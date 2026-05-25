@@ -1,9 +1,12 @@
+#![allow(clippy::unused_unit, deprecated, unused_imports)]
+
 use dioxus::prelude::*;
 
 use crate::auth::{password, session};
 use crate::db::pool::DB_POOL;
 use crate::models::user::{User, UserRole};
 
+#[allow(dead_code)]
 fn validate_username(username: &str) -> Result<(), String> {
     if username.len() < 3 || username.len() > 50 {
         return Err("用户名长度必须在 3-50 字符之间".to_string());
@@ -14,6 +17,7 @@ fn validate_username(username: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn validate_email(email: &str) -> Result<(), String> {
     let re = regex::Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap();
     if !re.is_match(email) {
@@ -22,6 +26,7 @@ fn validate_email(email: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[allow(dead_code)]
 fn validate_password(password: &str) -> Result<(), String> {
     if password.len() < 8 {
         return Err("密码长度至少 8 位".to_string());

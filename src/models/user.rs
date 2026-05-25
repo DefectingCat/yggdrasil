@@ -8,13 +8,7 @@ pub enum UserRole {
 }
 
 impl UserRole {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            UserRole::Admin => "admin",
-            UserRole::Blocked => "blocked",
-        }
-    }
-
+    #[allow(dead_code)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "admin" => Some(UserRole::Admin),

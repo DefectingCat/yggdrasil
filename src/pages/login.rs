@@ -19,7 +19,7 @@ pub fn LoginPage() -> Element {
 
         spawn(async move {
             match login(username_val, password_val).await {
-                Ok(AuthResponse { success: true, token: Some(token), .. }) => {
+                Ok(AuthResponse { success: true, token: Some(_token), .. }) => {
                     // 设置 cookie (client-side, not HttpOnly but works for now)
                     #[cfg(target_arch = "wasm32")]
                     {

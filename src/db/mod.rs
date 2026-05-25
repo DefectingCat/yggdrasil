@@ -2,6 +2,7 @@
 pub mod pool;
 
 #[cfg(not(feature = "server"))]
+#[allow(dead_code)]
 pub mod pool {
     pub struct DummyPool;
     impl DummyPool {

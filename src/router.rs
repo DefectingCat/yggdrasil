@@ -19,7 +19,7 @@ pub enum Route {
 
 #[component]
 pub fn AppRouter() -> Element {
-    let mut theme = use_theme();
+    let theme = use_theme();
     let theme_class = match theme() {
         Theme::Dark => "dark",
         Theme::Light => "",

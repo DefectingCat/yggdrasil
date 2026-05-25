@@ -1,5 +1,3 @@
-use dioxus::prelude::*;
-
 mod api;
 mod auth;
 mod db;
