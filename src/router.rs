@@ -28,10 +28,6 @@ pub fn AppRouter() -> Element {
     rsx! {
         div {
             class: theme_class,
-            script { src: "https://cdn.tailwindcss.com" }
-            script {
-                "tailwind.config = {{ darkMode: 'class' }}"
-            }
             ThemeToggle {}
             Router::<Route> {}
         }

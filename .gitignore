@@ -2,3 +2,5 @@
 /dist
 /.dioxus
 /.omc
+/node_modules
+/package-lock.json
