@@ -20,7 +20,7 @@
         "src/db/pool.rs",
         "migrations/001_init.sql"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-002",
@@ -48,7 +48,7 @@
       "title": "认证 API (Server Functions)",
       "description": "实现 register, login, logout, get_current_user 四个 Dioxus server function",
       "acceptanceCriteria": [
-        "register(): 输入验证(用户名3-50字符/邮箱格式/密码≥8位)，首个用户role=admin，后续返回'Registration is closed'",
+        "register(): 输入验证(用户名3-50字符/邮箱格式/密码>=8位)，首个用户role=admin，后续返回'Registration is closed'",
         "login(): 验证密码，创建30天过期session，设置HttpOnly+SameSite=Lax cookie",
         "logout(): 删除session行，清除cookie",
         "get_current_user(): 从cookie读取token，返回Option<User>",
@@ -105,12 +105,12 @@
       "description": "端到端验证所有功能",
       "acceptanceCriteria": [
         "启动PostgreSQL，运行migration",
-        "注册首个用户 → role=admin",
-        "再次注册 → 收到'Registration is closed'",
-        "登录 → 设置cookie，跳转/admin",
-        "关闭浏览器重开/admin → 无需重新登录",
-        "登出 → cookie清除，/admin重定向到/login",
-        "错误密码 → 显示'Invalid credentials'",
+        "注册首个用户 -> role=admin",
+        "再次注册 -> 收到'Registration is closed'",
+        "登录 -> 设置cookie，跳转/admin",
+        "关闭浏览器重开/admin -> 无需重新登录",
+        "登出 -> cookie清除，/admin重定向到/login",
+        "错误密码 -> 显示'Invalid credentials'",
         "主题切换正常"
       ],
       "filesExpected": [],
