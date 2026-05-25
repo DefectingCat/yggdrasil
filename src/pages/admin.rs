@@ -7,9 +7,8 @@ use crate::api::auth::{get_current_user, logout};
 
 #[component]
 pub fn AdminPage() -> Element {
-    let user_resource = use_resource(|| async move {
-        get_current_user().await.ok().and_then(|r| r.user)
-    });
+    let user_resource =
+        use_resource(|| async move { get_current_user().await.ok().and_then(|r| r.user) });
 
     let navigator = dioxus::router::navigator();
 

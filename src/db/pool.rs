@@ -4,8 +4,7 @@ use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
 use tokio_postgres::NoTls;
 
 pub static DB_POOL: LazyLock<Pool> = LazyLock::new(|| {
-    let db_url =
-        std::env::var("DATABASE_URL").expect("DATABASE_URL environment variable not set");
+    let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL environment variable not set");
     let pg_cfg = db_url
         .parse::<tokio_postgres::Config>()
         .expect("Invalid DATABASE_URL format");
