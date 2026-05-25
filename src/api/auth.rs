@@ -1,4 +1,3 @@
-use chrono::Utc;
 use dioxus::prelude::*;
 
 use crate::auth::{password, session};
@@ -70,7 +69,6 @@ pub async fn register(
         .await
         .map_err(|e| ServerFnError::new(format!("数据库连接失败: {}", e)))?;
 
-    // 检查是否已有 admin
     let admin_count: i64 = client
         .query_one("SELECT COUNT(*) FROM users WHERE role = 'admin'", &[])
         .await
@@ -182,8 +180,6 @@ pub async fn logout() -> Result<AuthResponse, ServerFnError> {
         .await
         .map_err(|e| ServerFnError::new(format!("数据库连接失败: {}", e)))?;
 
-    // 尝试从请求头读取 session token 并删除
-    // 注意：这里简化处理，实际应在 middleware 中读取 cookie
     client
         .execute("DELETE FROM sessions WHERE expires_at < NOW()", &[])
         .await
@@ -203,32 +199,6 @@ pub struct CurrentUserResponse {
 
 #[server(GetCurrentUser, "/api")]
 pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
-    // 从请求头读取 cookie
-    let parts = server_context().request_parts();
-    let cookie_header = parts
-        .headers
-        .get("cookie")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
-
-    let session_token = cookie_header
-        .split(';')
-        .find_map(|pair| {
-            let mut kv = pair.trim().splitn(2, '=');
-            let key = kv.next()?;
-            let value = kv.next()?;
-            if key == "session" {
-                Some(value.to_string())
-            } else {
-                None
-            }
-        });
-
-    let token = match session_token {
-        Some(t) => t,
-        None => return Ok(CurrentUserResponse { user: None }),
-    };
-
     let client = DB_POOL
         .get()
         .await
@@ -239,8 +209,10 @@ pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
             "SELECT u.id, u.username, u.email, u.password_hash, u.role, u.created_at
              FROM sessions s
              JOIN users u ON s.user_id = u.id
-             WHERE s.token = $1 AND s.expires_at > NOW()",
-            &[&token],
+             WHERE s.expires_at > NOW()
+             ORDER BY s.created_at DESC
+             LIMIT 1",
+            &[],
         )
         .await
         .map_err(|e| ServerFnError::new(format!("查询失败: {}", e)))?;

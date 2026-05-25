@@ -60,7 +60,6 @@ pub fn use_theme() -> Signal<Theme> {
             }
         }
 
-        // For SSR, the theme will be applied client-side after hydration
         let _ = theme_str;
     });
 
@@ -69,7 +68,7 @@ pub fn use_theme() -> Signal<Theme> {
 
 #[component]
 pub fn ThemeToggle() -> Element {
-    let theme = use_theme();
+    let mut theme = use_theme();
 
     rsx! {
         button {

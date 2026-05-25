@@ -7,13 +7,17 @@ edition = "2021"
 dioxus = { version = "0.7.9", features = ["fullstack", "router"] }
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.52", features = ["full"], optional = true }
-tokio-postgres = { version = "0.7", optional = true }
+tokio-postgres = { version = "0.7", features = ["with-chrono-0_4"], optional = true }
 deadpool-postgres = { version = "0.14", optional = true }
 argon2 = { version = "0.5", optional = true }
 uuid = { version = "1", features = ["v4"], optional = true }
-chrono = { version = "0.4", optional = true }
+chrono = { version = "0.4", features = ["serde"], optional = true }
 regex = { version = "1.10", optional = true }
 dotenvy = { version = "0.15", optional = true }
+rand = { version = "0.8", features = ["getrandom"], optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["Document", "Window", "HtmlDocument", "Storage", "Element"] }
 
 [features]
 default = []
@@ -28,4 +32,5 @@ server = [
     "dep:chrono",
     "dep:regex",
     "dep:dotenvy",
+    "dep:rand",
 ]

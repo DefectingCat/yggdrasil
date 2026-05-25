@@ -10,7 +10,9 @@ pub fn AdminPage() -> Element {
 
     let navigator = dioxus::router::navigator();
 
-    match user_resource.read().as_ref() {
+    let user_data = user_resource.read().clone();
+
+    match user_data.as_ref() {
         Some(Some(user)) => {
             let username = user.username.clone();
             rsx! {
@@ -27,9 +29,9 @@ pub fn AdminPage() -> Element {
                                 button {
                                     class: "px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors",
                                     onclick: move |_| {
+                                        let nav = navigator.clone();
                                         spawn(async move {
                                             let _ = logout().await;
-                                            // 清除 cookie
                                             #[cfg(target_arch = "wasm32")]
                                             {
                                                 let cookie = "session=; path=/; max-age=0";
@@ -40,7 +42,7 @@ pub fn AdminPage() -> Element {
                                                     }
                                                 }
                                             }
-                                            let _ = navigator.push("/login");
+                                            let _ = nav.push("/login");
                                         });
                                     },
                                     "登出"
@@ -57,7 +59,6 @@ pub fn AdminPage() -> Element {
             }
         }
         Some(None) => {
-            // 未登录，重定向到登录页
             use_effect(move || {
                 navigator.push("/login");
             });
