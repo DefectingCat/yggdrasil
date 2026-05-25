@@ -41,7 +41,7 @@
         "src/auth/password.rs",
         "src/auth/session.rs"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-003",
