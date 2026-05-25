@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 
+#[allow(dead_code)]
 const THEME_KEY: &str = "yggdrasil-theme";
 
 #[derive(Clone, Copy, PartialEq)]

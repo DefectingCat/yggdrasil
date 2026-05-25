@@ -32,7 +32,7 @@ pub fn AdminPage() -> Element {
                                 button {
                                     class: "px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors",
                                     onclick: move |_| {
-                                        let nav = navigator.clone();
+                                        let nav = navigator;
                                         spawn(async move {
                                             let _ = logout().await;
                                             #[cfg(target_arch = "wasm32")]
