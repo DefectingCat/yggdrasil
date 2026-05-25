@@ -1,0 +1,14 @@
+# Ralph Progress Log
+
+## Session Start
+- Date: 2026-05-25
+- Source: .omc/plans/blog-auth-consensus.md
+- User requirement: 每完成一个功能，提交一次
+
+## Stories
+- [ ] US-001: 数据库配置与建表
+- [ ] US-002: 用户模型与认证模块
+- [ ] US-003: 认证 API
+- [ ] US-004: 前端页面 - 注册与登录
+- [ ] US-005: 后台页面与路由整合
+- [ ] US-006: 验证

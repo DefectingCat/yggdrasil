@@ -1,0 +1,120 @@
+{
+  "project": "Blog Auth System",
+  "source": "consensus plan from deep-interview + omc-plan",
+  "planPath": ".omc/plans/blog-auth-consensus.md",
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "数据库配置与建表",
+      "description": "添加依赖、配置 deadpool 连接池、创建 PostgreSQL 用户表和 session 表",
+      "acceptanceCriteria": [
+        "Cargo.toml 包含所有必要依赖: tokio-postgres, deadpool-postgres, argon2, uuid, chrono, dotenvy, regex",
+        "src/db/mod.rs 和 src/db/pool.rs 存在，使用 std::sync::LazyLock 全局初始化 deadpool",
+        "migrations/001_init.sql 存在，包含 users 表、sessions 表、idx_one_admin 部分唯一索引",
+        "SQL 文件可成功在 PostgreSQL 中执行"
+      ],
+      "filesExpected": [
+        "Cargo.toml",
+        ".env",
+        "src/db/mod.rs",
+        "src/db/pool.rs",
+        "migrations/001_init.sql"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-002",
+      "title": "用户模型与认证模块",
+      "description": "创建 User/Session 模型和认证工具函数（密码哈希、session 管理）",
+      "acceptanceCriteria": [
+        "src/models/user.rs 定义 User 结构体和 UserRole 枚举",
+        "src/models/session.rs 定义 Session 结构体",
+        "src/auth/password.rs 实现 argon2 密码哈希和验证",
+        "src/auth/session.rs 实现 UUID v4 token 生成和过期检查",
+        "cargo check 在此阶段无编译错误"
+      ],
+      "filesExpected": [
+        "src/models/mod.rs",
+        "src/models/user.rs",
+        "src/models/session.rs",
+        "src/auth/mod.rs",
+        "src/auth/password.rs",
+        "src/auth/session.rs"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-003",
+      "title": "认证 API (Server Functions)",
+      "description": "实现 register, login, logout, get_current_user 四个 Dioxus server function",
+      "acceptanceCriteria": [
+        "register(): 输入验证(用户名3-50字符/邮箱格式/密码≥8位)，首个用户role=admin，后续返回'Registration is closed'",
+        "login(): 验证密码，创建30天过期session，设置HttpOnly+SameSite=Lax cookie",
+        "logout(): 删除session行，清除cookie",
+        "get_current_user(): 从cookie读取token，返回Option<User>",
+        "所有函数处理 pool.get().await 超时错误",
+        "cookie设置通过Axum middleware方式实现"
+      ],
+      "filesExpected": [
+        "src/api/mod.rs",
+        "src/api/auth.rs"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-004",
+      "title": "前端页面 - 注册与登录",
+      "description": "使用 Tailwind CSS 实现注册页和登录页，支持暗色/亮色主题",
+      "acceptanceCriteria": [
+        "src/pages/register.rs: 用户名/邮箱/密码/确认密码表单，前端验证",
+        "src/pages/login.rs: 用户名/密码表单，错误提示",
+        "页面使用 Tailwind CSS 最新版，圆角简约设计",
+        "暗色/亮色主题切换正常工作",
+        "主题状态持久化(localStorage)"
+      ],
+      "filesExpected": [
+        "src/pages/mod.rs",
+        "src/pages/register.rs",
+        "src/pages/login.rs",
+        "src/theme.rs"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-005",
+      "title": "后台页面与路由整合",
+      "description": "Admin页面、路由定义、session清理任务、main.rs整合",
+      "acceptanceCriteria": [
+        "src/pages/admin.rs: 认证检查(未登录重定向/login)，显示欢迎信息+登出按钮",
+        "src/router.rs: /login, /register, /admin 路由定义",
+        "src/tasks/session_cleanup.rs: 每小时清理过期session",
+        "main.rs: 整合路由、主题、db pool、server block中启动清理任务",
+        "cargo check + cargo clippy 无错误"
+      ],
+      "filesExpected": [
+        "src/pages/admin.rs",
+        "src/router.rs",
+        "src/tasks/session_cleanup.rs",
+        "src/main.rs"
+      ],
+      "passes": false
+    },
+    {
+      "id": "US-006",
+      "title": "验证",
+      "description": "端到端验证所有功能",
+      "acceptanceCriteria": [
+        "启动PostgreSQL，运行migration",
+        "注册首个用户 → role=admin",
+        "再次注册 → 收到'Registration is closed'",
+        "登录 → 设置cookie，跳转/admin",
+        "关闭浏览器重开/admin → 无需重新登录",
+        "登出 → cookie清除，/admin重定向到/login",
+        "错误密码 → 显示'Invalid credentials'",
+        "主题切换正常"
+      ],
+      "filesExpected": [],
+      "passes": false
+    }
+  ]
+}
