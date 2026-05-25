@@ -15,7 +15,10 @@ fn main() {
     #[cfg(feature = "server")]
     {
         dotenvy::dotenv().ok();
-        tokio::spawn(tasks::session_cleanup::run_cleanup());
+        std::thread::spawn(|| {
+            let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+            rt.block_on(tasks::session_cleanup::run_cleanup());
+        });
     }
 
     dioxus::launch(AppRouter);

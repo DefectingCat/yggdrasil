@@ -1,5 +1,8 @@
 use dioxus::prelude::*;
 
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::JsCast;
+
 use crate::api::auth::{get_current_user, logout};
 
 #[component]

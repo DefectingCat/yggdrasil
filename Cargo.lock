@@ -4594,12 +4594,14 @@ dependencies = [
  "deadpool-postgres",
  "dioxus",
  "dotenvy",
+ "getrandom 0.2.17",
  "rand 0.8.6",
  "regex",
  "serde",
  "tokio",
  "tokio-postgres",
  "uuid",
+ "wasm-bindgen",
  "web-sys",
 ]
 

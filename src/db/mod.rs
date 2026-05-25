@@ -1,1 +1,13 @@
+#[cfg(feature = "server")]
 pub mod pool;
+
+#[cfg(not(feature = "server"))]
+pub mod pool {
+    pub struct DummyPool;
+    impl DummyPool {
+        pub async fn get(&self) -> Result<(), ()> {
+            Err(())
+        }
+    }
+    pub static DB_POOL: DummyPool = DummyPool;
+}
