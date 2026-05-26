@@ -89,9 +89,9 @@ pub fn LoginPage() -> Element {
                         onclick: move |_| on_submit(()),
                         "登录"
                     }
-                    a {
-                        class: "block w-full py-2 px-4 text-center text-gray-500 dark:text-[#9b9c9d] hover:text-gray-700 dark:hover:text-[#dadadb] font-medium rounded-lg transition-colors",
-                        href: "/register",
+                    button {
+                        class: "block w-full py-2 px-4 text-center text-gray-500 dark:text-[#9b9c9d] hover:text-gray-700 dark:hover:text-[#dadadb] font-medium rounded-lg transition-colors cursor-pointer",
+                        onclick: move |_| { dioxus::router::navigator().push("/register"); },
                         "还没有账号？去注册"
                     }
                 }

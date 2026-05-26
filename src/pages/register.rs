@@ -56,7 +56,8 @@ pub fn RegisterPage() -> Element {
                 if success() {
                     div { class: "mb-4 p-3 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg text-center",
                         "注册成功！"
-                        a { class: "block mt-2 text-gray-700 dark:text-[#dadadb] hover:underline", href: "/login",
+                        button { class: "block mt-2 text-gray-700 dark:text-[#dadadb] hover:underline cursor-pointer",
+                            onclick: move |_| { dioxus::router::navigator().push("/login"); },
                             "去登录"
                         }
                     }
@@ -125,7 +126,8 @@ pub fn RegisterPage() -> Element {
                 }
                 p { class: "mt-4 text-center text-sm text-gray-500 dark:text-[#9b9c9d]",
                     "已有账号？"
-                    a { class: "text-gray-700 dark:text-[#dadadb] hover:underline", href: "/login",
+                    button { class: "text-gray-700 dark:text-[#dadadb] hover:underline cursor-pointer",
+                        onclick: move |_| { dioxus::router::navigator().push("/login"); },
                         "去登录"
                     }
                 }

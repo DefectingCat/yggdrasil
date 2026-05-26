@@ -211,6 +211,10 @@ fn ArchiveEntry(post: Post) -> Element {
                 class: "entry-link absolute inset-0 z-10",
                 aria_label: "post link to {post.title}",
                 href: "/post/{post.slug}",
+                onclick: move |evt| {
+                    evt.prevent_default();
+                    dioxus::router::navigator().push(format!("/post/{}", post.slug).as_str());
+                },
             }
         }
     }

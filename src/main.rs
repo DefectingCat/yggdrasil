@@ -1,6 +1,7 @@
 mod api;
 mod auth;
 mod components;
+mod context;
 mod db;
 mod models;
 mod pages;

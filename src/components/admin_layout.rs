@@ -3,15 +3,35 @@ use dioxus::prelude::*;
 use crate::api::auth::{get_current_user, logout};
 use crate::components::header::{Header, NavItemConfig};
 use crate::components::footer::Footer;
+use crate::context::UserContext;
 use crate::router::Route;
 
 #[component]
-pub fn AdminLayout(children: Element) -> Element {
-    let user_resource =
-        use_resource(|| async move { get_current_user().await.ok().and_then(|r| r.user) });
-
+pub fn AdminLayout() -> Element {
+    let mut ctx: UserContext = use_context();
     let navigator = dioxus::router::navigator();
     let route = use_route::<Route>();
+
+    // 只在首次挂载时加载用户数据
+    use_effect(move || {
+        if !(ctx.checked)() {
+            (ctx.checked).set(true);
+            spawn(async move {
+                match get_current_user().await {
+                    Ok(response) => {
+                        if let Some(user) = response.user {
+                            ctx.user.set(Some(std::sync::Arc::new(user)));
+                        } else {
+                            let _ = navigator.push("/login");
+                        }
+                    }
+                    Err(_) => {
+                        let _ = navigator.push("/login");
+                    }
+                }
+            });
+        }
+    });
 
     let admin_nav_items = vec![
         NavItemConfig {
@@ -31,12 +51,12 @@ pub fn AdminLayout(children: Element) -> Element {
         },
     ];
 
-    let nav = navigator;
+    let nav = navigator.clone();
     let logout_button = rsx! {
         button {
             class: "text-sm text-gray-600 dark:text-[#9b9c9d] hover:text-gray-900 dark:hover:text-[#dadadb] transition-colors",
             onclick: move |_| {
-                let nav = nav;
+                let nav = nav.clone();
                 spawn(async move {
                     let _ = logout().await;
                     let _ = nav.push("/login");
@@ -46,29 +66,26 @@ pub fn AdminLayout(children: Element) -> Element {
         }
     };
 
-    let user_data = user_resource.read().clone();
-
-    let should_redirect = matches!(user_data.as_ref(), Some(None));
-
-    use_effect(move || {
-        if should_redirect {
-            navigator.push("/login");
-        }
-    });
-
-    match user_data.as_ref() {
-        Some(Some(_user)) => {
+    match ((ctx.checked)(), (ctx.user)()) {
+        (true, Some(_)) => {
             rsx! {
                 div { class: "min-h-screen flex flex-col bg-white dark:bg-[#1d1e20]",
                     Header { nav_items: admin_nav_items, right_content: logout_button }
                     main { class: "flex-1 w-full max-w-5xl mx-auto px-6 py-8",
-                        {children}
+                        Outlet::<Route> {}
                     }
                     Footer {}
                 }
             }
         }
-        _ => {
+        (true, None) => {
+            rsx! {
+                div { class: "min-h-screen flex items-center justify-center bg-white dark:bg-[#1d1e20]",
+                    p { class: "text-gray-600 dark:text-[#9b9c9d]", "未登录，正在跳转..." }
+                }
+            }
+        }
+        (false, _) => {
             rsx! {
                 div { class: "min-h-screen flex items-center justify-center bg-white dark:bg-[#1d1e20]",
                     p { class: "text-gray-600 dark:text-[#9b9c9d]", "加载中..." }

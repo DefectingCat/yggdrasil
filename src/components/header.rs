@@ -15,6 +15,10 @@ pub fn Header(nav_items: Vec<NavItemConfig>, right_content: Element) -> Element 
                 a {
                     class: "text-2xl font-bold text-gray-900 dark:text-[#dadadb] hover:opacity-80 transition-opacity",
                     href: "/",
+                    onclick: move |evt| {
+                        evt.prevent_default();
+                        dioxus::router::navigator().push("/");
+                    },
                     "Yggdrasil"
                 }
                 div { class: "flex items-center gap-2",
@@ -43,9 +47,18 @@ fn NavItem(href: &'static str, label: &'static str, is_active: bool) -> Element 
         format!("{} text-gray-600 dark:text-[#9b9c9d] hover:text-gray-900 dark:hover:text-[#dadadb]", base_class)
     };
 
+    let href = href;
     rsx! {
         li {
-            a { class: "{class_str}", href: "{href}", "{label}" }
+            a {
+                class: "{class_str}",
+                href: "{href}",
+                onclick: move |evt| {
+                    evt.prevent_default();
+                    dioxus::router::navigator().push(href);
+                },
+                "{label}"
+            }
         }
     }
 }

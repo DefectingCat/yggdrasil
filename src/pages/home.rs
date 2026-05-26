@@ -103,9 +103,16 @@ fn HomeInfo() -> Element {
 fn PostEntry(post: Post) -> Element {
     let tag_items = post.tags.to_vec();
 
+    let post_slug = post.slug;
     rsx! {
         article { class: "relative mb-6 p-6 bg-white dark:bg-[#2e2e33] rounded-lg border border-gray-200 dark:border-[#333] hover:-translate-y-0.5 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-250",
-            a { class: "block group", href: "/post/{post.slug}",
+            a {
+                class: "block group",
+                href: "/post/{post_slug}",
+                onclick: move |evt| {
+                    evt.prevent_default();
+                    dioxus::router::navigator().push(format!("/post/{}", post_slug).as_str());
+                },
                 h2 { class: "text-2xl font-bold leading-tight text-gray-900 dark:text-[#dadadb] group-hover:opacity-80 transition-opacity",
                     "{post.title}"
                 }
@@ -131,9 +138,9 @@ fn PostEntry(post: Post) -> Element {
 fn Pagination() -> Element {
     rsx! {
         nav { class: "flex mt-10 mb-6",
-            a {
-                class: "ml-auto inline-flex items-center px-4 py-2 text-sm text-white bg-gray-900 dark:bg-[#dadadb] dark:text-gray-900 rounded-full hover:opacity-80 transition-opacity",
-                href: "/page/2",
+            button {
+                class: "ml-auto inline-flex items-center px-4 py-2 text-sm text-white bg-gray-900 dark:bg-[#dadadb] dark:text-gray-900 rounded-full hover:opacity-80 transition-opacity cursor-pointer",
+                onclick: move |_| { dioxus::router::navigator().push("/page/2"); },
                 "下一页"
                 span { class: "ml-1", "»" }
             }

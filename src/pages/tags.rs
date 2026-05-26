@@ -70,13 +70,17 @@ pub fn TagsPage() -> Element {
                     }
                 }
                 ul { class: "flex flex-wrap gap-4 mt-6",
-                    for tag in tags.iter() {
+                    for (name, count) in tags.into_iter().map(|t| (t.name, t.count)) {
                         li {
                             a {
                                 class: "inline-flex items-center px-3 py-1.5 text-base font-medium bg-gray-100 dark:bg-[#2e2e33] text-gray-700 dark:text-[#9b9c9d] rounded-lg hover:bg-gray-200 dark:hover:bg-[#333] transition-colors",
-                                href: "/tags/{tag.name}",
-                                "{tag.name}"
-                                sup { class: "ml-1 text-sm text-gray-500 dark:text-[#9b9c9d]", "{tag.count}" }
+                                href: "/tags/{name}",
+                                onclick: move |evt| {
+                                    evt.prevent_default();
+                                    dioxus::router::navigator().push(format!("/tags/{}", name).as_str());
+                                },
+                                "{name}"
+                                sup { class: "ml-1 text-sm text-gray-500 dark:text-[#9b9c9d]", "{count}" }
                             }
                         }
                     }
@@ -126,10 +130,17 @@ pub fn TagDetailPage(tag: String) -> Element {
 #[component]
 fn TagPostEntry(post: Post) -> Element {
     let tag_items = post.tags.to_vec();
+    let post_slug = post.slug;
 
     rsx! {
         article { class: "relative mb-6 p-6 bg-white dark:bg-[#2e2e33] rounded-lg border border-gray-200 dark:border-[#333] hover:-translate-y-0.5 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-250",
-            a { class: "block group", href: "/post/{post.slug}",
+            a {
+                class: "block group",
+                href: "/post/{post_slug}",
+                onclick: move |evt| {
+                    evt.prevent_default();
+                    dioxus::router::navigator().push(format!("/post/{}", post_slug).as_str());
+                },
                 h2 { class: "text-2xl font-bold leading-tight text-gray-900 dark:text-[#dadadb] group-hover:opacity-80 transition-opacity",
                     "{post.title}"
                 }
@@ -139,15 +150,19 @@ fn TagPostEntry(post: Post) -> Element {
                 div { class: "mt-3 flex items-center gap-3 text-[13px] text-gray-400 dark:text-[#9b9c9d]",
                     span { "{post.date}" }
                     span { "·" }
-                    for (i, t) in tag_items.iter().enumerate() {
+                    for (i, tag_name) in tag_items.into_iter().enumerate() {
                         if i > 0 {
                             span { "," }
                         }
                         span {
                             a {
                                 class: "hover:text-gray-600 dark:hover:text-[#dadadb] transition-colors",
-                                href: "/tags/{t}",
-                                "{t}"
+                                href: "/tags/{tag_name}",
+                                onclick: move |evt| {
+                                    evt.prevent_default();
+                                    dioxus::router::navigator().push(format!("/tags/{}", tag_name).as_str());
+                                },
+                                "{tag_name}"
                             }
                         }
                     }
