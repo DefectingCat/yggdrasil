@@ -78,12 +78,12 @@ pub fn LoginPage() -> Element {
                 div { class: "space-y-4",
                     div {
                         label { class: "block text-sm font-medium text-gray-700 dark:text-[#9b9c9d] mb-1",
-                            "用户名"
+                            "用户名 / 邮箱"
                         }
                         input {
                             class: "w-full px-4 py-2 border border-gray-200 dark:border-[#333] rounded-lg bg-white dark:bg-[#2e2e33] text-gray-900 dark:text-[#dadadb] focus:outline-none focus:border-gray-400 dark:focus:border-gray-600",
                             r#type: "text",
-                            placeholder: "用户名",
+                            placeholder: "用户名或邮箱",
                             value: username(),
                             oninput: move |e| username.set(e.value()),
                         }

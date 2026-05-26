@@ -131,7 +131,7 @@ pub async fn login(
 
     let row = match client
         .query_opt(
-            "SELECT id, username, email, password_hash, role, created_at FROM users WHERE username = $1",
+            "SELECT id, username, email, password_hash, role, created_at FROM users WHERE username = $1 OR email = $1",
             &[&username],
         )
         .await
