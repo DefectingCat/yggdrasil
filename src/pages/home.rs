@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 
+use crate::router::Route;
 use crate::theme::ThemeToggle;
 
 #[derive(Clone, PartialEq)]
@@ -74,7 +75,9 @@ pub fn HomePage() -> Element {
 }
 
 #[component]
-fn Header() -> Element {
+pub fn Header() -> Element {
+    let route = use_route::<Route>();
+
     rsx! {
         header { class: "sticky top-0 z-40 w-full border-b border-gray-200 dark:border-[#333] bg-white/80 dark:bg-[#1d1e20]/80 backdrop-blur-sm",
             nav { class: "max-w-3xl mx-auto px-6 h-[60px] flex items-center justify-between",
@@ -85,11 +88,11 @@ fn Header() -> Element {
                 }
                 div { class: "flex items-center gap-2",
                     ul { class: "hidden md:flex items-center gap-1",
-                        NavItem { href: "/", label: "首页", active: true }
-                        NavItem { href: "/archives", label: "归档" }
-                        NavItem { href: "/tags", label: "标签" }
-                        NavItem { href: "/search", label: "搜索" }
-                        NavItem { href: "/about", label: "关于" }
+                        NavItem { href: "/", label: "首页", route: route.clone() }
+                        NavItem { href: "/archives", label: "归档", route: route.clone() }
+                        NavItem { href: "/tags", label: "标签", route: route.clone() }
+                        NavItem { href: "/search", label: "搜索", route: route.clone() }
+                        NavItem { href: "/about", label: "关于", route: route.clone() }
                     }
                     ThemeToggle {}
                 }
@@ -99,9 +102,18 @@ fn Header() -> Element {
 }
 
 #[component]
-fn NavItem(href: &'static str, label: &'static str, #[props(default = false)] active: bool) -> Element {
+pub fn NavItem(href: &'static str, label: &'static str, route: Route) -> Element {
+    let is_active = match (href, route) {
+        ("/", Route::HomePage {}) => true,
+        ("/archives", Route::ArchivesPage {}) => true,
+        ("/tags", Route::TagsPage {}) => true,
+        ("/search", Route::SearchPage {}) => true,
+        ("/about", Route::AboutPage {}) => true,
+        _ => false,
+    };
+
     let base_class = "px-3 py-1 text-base rounded-lg transition-colors";
-    let class_str = if active {
+    let class_str = if is_active {
         format!("{} font-medium text-gray-900 dark:text-[#dadadb] underline underline-offset-[0.3rem] decoration-2 decoration-gray-900 dark:decoration-[#dadadb]", base_class)
     } else {
         format!("{} text-gray-600 dark:text-[#9b9c9d] hover:text-gray-900 dark:hover:text-[#dadadb]", base_class)
@@ -171,7 +183,7 @@ fn Pagination() -> Element {
 }
 
 #[component]
-fn Footer() -> Element {
+pub fn Footer() -> Element {
     let mut visible = use_signal(|| false);
 
     use_effect(move || {

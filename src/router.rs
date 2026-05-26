@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 
 use crate::pages::admin::AdminPage;
+use crate::pages::archives::ArchivesPage;
 use crate::pages::home::HomePage;
 use crate::pages::login::LoginPage;
 use crate::pages::register::RegisterPage;
@@ -41,11 +42,6 @@ pub fn AppRouter() -> Element {
             Router::<Route> {}
         }
     }
-}
-
-#[component]
-pub fn ArchivesPage() -> Element {
-    rsx! { "Archives" }
 }
 
 #[component]
