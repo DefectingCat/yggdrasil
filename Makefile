@@ -1,8 +1,16 @@
-.PHONY: dev build css css-watch clean
+.PHONY: dev build css css-watch clean build-editor
 
 build:
+	@$(MAKE) build-editor
 	@tailwindcss -i input.css -o public/style.css --minify
 	@dx build --release
+
+build-editor:
+	@echo "Building Tiptap editor..."
+	@cd libs/tiptap-editor && npm install && npx vite build
+	@mv public/tiptap/editor.iife.js public/tiptap/editor.js 2>/dev/null || true
+	@mv public/tiptap/editor.iife.js.map public/tiptap/editor.js.map 2>/dev/null || true
+	@echo "Tiptap editor built."
 
 dev:
 	@echo "Starting tailwindcss watch and dx serve..."
