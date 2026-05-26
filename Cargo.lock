@@ -4629,6 +4629,7 @@ dependencies = [
  "dioxus",
  "dotenvy",
  "getrandom 0.2.17",
+ "http",
  "js-sys",
  "pulldown-cmark",
  "rand 0.8.6",

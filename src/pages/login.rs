@@ -1,8 +1,5 @@
 use dioxus::prelude::*;
 
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::JsCast;
-
 use crate::api::auth::{login, AuthResponse};
 
 #[component]
@@ -24,21 +21,6 @@ pub fn LoginPage() -> Element {
                     token: Some(_token),
                     ..
                 }) => {
-                    #[cfg(target_arch = "wasm32")]
-                    {
-                        let cookie = format!(
-                            "session={}; path=/; max-age={}; SameSite=Lax",
-                            _token,
-                            30 * 24 * 60 * 60
-                        );
-                        if let Some(window) = web_sys::window() {
-                            if let Some(document) = window.document() {
-                                let _ = document
-                                    .dyn_into::<web_sys::HtmlDocument>()
-                                    .map(|d| d.set_cookie(&cookie));
-                            }
-                        }
-                    }
                     let _ = dioxus::router::navigator().push("/admin");
                 }
                 Ok(AuthResponse {

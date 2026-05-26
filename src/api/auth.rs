@@ -1,6 +1,8 @@
 #![allow(clippy::unused_unit, deprecated, unused_imports)]
 
 use dioxus::prelude::*;
+#[cfg(feature = "server")]
+use http::header::{HeaderValue, SET_COOKIE};
 
 use crate::auth::{password, session};
 use crate::db::pool::DB_POOL;
@@ -32,6 +34,23 @@ fn validate_password(password: &str) -> Result<(), String> {
         return Err("密码长度至少 8 位".to_string());
     }
     Ok(())
+}
+
+#[cfg(feature = "server")]
+fn parse_session_token(cookie_header: &str) -> Option<&str> {
+    cookie_header
+        .split(';')
+        .map(|s| s.trim())
+        .find_map(|pair| {
+            let mut parts = pair.splitn(2, '=');
+            let name = parts.next()?.trim();
+            let value = parts.next()?.trim();
+            if name == "session" {
+                Some(value)
+            } else {
+                None
+            }
+        })
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -171,6 +190,16 @@ pub async fn login(
         .await
         .map_err(|e| ServerFnError::new(format!("创建 session 失败: {}", e)))?;
 
+    let cookie = format!(
+        "session={token}; HttpOnly; Path=/; Max-Age={}; SameSite=Lax",
+        30 * 24 * 60 * 60
+    );
+    if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
+        if let Ok(value) = HeaderValue::try_from(cookie.as_str()) {
+            ctx.add_response_header(SET_COOKIE, value);
+        }
+    }
+
     Ok(AuthResponse {
         success: true,
         message: "登录成功".to_string(),
@@ -180,15 +209,40 @@ pub async fn login(
 
 #[server(Logout, "/api")]
 pub async fn logout() -> Result<AuthResponse, ServerFnError> {
+    let token = if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
+        let parts = ctx.parts_mut();
+        parts
+            .headers
+            .get("cookie")
+            .and_then(|h| h.to_str().ok())
+            .and_then(parse_session_token)
+            .map(|s| s.to_string())
+    } else {
+        None
+    };
+
     let client = DB_POOL
         .get()
         .await
         .map_err(|e| ServerFnError::new(format!("数据库连接失败: {}", e)))?;
 
-    client
-        .execute("DELETE FROM sessions WHERE expires_at < NOW()", &[])
-        .await
-        .map_err(|e| ServerFnError::new(format!("清理 session 失败: {}", e)))?;
+    // 清除 cookie
+    if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
+        ctx.add_response_header(
+            SET_COOKIE,
+            HeaderValue::from_static(
+                "session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax",
+            ),
+        );
+    }
+
+    // 删除当前 session
+    if let Some(t) = token {
+        client
+            .execute("DELETE FROM sessions WHERE token = $1", &[&t])
+            .await
+            .map_err(|e| ServerFnError::new(format!("删除 session 失败: {}", e)))?;
+    }
 
     Ok(AuthResponse {
         success: true,
@@ -204,6 +258,22 @@ pub struct CurrentUserResponse {
 
 #[server(GetCurrentUser, "/api")]
 pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
+    let token = if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
+        let parts = ctx.parts_mut();
+        parts
+            .headers
+            .get("cookie")
+            .and_then(|h| h.to_str().ok())
+            .and_then(parse_session_token)
+            .map(|s| s.to_string())
+    } else {
+        None
+    };
+
+    let Some(token) = token else {
+        return Ok(CurrentUserResponse { user: None });
+    };
+
     let client = DB_POOL
         .get()
         .await
@@ -214,10 +284,8 @@ pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
             "SELECT u.id, u.username, u.email, u.password_hash, u.role, u.created_at
              FROM sessions s
              JOIN users u ON s.user_id = u.id
-             WHERE s.expires_at > NOW()
-             ORDER BY s.created_at DESC
-             LIMIT 1",
-            &[],
+             WHERE s.token = $1 AND s.expires_at > NOW()",
+            &[&token],
         )
         .await
         .map_err(|e| ServerFnError::new(format!("查询失败: {}", e)))?;

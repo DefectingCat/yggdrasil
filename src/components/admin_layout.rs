@@ -1,8 +1,5 @@
 use dioxus::prelude::*;
 
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::JsCast;
-
 use crate::api::auth::{get_current_user, logout};
 use crate::components::header::{Header, NavItemConfig};
 use crate::components::footer::Footer;
@@ -42,16 +39,6 @@ pub fn AdminLayout(children: Element) -> Element {
                 let nav = nav;
                 spawn(async move {
                     let _ = logout().await;
-                    #[cfg(target_arch = "wasm32")]
-                    {
-                        let cookie = "session=; path=/; max-age=0";
-                        if let Some(window) = web_sys::window() {
-                            if let Some(document) = window.document() {
-                                let _ = document.dyn_into::<web_sys::HtmlDocument>()
-                                    .map(|d| d.set_cookie(cookie));
-                            }
-                        }
-                    }
                     let _ = nav.push("/login");
                 });
             },
