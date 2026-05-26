@@ -4,7 +4,7 @@ use crate::pages::admin::AdminPage;
 use crate::pages::home::HomePage;
 use crate::pages::login::LoginPage;
 use crate::pages::register::RegisterPage;
-use crate::theme::{Theme, use_theme};
+use crate::theme::{Theme, ThemePreload, use_theme_provider};
 
 #[derive(Clone, Routable, Debug, PartialEq)]
 pub enum Route {
@@ -28,7 +28,7 @@ pub enum Route {
 
 #[component]
 pub fn AppRouter() -> Element {
-    let theme = use_theme();
+    let theme = use_theme_provider();
     let theme_class = match theme() {
         Theme::Dark => "dark",
         Theme::Light => "",
@@ -36,7 +36,8 @@ pub fn AppRouter() -> Element {
 
     rsx! {
         div {
-            class: theme_class,
+            class: "{theme_class}",
+            ThemePreload {}
             Router::<Route> {}
         }
     }
@@ -61,4 +62,3 @@ pub fn SearchPage() -> Element {
 pub fn AboutPage() -> Element {
     rsx! { "About" }
 }
-
