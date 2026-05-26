@@ -73,12 +73,20 @@ pub fn ThemeToggle() -> Element {
 
     rsx! {
         button {
-            class: "theme-toggle p-2 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors",
+            class: "theme-toggle p-2 rounded-full hover:opacity-80 transition-opacity",
             onclick: move |_| theme.set(theme().toggle()),
             if theme() == Theme::Dark {
-                "🌙"
+                img {
+                    src: "/icons/bedtime_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg",
+                    alt: "Dark mode",
+                    class: "w-6 h-6",
+                }
             } else {
-                "☀️"
+                img {
+                    src: "/icons/wb_sunny_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg",
+                    alt: "Light mode",
+                    class: "w-6 h-6",
+                }
             }
         }
     }
