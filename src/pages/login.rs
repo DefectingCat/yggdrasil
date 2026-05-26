@@ -11,7 +11,7 @@ pub fn LoginPage() -> Element {
     let mut password = use_signal(|| "".to_string());
     let mut error = use_signal(|| None::<String>);
 
-    let on_submit = move |_| {
+    let on_submit = Callback::new(move |_| {
         error.set(None);
 
         let username_val = username();
@@ -60,7 +60,7 @@ pub fn LoginPage() -> Element {
                 }
             }
         });
-    };
+    });
 
     rsx! {
         div { class: "min-h-screen flex items-center justify-center bg-white dark:bg-[#1d1e20]",
@@ -86,6 +86,7 @@ pub fn LoginPage() -> Element {
                             placeholder: "用户名或邮箱",
                             value: username(),
                             oninput: move |e| username.set(e.value()),
+                            onkeydown: move |e| if e.key() == Key::Enter { on_submit(()) },
                         }
                     }
                     div {
@@ -98,11 +99,12 @@ pub fn LoginPage() -> Element {
                             placeholder: "密码",
                             value: password(),
                             oninput: move |e| password.set(e.value()),
+                            onkeydown: move |e| if e.key() == Key::Enter { on_submit(()) },
                         }
                     }
                     button {
                         class: "w-full py-2 px-4 bg-gray-900 dark:bg-[#dadadb] text-white dark:text-gray-900 font-medium rounded-full hover:opacity-80 transition-opacity",
-                        onclick: on_submit,
+                        onclick: move |_| on_submit(()),
                         "登录"
                     }
                     a {
