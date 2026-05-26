@@ -5,6 +5,7 @@ use crate::pages::archives::ArchivesPage;
 use crate::pages::home::HomePage;
 use crate::pages::login::LoginPage;
 use crate::pages::register::RegisterPage;
+use crate::pages::tags::{TagsPage, TagDetailPage};
 use crate::theme::{Theme, ThemePreload, use_theme_provider};
 
 #[derive(Clone, Routable, Debug, PartialEq)]
@@ -21,6 +22,8 @@ pub enum Route {
     ArchivesPage {},
     #[route("/tags")]
     TagsPage {},
+    #[route("/tags/:tag")]
+    TagDetailPage { tag: String },
     #[route("/search")]
     SearchPage {},
     #[route("/about")]
@@ -42,11 +45,6 @@ pub fn AppRouter() -> Element {
             Router::<Route> {}
         }
     }
-}
-
-#[component]
-pub fn TagsPage() -> Element {
-    rsx! { "Tags" }
 }
 
 #[component]

@@ -4,15 +4,15 @@ use crate::router::Route;
 use crate::theme::ThemeToggle;
 
 #[derive(Clone, PartialEq)]
-struct Post {
-    title: &'static str,
-    summary: &'static str,
-    date: &'static str,
-    tags: &'static [&'static str],
-    slug: &'static str,
+pub struct Post {
+    pub title: &'static str,
+    pub summary: &'static str,
+    pub date: &'static str,
+    pub tags: &'static [&'static str],
+    pub slug: &'static str,
 }
 
-const POSTS: &[Post] = &[
+pub const POSTS: &[Post] = &[
     Post {
         title: "开始使用 Rust 构建 Web 应用",
         summary: "Rust 作为一门系统级编程语言，近年来在 Web 开发领域也展现出了强大的生命力。本文将介绍如何使用 Rust 和 Dioxus 框架构建现代化的全栈 Web 应用，从项目搭建到部署的完整流程。",
@@ -107,6 +107,7 @@ pub fn NavItem(href: &'static str, label: &'static str, route: Route) -> Element
         ("/", Route::HomePage {}) => true,
         ("/archives", Route::ArchivesPage {}) => true,
         ("/tags", Route::TagsPage {}) => true,
+        ("/tags", Route::TagDetailPage { .. }) => true,
         ("/search", Route::SearchPage {}) => true,
         ("/about", Route::AboutPage {}) => true,
         _ => false,
