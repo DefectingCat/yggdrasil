@@ -19,18 +19,23 @@ pub fn LoginPage() -> Element {
 
         spawn(async move {
             match login(username_val, password_val).await {
-                Ok(AuthResponse { success: true, token: Some(_token), .. }) => {
+                Ok(AuthResponse {
+                    success: true,
+                    token: Some(_token),
+                    ..
+                }) => {
                     // 设置 cookie (client-side, not HttpOnly but works for now)
                     #[cfg(target_arch = "wasm32")]
                     {
                         let cookie = format!(
                             "session={}; path=/; max-age={}; SameSite=Lax",
-                            token,
+                            _token,
                             30 * 24 * 60 * 60 // 30 days
                         );
                         if let Some(window) = web_sys::window() {
                             if let Some(document) = window.document() {
-                                let _ = document.dyn_into::<web_sys::HtmlDocument>()
+                                let _ = document
+                                    .dyn_into::<web_sys::HtmlDocument>()
                                     .map(|d| d.set_cookie(&cookie));
                             }
                         }
@@ -38,10 +43,18 @@ pub fn LoginPage() -> Element {
                     // 跳转到 admin 页面
                     let _ = dioxus::router::navigator().push("/admin");
                 }
-                Ok(AuthResponse { success: false, message, .. }) => {
+                Ok(AuthResponse {
+                    success: false,
+                    message,
+                    ..
+                }) => {
                     error.set(Some(message));
                 }
-                Ok(AuthResponse { success: true, token: None, .. }) => {
+                Ok(AuthResponse {
+                    success: true,
+                    token: None,
+                    ..
+                }) => {
                     error.set(Some("登录异常".to_string()));
                 }
                 Err(e) => {
