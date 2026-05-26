@@ -107,6 +107,11 @@ pub fn LoginPage() -> Element {
                         onclick: on_submit,
                         "登录"
                     }
+                    a {
+                        class: "block w-full py-2 px-4 text-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium rounded-lg transition-colors",
+                        href: "/register",
+                        "还没有账号？去注册"
+                    }
                 }
             }
         }
