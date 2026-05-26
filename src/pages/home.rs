@@ -62,8 +62,8 @@ pub fn HomePage() -> Element {
         div { class: "min-h-screen flex flex-col bg-white dark:bg-[#1d1e20] transition-colors duration-300",
             Header {}
             main { class: "flex-1 w-full max-w-3xl mx-auto px-6 py-6",
-                FirstEntry { post: POSTS[0].clone() }
-                for post in POSTS.iter().skip(1) {
+                HomeInfo {}
+                for post in POSTS.iter() {
                     PostEntry { post: post.clone() }
                 }
                 Pagination {}
@@ -115,28 +115,14 @@ fn NavItem(href: &'static str, label: &'static str, #[props(default = false)] ac
 }
 
 #[component]
-fn FirstEntry(post: Post) -> Element {
-    let tag_items = post.tags.iter().map(|t| *t).collect::<Vec<_>>();
-
+fn HomeInfo() -> Element {
     rsx! {
-        article { class: "mb-10",
-            a { class: "block group", href: "/post/{post.slug}",
-                h1 { class: "text-[34px] font-bold leading-tight text-gray-900 dark:text-[#dadadb] group-hover:opacity-80 transition-opacity",
-                    "{post.title}"
-                }
-                div { class: "mt-3 text-base text-gray-500 dark:text-[#9b9c9d] leading-relaxed",
-                    "{post.summary}"
-                }
-                div { class: "mt-4 flex items-center gap-3 text-sm text-gray-400 dark:text-[#9b9c9d]",
-                    span { "{post.date}" }
-                    span { "·" }
-                    for (i, tag) in tag_items.iter().enumerate() {
-                        if i > 0 {
-                            span { "," }
-                        }
-                        span { "{tag}" }
-                    }
-                }
+        div { class: "mb-10 text-center",
+            h1 { class: "text-[34px] font-bold leading-tight text-gray-900 dark:text-[#dadadb]",
+                "Yggdrasil"
+            }
+            p { class: "mt-3 text-base text-gray-500 dark:text-[#9b9c9d] leading-relaxed",
+                "以文字为主的简约博客系统"
             }
         }
     }
