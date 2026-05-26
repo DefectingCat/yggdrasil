@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::pages::admin::AdminPage;
+use crate::pages::admin::{AdminPage, WritePage};
 use crate::pages::archives::ArchivesPage;
 use crate::pages::home::HomePage;
 use crate::pages::login::LoginPage;
@@ -18,6 +18,8 @@ pub enum Route {
     RegisterPage {},
     #[route("/admin")]
     AdminPage {},
+    #[route("/admin/write")]
+    WritePage {},
     #[route("/archives")]
     ArchivesPage {},
     #[route("/tags")]

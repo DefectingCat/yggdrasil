@@ -1,6 +1,10 @@
 use dioxus::prelude::*;
 
-use crate::pages::home::{Footer, Header, Post, POSTS};
+use crate::components::header::{Header, NavItemConfig};
+use crate::components::footer::Footer;
+use crate::pages::home::{Post, POSTS};
+use crate::router::Route;
+use crate::theme::ThemeToggle;
 
 #[derive(Clone, PartialEq)]
 struct TagInfo {
@@ -30,19 +34,28 @@ fn collect_tags() -> Vec<TagInfo> {
 fn posts_for_tag(tag: &str) -> Vec<Post> {
     POSTS
         .iter()
-        .filter(|p| p.tags.iter().any(|t| *t == tag))
+        .filter(|p| p.tags.contains(&tag))
         .cloned()
         .collect()
 }
 
 #[component]
 pub fn TagsPage() -> Element {
+    let route = use_route::<Route>();
+    let nav_items = vec![
+        NavItemConfig { href: "/", label: "首页", is_active: matches!(route, Route::HomePage {}) },
+        NavItemConfig { href: "/archives", label: "归档", is_active: matches!(route, Route::ArchivesPage {}) },
+        NavItemConfig { href: "/tags", label: "标签", is_active: matches!(route, Route::TagsPage {}) || matches!(route, Route::TagDetailPage { .. }) },
+        NavItemConfig { href: "/search", label: "搜索", is_active: matches!(route, Route::SearchPage {}) },
+        NavItemConfig { href: "/about", label: "关于", is_active: matches!(route, Route::AboutPage {}) },
+    ];
+
     let tags = collect_tags();
     let total_posts = POSTS.len();
 
     rsx! {
         div { class: "min-h-screen flex flex-col bg-white dark:bg-[#1d1e20] transition-colors duration-300",
-            Header {}
+            Header { nav_items, right_content: rsx! { ThemeToggle {} } }
             main { class: "flex-1 w-full max-w-3xl mx-auto px-6 py-6",
                 header { class: "page-header mb-6",
                     h1 { class: "text-[34px] font-bold text-gray-900 dark:text-[#dadadb]",
@@ -76,11 +89,20 @@ pub fn TagsPage() -> Element {
 
 #[component]
 pub fn TagDetailPage(tag: String) -> Element {
+    let route = use_route::<Route>();
+    let nav_items = vec![
+        NavItemConfig { href: "/", label: "首页", is_active: matches!(route, Route::HomePage {}) },
+        NavItemConfig { href: "/archives", label: "归档", is_active: matches!(route, Route::ArchivesPage {}) },
+        NavItemConfig { href: "/tags", label: "标签", is_active: matches!(route, Route::TagsPage {}) || matches!(route, Route::TagDetailPage { .. }) },
+        NavItemConfig { href: "/search", label: "搜索", is_active: matches!(route, Route::SearchPage {}) },
+        NavItemConfig { href: "/about", label: "关于", is_active: matches!(route, Route::AboutPage {}) },
+    ];
+
     let posts = posts_for_tag(&tag);
 
     rsx! {
         div { class: "min-h-screen flex flex-col bg-white dark:bg-[#1d1e20] transition-colors duration-300",
-            Header {}
+            Header { nav_items, right_content: rsx! { ThemeToggle {} } }
             main { class: "flex-1 w-full max-w-3xl mx-auto px-6 py-6",
                 header { class: "page-header mb-6",
                     h1 { class: "text-[34px] font-bold text-gray-900 dark:text-[#dadadb]",
@@ -103,7 +125,7 @@ pub fn TagDetailPage(tag: String) -> Element {
 
 #[component]
 fn TagPostEntry(post: Post) -> Element {
-    let tag_items = post.tags.iter().map(|t| *t).collect::<Vec<_>>();
+    let tag_items = post.tags.to_vec();
 
     rsx! {
         article { class: "relative mb-6 p-6 bg-white dark:bg-[#2e2e33] rounded-lg border border-gray-200 dark:border-[#333] hover:-translate-y-0.5 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-250",

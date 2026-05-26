@@ -1,5 +1,7 @@
 use dioxus::prelude::*;
 
+use crate::components::header::{Header, NavItemConfig};
+use crate::components::footer::Footer;
 use crate::router::Route;
 use crate::theme::ThemeToggle;
 
@@ -59,9 +61,18 @@ pub const POSTS: &[Post] = &[
 
 #[component]
 pub fn HomePage() -> Element {
+    let route = use_route::<Route>();
+    let nav_items = vec![
+        NavItemConfig { href: "/", label: "首页", is_active: matches!(route, Route::HomePage {}) },
+        NavItemConfig { href: "/archives", label: "归档", is_active: matches!(route, Route::ArchivesPage {}) },
+        NavItemConfig { href: "/tags", label: "标签", is_active: matches!(route, Route::TagsPage {}) || matches!(route, Route::TagDetailPage { .. }) },
+        NavItemConfig { href: "/search", label: "搜索", is_active: matches!(route, Route::SearchPage {}) },
+        NavItemConfig { href: "/about", label: "关于", is_active: matches!(route, Route::AboutPage {}) },
+    ];
+
     rsx! {
         div { class: "min-h-screen flex flex-col bg-white dark:bg-[#1d1e20] transition-colors duration-300",
-            Header {}
+            Header { nav_items, right_content: rsx! { ThemeToggle {} } }
             main { class: "flex-1 w-full max-w-3xl mx-auto px-6 py-6",
                 HomeInfo {}
                 for post in POSTS.iter() {
@@ -70,59 +81,6 @@ pub fn HomePage() -> Element {
                 Pagination {}
             }
             Footer {}
-        }
-    }
-}
-
-#[component]
-pub fn Header() -> Element {
-    let route = use_route::<Route>();
-
-    rsx! {
-        header { class: "sticky top-0 z-40 w-full border-b border-gray-200 dark:border-[#333] bg-white/80 dark:bg-[#1d1e20]/80 backdrop-blur-sm",
-            nav { class: "max-w-3xl mx-auto px-6 h-[60px] flex items-center justify-between",
-                a {
-                    class: "text-2xl font-bold text-gray-900 dark:text-[#dadadb] hover:opacity-80 transition-opacity",
-                    href: "/",
-                    "Yggdrasil"
-                }
-                div { class: "flex items-center gap-2",
-                    ul { class: "hidden md:flex items-center gap-1",
-                        NavItem { href: "/", label: "首页", route: route.clone() }
-                        NavItem { href: "/archives", label: "归档", route: route.clone() }
-                        NavItem { href: "/tags", label: "标签", route: route.clone() }
-                        NavItem { href: "/search", label: "搜索", route: route.clone() }
-                        NavItem { href: "/about", label: "关于", route: route.clone() }
-                    }
-                    ThemeToggle {}
-                }
-            }
-        }
-    }
-}
-
-#[component]
-pub fn NavItem(href: &'static str, label: &'static str, route: Route) -> Element {
-    let is_active = match (href, route) {
-        ("/", Route::HomePage {}) => true,
-        ("/archives", Route::ArchivesPage {}) => true,
-        ("/tags", Route::TagsPage {}) => true,
-        ("/tags", Route::TagDetailPage { .. }) => true,
-        ("/search", Route::SearchPage {}) => true,
-        ("/about", Route::AboutPage {}) => true,
-        _ => false,
-    };
-
-    let base_class = "px-3 py-1 text-base rounded-lg transition-colors";
-    let class_str = if is_active {
-        format!("{} font-medium text-gray-900 dark:text-[#dadadb] underline underline-offset-[0.3rem] decoration-2 decoration-gray-900 dark:decoration-[#dadadb]", base_class)
-    } else {
-        format!("{} text-gray-600 dark:text-[#9b9c9d] hover:text-gray-900 dark:hover:text-[#dadadb]", base_class)
-    };
-
-    rsx! {
-        li {
-            a { class: "{class_str}", href: "{href}", "{label}" }
         }
     }
 }
@@ -143,7 +101,7 @@ fn HomeInfo() -> Element {
 
 #[component]
 fn PostEntry(post: Post) -> Element {
-    let tag_items = post.tags.iter().map(|t| *t).collect::<Vec<_>>();
+    let tag_items = post.tags.to_vec();
 
     rsx! {
         article { class: "relative mb-6 p-6 bg-white dark:bg-[#2e2e33] rounded-lg border border-gray-200 dark:border-[#333] hover:-translate-y-0.5 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-250",
@@ -178,93 +136,6 @@ fn Pagination() -> Element {
                 href: "/page/2",
                 "下一页"
                 span { class: "ml-1", "»" }
-            }
-        }
-    }
-}
-
-#[component]
-pub fn Footer() -> Element {
-    let mut visible = use_signal(|| false);
-
-    use_effect(move || {
-        #[cfg(target_arch = "wasm32")]
-        {
-            if let Some(window) = web_sys::window() {
-                let closure = wasm_bindgen::prelude::Closure::wrap(Box::new(move || {
-                    if let Some(w) = web_sys::window() {
-                        let threshold = w.inner_height().ok()
-                            .and_then(|h| h.as_f64())
-                            .unwrap_or(0.0);
-                        let scroll_y = w.scroll_y().unwrap_or(0.0);
-                        let new_visible = scroll_y > threshold;
-                        visible.set(new_visible);
-                    }
-                }) as Box<dyn FnMut()>);
-
-                let _ = window.add_event_listener_with_callback("scroll", wasm_bindgen::JsCast::unchecked_ref(closure.as_ref()));
-
-                let threshold = window.inner_height().ok()
-                    .and_then(|h| h.as_f64())
-                    .unwrap_or(0.0);
-                let scroll_y = window.scroll_y().unwrap_or(0.0);
-                visible.set(scroll_y > threshold);
-
-                closure.forget();
-            }
-        }
-    });
-
-    let link_class = use_memo(move || {
-        let base = "p-2 rounded-full cursor-pointer hover:opacity-80 transition-all duration-300 text-gray-600 dark:text-gray-300";
-        if visible() {
-            format!("{} opacity-100 translate-y-0", base)
-        } else {
-            format!("{} opacity-0 translate-y-2 pointer-events-none", base)
-        }
-    });
-
-    rsx! {
-        footer { class: "w-full border-t border-gray-200 dark:border-[#333] mt-auto",
-            div { class: "max-w-3xl mx-auto px-6 py-5 flex items-center justify-between text-sm text-gray-400 dark:text-[#9b9c9d]",
-                span { "© 2026 Yggdrasil Blog" }
-                a {
-                    class: "{link_class}",
-                    href: "#top",
-                    aria_label: "go to top",
-                    title: "Go to Top (Alt + G)",
-                    accesskey: "g",
-                    onclick: move |evt| {
-                        evt.prevent_default();
-                        scroll_to_top();
-                    },
-                    svg {
-                        xmlns: "http://www.w3.org/2000/svg",
-                        height: "24px",
-                        view_box: "0 -960 960 960",
-                        width: "24px",
-                        fill: "currentColor",
-                        path {
-                            d: "m296-224-56-56 240-240 240 240-56 56-184-183-184 183Zm0-240-56-56 240-240 240 240-56 56-184-183-184 183Z",
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn scroll_to_top() {
-    #[cfg(target_arch = "wasm32")]
-    {
-        if let Some(window) = web_sys::window() {
-            let mut options = web_sys::ScrollToOptions::new();
-            options.top(0.0);
-            options.behavior(web_sys::ScrollBehavior::Smooth);
-            let _ = window.scroll_to_with_scroll_to_options(&options);
-
-            if let Ok(history) = window.history() {
-                let _ = history.replace_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(" "));
             }
         }
     }

@@ -24,13 +24,12 @@ pub fn LoginPage() -> Element {
                     token: Some(_token),
                     ..
                 }) => {
-                    // 设置 cookie (client-side, not HttpOnly but works for now)
                     #[cfg(target_arch = "wasm32")]
                     {
                         let cookie = format!(
                             "session={}; path=/; max-age={}; SameSite=Lax",
                             _token,
-                            30 * 24 * 60 * 60 // 30 days
+                            30 * 24 * 60 * 60
                         );
                         if let Some(window) = web_sys::window() {
                             if let Some(document) = window.document() {
@@ -40,7 +39,6 @@ pub fn LoginPage() -> Element {
                             }
                         }
                     }
-                    // 跳转到 admin 页面
                     let _ = dioxus::router::navigator().push("/admin");
                 }
                 Ok(AuthResponse {
@@ -65,25 +63,25 @@ pub fn LoginPage() -> Element {
     };
 
     rsx! {
-        div { class: "min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900",
-            div { class: "w-full max-w-md p-8 bg-white dark:bg-gray-800 rounded-2xl shadow-lg",
-                h1 { class: "text-2xl font-bold text-center text-gray-900 dark:text-white mb-6",
+        div { class: "min-h-screen flex items-center justify-center bg-white dark:bg-[#1d1e20]",
+            div { class: "w-full max-w-md p-8 bg-white dark:bg-[#2e2e33] rounded-2xl border border-gray-200 dark:border-[#333]",
+                h1 { class: "text-2xl font-bold text-center text-gray-900 dark:text-[#dadadb] mb-6",
                     "登录"
                 }
 
                 if let Some(err) = error() {
-                    div { class: "mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg text-center",
+                    div { class: "mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-center",
                         "{err}"
                     }
                 }
 
                 div { class: "space-y-4",
                     div {
-                        label { class: "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1",
+                        label { class: "block text-sm font-medium text-gray-700 dark:text-[#9b9c9d] mb-1",
                             "用户名"
                         }
                         input {
-                            class: "w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500",
+                            class: "w-full px-4 py-2 border border-gray-200 dark:border-[#333] rounded-lg bg-white dark:bg-[#2e2e33] text-gray-900 dark:text-[#dadadb] focus:outline-none focus:border-gray-400 dark:focus:border-gray-600",
                             r#type: "text",
                             placeholder: "用户名",
                             value: username(),
@@ -91,11 +89,11 @@ pub fn LoginPage() -> Element {
                         }
                     }
                     div {
-                        label { class: "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1",
+                        label { class: "block text-sm font-medium text-gray-700 dark:text-[#9b9c9d] mb-1",
                             "密码"
                         }
                         input {
-                            class: "w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500",
+                            class: "w-full px-4 py-2 border border-gray-200 dark:border-[#333] rounded-lg bg-white dark:bg-[#2e2e33] text-gray-900 dark:text-[#dadadb] focus:outline-none focus:border-gray-400 dark:focus:border-gray-600",
                             r#type: "password",
                             placeholder: "密码",
                             value: password(),
@@ -103,12 +101,12 @@ pub fn LoginPage() -> Element {
                         }
                     }
                     button {
-                        class: "w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors",
+                        class: "w-full py-2 px-4 bg-gray-900 dark:bg-[#dadadb] text-white dark:text-gray-900 font-medium rounded-full hover:opacity-80 transition-opacity",
                         onclick: on_submit,
                         "登录"
                     }
                     a {
-                        class: "block w-full py-2 px-4 text-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium rounded-lg transition-colors",
+                        class: "block w-full py-2 px-4 text-center text-gray-500 dark:text-[#9b9c9d] hover:text-gray-700 dark:hover:text-[#dadadb] font-medium rounded-lg transition-colors",
                         href: "/register",
                         "还没有账号？去注册"
                     }

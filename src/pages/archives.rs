@@ -1,6 +1,9 @@
 use dioxus::prelude::*;
 
-use crate::pages::home::{Footer, Header};
+use crate::components::header::{Header, NavItemConfig};
+use crate::components::footer::Footer;
+use crate::router::Route;
+use crate::theme::ThemeToggle;
 
 #[derive(Clone, PartialEq)]
 pub struct Post {
@@ -112,11 +115,20 @@ fn group_posts(posts: &[Post]) -> Vec<YearGroup> {
 
 #[component]
 pub fn ArchivesPage() -> Element {
+    let route = use_route::<Route>();
+    let nav_items = vec![
+        NavItemConfig { href: "/", label: "首页", is_active: matches!(route, Route::HomePage {}) },
+        NavItemConfig { href: "/archives", label: "归档", is_active: matches!(route, Route::ArchivesPage {}) },
+        NavItemConfig { href: "/tags", label: "标签", is_active: matches!(route, Route::TagsPage {}) || matches!(route, Route::TagDetailPage { .. }) },
+        NavItemConfig { href: "/search", label: "搜索", is_active: matches!(route, Route::SearchPage {}) },
+        NavItemConfig { href: "/about", label: "关于", is_active: matches!(route, Route::AboutPage {}) },
+    ];
+
     let grouped = group_posts(POSTS);
 
     rsx! {
         div { class: "min-h-screen flex flex-col bg-white dark:bg-[#1d1e20] transition-colors duration-300",
-            Header {}
+            Header { nav_items, right_content: rsx! { ThemeToggle {} } }
             main { class: "flex-1 w-full max-w-3xl mx-auto px-6 py-6",
                 header { class: "page-header mb-6",
                     h1 { class: "text-[34px] font-bold text-gray-900 dark:text-[#dadadb]",

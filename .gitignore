@@ -6,3 +6,4 @@
 /package-lock.json
 others/
 public/style.css
+.env

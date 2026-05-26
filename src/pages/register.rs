@@ -44,37 +44,37 @@ pub fn RegisterPage() -> Element {
     };
 
     rsx! {
-        div { class: "min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900",
-            div { class: "w-full max-w-md p-8 bg-white dark:bg-gray-800 rounded-2xl shadow-lg",
-                h1 { class: "text-2xl font-bold text-center text-gray-900 dark:text-white mb-2",
+        div { class: "min-h-screen flex items-center justify-center bg-white dark:bg-[#1d1e20]",
+            div { class: "w-full max-w-md p-8 bg-white dark:bg-[#2e2e33] rounded-2xl border border-gray-200 dark:border-[#333]",
+                h1 { class: "text-2xl font-bold text-center text-gray-900 dark:text-[#dadadb] mb-2",
                     "注册"
                 }
-                p { class: "text-sm text-center text-gray-500 dark:text-gray-400 mb-6",
+                p { class: "text-sm text-center text-gray-500 dark:text-[#9b9c9d] mb-6",
                     "首个注册账号将自动成为管理员"
                 }
 
                 if success() {
-                    div { class: "mb-4 p-3 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 rounded-lg text-center",
+                    div { class: "mb-4 p-3 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg text-center",
                         "注册成功！"
-                        a { class: "block mt-2 text-blue-600 dark:text-blue-400 hover:underline", href: "/login",
+                        a { class: "block mt-2 text-gray-700 dark:text-[#dadadb] hover:underline", href: "/login",
                             "去登录"
                         }
                     }
                 }
 
                 if let Some(err) = error() {
-                    div { class: "mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 rounded-lg text-center",
+                    div { class: "mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-center",
                         "{err}"
                     }
                 }
 
                 div { class: "space-y-4",
                     div {
-                        label { class: "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1",
+                        label { class: "block text-sm font-medium text-gray-700 dark:text-[#9b9c9d] mb-1",
                             "用户名"
                         }
                         input {
-                            class: "w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500",
+                            class: "w-full px-4 py-2 border border-gray-200 dark:border-[#333] rounded-lg bg-white dark:bg-[#2e2e33] text-gray-900 dark:text-[#dadadb] focus:outline-none focus:border-gray-400 dark:focus:border-gray-600",
                             r#type: "text",
                             placeholder: "3-50 位字符",
                             value: username(),
@@ -82,11 +82,11 @@ pub fn RegisterPage() -> Element {
                         }
                     }
                     div {
-                        label { class: "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1",
+                        label { class: "block text-sm font-medium text-gray-700 dark:text-[#9b9c9d] mb-1",
                             "邮箱"
                         }
                         input {
-                            class: "w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500",
+                            class: "w-full px-4 py-2 border border-gray-200 dark:border-[#333] rounded-lg bg-white dark:bg-[#2e2e33] text-gray-900 dark:text-[#dadadb] focus:outline-none focus:border-gray-400 dark:focus:border-gray-600",
                             r#type: "email",
                             placeholder: "your@email.com",
                             value: email(),
@@ -94,11 +94,11 @@ pub fn RegisterPage() -> Element {
                         }
                     }
                     div {
-                        label { class: "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1",
+                        label { class: "block text-sm font-medium text-gray-700 dark:text-[#9b9c9d] mb-1",
                             "密码"
                         }
                         input {
-                            class: "w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500",
+                            class: "w-full px-4 py-2 border border-gray-200 dark:border-[#333] rounded-lg bg-white dark:bg-[#2e2e33] text-gray-900 dark:text-[#dadadb] focus:outline-none focus:border-gray-400 dark:focus:border-gray-600",
                             r#type: "password",
                             placeholder: "至少 8 位",
                             value: password(),
@@ -106,11 +106,11 @@ pub fn RegisterPage() -> Element {
                         }
                     }
                     div {
-                        label { class: "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1",
+                        label { class: "block text-sm font-medium text-gray-700 dark:text-[#9b9c9d] mb-1",
                             "确认密码"
                         }
                         input {
-                            class: "w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500",
+                            class: "w-full px-4 py-2 border border-gray-200 dark:border-[#333] rounded-lg bg-white dark:bg-[#2e2e33] text-gray-900 dark:text-[#dadadb] focus:outline-none focus:border-gray-400 dark:focus:border-gray-600",
                             r#type: "password",
                             placeholder: "再次输入密码",
                             value: confirm_password(),
@@ -118,14 +118,14 @@ pub fn RegisterPage() -> Element {
                         }
                     }
                     button {
-                        class: "w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors",
+                        class: "w-full py-2 px-4 bg-gray-900 dark:bg-[#dadadb] text-white dark:text-gray-900 font-medium rounded-full hover:opacity-80 transition-opacity",
                         onclick: on_submit,
                         "注册"
                     }
                 }
-                p { class: "mt-4 text-center text-sm text-gray-500 dark:text-gray-400",
+                p { class: "mt-4 text-center text-sm text-gray-500 dark:text-[#9b9c9d]",
                     "已有账号？"
-                    a { class: "text-blue-600 dark:text-blue-400 hover:underline", href: "/login",
+                    a { class: "text-gray-700 dark:text-[#dadadb] hover:underline", href: "/login",
                         "去登录"
                     }
                 }
