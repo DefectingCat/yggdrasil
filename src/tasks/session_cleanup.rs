@@ -14,11 +14,11 @@ pub async fn run_cleanup() {
                     .execute("DELETE FROM sessions WHERE expires_at < NOW()", &[])
                     .await
                 {
-                    eprintln!("Session cleanup error: {}", e);
+                    tracing::error!("Session cleanup error: {}", e);
                 }
             }
             Err(e) => {
-                eprintln!("Failed to get DB connection for cleanup: {}", e);
+                tracing::error!("Failed to get DB connection for cleanup: {}", e);
             }
         }
     }

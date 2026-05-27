@@ -6,9 +6,10 @@ use wasm_bindgen::JsCast;
 use crate::components::write_skeleton::WriteSkeleton;
 
 #[component]
+#[allow(unused_mut, unused_variables)]
 pub fn Write() -> Element {
     let mut title = use_signal(|| "".to_string());
-    let content = use_signal(|| "".to_string());
+    let mut content = use_signal(|| "".to_string());
     let mut loading = use_signal(|| true);
 
     // 初始化 Tiptap 编辑器
@@ -105,11 +106,6 @@ pub fn Write() -> Element {
                             })()
                         "#).ok().and_then(|v| v.as_string()).unwrap_or_default();
                         content.set(md.clone());
-                        println!("保存文章: title={}, content_len={}", title(), md.len());
-                    }
-                    #[cfg(not(target_arch = "wasm32"))]
-                    {
-                        println!("保存文章: title={}, content_len={}", title(), content().len());
                     }
                 },
                 "保存草稿"

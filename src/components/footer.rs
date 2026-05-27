@@ -1,8 +1,9 @@
 use dioxus::prelude::*;
 
 #[component]
+#[allow(unused_mut)]
 pub fn Footer() -> Element {
-    let visible = use_signal(|| false);
+    let mut visible = use_signal(|| false);
 
     use_effect(move || {
         #[cfg(target_arch = "wasm32")]
@@ -10,18 +11,26 @@ pub fn Footer() -> Element {
             if let Some(window) = web_sys::window() {
                 let closure = wasm_bindgen::prelude::Closure::wrap(Box::new(move || {
                     if let Some(w) = web_sys::window() {
-                        let threshold = w.inner_height().ok()
+                        let threshold = w
+                            .inner_height()
+                            .ok()
                             .and_then(|h| h.as_f64())
                             .unwrap_or(0.0);
                         let scroll_y = w.scroll_y().unwrap_or(0.0);
                         let new_visible = scroll_y > threshold;
                         visible.set(new_visible);
                     }
-                }) as Box<dyn FnMut()>);
+                })
+                    as Box<dyn FnMut()>);
 
-                let _ = window.add_event_listener_with_callback("scroll", wasm_bindgen::JsCast::unchecked_ref(closure.as_ref()));
+                let _ = window.add_event_listener_with_callback(
+                    "scroll",
+                    wasm_bindgen::JsCast::unchecked_ref(closure.as_ref()),
+                );
 
-                let threshold = window.inner_height().ok()
+                let threshold = window
+                    .inner_height()
+                    .ok()
                     .and_then(|h| h.as_f64())
                     .unwrap_or(0.0);
                 let scroll_y = window.scroll_y().unwrap_or(0.0);
@@ -75,9 +84,9 @@ fn scroll_to_top() {
     #[cfg(target_arch = "wasm32")]
     {
         if let Some(window) = web_sys::window() {
-            let mut options = web_sys::ScrollToOptions::new();
-            options.top(0.0);
-            options.behavior(web_sys::ScrollBehavior::Smooth);
+            let options = web_sys::ScrollToOptions::new();
+            options.set_top(0.0);
+            options.set_behavior(web_sys::ScrollBehavior::Smooth);
             let _ = window.scroll_to_with_scroll_to_options(&options);
 
             if let Ok(history) = window.history() {
