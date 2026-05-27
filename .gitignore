@@ -7,4 +7,5 @@
 /package-lock.json
 others/
 public/style.css
+public/tiptap
 .env
