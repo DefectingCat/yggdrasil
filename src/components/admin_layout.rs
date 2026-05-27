@@ -3,6 +3,8 @@ use dioxus::prelude::*;
 use crate::api::auth::{get_current_user, logout};
 use crate::components::header::{Header, NavItemConfig};
 use crate::components::footer::Footer;
+use crate::components::admin_skeleton::{AdminSkeleton, AdminDashboardSkeleton};
+use crate::components::write_skeleton::WriteSkeleton;
 use crate::context::UserContext;
 use crate::router::Route;
 
@@ -86,9 +88,17 @@ pub fn AdminLayout() -> Element {
             }
         }
         (false, _) => {
+            // 使用与真实布局完全相同的结构包裹内容骨架，避免 checked 变化时的布局闪烁
             rsx! {
-                div { class: "min-h-screen flex items-center justify-center bg-white dark:bg-[#1d1e20]",
-                    p { class: "text-gray-600 dark:text-[#9b9c9d]", "加载中..." }
+                div { class: "min-h-screen flex flex-col bg-white dark:bg-[#1d1e20]",
+                    Header { nav_items: admin_nav_items, right_content: logout_button }
+                    main { class: "flex-1 w-full max-w-5xl mx-auto px-6 py-8",
+                        {match route {
+                            Route::WritePage {} => rsx! { WriteSkeleton {} },
+                            _ => rsx! { AdminDashboardSkeleton {} },
+                        }}
+                    }
+                    Footer {}
                 }
             }
         }
