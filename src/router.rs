@@ -3,43 +3,43 @@ use std::sync::Arc;
 
 use crate::components::admin_layout::AdminLayout;
 use crate::context::UserContext;
-use crate::pages::admin::{AdminPage, WritePage};
-use crate::pages::archives::ArchivesPage;
-use crate::pages::home::HomePage;
-use crate::pages::login::LoginPage;
-use crate::pages::register::RegisterPage;
-use crate::pages::tags::{TagsPage, TagDetailPage};
-use crate::theme::{Theme, ThemePreload, use_theme_provider};
+use crate::pages::admin::{Admin, Write};
+use crate::pages::archives::Archives;
+use crate::pages::home::Home;
+use crate::pages::login::Login;
+use crate::pages::register::Register;
+use crate::pages::tags::{TagDetail, Tags};
+use crate::theme::{use_theme_provider, Theme, ThemePreload};
 
 #[derive(Clone, Routable, Debug, PartialEq)]
 #[rustfmt::skip]
 pub enum Route {
     #[route("/")]
-    HomePage {},
+    Home {},
     #[route("/login")]
-    LoginPage {},
+    Login {},
     #[route("/register")]
-    RegisterPage {},
+    Register {},
 
     #[nest("/admin")]
     #[layout(AdminLayout)]
         #[route("/")]
-        AdminPage {},
+        Admin {},
         #[route("/write")]
-        WritePage {},
+        Write {},
     #[end_layout]
     #[end_nest]
 
     #[route("/archives")]
-    ArchivesPage {},
+    Archives {},
     #[route("/tags")]
-    TagsPage {},
+    Tags {},
     #[route("/tags/:tag")]
-    TagDetailPage { tag: String },
+    TagDetail { tag: String },
     #[route("/search")]
-    SearchPage {},
+    Search {},
     #[route("/about")]
-    AboutPage {},
+    About {},
 }
 
 #[component]
@@ -64,11 +64,11 @@ pub fn AppRouter() -> Element {
 }
 
 #[component]
-pub fn SearchPage() -> Element {
+pub fn Search() -> Element {
     rsx! { "Search" }
 }
 
 #[component]
-pub fn AboutPage() -> Element {
+pub fn About() -> Element {
     rsx! { "About" }
 }

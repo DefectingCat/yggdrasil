@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use crate::pages::home::{Post, POSTS};
 
 #[component]
-pub fn AdminPage() -> Element {
+pub fn Admin() -> Element {
     rsx! {
         div { class: "space-y-8",
             // 统计卡片

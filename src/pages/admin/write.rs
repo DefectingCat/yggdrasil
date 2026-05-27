@@ -6,9 +6,9 @@ use wasm_bindgen::JsCast;
 use crate::components::write_skeleton::WriteSkeleton;
 
 #[component]
-pub fn WritePage() -> Element {
+pub fn Write() -> Element {
     let mut title = use_signal(|| "".to_string());
-    let mut content = use_signal(|| "".to_string());
+    let content = use_signal(|| "".to_string());
     let mut loading = use_signal(|| true);
 
     // 初始化 Tiptap 编辑器

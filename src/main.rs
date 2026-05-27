@@ -9,17 +9,37 @@ mod router;
 mod tasks;
 mod theme;
 
-use router::AppRouter;
-
 fn main() {
     #[cfg(feature = "server")]
     {
         dotenvy::dotenv().ok();
-        std::thread::spawn(|| {
-            let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
-            rt.block_on(tasks::session_cleanup::run_cleanup());
+        tracing_subscriber::fmt()
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+            )
+            .init();
+
+        dioxus::server::serve(|| async move {
+            use dioxus::server::{axum, DioxusRouterExt, ServeConfig};
+            use tower_http::trace::TraceLayer;
+
+            tokio::spawn(async {
+                tasks::session_cleanup::run_cleanup().await;
+            });
+
+            let config = ServeConfig::new();
+            let router = axum::Router::new()
+                .layer(TraceLayer::new_for_http())
+                .serve_dioxus_application(config, router::AppRouter);
+
+            Ok(router)
         });
     }
 
-    dioxus::launch(AppRouter);
+    #[cfg(not(feature = "server"))]
+    {
+        use router::AppRouter;
+        dioxus::launch(AppRouter);
+    }
 }

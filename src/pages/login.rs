@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use crate::api::auth::{login, AuthResponse};
 
 #[component]
-pub fn LoginPage() -> Element {
+pub fn Login() -> Element {
     let mut username = use_signal(|| "".to_string());
     let mut password = use_signal(|| "".to_string());
     let mut error = use_signal(|| None::<String>);

@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn Footer() -> Element {
-    let mut visible = use_signal(|| false);
+    let visible = use_signal(|| false);
 
     use_effect(move || {
         #[cfg(target_arch = "wasm32")]

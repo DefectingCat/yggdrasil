@@ -1,9 +1,9 @@
 use dioxus::prelude::*;
 
 use crate::api::auth::{get_current_user, logout};
-use crate::components::header::{Header, NavItemConfig};
+use crate::components::admin_skeleton::AdminDashboardSkeleton;
 use crate::components::footer::Footer;
-use crate::components::admin_skeleton::{AdminSkeleton, AdminDashboardSkeleton};
+use crate::components::header::{Header, NavItemConfig};
 use crate::components::write_skeleton::WriteSkeleton;
 use crate::context::UserContext;
 use crate::router::Route;
@@ -39,12 +39,12 @@ pub fn AdminLayout() -> Element {
         NavItemConfig {
             href: "/admin",
             label: "仪表盘",
-            is_active: matches!(route, Route::AdminPage {}),
+            is_active: matches!(route, Route::Admin {}),
         },
         NavItemConfig {
             href: "/admin/write",
             label: "写文章",
-            is_active: matches!(route, Route::WritePage {}),
+            is_active: matches!(route, Route::Write {}),
         },
         NavItemConfig {
             href: "/",
@@ -53,15 +53,13 @@ pub fn AdminLayout() -> Element {
         },
     ];
 
-    let nav = navigator.clone();
     let logout_button = rsx! {
         button {
             class: "text-sm text-gray-600 dark:text-[#9b9c9d] hover:text-gray-900 dark:hover:text-[#dadadb] transition-colors",
             onclick: move |_| {
-                let nav = nav.clone();
                 spawn(async move {
                     let _ = logout().await;
-                    let _ = nav.push("/login");
+                    let _ = navigator.push("/login");
                 });
             },
             "登出"
@@ -94,7 +92,7 @@ pub fn AdminLayout() -> Element {
                     Header { nav_items: admin_nav_items, right_content: logout_button }
                     main { class: "flex-1 w-full max-w-5xl mx-auto px-6 py-8",
                         {match route {
-                            Route::WritePage {} => rsx! { WriteSkeleton {} },
+                            Route::Write {} => rsx! { WriteSkeleton {} },
                             _ => rsx! { AdminDashboardSkeleton {} },
                         }}
                     }

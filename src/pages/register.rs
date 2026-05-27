@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use crate::api::auth::{register, AuthResponse};
 
 #[component]
-pub fn RegisterPage() -> Element {
+pub fn Register() -> Element {
     let mut username = use_signal(|| "".to_string());
     let mut email = use_signal(|| "".to_string());
     let mut password = use_signal(|| "".to_string());
