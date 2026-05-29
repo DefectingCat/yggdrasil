@@ -1,0 +1,4 @@
+linkedProjects = ["Cargo.toml"]
+
+[files]
+exclude = ["node_modules", "public", ".dioxus", ".omc", "dist"]
