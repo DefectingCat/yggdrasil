@@ -20,6 +20,12 @@ fn main() {
             )
             .init();
 
+        if std::env::var("DATABASE_URL").is_err() {
+            tracing::error!("DATABASE_URL environment variable not set. Make sure .env exists or the variable is exported.");
+            eprintln!("ERROR: DATABASE_URL environment variable not set");
+            std::process::exit(1);
+        }
+
         dioxus::server::serve(|| async move {
             use dioxus::server::{axum, DioxusRouterExt, ServeConfig};
             use tower_http::trace::TraceLayer;

@@ -91,12 +91,18 @@ pub async fn register(
     let client = DB_POOL
         .get()
         .await
-        .map_err(|e| ServerFnError::new(format!("数据库连接失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("Register DB connection failed: {}", e);
+            ServerFnError::new(format!("数据库连接失败: {}", e))
+        })?;
 
     let admin_count: i64 = client
         .query_one("SELECT COUNT(*) FROM users WHERE role = 'admin'", &[])
         .await
-        .map_err(|e| ServerFnError::new(format!("查询失败: {}", e)))?
+        .map_err(|e| {
+            tracing::error!("Register admin count query failed: {}", e);
+            ServerFnError::new(format!("查询失败: {}", e))
+        })?
         .get(0);
 
     if admin_count > 0 {
@@ -108,7 +114,10 @@ pub async fn register(
     }
 
     let password_hash = password::hash_password(&password)
-        .map_err(|e| ServerFnError::new(format!("密码哈希失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("Register password hash failed: {}", e);
+            ServerFnError::new(format!("密码哈希失败: {}", e))
+        })?;
 
     let result = client
         .query_one(
@@ -146,7 +155,10 @@ pub async fn login(
     let client = DB_POOL
         .get()
         .await
-        .map_err(|e| ServerFnError::new(format!("数据库连接失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("Login DB connection failed: {}", e);
+            ServerFnError::new(format!("数据库连接失败: {}", e))
+        })?;
 
     let row = match client
         .query_opt(
@@ -163,12 +175,18 @@ pub async fn login(
                 token: None,
             });
         }
-        Err(e) => return Err(ServerFnError::new(format!("查询失败: {}", e))),
+        Err(e) => {
+            tracing::error!("Login user query failed: {}", e);
+            return Err(ServerFnError::new(format!("查询失败: {}", e)));
+        }
     };
 
     let password_hash: String = row.get("password_hash");
     let valid = password::verify_password(&password, &password_hash)
-        .map_err(|e| ServerFnError::new(format!("密码验证失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("Login password verify failed: {}", e);
+            ServerFnError::new(format!("密码验证失败: {}", e))
+        })?;
 
     if !valid {
         return Ok(AuthResponse {
@@ -188,7 +206,10 @@ pub async fn login(
             &[&user_id, &token, &expires_at],
         )
         .await
-        .map_err(|e| ServerFnError::new(format!("创建 session 失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("Login session insert failed: {}", e);
+            ServerFnError::new(format!("创建 session 失败: {}", e))
+        })?;
 
     let cookie = format!(
         "session={token}; HttpOnly; Path=/; Max-Age={}; SameSite=Lax",
@@ -224,7 +245,10 @@ pub async fn logout() -> Result<AuthResponse, ServerFnError> {
     let client = DB_POOL
         .get()
         .await
-        .map_err(|e| ServerFnError::new(format!("数据库连接失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("Logout DB connection failed: {}", e);
+            ServerFnError::new(format!("数据库连接失败: {}", e))
+        })?;
 
     // 清除 cookie
     if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
@@ -241,7 +265,10 @@ pub async fn logout() -> Result<AuthResponse, ServerFnError> {
         client
             .execute("DELETE FROM sessions WHERE token = $1", &[&t])
             .await
-            .map_err(|e| ServerFnError::new(format!("删除 session 失败: {}", e)))?;
+            .map_err(|e| {
+                tracing::error!("Logout session delete failed: {}", e);
+                ServerFnError::new(format!("删除 session 失败: {}", e))
+            })?;
     }
 
     Ok(AuthResponse {
@@ -277,7 +304,10 @@ pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
     let client = DB_POOL
         .get()
         .await
-        .map_err(|e| ServerFnError::new(format!("数据库连接失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("GetCurrentUser DB connection failed: {}", e);
+            ServerFnError::new(format!("数据库连接失败: {}", e))
+        })?;
 
     let row = client
         .query_opt(
@@ -288,7 +318,10 @@ pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
             &[&token],
         )
         .await
-        .map_err(|e| ServerFnError::new(format!("查询失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("GetCurrentUser session query failed: {}", e);
+            ServerFnError::new(format!("查询失败: {}", e))
+        })?;
 
     let user = match row {
         Some(row) => {

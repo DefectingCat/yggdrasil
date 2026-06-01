@@ -48,7 +48,10 @@ async fn get_current_admin_user() -> Result<User, ServerFnError> {
     let client = DB_POOL
         .get()
         .await
-        .map_err(|e| ServerFnError::new(format!("数据库连接失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("DB connection failed: {}", e);
+            ServerFnError::new(format!("数据库连接失败: {}", e))
+        })?;
 
     let row = client
         .query_opt(
@@ -59,7 +62,10 @@ async fn get_current_admin_user() -> Result<User, ServerFnError> {
             &[&token],
         )
         .await
-        .map_err(|e| ServerFnError::new(format!("查询失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("query failed: {}", e);
+            ServerFnError::new(format!("查询失败: {}", e))
+        })?;
 
     let user = match row {
         Some(row) => {
@@ -221,7 +227,10 @@ async fn set_post_tags(
     client
         .execute("DELETE FROM post_tags WHERE post_id = $1", &[&post_id])
         .await
-        .map_err(|e| ServerFnError::new(format!("删除标签关联失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("delete tag links failed: {}", e);
+            ServerFnError::new(format!("删除标签关联失败: {}", e))
+        })?;
 
     for tag_name in tags {
         let tag_name = tag_name.trim();
@@ -237,7 +246,10 @@ async fn set_post_tags(
                     &[&tag_name],
                 )
                 .await
-                .map_err(|e| ServerFnError::new(format!("创建标签失败: {}", e)))?;
+                .map_err(|e| {
+            tracing::error!("create tag failed: {}", e);
+            ServerFnError::new(format!("创建标签失败: {}", e))
+        })?;
 
             match row {
                 Some(r) => r.get(0),
@@ -246,7 +258,10 @@ async fn set_post_tags(
                     let row = client
                         .query_opt("SELECT id FROM tags WHERE name = $1", &[&tag_name])
                         .await
-                        .map_err(|e| ServerFnError::new(format!("查询标签失败: {}", e)))?;
+                        .map_err(|e| {
+            tracing::error!("query tag failed: {}", e);
+            ServerFnError::new(format!("查询标签失败: {}", e))
+        })?;
                     row.map(|r| r.get(0))
                         .ok_or_else(|| ServerFnError::new(format!("标签不存在: {}", tag_name)))?
                 }
@@ -259,7 +274,10 @@ async fn set_post_tags(
                 &[&post_id, &tag_id],
             )
             .await
-            .map_err(|e| ServerFnError::new(format!("关联标签失败: {}", e)))?;
+            .map_err(|e| {
+            tracing::error!("link tag failed: {}", e);
+            ServerFnError::new(format!("关联标签失败: {}", e))
+        })?;
     }
 
     Ok(())
@@ -401,7 +419,10 @@ pub async fn create_post(
     let mut client = DB_POOL
         .get()
         .await
-        .map_err(|e| ServerFnError::new(format!("数据库连接失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("DB connection failed: {}", e);
+            ServerFnError::new(format!("数据库连接失败: {}", e))
+        })?;
 
     let final_slug = ensure_unique_slug(&client, &base_slug, None).await?;
     let content_html = render_markdown(&content_md);
@@ -417,7 +438,10 @@ pub async fn create_post(
     let tx = client
         .transaction()
         .await
-        .map_err(|e| ServerFnError::new(format!("事务开始失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("transaction start failed: {}", e);
+            ServerFnError::new(format!("事务开始失败: {}", e))
+        })?;
 
     let row = tx
         .query_one(
@@ -436,7 +460,10 @@ pub async fn create_post(
             ],
         )
         .await
-        .map_err(|e| ServerFnError::new(format!("创建文章失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("create post failed: {}", e);
+            ServerFnError::new(format!("创建文章失败: {}", e))
+        })?;
 
     let post_id: i32 = row.get(0);
 
@@ -458,7 +485,10 @@ pub async fn create_post(
                         &[&tag_name.as_str()],
                     )
                     .await
-                    .map_err(|e| ServerFnError::new(format!("创建标签失败: {}", e)))?;
+                    .map_err(|e| {
+            tracing::error!("create tag failed: {}", e);
+            ServerFnError::new(format!("创建标签失败: {}", e))
+        })?;
 
                 match row {
                     Some(r) => r.get(0),
@@ -466,7 +496,10 @@ pub async fn create_post(
                         let row = tx
                             .query_opt("SELECT id FROM tags WHERE name = $1", &[&tag_name.as_str()])
                             .await
-                            .map_err(|e| ServerFnError::new(format!("查询标签失败: {}", e)))?;
+                            .map_err(|e| {
+            tracing::error!("query tag failed: {}", e);
+            ServerFnError::new(format!("查询标签失败: {}", e))
+        })?;
                         row.map(|r| r.get(0))
                             .ok_or_else(|| ServerFnError::new(format!("标签不存在: {}", tag_name)))?
                     }
@@ -478,13 +511,19 @@ pub async fn create_post(
                 &[&post_id, &tag_id],
             )
             .await
-            .map_err(|e| ServerFnError::new(format!("关联标签失败: {}", e)))?;
+            .map_err(|e| {
+            tracing::error!("link tag failed: {}", e);
+            ServerFnError::new(format!("关联标签失败: {}", e))
+        })?;
         }
     }
 
     tx.commit()
         .await
-        .map_err(|e| ServerFnError::new(format!("事务提交失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("transaction commit failed: {}", e);
+            ServerFnError::new(format!("事务提交失败: {}", e))
+        })?;
 
     Ok(CreatePostResponse {
         success: true,
@@ -509,7 +548,10 @@ pub async fn update_post(
     let mut client = DB_POOL
         .get()
         .await
-        .map_err(|e| ServerFnError::new(format!("数据库连接失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("DB connection failed: {}", e);
+            ServerFnError::new(format!("数据库连接失败: {}", e))
+        })?;
 
     // Verify ownership
     let exists: bool = client
@@ -554,7 +596,10 @@ pub async fn update_post(
     let tx = client
         .transaction()
         .await
-        .map_err(|e| ServerFnError::new(format!("事务开始失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("transaction start failed: {}", e);
+            ServerFnError::new(format!("事务开始失败: {}", e))
+        })?;
 
     // Check if status changed to published and was not published before
     let old_status_row = tx
@@ -563,7 +608,10 @@ pub async fn update_post(
             &[&post_id],
         )
         .await
-        .map_err(|e| ServerFnError::new(format!("查询失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("query failed: {}", e);
+            ServerFnError::new(format!("查询失败: {}", e))
+        })?;
 
     let published_at = if post_status == PostStatus::Published {
         let was_published = old_status_row
@@ -600,7 +648,10 @@ pub async fn update_post(
         ],
     )
     .await
-    .map_err(|e| ServerFnError::new(format!("更新文章失败: {}", e)))?;
+    .map_err(|e| {
+            tracing::error!("update post failed: {}", e);
+            ServerFnError::new(format!("更新文章失败: {}", e))
+        })?;
 
     // Update tags
     let tags_cleaned: Vec<String> = tags
@@ -611,7 +662,10 @@ pub async fn update_post(
 
     tx.execute("DELETE FROM post_tags WHERE post_id = $1", &[&post_id])
         .await
-        .map_err(|e| ServerFnError::new(format!("删除旧标签失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("delete old tags failed: {}", e);
+            ServerFnError::new(format!("删除旧标签失败: {}", e))
+        })?;
 
     for tag_name in &tags_cleaned {
         let tag_id: i32 = {
@@ -621,7 +675,10 @@ pub async fn update_post(
                     &[&tag_name.as_str()],
                 )
                 .await
-                .map_err(|e| ServerFnError::new(format!("创建标签失败: {}", e)))?;
+                .map_err(|e| {
+            tracing::error!("create tag failed: {}", e);
+            ServerFnError::new(format!("创建标签失败: {}", e))
+        })?;
 
             match row {
                 Some(r) => r.get(0),
@@ -629,7 +686,10 @@ pub async fn update_post(
                     let row = tx
                         .query_opt("SELECT id FROM tags WHERE name = $1", &[&tag_name.as_str()])
                         .await
-                        .map_err(|e| ServerFnError::new(format!("查询标签失败: {}", e)))?;
+                        .map_err(|e| {
+            tracing::error!("query tag failed: {}", e);
+            ServerFnError::new(format!("查询标签失败: {}", e))
+        })?;
                     row.map(|r| r.get(0))
                         .ok_or_else(|| ServerFnError::new(format!("标签不存在: {}", tag_name)))?
                 }
@@ -641,12 +701,18 @@ pub async fn update_post(
             &[&post_id, &tag_id],
         )
         .await
-        .map_err(|e| ServerFnError::new(format!("关联标签失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("link tag failed: {}", e);
+            ServerFnError::new(format!("关联标签失败: {}", e))
+        })?;
     }
 
     tx.commit()
         .await
-        .map_err(|e| ServerFnError::new(format!("事务提交失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("transaction commit failed: {}", e);
+            ServerFnError::new(format!("事务提交失败: {}", e))
+        })?;
 
     Ok(CreatePostResponse {
         success: true,
@@ -661,7 +727,10 @@ pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, Server
     let client = DB_POOL
         .get()
         .await
-        .map_err(|e| ServerFnError::new(format!("数据库连接失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("DB connection failed: {}", e);
+            ServerFnError::new(format!("数据库连接失败: {}", e))
+        })?;
 
     let row = client
         .query_opt(
@@ -671,7 +740,10 @@ pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, Server
             &[&slug],
         )
         .await
-        .map_err(|e| ServerFnError::new(format!("查询失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("query failed: {}", e);
+            ServerFnError::new(format!("查询失败: {}", e))
+        })?;
 
     let post = match row {
         Some(row) => Some(row_to_post(&client, &row).await),
@@ -686,7 +758,10 @@ pub async fn list_published_posts() -> Result<PostListResponse, ServerFnError> {
     let client = DB_POOL
         .get()
         .await
-        .map_err(|e| ServerFnError::new(format!("数据库连接失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("DB connection failed: {}", e);
+            ServerFnError::new(format!("数据库连接失败: {}", e))
+        })?;
 
     let rows = client
         .query(
@@ -697,7 +772,10 @@ pub async fn list_published_posts() -> Result<PostListResponse, ServerFnError> {
             &[],
         )
         .await
-        .map_err(|e| ServerFnError::new(format!("查询失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("query failed: {}", e);
+            ServerFnError::new(format!("查询失败: {}", e))
+        })?;
 
     let mut posts = Vec::new();
     for row in &rows {
@@ -714,7 +792,10 @@ pub async fn list_posts() -> Result<PostListResponse, ServerFnError> {
     let client = DB_POOL
         .get()
         .await
-        .map_err(|e| ServerFnError::new(format!("数据库连接失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("DB connection failed: {}", e);
+            ServerFnError::new(format!("数据库连接失败: {}", e))
+        })?;
 
     let rows = client
         .query(
@@ -725,7 +806,10 @@ pub async fn list_posts() -> Result<PostListResponse, ServerFnError> {
             &[],
         )
         .await
-        .map_err(|e| ServerFnError::new(format!("查询失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("query failed: {}", e);
+            ServerFnError::new(format!("查询失败: {}", e))
+        })?;
 
     let mut posts = Vec::new();
     for row in &rows {
@@ -742,7 +826,10 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
     let client = DB_POOL
         .get()
         .await
-        .map_err(|e| ServerFnError::new(format!("数据库连接失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("DB connection failed: {}", e);
+            ServerFnError::new(format!("数据库连接失败: {}", e))
+        })?;
 
     let result = client
         .execute(
@@ -750,7 +837,10 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
             &[&post_id],
         )
         .await
-        .map_err(|e| ServerFnError::new(format!("删除失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("delete failed: {}", e);
+            ServerFnError::new(format!("删除失败: {}", e))
+        })?;
 
     if result == 0 {
         return Ok(CreatePostResponse {
@@ -774,7 +864,10 @@ pub async fn list_tags() -> Result<TagListResponse, ServerFnError> {
     let client = DB_POOL
         .get()
         .await
-        .map_err(|e| ServerFnError::new(format!("数据库连接失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("DB connection failed: {}", e);
+            ServerFnError::new(format!("数据库连接失败: {}", e))
+        })?;
 
     let rows = client
         .query(
@@ -787,7 +880,10 @@ pub async fn list_tags() -> Result<TagListResponse, ServerFnError> {
             &[],
         )
         .await
-        .map_err(|e| ServerFnError::new(format!("查询失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("query failed: {}", e);
+            ServerFnError::new(format!("查询失败: {}", e))
+        })?;
 
     let tags: Vec<Tag> = rows
         .iter()
@@ -806,7 +902,10 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
     let client = DB_POOL
         .get()
         .await
-        .map_err(|e| ServerFnError::new(format!("数据库连接失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("DB connection failed: {}", e);
+            ServerFnError::new(format!("数据库连接失败: {}", e))
+        })?;
 
     let rows = client
         .query(
@@ -819,7 +918,10 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
             &[&tag_name],
         )
         .await
-        .map_err(|e| ServerFnError::new(format!("查询失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("query failed: {}", e);
+            ServerFnError::new(format!("查询失败: {}", e))
+        })?;
 
     let mut posts = Vec::new();
     for row in &rows {
@@ -836,7 +938,10 @@ pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
     let client = DB_POOL
         .get()
         .await
-        .map_err(|e| ServerFnError::new(format!("数据库连接失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("DB connection failed: {}", e);
+            ServerFnError::new(format!("数据库连接失败: {}", e))
+        })?;
 
     let total: i64 = client
         .query_one("SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL", &[])
@@ -876,7 +981,10 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
     let client = DB_POOL
         .get()
         .await
-        .map_err(|e| ServerFnError::new(format!("数据库连接失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("DB connection failed: {}", e);
+            ServerFnError::new(format!("数据库连接失败: {}", e))
+        })?;
 
     let search_pattern = format!("%{}%", query);
 
@@ -890,7 +998,10 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
             &[&search_pattern],
         )
         .await
-        .map_err(|e| ServerFnError::new(format!("查询失败: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("query failed: {}", e);
+            ServerFnError::new(format!("查询失败: {}", e))
+        })?;
 
     let mut posts = Vec::new();
     for row in &rows {
