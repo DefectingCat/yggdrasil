@@ -1,16 +1,36 @@
 use dioxus::prelude::*;
 
-use crate::pages::home::{Post, POSTS};
+use crate::api::posts::{get_post_stats, list_posts, PostListResponse, PostStatsResponse};
+use crate::models::post::Post;
 
 #[component]
 pub fn Admin() -> Element {
+    let stats_res = use_resource(get_post_stats);
+    let posts_res = use_resource(list_posts);
+
     rsx! {
         div { class: "space-y-8",
             // 统计卡片
             div { class: "grid grid-cols-1 md:grid-cols-3 gap-6",
-                StatCard { value: POSTS.len().to_string(), label: "文章总数" }
-                StatCard { value: "0".to_string(), label: "草稿数" }
-                StatCard { value: POSTS.len().to_string(), label: "已发布" }
+                match &*stats_res.read() {
+                    Some(Ok(PostStatsResponse { stats })) => {
+                        rsx! {
+                            StatCard { value: stats.total.to_string(), label: "文章总数" }
+                            StatCard { value: stats.drafts.to_string(), label: "草稿数" }
+                            StatCard { value: stats.published.to_string(), label: "已发布" }
+                        }
+                    }
+                    _ => {
+                        rsx! {
+                            for _ in 0..3 {
+                                div { class: "rounded-xl bg-white dark:bg-[#2e2e33] border border-gray-200 dark:border-[#333] p-6 text-center space-y-3 animate-pulse",
+                                    div { class: "h-9 w-16 mx-auto bg-gray-200 dark:bg-[#2a2a2a] rounded" }
+                                    div { class: "h-4 w-20 mx-auto bg-gray-200 dark:bg-[#2a2a2a] rounded" }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // 快捷操作
@@ -23,10 +43,9 @@ pub fn Admin() -> Element {
                     "写文章"
                 }
                 button {
-                    class: "bg-gray-200 dark:bg-[#333] text-gray-700 dark:text-[#dadadb] rounded-full px-6 py-3 text-center font-medium hover:opacity-80 transition-opacity",
+                    class: "bg-gray-200 dark:bg-[#333] text-gray-700 dark:text-[#dadadb] rounded-full px-6 py-3 text-center font-medium hover:opacity-80 transition-opacity cursor-pointer",
                     onclick: move |_| {
-                        #[cfg(target_arch = "wasm32")]
-                        web_sys::window().map(|w| w.alert_with_message("开发中").ok());
+                        dioxus::router::navigator().push("/admin/posts");
                     },
                     "管理文章"
                 }
@@ -37,9 +56,27 @@ pub fn Admin() -> Element {
                 h2 { class: "text-xl font-bold text-gray-900 dark:text-[#dadadb] mb-4",
                     "最近文章"
                 }
-                div { class: "space-y-0",
-                    for post in POSTS.iter().take(5) {
-                        RecentPostItem { post: post.clone() }
+                match &*posts_res.read() {
+                    Some(Ok(PostListResponse { posts })) => {
+                        rsx! {
+                            div { class: "space-y-0",
+                                for post in posts.iter().take(5) {
+                                    RecentPostItem { post: post.clone() }
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        rsx! {
+                            div { class: "space-y-4 animate-pulse",
+                                for _ in 0..5 {
+                                    div { class: "flex justify-between items-center py-3 border-b border-gray-100 dark:border-[#333]",
+                                        div { class: "h-4 w-[45%] bg-gray-200 dark:bg-[#2a2a2a] rounded" }
+                                        div { class: "h-3 w-20 bg-gray-200 dark:bg-[#2a2a2a] rounded" }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -63,13 +100,33 @@ fn StatCard(value: String, label: String) -> Element {
 
 #[component]
 fn RecentPostItem(post: Post) -> Element {
+    let date_str = post
+        .published_at
+        .map(|d| d.format("%Y-%m-%d").to_string())
+        .unwrap_or_else(|| post.created_at.format("%Y-%m-%d").to_string());
+    let status_label = if post.status == crate::models::post::PostStatus::Published {
+        "已发布"
+    } else {
+        "草稿"
+    };
+    let status_class = if post.status == crate::models::post::PostStatus::Published {
+        "text-green-600 dark:text-green-400"
+    } else {
+        "text-gray-400 dark:text-[#9b9c9d]"
+    };
+
     rsx! {
         div { class: "flex justify-between items-center py-3 border-b border-gray-100 dark:border-[#333]",
-            span { class: "text-gray-700 dark:text-[#dadadb]",
-                "{post.title}"
+            div { class: "flex items-center gap-3",
+                span { class: "text-gray-700 dark:text-[#dadadb]",
+                    "{post.title}"
+                }
+                span { class: "text-xs {status_class}",
+                    "{status_label}"
+                }
             }
             span { class: "text-sm text-gray-400 dark:text-[#9b9c9d]",
-                "{post.date}"
+                "{date_str}"
             }
         }
     }

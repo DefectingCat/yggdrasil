@@ -3,10 +3,11 @@ use std::sync::Arc;
 
 use crate::components::admin_layout::AdminLayout;
 use crate::context::UserContext;
-use crate::pages::admin::{Admin, Write};
+use crate::pages::admin::{Admin, Posts, Write};
 use crate::pages::archives::Archives;
 use crate::pages::home::Home;
 use crate::pages::login::Login;
+use crate::pages::post_detail::PostDetail;
 use crate::pages::register::Register;
 use crate::pages::tags::{TagDetail, Tags};
 use crate::theme::{use_theme_provider, Theme, ThemePreload};
@@ -27,6 +28,8 @@ pub enum Route {
         Admin {},
         #[route("/write")]
         Write {},
+        #[route("/posts")]
+        Posts {},
     #[end_layout]
     #[end_nest]
 
@@ -36,6 +39,8 @@ pub enum Route {
     Tags {},
     #[route("/tags/:tag")]
     TagDetail { tag: String },
+    #[route("/post/:slug")]
+    PostDetail { slug: String },
     #[route("/search")]
     Search {},
     #[route("/about")]

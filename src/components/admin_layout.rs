@@ -47,6 +47,11 @@ pub fn AdminLayout() -> Element {
             is_active: matches!(route, Route::Write {}),
         },
         NavItemConfig {
+            href: "/admin/posts",
+            label: "管理文章",
+            is_active: matches!(route, Route::Posts {}),
+        },
+        NavItemConfig {
             href: "/",
             label: "前台",
             is_active: false,

@@ -1,60 +1,22 @@
 use dioxus::prelude::*;
 
+use crate::api::posts::{list_published_posts, PostListResponse};
 use crate::components::header::{Header, NavItemConfig};
 use crate::components::footer::Footer;
+use crate::models::post::Post;
 use crate::router::Route;
 use crate::theme::ThemeToggle;
 
 #[derive(Clone, PartialEq)]
-pub struct Post {
-    pub title: &'static str,
-    pub date: &'static str,
-    pub slug: &'static str,
-}
-
-const POSTS: &[Post] = &[
-    Post {
-        title: "开始使用 Rust 构建 Web 应用",
-        date: "2026-05-20",
-        slug: "rust-web-app",
-    },
-    Post {
-        title: "Tailwind CSS 的设计理念与实践",
-        date: "2026-05-15",
-        slug: "tailwind-css",
-    },
-    Post {
-        title: "PostgreSQL 在 Rust 项目中的最佳实践",
-        date: "2026-05-10",
-        slug: "postgresql-rust",
-    },
-    Post {
-        title: "暗色模式的设计思考",
-        date: "2026-05-05",
-        slug: "dark-mode-design",
-    },
-    Post {
-        title: "博客系统的架构演进",
-        date: "2026-04-28",
-        slug: "blog-architecture",
-    },
-    Post {
-        title: "Dioxus 0.7 新特性一览",
-        date: "2026-04-20",
-        slug: "dioxus-07",
-    },
-];
-
-#[derive(Clone, PartialEq)]
 struct YearGroup {
-    year: &'static str,
+    year: String,
     months: Vec<MonthGroup>,
 }
 
 #[derive(Clone, PartialEq)]
 struct MonthGroup {
-    month: &'static str,
-    month_en: &'static str,
+    month: String,
+    month_en: String,
     posts: Vec<Post>,
 }
 
@@ -62,11 +24,16 @@ fn group_posts(posts: &[Post]) -> Vec<YearGroup> {
     let mut years: Vec<YearGroup> = vec![];
 
     for post in posts {
-        let parts: Vec<&str> = post.date.split('-').collect();
+        let date_str = post
+            .published_at
+            .map(|d| d.format("%Y-%m-%d").to_string())
+            .unwrap_or_else(|| post.created_at.format("%Y-%m-%d").to_string());
+
+        let parts: Vec<&str> = date_str.split('-').collect();
         if parts.len() != 3 {
             continue;
         }
-        let year = parts[0];
+        let year = parts[0].to_string();
         let month_num = parts[1];
         let month_en = match month_num {
             "01" => "January",
@@ -93,8 +60,8 @@ fn group_posts(posts: &[Post]) -> Vec<YearGroup> {
                     }
                 }
                 yg.months.push(MonthGroup {
-                    month: month_en,
-                    month_en,
+                    month: month_en.to_string(),
+                    month_en: month_en.to_string(),
                     posts: vec![post.clone()],
                 });
                 continue;
@@ -103,8 +70,8 @@ fn group_posts(posts: &[Post]) -> Vec<YearGroup> {
         years.push(YearGroup {
             year,
             months: vec![MonthGroup {
-                month: month_en,
-                month_en,
+                month: month_en.to_string(),
+                month_en: month_en.to_string(),
                 posts: vec![post.clone()],
             }],
         });
@@ -116,6 +83,8 @@ fn group_posts(posts: &[Post]) -> Vec<YearGroup> {
 #[component]
 pub fn Archives() -> Element {
     let route = use_route::<Route>();
+    let posts_res = use_resource(list_published_posts);
+
     let nav_items = vec![
         NavItemConfig { href: "/", label: "首页", is_active: matches!(route, Route::Home {}) },
         NavItemConfig { href: "/archives", label: "归档", is_active: matches!(route, Route::Archives {}) },
@@ -123,8 +92,6 @@ pub fn Archives() -> Element {
         NavItemConfig { href: "/search", label: "搜索", is_active: matches!(route, Route::Search {}) },
         NavItemConfig { href: "/about", label: "关于", is_active: matches!(route, Route::About {}) },
     ];
-
-    let grouped = group_posts(POSTS);
 
     rsx! {
         div { class: "min-h-screen flex flex-col bg-white dark:bg-[#1d1e20] transition-colors duration-300",
@@ -134,14 +101,57 @@ pub fn Archives() -> Element {
                     h1 { class: "text-[34px] font-bold text-gray-900 dark:text-[#dadadb]",
                         "归档"
                     }
-                    div { class: "mt-2 text-base text-gray-500 dark:text-[#9b9c9d]",
-                        "共 "
-                        span { class: "font-medium text-gray-700 dark:text-[#dadadb]", "{POSTS.len()}" }
-                        " 篇文章"
+                    match &*posts_res.read() {
+                        Some(Ok(PostListResponse { posts })) => {
+                            rsx! {
+                                div { class: "mt-2 text-base text-gray-500 dark:text-[#9b9c9d]",
+                                    "共 "
+                                    span { class: "font-medium text-gray-700 dark:text-[#dadadb]", "{posts.len()}" }
+                                    " 篇文章"
+                                }
+                            }
+                        }
+                        _ => {
+                            rsx! {
+                                div { class: "mt-2 text-base text-gray-500 dark:text-[#9b9c9d]",
+                                    "加载中..."
+                                }
+                            }
+                        }
                     }
                 }
-                for year_group in grouped.iter() {
-                    YearSection { year_group: year_group.clone() }
+                match &*posts_res.read() {
+                    Some(Ok(PostListResponse { posts })) => {
+                        let grouped = group_posts(posts);
+                        rsx! {
+                            for year_group in grouped.iter() {
+                                YearSection { year_group: year_group.clone() }
+                            }
+                        }
+                    }
+                    Some(Err(e)) => {
+                        rsx! {
+                            div { class: "text-center text-red-500 dark:text-red-400 py-20",
+                                "加载失败: {e}"
+                            }
+                        }
+                    }
+                    None => {
+                        rsx! {
+                            div { class: "space-y-8 animate-pulse",
+                                for _ in 0..2 {
+                                    div { class: "space-y-4",
+                                        div { class: "h-8 w-20 bg-gray-200 dark:bg-[#2a2a2a] rounded" }
+                                        div { class: "space-y-2",
+                                            for _ in 0..3 {
+                                                div { class: "h-4 w-full bg-gray-200 dark:bg-[#2a2a2a] rounded" }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             Footer {}
@@ -166,14 +176,14 @@ fn YearSection(year_group: YearGroup) -> Element {
                 sup { class: "archive-count text-sm text-gray-400 dark:text-[#9b9c9d] ml-1", "{total}" }
             }
             for month_group in year_group.months.iter() {
-                MonthSection { month_group: month_group.clone(), year: year_group.year }
+                MonthSection { month_group: month_group.clone(), year: year_group.year.clone() }
             }
         }
     }
 }
 
 #[component]
-fn MonthSection(month_group: MonthGroup, year: &'static str) -> Element {
+fn MonthSection(month_group: MonthGroup, year: String) -> Element {
     let count = month_group.posts.len();
 
     rsx! {
@@ -199,13 +209,18 @@ fn MonthSection(month_group: MonthGroup, year: &'static str) -> Element {
 
 #[component]
 fn ArchiveEntry(post: Post) -> Element {
+    let date_str = post
+        .published_at
+        .map(|d| d.format("%Y-%m-%d").to_string())
+        .unwrap_or_else(|| post.created_at.format("%Y-%m-%d").to_string());
+
     rsx! {
         div { class: "archive-entry relative py-1.5 my-2.5 group",
             h3 { class: "archive-entry-title text-base font-normal text-gray-900 dark:text-[#dadadb] m-0",
                 "{post.title}"
             }
             div { class: "archive-meta text-sm text-gray-400 dark:text-[#9b9c9d] mt-1",
-                "{post.date}"
+                "{date_str}"
             }
             a {
                 class: "entry-link absolute inset-0 z-10",

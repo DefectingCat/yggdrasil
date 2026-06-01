@@ -1,67 +1,17 @@
 use dioxus::prelude::*;
 
+use crate::api::posts::{list_published_posts, PostListResponse};
 use crate::components::header::{Header, NavItemConfig};
 use crate::components::footer::Footer;
+use crate::models::post::Post;
 use crate::router::Route;
 use crate::theme::ThemeToggle;
-
-#[derive(Clone, PartialEq)]
-pub struct Post {
-    pub title: &'static str,
-    pub summary: &'static str,
-    pub date: &'static str,
-    pub tags: &'static [&'static str],
-    pub slug: &'static str,
-}
-
-pub const POSTS: &[Post] = &[
-    Post {
-        title: "开始使用 Rust 构建 Web 应用",
-        summary: "Rust 作为一门系统级编程语言，近年来在 Web 开发领域也展现出了强大的生命力。本文将介绍如何使用 Rust 和 Dioxus 框架构建现代化的全栈 Web 应用，从项目搭建到部署的完整流程。",
-        date: "2026-05-20",
-        tags: &["Rust", "Web"],
-        slug: "rust-web-app",
-    },
-    Post {
-        title: "Tailwind CSS 的设计理念与实践",
-        summary: "Tailwind CSS 是一种实用优先的 CSS 框架，它改变了我们编写样式的方式。通过原子化的工具类，开发者可以快速构建出美观且一致的界面，而无需在 CSS 文件和 HTML 之间来回切换。",
-        date: "2026-05-15",
-        tags: &["CSS", "前端"],
-        slug: "tailwind-css",
-    },
-    Post {
-        title: "PostgreSQL 在 Rust 项目中的最佳实践",
-        summary: "数据库是大多数 Web 应用的核心组件。本文探讨如何在 Rust 项目中高效地使用 PostgreSQL，包括连接池管理、异步查询、事务处理以及常见的性能优化技巧。",
-        date: "2026-05-10",
-        tags: &["数据库", "Rust"],
-        slug: "postgresql-rust",
-    },
-    Post {
-        title: "暗色模式的设计思考",
-        summary: "暗色模式不仅仅是颜色的反转，它涉及到一整套设计系统的重新思考。从对比度到语义化颜色，暗色模式需要细致的打磨才能提供舒适的阅读体验。",
-        date: "2026-05-05",
-        tags: &["设计", "UI"],
-        slug: "dark-mode-design",
-    },
-    Post {
-        title: "博客系统的架构演进",
-        summary: "从一个简单的静态页面到全栈应用，博客系统的架构经历了多次演进。本文记录了 Yggdrasil 博客从设计到实现的思考过程，以及每次迭代背后的决策依据。",
-        date: "2026-04-28",
-        tags: &["架构", "博客"],
-        slug: "blog-architecture",
-    },
-    Post {
-        title: "Dioxus 0.7 新特性一览",
-        summary: "Dioxus 0.7 带来了许多令人兴奋的改进，包括更好的全栈支持、改进的路由系统和更流畅的开发体验。让我们一起看看这些新特性如何提升开发效率。",
-        date: "2026-04-20",
-        tags: &["Rust", "框架"],
-        slug: "dioxus-07",
-    },
-];
 
 #[component]
 pub fn Home() -> Element {
     let route = use_route::<Route>();
+    let posts_res = use_resource(list_published_posts);
+
     let nav_items = vec![
         NavItemConfig { href: "/", label: "首页", is_active: matches!(route, Route::Home {}) },
         NavItemConfig { href: "/archives", label: "归档", is_active: matches!(route, Route::Archives {}) },
@@ -75,8 +25,39 @@ pub fn Home() -> Element {
             Header { nav_items, right_content: rsx! { ThemeToggle {} } }
             main { class: "flex-1 w-full max-w-3xl mx-auto px-6 py-6",
                 HomeInfo {}
-                for post in POSTS.iter() {
-                    PostEntry { post: post.clone() }
+                match &*posts_res.read() {
+                    Some(Ok(PostListResponse { posts })) => {
+                        rsx! {
+                            for post in posts.iter() {
+                                PostEntry { post: post.clone() }
+                            }
+                            if posts.is_empty() {
+                                div { class: "text-center text-gray-500 dark:text-[#9b9c9d] py-20",
+                                    "暂无文章"
+                                }
+                            }
+                        }
+                    }
+                    Some(Err(e)) => {
+                        rsx! {
+                            div { class: "text-center text-red-500 dark:text-red-400 py-20",
+                                "加载失败: {e}"
+                            }
+                        }
+                    }
+                    None => {
+                        rsx! {
+                            div { class: "space-y-6 py-4",
+                                for _ in 0..3 {
+                                    div { class: "mb-6 p-6 bg-white dark:bg-[#2e2e33] rounded-lg border border-gray-200 dark:border-[#333] animate-pulse",
+                                        div { class: "h-7 w-3/4 bg-gray-200 dark:bg-[#2a2a2a] rounded mb-3" }
+                                        div { class: "h-4 w-full bg-gray-200 dark:bg-[#2a2a2a] rounded mb-2" }
+                                        div { class: "h-4 w-2/3 bg-gray-200 dark:bg-[#2a2a2a] rounded" }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 Pagination {}
             }
@@ -101,9 +82,12 @@ fn HomeInfo() -> Element {
 
 #[component]
 fn PostEntry(post: Post) -> Element {
-    let tag_items = post.tags.to_vec();
+    let post_slug = post.slug.clone();
+    let date_str = post
+        .published_at
+        .map(|d| d.format("%Y-%m-%d").to_string())
+        .unwrap_or_else(|| post.created_at.format("%Y-%m-%d").to_string());
 
-    let post_slug = post.slug;
     rsx! {
         article { class: "relative mb-6 p-6 bg-white dark:bg-[#2e2e33] rounded-lg border border-gray-200 dark:border-[#333] hover:-translate-y-0.5 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-250",
             a {
@@ -117,16 +101,26 @@ fn PostEntry(post: Post) -> Element {
                     "{post.title}"
                 }
                 div { class: "mt-2 text-sm text-gray-500 dark:text-[#9b9c9d] leading-relaxed line-clamp-2",
-                    "{post.summary}"
+                    "{post.summary.as_deref().unwrap_or(\"\")}"
                 }
                 div { class: "mt-3 flex items-center gap-3 text-[13px] text-gray-400 dark:text-[#9b9c9d]",
-                    span { "{post.date}" }
-                    span { "·" }
-                    for (i, tag) in tag_items.iter().enumerate() {
-                        if i > 0 {
-                            span { "," }
+                    span { "{date_str}" }
+                    if !post.tags.is_empty() {
+                        span { "·" }
+                        for tag in post.tags.clone().into_iter() {
+                            span {
+                                a {
+                                    class: "hover:text-gray-600 dark:hover:text-[#dadadb] transition-colors",
+                                    href: "/tags/{tag}",
+                                    onclick: move |evt| {
+                                        evt.prevent_default();
+                                        evt.stop_propagation();
+                                        dioxus::router::navigator().push(format!("/tags/{}", tag).as_str());
+                                    },
+                                    "{tag}"
+                                }
+                            }
                         }
-                        span { "{tag}" }
                     }
                 }
             }

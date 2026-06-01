@@ -26,7 +26,7 @@ impl PostStatus {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Post {
     pub id: i32,
     pub author_id: i32,
@@ -42,14 +42,14 @@ pub struct Post {
     pub tags: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Tag {
     pub id: i32,
     pub name: String,
     pub post_count: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PostStats {
     pub total: i64,
     pub drafts: i64,
