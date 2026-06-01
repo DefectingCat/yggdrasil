@@ -1,5 +1,3 @@
-CREATE TYPE post_status AS ENUM ('draft', 'published');
-
 CREATE TABLE posts (
     id           SERIAL PRIMARY KEY,
     author_id    INT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
@@ -11,14 +9,15 @@ CREATE TABLE posts (
     content_md   TEXT NOT NULL,
     content_html TEXT,
 
-    status       post_status NOT NULL DEFAULT 'draft',
+    status       TEXT NOT NULL DEFAULT 'draft',
     published_at TIMESTAMPTZ,
 
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at   TIMESTAMPTZ,
 
-    CONSTRAINT posts_slug_unique UNIQUE (slug)
+    CONSTRAINT posts_slug_unique UNIQUE (slug),
+    CONSTRAINT posts_status_check CHECK (status IN ('draft', 'published'))
 );
 
 CREATE INDEX idx_posts_status_published ON posts(status, published_at DESC) WHERE deleted_at IS NULL;

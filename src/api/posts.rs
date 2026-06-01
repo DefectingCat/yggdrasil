@@ -634,7 +634,7 @@ pub async fn update_post(
     };
 
     tx.execute(
-        "UPDATE posts SET title = $1, slug = $2, summary = $3, content_md = $4, content_html = $5, status = $6, published_at = $7, updated_at = NOW()
+         "UPDATE posts SET title = $1, slug = $2, summary = $3, content_md = $4, content_html = $5, status = $6, published_at = $7, updated_at = NOW()
          WHERE id = $8",
         &[
             &title.trim(),
