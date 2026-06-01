@@ -92,7 +92,7 @@ pub async fn register(
         .get()
         .await
         .map_err(|e| {
-            tracing::error!("Register DB connection failed: {}", e);
+            tracing::error!("Register DB connection failed: {:?}", e);
             ServerFnError::new(format!("数据库连接失败: {}", e))
         })?;
 
@@ -100,7 +100,7 @@ pub async fn register(
         .query_one("SELECT COUNT(*) FROM users WHERE role = 'admin'", &[])
         .await
         .map_err(|e| {
-            tracing::error!("Register admin count query failed: {}", e);
+            tracing::error!("Register admin count query failed: {:?}", e);
             ServerFnError::new(format!("查询失败: {}", e))
         })?
         .get(0);
@@ -115,7 +115,7 @@ pub async fn register(
 
     let password_hash = password::hash_password(&password)
         .map_err(|e| {
-            tracing::error!("Register password hash failed: {}", e);
+            tracing::error!("Register password hash failed: {:?}", e);
             ServerFnError::new(format!("密码哈希失败: {}", e))
         })?;
 
@@ -156,7 +156,7 @@ pub async fn login(
         .get()
         .await
         .map_err(|e| {
-            tracing::error!("Login DB connection failed: {}", e);
+            tracing::error!("Login DB connection failed: {:?}", e);
             ServerFnError::new(format!("数据库连接失败: {}", e))
         })?;
 
@@ -176,7 +176,7 @@ pub async fn login(
             });
         }
         Err(e) => {
-            tracing::error!("Login user query failed: {}", e);
+            tracing::error!("Login user query failed: {:?}", e);
             return Err(ServerFnError::new(format!("查询失败: {}", e)));
         }
     };
@@ -184,7 +184,7 @@ pub async fn login(
     let password_hash: String = row.get("password_hash");
     let valid = password::verify_password(&password, &password_hash)
         .map_err(|e| {
-            tracing::error!("Login password verify failed: {}", e);
+            tracing::error!("Login password verify failed: {:?}", e);
             ServerFnError::new(format!("密码验证失败: {}", e))
         })?;
 
@@ -207,7 +207,7 @@ pub async fn login(
         )
         .await
         .map_err(|e| {
-            tracing::error!("Login session insert failed: {}", e);
+            tracing::error!("Login session insert failed: {:?}", e);
             ServerFnError::new(format!("创建 session 失败: {}", e))
         })?;
 
@@ -246,7 +246,7 @@ pub async fn logout() -> Result<AuthResponse, ServerFnError> {
         .get()
         .await
         .map_err(|e| {
-            tracing::error!("Logout DB connection failed: {}", e);
+            tracing::error!("Logout DB connection failed: {:?}", e);
             ServerFnError::new(format!("数据库连接失败: {}", e))
         })?;
 
@@ -266,7 +266,7 @@ pub async fn logout() -> Result<AuthResponse, ServerFnError> {
             .execute("DELETE FROM sessions WHERE token = $1", &[&t])
             .await
             .map_err(|e| {
-                tracing::error!("Logout session delete failed: {}", e);
+                tracing::error!("Logout session delete failed: {:?}", e);
                 ServerFnError::new(format!("删除 session 失败: {}", e))
             })?;
     }
@@ -305,7 +305,7 @@ pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
         .get()
         .await
         .map_err(|e| {
-            tracing::error!("GetCurrentUser DB connection failed: {}", e);
+            tracing::error!("GetCurrentUser DB connection failed: {:?}", e);
             ServerFnError::new(format!("数据库连接失败: {}", e))
         })?;
 
@@ -319,7 +319,7 @@ pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
         )
         .await
         .map_err(|e| {
-            tracing::error!("GetCurrentUser session query failed: {}", e);
+            tracing::error!("GetCurrentUser session query failed: {:?}", e);
             ServerFnError::new(format!("查询失败: {}", e))
         })?;
 

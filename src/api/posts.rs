@@ -49,7 +49,7 @@ async fn get_current_admin_user() -> Result<User, ServerFnError> {
         .get()
         .await
         .map_err(|e| {
-            tracing::error!("DB connection failed: {}", e);
+            tracing::error!("DB connection failed: {:?}", e);
             ServerFnError::new(format!("数据库连接失败: {}", e))
         })?;
 
@@ -63,7 +63,7 @@ async fn get_current_admin_user() -> Result<User, ServerFnError> {
         )
         .await
         .map_err(|e| {
-            tracing::error!("query failed: {}", e);
+            tracing::error!("query failed: {:?}", e);
             ServerFnError::new(format!("查询失败: {}", e))
         })?;
 
@@ -228,7 +228,7 @@ async fn set_post_tags(
         .execute("DELETE FROM post_tags WHERE post_id = $1", &[&post_id])
         .await
         .map_err(|e| {
-            tracing::error!("delete tag links failed: {}", e);
+            tracing::error!("delete tag links failed: {:?}", e);
             ServerFnError::new(format!("删除标签关联失败: {}", e))
         })?;
 
@@ -247,7 +247,7 @@ async fn set_post_tags(
                 )
                 .await
                 .map_err(|e| {
-            tracing::error!("create tag failed: {}", e);
+            tracing::error!("create tag failed: {:?}", e);
             ServerFnError::new(format!("创建标签失败: {}", e))
         })?;
 
@@ -259,7 +259,7 @@ async fn set_post_tags(
                         .query_opt("SELECT id FROM tags WHERE name = $1", &[&tag_name])
                         .await
                         .map_err(|e| {
-            tracing::error!("query tag failed: {}", e);
+            tracing::error!("query tag failed: {:?}", e);
             ServerFnError::new(format!("查询标签失败: {}", e))
         })?;
                     row.map(|r| r.get(0))
@@ -275,7 +275,7 @@ async fn set_post_tags(
             )
             .await
             .map_err(|e| {
-            tracing::error!("link tag failed: {}", e);
+            tracing::error!("link tag failed: {:?}", e);
             ServerFnError::new(format!("关联标签失败: {}", e))
         })?;
     }
@@ -420,7 +420,7 @@ pub async fn create_post(
         .get()
         .await
         .map_err(|e| {
-            tracing::error!("DB connection failed: {}", e);
+            tracing::error!("DB connection failed: {:?}", e);
             ServerFnError::new(format!("数据库连接失败: {}", e))
         })?;
 
@@ -439,7 +439,7 @@ pub async fn create_post(
         .transaction()
         .await
         .map_err(|e| {
-            tracing::error!("transaction start failed: {}", e);
+            tracing::error!("transaction start failed: {:?}", e);
             ServerFnError::new(format!("事务开始失败: {}", e))
         })?;
 
@@ -461,7 +461,7 @@ pub async fn create_post(
         )
         .await
         .map_err(|e| {
-            tracing::error!("create post failed: {}", e);
+            tracing::error!("create post failed: {:?}", e);
             ServerFnError::new(format!("创建文章失败: {}", e))
         })?;
 
@@ -486,7 +486,7 @@ pub async fn create_post(
                     )
                     .await
                     .map_err(|e| {
-            tracing::error!("create tag failed: {}", e);
+            tracing::error!("create tag failed: {:?}", e);
             ServerFnError::new(format!("创建标签失败: {}", e))
         })?;
 
@@ -497,7 +497,7 @@ pub async fn create_post(
                             .query_opt("SELECT id FROM tags WHERE name = $1", &[&tag_name.as_str()])
                             .await
                             .map_err(|e| {
-            tracing::error!("query tag failed: {}", e);
+            tracing::error!("query tag failed: {:?}", e);
             ServerFnError::new(format!("查询标签失败: {}", e))
         })?;
                         row.map(|r| r.get(0))
@@ -512,7 +512,7 @@ pub async fn create_post(
             )
             .await
             .map_err(|e| {
-            tracing::error!("link tag failed: {}", e);
+            tracing::error!("link tag failed: {:?}", e);
             ServerFnError::new(format!("关联标签失败: {}", e))
         })?;
         }
@@ -521,7 +521,7 @@ pub async fn create_post(
     tx.commit()
         .await
         .map_err(|e| {
-            tracing::error!("transaction commit failed: {}", e);
+            tracing::error!("transaction commit failed: {:?}", e);
             ServerFnError::new(format!("事务提交失败: {}", e))
         })?;
 
@@ -549,7 +549,7 @@ pub async fn update_post(
         .get()
         .await
         .map_err(|e| {
-            tracing::error!("DB connection failed: {}", e);
+            tracing::error!("DB connection failed: {:?}", e);
             ServerFnError::new(format!("数据库连接失败: {}", e))
         })?;
 
@@ -597,7 +597,7 @@ pub async fn update_post(
         .transaction()
         .await
         .map_err(|e| {
-            tracing::error!("transaction start failed: {}", e);
+            tracing::error!("transaction start failed: {:?}", e);
             ServerFnError::new(format!("事务开始失败: {}", e))
         })?;
 
@@ -609,7 +609,7 @@ pub async fn update_post(
         )
         .await
         .map_err(|e| {
-            tracing::error!("query failed: {}", e);
+            tracing::error!("query failed: {:?}", e);
             ServerFnError::new(format!("查询失败: {}", e))
         })?;
 
@@ -649,7 +649,7 @@ pub async fn update_post(
     )
     .await
     .map_err(|e| {
-            tracing::error!("update post failed: {}", e);
+            tracing::error!("update post failed: {:?}", e);
             ServerFnError::new(format!("更新文章失败: {}", e))
         })?;
 
@@ -663,7 +663,7 @@ pub async fn update_post(
     tx.execute("DELETE FROM post_tags WHERE post_id = $1", &[&post_id])
         .await
         .map_err(|e| {
-            tracing::error!("delete old tags failed: {}", e);
+            tracing::error!("delete old tags failed: {:?}", e);
             ServerFnError::new(format!("删除旧标签失败: {}", e))
         })?;
 
@@ -676,7 +676,7 @@ pub async fn update_post(
                 )
                 .await
                 .map_err(|e| {
-            tracing::error!("create tag failed: {}", e);
+            tracing::error!("create tag failed: {:?}", e);
             ServerFnError::new(format!("创建标签失败: {}", e))
         })?;
 
@@ -687,7 +687,7 @@ pub async fn update_post(
                         .query_opt("SELECT id FROM tags WHERE name = $1", &[&tag_name.as_str()])
                         .await
                         .map_err(|e| {
-            tracing::error!("query tag failed: {}", e);
+            tracing::error!("query tag failed: {:?}", e);
             ServerFnError::new(format!("查询标签失败: {}", e))
         })?;
                     row.map(|r| r.get(0))
@@ -702,7 +702,7 @@ pub async fn update_post(
         )
         .await
         .map_err(|e| {
-            tracing::error!("link tag failed: {}", e);
+            tracing::error!("link tag failed: {:?}", e);
             ServerFnError::new(format!("关联标签失败: {}", e))
         })?;
     }
@@ -710,7 +710,7 @@ pub async fn update_post(
     tx.commit()
         .await
         .map_err(|e| {
-            tracing::error!("transaction commit failed: {}", e);
+            tracing::error!("transaction commit failed: {:?}", e);
             ServerFnError::new(format!("事务提交失败: {}", e))
         })?;
 
@@ -728,7 +728,7 @@ pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, Server
         .get()
         .await
         .map_err(|e| {
-            tracing::error!("DB connection failed: {}", e);
+            tracing::error!("DB connection failed: {:?}", e);
             ServerFnError::new(format!("数据库连接失败: {}", e))
         })?;
 
@@ -741,7 +741,7 @@ pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, Server
         )
         .await
         .map_err(|e| {
-            tracing::error!("query failed: {}", e);
+            tracing::error!("query failed: {:?}", e);
             ServerFnError::new(format!("查询失败: {}", e))
         })?;
 
@@ -759,7 +759,7 @@ pub async fn list_published_posts() -> Result<PostListResponse, ServerFnError> {
         .get()
         .await
         .map_err(|e| {
-            tracing::error!("DB connection failed: {}", e);
+            tracing::error!("DB connection failed: {:?}", e);
             ServerFnError::new(format!("数据库连接失败: {}", e))
         })?;
 
@@ -773,7 +773,7 @@ pub async fn list_published_posts() -> Result<PostListResponse, ServerFnError> {
         )
         .await
         .map_err(|e| {
-            tracing::error!("query failed: {}", e);
+            tracing::error!("query failed: {:?}", e);
             ServerFnError::new(format!("查询失败: {}", e))
         })?;
 
@@ -793,7 +793,7 @@ pub async fn list_posts() -> Result<PostListResponse, ServerFnError> {
         .get()
         .await
         .map_err(|e| {
-            tracing::error!("DB connection failed: {}", e);
+            tracing::error!("DB connection failed: {:?}", e);
             ServerFnError::new(format!("数据库连接失败: {}", e))
         })?;
 
@@ -807,7 +807,7 @@ pub async fn list_posts() -> Result<PostListResponse, ServerFnError> {
         )
         .await
         .map_err(|e| {
-            tracing::error!("query failed: {}", e);
+            tracing::error!("query failed: {:?}", e);
             ServerFnError::new(format!("查询失败: {}", e))
         })?;
 
@@ -827,7 +827,7 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
         .get()
         .await
         .map_err(|e| {
-            tracing::error!("DB connection failed: {}", e);
+            tracing::error!("DB connection failed: {:?}", e);
             ServerFnError::new(format!("数据库连接失败: {}", e))
         })?;
 
@@ -838,7 +838,7 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
         )
         .await
         .map_err(|e| {
-            tracing::error!("delete failed: {}", e);
+            tracing::error!("delete failed: {:?}", e);
             ServerFnError::new(format!("删除失败: {}", e))
         })?;
 
@@ -865,7 +865,7 @@ pub async fn list_tags() -> Result<TagListResponse, ServerFnError> {
         .get()
         .await
         .map_err(|e| {
-            tracing::error!("DB connection failed: {}", e);
+            tracing::error!("DB connection failed: {:?}", e);
             ServerFnError::new(format!("数据库连接失败: {}", e))
         })?;
 
@@ -881,7 +881,7 @@ pub async fn list_tags() -> Result<TagListResponse, ServerFnError> {
         )
         .await
         .map_err(|e| {
-            tracing::error!("query failed: {}", e);
+            tracing::error!("query failed: {:?}", e);
             ServerFnError::new(format!("查询失败: {}", e))
         })?;
 
@@ -903,7 +903,7 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
         .get()
         .await
         .map_err(|e| {
-            tracing::error!("DB connection failed: {}", e);
+            tracing::error!("DB connection failed: {:?}", e);
             ServerFnError::new(format!("数据库连接失败: {}", e))
         })?;
 
@@ -919,7 +919,7 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
         )
         .await
         .map_err(|e| {
-            tracing::error!("query failed: {}", e);
+            tracing::error!("query failed: {:?}", e);
             ServerFnError::new(format!("查询失败: {}", e))
         })?;
 
@@ -939,7 +939,7 @@ pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
         .get()
         .await
         .map_err(|e| {
-            tracing::error!("DB connection failed: {}", e);
+            tracing::error!("DB connection failed: {:?}", e);
             ServerFnError::new(format!("数据库连接失败: {}", e))
         })?;
 
@@ -982,7 +982,7 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
         .get()
         .await
         .map_err(|e| {
-            tracing::error!("DB connection failed: {}", e);
+            tracing::error!("DB connection failed: {:?}", e);
             ServerFnError::new(format!("数据库连接失败: {}", e))
         })?;
 
@@ -999,7 +999,7 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
         )
         .await
         .map_err(|e| {
-            tracing::error!("query failed: {}", e);
+            tracing::error!("query failed: {:?}", e);
             ServerFnError::new(format!("查询失败: {}", e))
         })?;
 
