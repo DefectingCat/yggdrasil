@@ -1,9 +1,24 @@
 use dioxus::prelude::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 #[component]
 #[allow(unused_mut)]
 pub fn Footer() -> Element {
     let mut visible = use_signal(|| false);
+
+    #[cfg(target_arch = "wasm32")]
+    let listener_state = use_hook(|| {
+        Rc::new(RefCell::new(
+            None::<(wasm_bindgen::prelude::Closure<dyn FnMut()>, web_sys::Window)>,
+        ))
+    });
+
+    #[cfg(not(target_arch = "wasm32"))]
+    let _listener_state = use_hook(|| Rc::new(RefCell::new(None::<()>)));
+
+    #[cfg(target_arch = "wasm32")]
+    let listener_state_for_effect = listener_state.clone();
 
     use_effect(move || {
         #[cfg(target_arch = "wasm32")]
@@ -36,8 +51,18 @@ pub fn Footer() -> Element {
                 let scroll_y = window.scroll_y().unwrap_or(0.0);
                 visible.set(scroll_y > threshold);
 
-                closure.forget();
+                *listener_state_for_effect.borrow_mut() = Some((closure, window));
             }
+        }
+    });
+
+    #[cfg(target_arch = "wasm32")]
+    use_drop(move || {
+        if let Some((closure, window)) = listener_state.borrow_mut().take() {
+            let _ = window.remove_event_listener_with_callback(
+                "scroll",
+                wasm_bindgen::JsCast::unchecked_ref(closure.as_ref()),
+            );
         }
     });
 
