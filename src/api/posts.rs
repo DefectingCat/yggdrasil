@@ -176,7 +176,7 @@ fn render_markdown(md: &str) -> String {
     let parser = pulldown_cmark::Parser::new(md);
     let mut html = String::new();
     pulldown_cmark::html::push_html(&mut html, parser);
-    html
+    ammonia::clean(&html)
 }
 
 #[cfg(feature = "server")]
