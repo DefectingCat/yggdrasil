@@ -163,15 +163,249 @@ async fn ensure_unique_slug(
 }
 
 // ============================================================================
-// Markdown rendering
+// Markdown rendering (enhanced with TOC, word count, reading time, anchors)
 // ============================================================================
 
+#[derive(Debug, Clone)]
 #[cfg(feature = "server")]
-fn render_markdown(md: &str) -> String {
+struct RenderedContent {
+    html: String,
+    toc_html: String,
+    word_count: u32,
+    reading_time: u32,
+}
+
+#[cfg(feature = "server")]
+fn render_markdown_enhanced(md: &str) -> RenderedContent {
+    use pulldown_cmark::{Event, Tag, TagEnd, HeadingLevel};
+
+    // 1. Parse markdown and collect headings for TOC
+    let parser = pulldown_cmark::Parser::new(md);
+    let mut headings: Vec<(u8, String, String)> = Vec::new(); // (level, text, id)
+    let mut current_heading: Option<(u8, String)> = None;
+
+    for event in parser {
+        match event {
+            Event::Start(Tag::Heading { level, .. }) => {
+                let lvl = match level {
+                    HeadingLevel::H1 => 1,
+                    HeadingLevel::H2 => 2,
+                    HeadingLevel::H3 => 3,
+                    HeadingLevel::H4 => 4,
+                    HeadingLevel::H5 => 5,
+                    HeadingLevel::H6 => 6,
+                };
+                current_heading = Some((lvl, String::new()));
+            }
+            Event::Text(text) => {
+                if let Some((_, ref mut content)) = current_heading {
+                    content.push_str(&text);
+                }
+            }
+            Event::Code(code) => {
+                if let Some((_, ref mut content)) = current_heading {
+                    content.push_str(&code);
+                }
+            }
+            Event::End(TagEnd::Heading(_)) => {
+                if let Some((lvl, text)) = current_heading.take() {
+                    let id = slugify_heading(&text);
+                    headings.push((lvl, text, id));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // 2. Generate TOC HTML
+    let toc_html = generate_toc_html(&headings);
+
+    // 3. Generate HTML with heading anchors
     let parser = pulldown_cmark::Parser::new(md);
     let mut html = String::new();
-    pulldown_cmark::html::push_html(&mut html, parser);
-    ammonia::clean(&html)
+    let mut heading_idx = 0;
+    let mut in_heading = false;
+
+    for event in parser {
+        match event {
+            Event::Start(Tag::Heading { level, .. }) => {
+                in_heading = true;
+                if heading_idx < headings.len() {
+                    let (_, _, ref id) = headings[heading_idx];
+                    let tag = match level {
+                        HeadingLevel::H1 => "h1",
+                        HeadingLevel::H2 => "h2",
+                        HeadingLevel::H3 => "h3",
+                        HeadingLevel::H4 => "h4",
+                        HeadingLevel::H5 => "h5",
+                        HeadingLevel::H6 => "h6",
+                    };
+                    html.push_str(&format!("<{} id=\"{}\">", tag, id));
+                    continue;
+                }
+            }
+            Event::End(TagEnd::Heading(level)) => {
+                in_heading = false;
+                if heading_idx < headings.len() {
+                    let (_, _, ref id) = headings[heading_idx];
+                    let tag = match level {
+                        HeadingLevel::H1 => "h1",
+                        HeadingLevel::H2 => "h2",
+                        HeadingLevel::H3 => "h3",
+                        HeadingLevel::H4 => "h4",
+                        HeadingLevel::H5 => "h5",
+                        HeadingLevel::H6 => "h6",
+                    };
+                    html.push_str(&format!(
+                        "<a hidden class=\"anchor\" aria-hidden=\"true\" href=\"#{}\">#</a></{}>",
+                        id, tag
+                    ));
+                    heading_idx += 1;
+                    continue;
+                }
+            }
+            _ => {}
+        }
+
+        if in_heading {
+            // Manually render heading content
+            match event {
+                Event::Text(text) => html.push_str(&ammonia::clean(&text)),
+                Event::Code(code) => {
+                    html.push_str("<code>");
+                    html.push_str(&ammonia::clean(&code));
+                    html.push_str("</code>");
+                }
+                _ => {}
+            }
+        } else {
+            pulldown_cmark::html::push_html(&mut html, std::iter::once(event));
+        }
+    }
+
+    // 4. Count words (Chinese characters + English words)
+    let word_count = count_words(md);
+    let reading_time = (word_count / 200).max(1);
+
+    RenderedContent {
+        html: ammonia::clean(&html),
+        toc_html,
+        word_count,
+        reading_time,
+    }
+}
+
+#[cfg(feature = "server")]
+fn generate_toc_html(headings: &[(u8, String, String)]) -> String {
+    if headings.is_empty() {
+        return String::new();
+    }
+
+    let mut html = String::from("<ul>");
+    let mut stack: Vec<u8> = vec![headings[0].0];
+
+    for (i, (level, text, id)) in headings.iter().enumerate() {
+        let level = *level;
+
+        if i > 0 {
+            let prev_level = headings[i - 1].0;
+            if level > prev_level {
+                // Open new nested lists
+                for _ in prev_level..level {
+                    html.push_str("<ul>");
+                    stack.push(level);
+                }
+            } else if level < prev_level {
+                // Close nested lists
+                while let Some(top) = stack.last() {
+                    if *top > level {
+                        html.push_str("</li></ul>");
+                        stack.pop();
+                    } else {
+                        break;
+                    }
+                }
+                html.push_str("</li>");
+            } else {
+                html.push_str("</li>");
+            }
+        }
+
+        html.push_str(&format!(
+            "<li><a href=\"#{}\" aria-label=\"{}\">{}</a>",
+            id,
+            ammonia::clean(text),
+            ammonia::clean(text)
+        ));
+    }
+
+    // Close remaining lists
+    while stack.len() > 1 {
+        html.push_str("</li></ul>");
+        stack.pop();
+    }
+    html.push_str("</li></ul>");
+
+    html
+}
+
+#[cfg(feature = "server")]
+fn slugify_heading(text: &str) -> String {
+    let mut slug = String::new();
+    let mut prev_dash = true;
+
+    for c in text.to_lowercase().chars() {
+        if c.is_alphanumeric() {
+            slug.push(c);
+            prev_dash = false;
+        } else if !prev_dash {
+            slug.push('-');
+            prev_dash = true;
+        }
+    }
+
+    if slug.ends_with('-') {
+        slug.pop();
+    }
+
+    if slug.is_empty() {
+        slug.push_str("heading");
+    }
+
+    slug
+}
+
+#[cfg(feature = "server")]
+fn count_words(md: &str) -> u32 {
+    // Remove markdown syntax
+    let mut plain = md.to_string();
+    plain = regex::Regex::new(r"```[\s\S]*?```").unwrap().replace_all(&plain, "").to_string();
+    plain = regex::Regex::new(r"`[^`]*`").unwrap().replace_all(&plain, "").to_string();
+    plain = regex::Regex::new(r"\[([^\]]*)\]\([^)]*\)").unwrap().replace_all(&plain, "$1").to_string();
+    plain = regex::Regex::new(r"^#{1,6}\s*").unwrap().replace_all(&plain, "").to_string();
+    plain = regex::Regex::new(r"!\[([^\]]*)\]\([^)]*\)").unwrap().replace_all(&plain, "").to_string();
+    plain = plain.replace("**", "").replace("*", "").replace("__", "").replace("_", "");
+
+    // Count Chinese characters and English words
+    let mut count = 0u32;
+    let mut in_word = false;
+
+    for c in plain.chars() {
+        if c.is_alphabetic() {
+            if !in_word {
+                count += 1;
+                in_word = true;
+            }
+        } else if c as u32 >= 0x4E00 && c as u32 <= 0x9FFF {
+            // Chinese character
+            count += 1;
+            in_word = false;
+        } else {
+            in_word = false;
+        }
+    }
+
+    count.max(1)
 }
 
 #[cfg(feature = "server")]
@@ -315,6 +549,41 @@ async fn row_to_post(client: &tokio_postgres::Client, row: &tokio_postgres::Row)
     let status = PostStatus::from_str(&role_str).unwrap_or(PostStatus::Draft);
     let tags = get_post_tags(client, id).await;
 
+    // Get prev/next post info if present in the row
+    let prev_post = if let Ok(prev_title) = row.try_get::<_, String>("prev_title") {
+        if let Ok(prev_slug) = row.try_get::<_, String>("prev_slug") {
+            Some(crate::models::post::PostNav {
+                title: prev_title,
+                slug: prev_slug,
+            })
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let next_post = if let Ok(next_title) = row.try_get::<_, String>("next_title") {
+        if let Ok(next_slug) = row.try_get::<_, String>("next_slug") {
+            Some(crate::models::post::PostNav {
+                title: next_title,
+                slug: next_slug,
+            })
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Calculate word count and reading time from content
+    let content_md: String = row.get("content_md");
+    let word_count = count_words(&content_md);
+    let reading_time = (word_count / 200).max(1);
+
+    // Generate TOC HTML from content
+    let rendered = render_markdown_enhanced(&content_md);
+
     Post {
         id,
         author_id: row.get("author_id"),
@@ -328,6 +597,16 @@ async fn row_to_post(client: &tokio_postgres::Client, row: &tokio_postgres::Row)
         created_at: row.get("created_at"),
         updated_at: row.get("updated_at"),
         tags,
+        cover_image: row.get("cover_image"),
+        reading_time,
+        word_count,
+        toc_html: if rendered.toc_html.is_empty() {
+            None
+        } else {
+            Some(rendered.toc_html)
+        },
+        prev_post,
+        next_post,
     }
 }
 
@@ -344,6 +623,7 @@ pub struct CreatePostRequest {
     pub content_md: String,
     pub status: String,
     pub tags: Vec<String>,
+    pub cover_image: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -386,6 +666,7 @@ pub async fn create_post(
     content_md: String,
     status: String,
     tags: Vec<String>,
+    cover_image: Option<String>,
 ) -> Result<CreatePostResponse, ServerFnError> {
     let user = get_current_admin_user().await?;
 
@@ -429,11 +710,13 @@ pub async fn create_post(
     })?;
 
     let final_slug = ensure_unique_slug(&client, &base_slug, None).await?;
-    let content_html = render_markdown(&content_md);
+    let rendered = render_markdown_enhanced(&content_md);
+    let content_html = rendered.html;
     let summary = summary
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| auto_summary(&content_md));
     let post_status = PostStatus::from_str(&status).unwrap_or(PostStatus::Draft);
+    let cover_image = cover_image.filter(|s| !s.trim().is_empty());
 
     let published_at = if post_status == PostStatus::Published {
         Some(chrono::Utc::now())
@@ -448,8 +731,8 @@ pub async fn create_post(
 
     let row = tx
         .query_one(
-            "INSERT INTO posts (author_id, title, slug, summary, content_md, content_html, status, published_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            "INSERT INTO posts (author_id, title, slug, summary, content_md, content_html, status, published_at, cover_image)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
              RETURNING id",
             &[
                 &user.id,
@@ -460,6 +743,7 @@ pub async fn create_post(
                 &content_html,
                 &post_status.as_str(),
                 &published_at,
+                &cover_image,
             ],
         )
         .await
@@ -544,6 +828,7 @@ pub async fn update_post(
     content_md: String,
     status: String,
     tags: Vec<String>,
+    cover_image: Option<String>,
 ) -> Result<CreatePostResponse, ServerFnError> {
     let user = get_current_admin_user().await?;
 
@@ -588,11 +873,13 @@ pub async fn update_post(
     };
 
     let final_slug = ensure_unique_slug(&client, &base_slug, Some(post_id)).await?;
-    let content_html = render_markdown(&content_md);
+    let rendered = render_markdown_enhanced(&content_md);
+    let content_html = rendered.html;
     let summary = summary
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| auto_summary(&content_md));
     let post_status = PostStatus::from_str(&status).unwrap_or(PostStatus::Draft);
+    let cover_image = cover_image.filter(|s| !s.trim().is_empty());
 
     let tx = client.transaction().await.map_err(|e| {
         tracing::error!("transaction start failed: {:?}", e);
@@ -632,8 +919,8 @@ pub async fn update_post(
     };
 
     tx.execute(
-         "UPDATE posts SET title = $1, slug = $2, summary = $3, content_md = $4, content_html = $5, status = $6, published_at = $7, updated_at = NOW()
-         WHERE id = $8",
+         "UPDATE posts SET title = $1, slug = $2, summary = $3, content_md = $4, content_html = $5, status = $6, published_at = $7, cover_image = $8, updated_at = NOW()
+         WHERE id = $9",
         &[
             &title.trim(),
             &final_slug,
@@ -642,6 +929,7 @@ pub async fn update_post(
             &content_html,
             &post_status.as_str(),
             &published_at,
+            &cover_image,
             &post_id,
         ],
     )
@@ -727,9 +1015,29 @@ pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, Server
 
     let row = client
         .query_opt(
-            "SELECT id, author_id, title, slug, summary, content_md, content_html, status, published_at, created_at, updated_at
-             FROM posts
-             WHERE slug = $1 AND deleted_at IS NULL",
+            "SELECT 
+                p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, 
+                p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
+                prev.title as prev_title, prev.slug as prev_slug,
+                next.title as next_title, next.slug as next_slug
+             FROM posts p
+             LEFT JOIN LATERAL (
+                 SELECT title, slug FROM posts 
+                 WHERE published_at < p.published_at 
+                   AND status = 'published' 
+                   AND deleted_at IS NULL
+                 ORDER BY published_at DESC
+                 LIMIT 1
+             ) prev ON true
+             LEFT JOIN LATERAL (
+                 SELECT title, slug FROM posts 
+                 WHERE published_at > p.published_at 
+                   AND status = 'published' 
+                   AND deleted_at IS NULL
+                 ORDER BY published_at ASC
+                 LIMIT 1
+             ) next ON true
+             WHERE p.slug = $1 AND p.deleted_at IS NULL",
             &[&slug],
         )
         .await
@@ -760,7 +1068,7 @@ pub async fn list_published_posts(
     let limit = per_page as i64;
     let rows = client
         .query(
-            "SELECT id, author_id, title, slug, summary, content_md, content_html, status, published_at, created_at, updated_at
+            "SELECT id, author_id, title, slug, summary, content_md, content_html, status, published_at, created_at, updated_at, cover_image
              FROM posts
              WHERE status = 'published' AND deleted_at IS NULL
              ORDER BY published_at DESC
@@ -792,7 +1100,7 @@ pub async fn list_posts() -> Result<PostListResponse, ServerFnError> {
 
     let rows = client
         .query(
-            "SELECT id, author_id, title, slug, summary, content_md, content_html, status, published_at, created_at, updated_at
+            "SELECT id, author_id, title, slug, summary, content_md, content_html, status, published_at, created_at, updated_at, cover_image
              FROM posts
              WHERE deleted_at IS NULL
              ORDER BY created_at DESC",
@@ -893,7 +1201,7 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
 
     let rows = client
         .query(
-            "SELECT p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, p.status, p.published_at, p.created_at, p.updated_at
+            "SELECT p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, p.status, p.published_at, p.created_at, p.updated_at, p.cover_image
              FROM posts p
              JOIN post_tags pt ON p.id = pt.post_id
              JOIN tags t ON pt.tag_id = t.id
@@ -968,7 +1276,7 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
 
     let rows = client
         .query(
-            "SELECT p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, p.status, p.published_at, p.created_at, p.updated_at
+            "SELECT p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, p.status, p.published_at, p.created_at, p.updated_at, p.cover_image
              FROM posts p
              WHERE p.status = 'published' AND p.deleted_at IS NULL
                AND (p.title ILIKE $1 OR p.content_md ILIKE $1)
