@@ -40,6 +40,12 @@ pub struct Post {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub tags: Vec<String>,
+    pub cover_image: Option<String>,
+    pub reading_time: u32,
+    pub word_count: u32,
+    pub toc_html: Option<String>,
+    pub prev_post: Option<PostNav>,
+    pub next_post: Option<PostNav>,
 }
 
 impl Post {
@@ -48,6 +54,12 @@ impl Post {
             .map(|d| d.format("%Y-%m-%d").to_string())
             .unwrap_or_else(|| self.created_at.format("%Y-%m-%d").to_string())
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PostNav {
+    pub title: String,
+    pub slug: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
