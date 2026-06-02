@@ -225,10 +225,16 @@ fn render_markdown_enhanced(md: &str) -> RenderedContent {
     let mut html = String::new();
     let mut heading_idx = 0;
     let mut in_heading = false;
+    let mut non_heading_events: Vec<Event> = Vec::new();
 
     for event in parser {
         match event {
             Event::Start(Tag::Heading { level, .. }) => {
+                // Flush non-heading events first
+                if !non_heading_events.is_empty() {
+                    pulldown_cmark::html::push_html(&mut html, non_heading_events.into_iter());
+                    non_heading_events = Vec::new();
+                }
                 in_heading = true;
                 if heading_idx < headings.len() {
                     let (_, _, ref id) = headings[heading_idx];
@@ -241,11 +247,9 @@ fn render_markdown_enhanced(md: &str) -> RenderedContent {
                         HeadingLevel::H6 => "h6",
                     };
                     html.push_str(&format!("<{} id=\"{}\">", tag, id));
-                    continue;
                 }
             }
             Event::End(TagEnd::Heading(level)) => {
-                in_heading = false;
                 if heading_idx < headings.len() {
                     let (_, _, ref id) = headings[heading_idx];
                     let tag = match level {
@@ -261,26 +265,31 @@ fn render_markdown_enhanced(md: &str) -> RenderedContent {
                         id, tag
                     ));
                     heading_idx += 1;
-                    continue;
+                }
+                in_heading = false;
+            }
+            _ => {
+                if in_heading {
+                    // Manually render heading content
+                    match event {
+                        Event::Text(text) => html.push_str(&ammonia::clean(&text)),
+                        Event::Code(code) => {
+                            html.push_str("<code>");
+                            html.push_str(&ammonia::clean(&code));
+                            html.push_str("</code>");
+                        }
+                        _ => {}
+                    }
+                } else {
+                    non_heading_events.push(event);
                 }
             }
-            _ => {}
         }
+    }
 
-        if in_heading {
-            // Manually render heading content
-            match event {
-                Event::Text(text) => html.push_str(&ammonia::clean(&text)),
-                Event::Code(code) => {
-                    html.push_str("<code>");
-                    html.push_str(&ammonia::clean(&code));
-                    html.push_str("</code>");
-                }
-                _ => {}
-            }
-        } else {
-            pulldown_cmark::html::push_html(&mut html, std::iter::once(event));
-        }
+    // Flush remaining non-heading events
+    if !non_heading_events.is_empty() {
+        pulldown_cmark::html::push_html(&mut html, non_heading_events.into_iter());
     }
 
     // 4. Count words (Chinese characters + English words)
