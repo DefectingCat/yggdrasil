@@ -4,6 +4,7 @@ use crate::api::posts::{search_posts, PostListResponse};
 use crate::components::nav::use_nav_items;
 use crate::components::page_layout::PageLayout;
 use crate::components::post_card::PostCard;
+use crate::hooks::delayed_loading::use_delayed_loading;
 use crate::router::Route;
 
 #[component]
@@ -13,6 +14,7 @@ pub fn Search() -> Element {
     let mut search_res = use_signal(|| None::<Result<PostListResponse, ServerFnError>>);
     let mut is_searching = use_signal(|| false);
     let nav_items = use_nav_items(route);
+    let show_skeleton = use_delayed_loading(move || is_searching());
 
     let mut on_search = move || {
         let q = query().trim().to_string();
@@ -53,7 +55,7 @@ pub fn Search() -> Element {
                 }
             }
             if is_searching() {
-                div { class: "space-y-6 py-4 animate-pulse",
+                div { class: if show_skeleton() { "space-y-6 py-4 animate-pulse" } else { "space-y-6 py-4 opacity-0" },
                     for _ in 0..3 {
                         div { class: "mb-6 p-6 bg-white dark:bg-[#2e2e33] rounded-lg border border-gray-200 dark:border-[#333]",
                             div { class: "h-7 w-3/4 bg-gray-200 dark:bg-[#2a2a2a] rounded mb-3" }

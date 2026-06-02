@@ -1,12 +1,14 @@
 use dioxus::prelude::*;
 
 use crate::api::posts::{delete_post, list_posts, CreatePostResponse, PostListResponse};
+use crate::hooks::delayed_loading::use_delayed_loading;
 use crate::models::post::{Post, PostStatus};
 
 #[component]
 pub fn Posts() -> Element {
     let mut posts_res = use_resource(list_posts);
     let mut deleting = use_signal(|| None::<i32>);
+    let show_skeleton = use_delayed_loading(move || posts_res.read().is_none());
 
     rsx! {
         div { class: "space-y-6",
@@ -84,7 +86,7 @@ pub fn Posts() -> Element {
                 }
                 None => {
                     rsx! {
-                        div { class: "bg-white dark:bg-[#2e2e33] rounded-xl border border-gray-200 dark:border-[#333] animate-pulse",
+                        div { class: if show_skeleton() { "bg-white dark:bg-[#2e2e33] rounded-xl border border-gray-200 dark:border-[#333] animate-pulse" } else { "bg-white dark:bg-[#2e2e33] rounded-xl border border-gray-200 dark:border-[#333] opacity-0" },
                             for _ in 0..5 {
                                 div { class: "flex items-center px-4 py-3 border-b border-gray-100 dark:border-[#333] last:border-0",
                                     div { class: "h-4 w-1/3 bg-gray-200 dark:bg-[#2a2a2a] rounded" }

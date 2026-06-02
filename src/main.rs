@@ -3,6 +3,7 @@ mod auth;
 mod components;
 mod context;
 mod db;
+mod hooks;
 mod models;
 mod pages;
 mod router;

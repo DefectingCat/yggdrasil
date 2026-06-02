@@ -4,6 +4,7 @@ use crate::api::posts::{list_published_posts, PostListResponse};
 use crate::components::nav::use_nav_items;
 use crate::components::page_layout::PageLayout;
 use crate::components::post_card::PostCard;
+use crate::hooks::delayed_loading::use_delayed_loading;
 use crate::router::Route;
 
 const POSTS_PER_PAGE: i32 = 10;
@@ -24,6 +25,7 @@ fn HomeContent(page: i32) -> Element {
     let current_page = page.max(1);
     let posts_res = use_resource(move || list_published_posts(current_page, POSTS_PER_PAGE));
     let nav_items = use_nav_items(route);
+    let show_skeleton = use_delayed_loading(move || posts_res.read().is_none());
 
     rsx! {
         PageLayout { nav_items,
@@ -51,7 +53,7 @@ fn HomeContent(page: i32) -> Element {
                 }
                 None => {
                     rsx! {
-                        div { class: "space-y-6 py-4",
+                        div { class: if show_skeleton() { "space-y-6 py-4" } else { "space-y-6 py-4 opacity-0" },
                             for _ in 0..3 {
                                 div { class: "mb-6 p-6 bg-white dark:bg-[#2e2e33] rounded-lg border border-gray-200 dark:border-[#333] animate-pulse",
                                     div { class: "h-7 w-3/4 bg-gray-200 dark:bg-[#2a2a2a] rounded mb-3" }

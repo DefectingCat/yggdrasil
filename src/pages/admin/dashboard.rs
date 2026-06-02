@@ -1,12 +1,15 @@
 use dioxus::prelude::*;
 
 use crate::api::posts::{get_post_stats, list_posts, PostListResponse, PostStatsResponse};
+use crate::hooks::delayed_loading::use_delayed_loading;
 use crate::models::post::Post;
 
 #[component]
 pub fn Admin() -> Element {
     let stats_res = use_resource(get_post_stats);
     let posts_res = use_resource(list_posts);
+    let show_stats_skeleton = use_delayed_loading(move || stats_res.read().is_none());
+    let show_posts_skeleton = use_delayed_loading(move || posts_res.read().is_none());
 
     rsx! {
         div { class: "space-y-8",
@@ -23,7 +26,7 @@ pub fn Admin() -> Element {
                     _ => {
                         rsx! {
                             for _ in 0..3 {
-                                div { class: "rounded-xl bg-white dark:bg-[#2e2e33] border border-gray-200 dark:border-[#333] p-6 text-center space-y-3 animate-pulse",
+                                div { class: if show_stats_skeleton() { "rounded-xl bg-white dark:bg-[#2e2e33] border border-gray-200 dark:border-[#333] p-6 text-center space-y-3 animate-pulse" } else { "rounded-xl bg-white dark:bg-[#2e2e33] border border-gray-200 dark:border-[#333] p-6 text-center space-y-3 opacity-0" },
                                     div { class: "h-9 w-16 mx-auto bg-gray-200 dark:bg-[#2a2a2a] rounded" }
                                     div { class: "h-4 w-20 mx-auto bg-gray-200 dark:bg-[#2a2a2a] rounded" }
                                 }
@@ -68,7 +71,7 @@ pub fn Admin() -> Element {
                     }
                     _ => {
                         rsx! {
-                            div { class: "space-y-4 animate-pulse",
+                            div { class: if show_posts_skeleton() { "space-y-4 animate-pulse" } else { "space-y-4 opacity-0" },
                                 for _ in 0..5 {
                                     div { class: "flex justify-between items-center py-3 border-b border-gray-100 dark:border-[#333]",
                                         div { class: "h-4 w-[45%] bg-gray-200 dark:bg-[#2a2a2a] rounded" }

@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 use crate::api::posts::{list_published_posts, PostListResponse};
 use crate::components::nav::use_nav_items;
 use crate::components::page_layout::PageLayout;
+use crate::hooks::delayed_loading::use_delayed_loading;
 use crate::models::post::Post;
 use crate::router::Route;
 
@@ -81,6 +82,7 @@ pub fn Archives() -> Element {
     let route = use_route::<Route>();
     let posts_res = use_resource(move || list_published_posts(1, 10000));
     let nav_items = use_nav_items(route);
+    let show_skeleton = use_delayed_loading(move || posts_res.read().is_none());
 
     rsx! {
         PageLayout { nav_items,
@@ -125,7 +127,7 @@ pub fn Archives() -> Element {
                 }
                 None => {
                     rsx! {
-                        div { class: "space-y-8 animate-pulse",
+                        div { class: if show_skeleton() { "space-y-8 animate-pulse" } else { "space-y-8 opacity-0" },
                             for _ in 0..2 {
                                 div { class: "space-y-4",
                                     div { class: "h-8 w-20 bg-gray-200 dark:bg-[#2a2a2a] rounded" }

@@ -4,6 +4,7 @@ use crate::api::posts::{get_posts_by_tag, list_tags, PostListResponse, TagListRe
 use crate::components::nav::use_nav_items;
 use crate::components::page_layout::PageLayout;
 use crate::components::post_card::PostCard;
+use crate::hooks::delayed_loading::use_delayed_loading;
 use crate::router::Route;
 
 #[component]
@@ -11,6 +12,7 @@ pub fn Tags() -> Element {
     let route = use_route::<Route>();
     let tags_res = use_resource(list_tags);
     let nav_items = use_nav_items(route);
+    let show_skeleton = use_delayed_loading(move || tags_res.read().is_none());
 
     rsx! {
         PageLayout { nav_items,
@@ -78,7 +80,7 @@ pub fn Tags() -> Element {
                 }
                 None => {
                     rsx! {
-                        div { class: "flex flex-wrap gap-4 mt-6 animate-pulse",
+                        div { class: if show_skeleton() { "flex flex-wrap gap-4 mt-6 animate-pulse" } else { "flex flex-wrap gap-4 mt-6 opacity-0" },
                             for _ in 0..8 {
                                 div { class: "h-8 w-16 bg-gray-200 dark:bg-[#2a2a2a] rounded-lg" }
                             }
@@ -96,6 +98,7 @@ pub fn TagDetail(tag: String) -> Element {
     let tag_clone = tag.clone();
     let posts_res = use_resource(move || get_posts_by_tag(tag_clone.clone()));
     let nav_items = use_nav_items(route);
+    let show_skeleton = use_delayed_loading(move || posts_res.read().is_none());
 
     rsx! {
         PageLayout { nav_items,
@@ -146,7 +149,7 @@ pub fn TagDetail(tag: String) -> Element {
                 }
                 None => {
                     rsx! {
-                        div { class: "space-y-6 py-4 animate-pulse",
+                        div { class: if show_skeleton() { "space-y-6 py-4 animate-pulse" } else { "space-y-6 py-4 opacity-0" },
                             for _ in 0..3 {
                                 div { class: "mb-6 p-6 bg-white dark:bg-[#2e2e33] rounded-lg border border-gray-200 dark:border-[#333]",
                                     div { class: "h-7 w-3/4 bg-gray-200 dark:bg-[#2a2a2a] rounded mb-3" }

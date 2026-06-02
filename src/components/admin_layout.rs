@@ -6,6 +6,7 @@ use crate::components::footer::Footer;
 use crate::components::header::{Header, NavItemConfig};
 use crate::components::write_skeleton::WriteSkeleton;
 use crate::context::UserContext;
+use crate::hooks::delayed_loading::use_delayed_loading;
 use crate::router::Route;
 
 #[component]
@@ -13,6 +14,7 @@ pub fn AdminLayout() -> Element {
     let mut ctx: UserContext = use_context();
     let navigator = dioxus::router::navigator();
     let route = use_route::<Route>();
+    let show_skeleton = use_delayed_loading(move || !(ctx.checked)());
 
     // 只在首次挂载时加载用户数据
     use_effect(move || {
@@ -96,10 +98,12 @@ pub fn AdminLayout() -> Element {
                 div { class: "min-h-screen flex flex-col bg-white dark:bg-[#1d1e20]",
                     Header { nav_items: admin_nav_items, right_content: logout_button }
                     main { class: "flex-1 w-full max-w-5xl mx-auto px-6 py-8",
-                        {match route {
-                            Route::Write {} => rsx! { WriteSkeleton {} },
-                            _ => rsx! { AdminDashboardSkeleton {} },
-                        }}
+                        div { class: if show_skeleton() { "" } else { "opacity-0" },
+                            {match route {
+                                Route::Write {} => rsx! { WriteSkeleton {} },
+                                _ => rsx! { AdminDashboardSkeleton {} },
+                            }}
+                        }
                     }
                     Footer {}
                 }

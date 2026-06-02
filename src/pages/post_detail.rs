@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 use crate::api::posts::{get_post_by_slug, SinglePostResponse};
 use crate::components::nav::use_nav_items;
 use crate::components::page_layout::PageLayout;
+use crate::hooks::delayed_loading::use_delayed_loading;
 use crate::router::Route;
 
 #[component]
@@ -11,6 +12,7 @@ pub fn PostDetail(slug: String) -> Element {
     let slug_clone = slug.clone();
     let post_res = use_resource(move || get_post_by_slug(slug_clone.clone()));
     let nav_items = use_nav_items(route);
+    let show_skeleton = use_delayed_loading(move || post_res.read().is_none());
 
     rsx! {
         PageLayout { nav_items,
@@ -86,7 +88,7 @@ pub fn PostDetail(slug: String) -> Element {
                 }
                 None => {
                     rsx! {
-                        div { class: "animate-pulse py-6 space-y-4",
+                        div { class: if show_skeleton() { "animate-pulse py-6 space-y-4" } else { "py-6 space-y-4 opacity-0" },
                             div { class: "h-10 w-3/4 bg-gray-200 dark:bg-[#2a2a2a] rounded" }
                             div { class: "h-4 w-32 bg-gray-200 dark:bg-[#2a2a2a] rounded" }
                             div { class: "h-4 w-full bg-gray-200 dark:bg-[#2a2a2a] rounded mt-8" }
