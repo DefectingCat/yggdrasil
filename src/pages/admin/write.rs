@@ -13,6 +13,7 @@ pub fn Write() -> Element {
     let mut summary = use_signal(|| "".to_string());
     let mut slug = use_signal(|| "".to_string());
     let mut tags = use_signal(|| "".to_string());
+    let mut cover_image = use_signal(|| "".to_string());
     let mut status = use_signal(|| "draft".to_string());
     let mut content = use_signal(|| "".to_string());
     let mut loading = use_signal(|| true);
@@ -116,6 +117,12 @@ pub fn Write() -> Element {
                 Some(summary().trim().to_string())
             };
 
+            let cover_image_opt = if cover_image().trim().is_empty() {
+                None
+            } else {
+                Some(cover_image().trim().to_string())
+            };
+
             saving.set(true);
             error.set(None);
 
@@ -127,6 +134,7 @@ pub fn Write() -> Element {
                     md,
                     status(),
                     tags_list,
+                    cover_image_opt,
                 )
                 .await
                 {
@@ -204,6 +212,14 @@ pub fn Write() -> Element {
                     option { value: "draft", "草稿" }
                     option { value: "published", "发布" }
                 }
+            }
+
+            // 封面图 URL
+            input {
+                class: "w-full text-sm bg-transparent border-b border-gray-200 dark:border-[#333] py-2 mb-2 text-gray-700 dark:text-[#9b9c9d] placeholder-gray-400 dark:placeholder-[#9b9c9d] focus:outline-none",
+                placeholder: "封面图 URL（可选）",
+                value: "{cover_image}",
+                oninput: move |evt| cover_image.set(evt.value()),
             }
 
             // Tiptap 编辑器
