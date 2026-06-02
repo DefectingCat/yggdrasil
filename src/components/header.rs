@@ -44,7 +44,10 @@ fn NavItem(href: &'static str, label: &'static str, is_active: bool) -> Element 
     let class_str = if is_active {
         format!("{} font-medium text-gray-900 dark:text-[#dadadb] underline underline-offset-[0.3rem] decoration-2 decoration-gray-900 dark:decoration-[#dadadb]", base_class)
     } else {
-        format!("{} text-gray-600 dark:text-[#9b9c9d] hover:text-gray-900 dark:hover:text-[#dadadb]", base_class)
+        format!(
+            "{} text-gray-600 dark:text-[#9b9c9d] hover:text-gray-900 dark:hover:text-[#dadadb]",
+            base_class
+        )
     };
 
     let href = href;

@@ -1,11 +1,10 @@
 use dioxus::prelude::*;
 
 use crate::api::posts::{list_published_posts, PostListResponse};
-use crate::components::header::{Header, NavItemConfig};
-use crate::components::footer::Footer;
+use crate::components::nav::use_nav_items;
+use crate::components::page_layout::PageLayout;
 use crate::models::post::Post;
 use crate::router::Route;
-use crate::theme::ThemeToggle;
 
 #[derive(Clone, PartialEq)]
 struct YearGroup {
@@ -24,10 +23,7 @@ fn group_posts(posts: &[Post]) -> Vec<YearGroup> {
     let mut years: Vec<YearGroup> = vec![];
 
     for post in posts {
-        let date_str = post
-            .published_at
-            .map(|d| d.format("%Y-%m-%d").to_string())
-            .unwrap_or_else(|| post.created_at.format("%Y-%m-%d").to_string());
+        let date_str = post.formatted_date();
 
         let parts: Vec<&str> = date_str.split('-').collect();
         if parts.len() != 3 {
@@ -83,69 +79,59 @@ fn group_posts(posts: &[Post]) -> Vec<YearGroup> {
 #[component]
 pub fn Archives() -> Element {
     let route = use_route::<Route>();
-    let posts_res = use_resource(list_published_posts);
-
-    let nav_items = vec![
-        NavItemConfig { href: "/", label: "首页", is_active: matches!(route, Route::Home {}) },
-        NavItemConfig { href: "/archives", label: "归档", is_active: matches!(route, Route::Archives {}) },
-        NavItemConfig { href: "/tags", label: "标签", is_active: matches!(route, Route::Tags {}) || matches!(route, Route::TagDetail { .. }) },
-        NavItemConfig { href: "/search", label: "搜索", is_active: matches!(route, Route::Search {}) },
-        NavItemConfig { href: "/about", label: "关于", is_active: matches!(route, Route::About {}) },
-    ];
+    let posts_res = use_resource(move || list_published_posts(1, 10000));
+    let nav_items = use_nav_items(route);
 
     rsx! {
-        div { class: "min-h-screen flex flex-col bg-white dark:bg-[#1d1e20] transition-colors duration-300",
-            Header { nav_items, right_content: rsx! { ThemeToggle {} } }
-            main { class: "flex-1 w-full max-w-3xl mx-auto px-6 py-6",
-                header { class: "page-header mb-6",
-                    h1 { class: "text-[34px] font-bold text-gray-900 dark:text-[#dadadb]",
-                        "归档"
-                    }
-                    match &*posts_res.read() {
-                        Some(Ok(PostListResponse { posts })) => {
-                            rsx! {
-                                div { class: "mt-2 text-base text-gray-500 dark:text-[#9b9c9d]",
-                                    "共 "
-                                    span { class: "font-medium text-gray-700 dark:text-[#dadadb]", "{posts.len()}" }
-                                    " 篇文章"
-                                }
+        PageLayout { nav_items,
+            header { class: "page-header mb-6",
+                h1 { class: "text-[34px] font-bold text-gray-900 dark:text-[#dadadb]",
+                    "归档"
+                }
+                match &*posts_res.read() {
+                    Some(Ok(PostListResponse { posts })) => {
+                        rsx! {
+                            div { class: "mt-2 text-base text-gray-500 dark:text-[#9b9c9d]",
+                                "共 "
+                                span { class: "font-medium text-gray-700 dark:text-[#dadadb]", "{posts.len()}" }
+                                " 篇文章"
                             }
                         }
-                        _ => {
-                            rsx! {
-                                div { class: "mt-2 text-base text-gray-500 dark:text-[#9b9c9d]",
-                                    "加载中..."
-                                }
+                    }
+                    _ => {
+                        rsx! {
+                            div { class: "mt-2 text-base text-gray-500 dark:text-[#9b9c9d]",
+                                "加载中..."
                             }
                         }
                     }
                 }
-                match &*posts_res.read() {
-                    Some(Ok(PostListResponse { posts })) => {
-                        let grouped = group_posts(posts);
-                        rsx! {
-                            for year_group in grouped.iter() {
-                                YearSection { year_group: year_group.clone() }
-                            }
+            }
+            match &*posts_res.read() {
+                Some(Ok(PostListResponse { posts })) => {
+                    let grouped = group_posts(posts);
+                    rsx! {
+                        for year_group in grouped.iter() {
+                            YearSection { year_group: year_group.clone() }
                         }
                     }
-                    Some(Err(e)) => {
-                        rsx! {
-                            div { class: "text-center text-red-500 dark:text-red-400 py-20",
-                                "加载失败: {e}"
-                            }
+                }
+                Some(Err(e)) => {
+                    rsx! {
+                        div { class: "text-center text-red-500 dark:text-red-400 py-20",
+                            "加载失败: {e}"
                         }
                     }
-                    None => {
-                        rsx! {
-                            div { class: "space-y-8 animate-pulse",
-                                for _ in 0..2 {
-                                    div { class: "space-y-4",
-                                        div { class: "h-8 w-20 bg-gray-200 dark:bg-[#2a2a2a] rounded" }
-                                        div { class: "space-y-2",
-                                            for _ in 0..3 {
-                                                div { class: "h-4 w-full bg-gray-200 dark:bg-[#2a2a2a] rounded" }
-                                            }
+                }
+                None => {
+                    rsx! {
+                        div { class: "space-y-8 animate-pulse",
+                            for _ in 0..2 {
+                                div { class: "space-y-4",
+                                    div { class: "h-8 w-20 bg-gray-200 dark:bg-[#2a2a2a] rounded" }
+                                    div { class: "space-y-2",
+                                        for _ in 0..3 {
+                                            div { class: "h-4 w-full bg-gray-200 dark:bg-[#2a2a2a] rounded" }
                                         }
                                     }
                                 }
@@ -154,14 +140,17 @@ pub fn Archives() -> Element {
                     }
                 }
             }
-            Footer {}
         }
     }
 }
 
 #[component]
 fn YearSection(year_group: YearGroup) -> Element {
-    let total = year_group.months.iter().map(|m| m.posts.len()).sum::<usize>();
+    let total = year_group
+        .months
+        .iter()
+        .map(|m| m.posts.len())
+        .sum::<usize>();
 
     rsx! {
         div { class: "archive-year mt-10",
@@ -209,10 +198,7 @@ fn MonthSection(month_group: MonthGroup, year: String) -> Element {
 
 #[component]
 fn ArchiveEntry(post: Post) -> Element {
-    let date_str = post
-        .published_at
-        .map(|d| d.format("%Y-%m-%d").to_string())
-        .unwrap_or_else(|| post.created_at.format("%Y-%m-%d").to_string());
+    let date_str = post.formatted_date();
 
     rsx! {
         div { class: "archive-entry relative py-1.5 my-2.5 group",

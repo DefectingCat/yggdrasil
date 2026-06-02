@@ -3,12 +3,14 @@ use std::sync::Arc;
 
 use crate::components::admin_layout::AdminLayout;
 use crate::context::UserContext;
+use crate::pages::about::About;
 use crate::pages::admin::{Admin, Posts, Write};
 use crate::pages::archives::Archives;
-use crate::pages::home::Home;
+use crate::pages::home::{Home, HomePage};
 use crate::pages::login::Login;
 use crate::pages::post_detail::PostDetail;
 use crate::pages::register::Register;
+use crate::pages::search::Search;
 use crate::pages::tags::{TagDetail, Tags};
 use crate::theme::{use_theme_provider, Theme, ThemePreload};
 
@@ -17,6 +19,8 @@ use crate::theme::{use_theme_provider, Theme, ThemePreload};
 pub enum Route {
     #[route("/")]
     Home {},
+    #[route("/page/:page")]
+    HomePage { page: i32 },
     #[route("/login")]
     Login {},
     #[route("/register")]
@@ -66,14 +70,4 @@ pub fn AppRouter() -> Element {
             Router::<Route> {}
         }
     }
-}
-
-#[component]
-pub fn Search() -> Element {
-    rsx! { "Search" }
-}
-
-#[component]
-pub fn About() -> Element {
-    rsx! { "About" }
 }
