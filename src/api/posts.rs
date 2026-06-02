@@ -591,7 +591,7 @@ async fn row_to_post(client: &tokio_postgres::Client, row: &tokio_postgres::Row)
         slug: row.get("slug"),
         summary: row.get("summary"),
         content_md: row.get("content_md"),
-        content_html: row.get("content_html"),
+        content_html: Some(rendered.html),
         status,
         published_at: row.get("published_at"),
         created_at: row.get("created_at"),
