@@ -120,7 +120,16 @@ pub fn Write() -> Element {
             error.set(None);
 
             spawn(async move {
-                match create_post(title().trim().to_string(), slug_opt, summary_opt, md, status(), tags_list).await {
+                match create_post(
+                    title().trim().to_string(),
+                    slug_opt,
+                    summary_opt,
+                    md,
+                    status(),
+                    tags_list,
+                )
+                .await
+                {
                     Ok(CreatePostResponse { success: true, .. }) => {
                         saving.set(false);
                         success.set(true);
@@ -131,7 +140,11 @@ pub fn Write() -> Element {
                         }
                         let _ = dioxus::router::navigator().push("/admin");
                     }
-                    Ok(CreatePostResponse { success: false, message, .. }) => {
+                    Ok(CreatePostResponse {
+                        success: false,
+                        message,
+                        ..
+                    }) => {
                         saving.set(false);
                         error.set(Some(message));
                     }

@@ -42,6 +42,14 @@ pub struct Post {
     pub tags: Vec<String>,
 }
 
+impl Post {
+    pub fn formatted_date(&self) -> String {
+        self.published_at
+            .map(|d| d.format("%Y-%m-%d").to_string())
+            .unwrap_or_else(|| self.created_at.format("%Y-%m-%d").to_string())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Tag {
     pub id: i32,

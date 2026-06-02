@@ -38,19 +38,16 @@ fn validate_password(password: &str) -> Result<(), String> {
 
 #[cfg(feature = "server")]
 fn parse_session_token(cookie_header: &str) -> Option<&str> {
-    cookie_header
-        .split(';')
-        .map(|s| s.trim())
-        .find_map(|pair| {
-            let mut parts = pair.splitn(2, '=');
-            let name = parts.next()?.trim();
-            let value = parts.next()?.trim();
-            if name == "session" {
-                Some(value)
-            } else {
-                None
-            }
-        })
+    cookie_header.split(';').map(|s| s.trim()).find_map(|pair| {
+        let mut parts = pair.splitn(2, '=');
+        let name = parts.next()?.trim();
+        let value = parts.next()?.trim();
+        if name == "session" {
+            Some(value)
+        } else {
+            None
+        }
+    })
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -88,13 +85,10 @@ pub async fn register(
         });
     }
 
-    let client = DB_POOL
-        .get()
-        .await
-        .map_err(|e| {
-            tracing::error!("Register DB connection failed: {:?}", e);
-            ServerFnError::new(format!("数据库连接失败: {}", e))
-        })?;
+    let client = DB_POOL.get().await.map_err(|e| {
+        tracing::error!("Register DB connection failed: {:?}", e);
+        ServerFnError::new(format!("数据库连接失败: {}", e))
+    })?;
 
     let admin_count: i64 = client
         .query_one("SELECT COUNT(*) FROM users WHERE role = 'admin'", &[])
@@ -113,11 +107,10 @@ pub async fn register(
         });
     }
 
-    let password_hash = password::hash_password(&password)
-        .map_err(|e| {
-            tracing::error!("Register password hash failed: {:?}", e);
-            ServerFnError::new(format!("密码哈希失败: {}", e))
-        })?;
+    let password_hash = password::hash_password(&password).map_err(|e| {
+        tracing::error!("Register password hash failed: {:?}", e);
+        ServerFnError::new(format!("密码哈希失败: {}", e))
+    })?;
 
     let result = client
         .query_one(
@@ -148,17 +141,11 @@ pub async fn register(
 }
 
 #[server(Login, "/api")]
-pub async fn login(
-    username: String,
-    password: String,
-) -> Result<AuthResponse, ServerFnError> {
-    let client = DB_POOL
-        .get()
-        .await
-        .map_err(|e| {
-            tracing::error!("Login DB connection failed: {:?}", e);
-            ServerFnError::new(format!("数据库连接失败: {}", e))
-        })?;
+pub async fn login(username: String, password: String) -> Result<AuthResponse, ServerFnError> {
+    let client = DB_POOL.get().await.map_err(|e| {
+        tracing::error!("Login DB connection failed: {:?}", e);
+        ServerFnError::new(format!("数据库连接失败: {}", e))
+    })?;
 
     let row = match client
         .query_opt(
@@ -182,11 +169,10 @@ pub async fn login(
     };
 
     let password_hash: String = row.get("password_hash");
-    let valid = password::verify_password(&password, &password_hash)
-        .map_err(|e| {
-            tracing::error!("Login password verify failed: {:?}", e);
-            ServerFnError::new(format!("密码验证失败: {}", e))
-        })?;
+    let valid = password::verify_password(&password, &password_hash).map_err(|e| {
+        tracing::error!("Login password verify failed: {:?}", e);
+        ServerFnError::new(format!("密码验证失败: {}", e))
+    })?;
 
     if !valid {
         return Ok(AuthResponse {
@@ -242,21 +228,16 @@ pub async fn logout() -> Result<AuthResponse, ServerFnError> {
         None
     };
 
-    let client = DB_POOL
-        .get()
-        .await
-        .map_err(|e| {
-            tracing::error!("Logout DB connection failed: {:?}", e);
-            ServerFnError::new(format!("数据库连接失败: {}", e))
-        })?;
+    let client = DB_POOL.get().await.map_err(|e| {
+        tracing::error!("Logout DB connection failed: {:?}", e);
+        ServerFnError::new(format!("数据库连接失败: {}", e))
+    })?;
 
     // 清除 cookie
     if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
         ctx.add_response_header(
             SET_COOKIE,
-            HeaderValue::from_static(
-                "session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax",
-            ),
+            HeaderValue::from_static("session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax"),
         );
     }
 
@@ -301,13 +282,10 @@ pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
         return Ok(CurrentUserResponse { user: None });
     };
 
-    let client = DB_POOL
-        .get()
-        .await
-        .map_err(|e| {
-            tracing::error!("GetCurrentUser DB connection failed: {:?}", e);
-            ServerFnError::new(format!("数据库连接失败: {}", e))
-        })?;
+    let client = DB_POOL.get().await.map_err(|e| {
+        tracing::error!("GetCurrentUser DB connection failed: {:?}", e);
+        ServerFnError::new(format!("数据库连接失败: {}", e))
+    })?;
 
     let row = client
         .query_opt(

@@ -42,6 +42,8 @@ RUST_LOG=info
 Run migrations before first dev server start:
 
 ```bash
+./migrate.sh       # preferred: auto-creates DB, runs all migrations in order
+# or manually:
 psql $DATABASE_URL -f migrations/001_init.sql
 ```
 

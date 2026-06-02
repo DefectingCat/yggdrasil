@@ -38,7 +38,7 @@ pub fn Posts() -> Element {
                                     thead {
                                         tr { class: "border-b border-gray-200 dark:border-[#333] text-left text-gray-500 dark:text-[#9b9c9d]",
                                             th { class: "px-4 py-3 font-medium", "标题" }
-                                            th { class: "px-4 py-3 font-medium w-24", "状态" }
+                                            th { class: "px-4 py-3 font-medium w-24 text-center", "状态" }
                                             th { class: "px-4 py-3 font-medium w-32", "日期" }
                                             th { class: "px-4 py-3 font-medium w-24 text-right", "操作" }
                                         }
@@ -107,9 +107,15 @@ fn PostRow(post: Post, deleting: bool, on_delete: EventHandler<i32>) -> Element 
         .unwrap_or_else(|| post.created_at.format("%Y-%m-%d").to_string());
 
     let (status_label, status_class) = if post.status == PostStatus::Published {
-        ("已发布", "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300")
+        (
+            "已发布",
+            "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300",
+        )
     } else {
-        ("草稿", "bg-gray-100 dark:bg-[#333] text-gray-600 dark:text-[#9b9c9d]")
+        (
+            "草稿",
+            "bg-gray-100 dark:bg-[#333] text-gray-600 dark:text-[#9b9c9d]",
+        )
     };
 
     rsx! {
@@ -125,7 +131,7 @@ fn PostRow(post: Post, deleting: bool, on_delete: EventHandler<i32>) -> Element 
                     "{post.title}"
                 }
             }
-            td { class: "px-4 py-3",
+            td { class: "px-4 py-3 text-center",
                 span { class: "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {status_class}",
                     "{status_label}"
                 }

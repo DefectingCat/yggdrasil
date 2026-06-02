@@ -33,7 +33,11 @@ pub fn Register() -> Element {
                 Ok(AuthResponse { success: true, .. }) => {
                     success.set(true);
                 }
-                Ok(AuthResponse { success: false, message, .. }) => {
+                Ok(AuthResponse {
+                    success: false,
+                    message,
+                    ..
+                }) => {
                     error.set(Some(message));
                 }
                 Err(e) => {

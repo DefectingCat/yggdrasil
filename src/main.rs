@@ -40,9 +40,13 @@ fn main() {
                 .serve_dioxus_application(config, router::AppRouter)
                 .layer(
                     TraceLayer::new_for_http()
-                        .make_span_with(tower_http::trace::DefaultMakeSpan::new().level(Level::INFO))
+                        .make_span_with(
+                            tower_http::trace::DefaultMakeSpan::new().level(Level::INFO),
+                        )
                         .on_request(tower_http::trace::DefaultOnRequest::new().level(Level::INFO))
-                        .on_response(tower_http::trace::DefaultOnResponse::new().level(Level::INFO)),
+                        .on_response(
+                            tower_http::trace::DefaultOnResponse::new().level(Level::INFO),
+                        ),
                 );
 
             Ok(router)
