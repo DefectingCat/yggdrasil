@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use crate::api::posts::{list_published_posts, PostListResponse};
 use crate::components::nav::use_nav_items;
 use crate::components::page_layout::PageLayout;
-use crate::hooks::delayed_loading::use_delayed_loading;
+use crate::components::suspense_wrapper::SuspenseWrapper;
 use crate::models::post::Post;
 use crate::router::Route;
 
@@ -80,9 +80,7 @@ fn group_posts(posts: &[Post]) -> Vec<YearGroup> {
 #[component]
 pub fn Archives() -> Element {
     let route = use_route::<Route>();
-    let posts_res = use_resource(move || list_published_posts(1, 10000));
     let nav_items = use_nav_items(route);
-    let show_skeleton = use_delayed_loading(move || posts_res.read().is_none());
 
     rsx! {
         PageLayout { nav_items,
@@ -90,58 +88,42 @@ pub fn Archives() -> Element {
                 h1 { class: "text-[34px] font-bold text-gray-900 dark:text-[#dadadb]",
                     "归档"
                 }
-                match &*posts_res.read() {
-                    Some(Ok(PostListResponse { posts })) => {
-                        rsx! {
-                            div { class: "mt-2 text-base text-gray-500 dark:text-[#9b9c9d]",
-                                "共 "
-                                span { class: "font-medium text-gray-700 dark:text-[#dadadb]", "{posts.len()}" }
-                                " 篇文章"
-                            }
-                        }
-                    }
-                    _ => {
-                        rsx! {
-                            div { class: "mt-2 text-base text-gray-500 dark:text-[#9b9c9d]",
-                                "加载中..."
-                            }
-                        }
-                    }
+            }
+            SuspenseWrapper {
+                ArchivesContent {}
+            }
+        }
+    }
+}
+
+#[component]
+fn ArchivesContent() -> Element {
+    let posts_res = use_server_future(move || list_published_posts(1, 10000))?;
+
+    let posts_data = posts_res.read();
+    match &*posts_data {
+        Some(Ok(PostListResponse { posts })) => {
+            let grouped = group_posts(posts);
+            rsx! {
+                div { class: "mt-2 text-base text-gray-500 dark:text-[#9b9c9d]",
+                    "共 "
+                    span { class: "font-medium text-gray-700 dark:text-[#dadadb]", "{posts.len()}" }
+                    " 篇文章"
+                }
+                for year_group in grouped.iter() {
+                    YearSection { year_group: year_group.clone() }
                 }
             }
-            match &*posts_res.read() {
-                Some(Ok(PostListResponse { posts })) => {
-                    let grouped = group_posts(posts);
-                    rsx! {
-                        for year_group in grouped.iter() {
-                            YearSection { year_group: year_group.clone() }
-                        }
-                    }
-                }
-                Some(Err(e)) => {
-                    rsx! {
-                        div { class: "text-center text-red-500 dark:text-red-400 py-20",
-                            "加载失败: {e}"
-                        }
-                    }
-                }
-                None => {
-                    rsx! {
-                        div { class: if show_skeleton() { "space-y-8 animate-pulse" } else { "space-y-8 opacity-0" },
-                            for _ in 0..2 {
-                                div { class: "space-y-4",
-                                    div { class: "h-8 w-20 bg-gray-200 dark:bg-[#2a2a2a] rounded" }
-                                    div { class: "space-y-2",
-                                        for _ in 0..3 {
-                                            div { class: "h-4 w-full bg-gray-200 dark:bg-[#2a2a2a] rounded" }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+        }
+        Some(Err(e)) => {
+            rsx! {
+                div { class: "text-center text-red-500 dark:text-red-400 py-20",
+                    "加载失败: {e}"
                 }
             }
+        }
+        None => {
+            rsx! {}
         }
     }
 }
