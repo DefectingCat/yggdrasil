@@ -4,6 +4,7 @@ use crate::api::posts::{search_posts, PostListResponse};
 use crate::components::nav::use_nav_items;
 use crate::components::page_layout::PageLayout;
 use crate::components::post_card::PostCard;
+use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::search_skeleton::SearchSkeleton;
 use crate::router::Route;
 
@@ -53,7 +54,7 @@ pub fn Search() -> Element {
                 }
             }
             if is_searching() {
-                SearchSkeleton {}
+                DelayedSkeleton { SearchSkeleton {} }
             } else if let Some(Ok(PostListResponse { posts })) = search_res() {
                 if posts.is_empty() {
                     div { class: "text-center text-gray-500 dark:text-[#9b9c9d] py-20",

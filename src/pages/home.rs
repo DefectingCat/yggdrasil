@@ -4,6 +4,7 @@ use crate::api::posts::{list_published_posts, PostListResponse};
 use crate::components::nav::use_nav_items;
 use crate::components::page_layout::PageLayout;
 use crate::components::post_card::PostCard;
+use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::home_skeleton::HomeSkeleton;
 use crate::router::Route;
 
@@ -24,7 +25,7 @@ pub fn HomePage(page: i32) -> Element {
         PageLayout { nav_items,
             HomeInfo {}
             SuspenseBoundary {
-                fallback: |_| rsx! { HomeSkeleton {} },
+                fallback: |_| rsx! { DelayedSkeleton { HomeSkeleton {} } },
                 HomePosts { current_page }
             }
         }
