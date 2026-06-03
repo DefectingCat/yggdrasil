@@ -25,11 +25,11 @@ fn main() {
     output.push_str("\n/* Catppuccin Mocha (dark) */\n");
     output.push_str(&mocha_rewritten);
 
-    std::fs::create_dir_all("generated").expect("Failed to create generated/");
-    std::fs::write("generated/highlight.css", output)
-        .expect("Failed to write generated/highlight.css");
+    std::fs::create_dir_all("public").expect("Failed to create public/");
+    std::fs::write("public/highlight.css", output)
+        .expect("Failed to write public/highlight.css");
 
-    println!("Generated generated/highlight.css");
+    println!("Generated public/highlight.css");
 }
 
 fn strip_comments(css: &str) -> String {
