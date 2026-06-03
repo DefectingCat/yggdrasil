@@ -4,7 +4,7 @@ use crate::api::posts::{list_published_posts, PostListResponse};
 use crate::components::nav::use_nav_items;
 use crate::components::page_layout::PageLayout;
 use crate::components::post_card::PostCard;
-use crate::components::suspense_wrapper::SuspenseWrapper;
+use crate::components::skeletons::home_skeleton::HomeSkeleton;
 use crate::router::Route;
 
 const POSTS_PER_PAGE: i32 = 10;
@@ -23,7 +23,8 @@ pub fn HomePage(page: i32) -> Element {
     rsx! {
         PageLayout { nav_items,
             HomeInfo {}
-            SuspenseWrapper {
+            SuspenseBoundary {
+                fallback: |_| rsx! { HomeSkeleton {} },
                 HomePosts { current_page }
             }
         }
@@ -62,9 +63,7 @@ fn HomePosts(current_page: i32) -> Element {
         }
         _ => {
             rsx! {
-                div { class: "text-center text-gray-500 dark:text-[#9b9c9d] py-20",
-                    "加载中..."
-                }
+                // 骨架屏由 SuspenseBoundary fallback 处理
             }
         }
     }
