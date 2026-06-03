@@ -418,15 +418,14 @@ fn count_words(md: &str) -> u32 {
     let mut in_word = false;
 
     for c in plain.chars() {
-        if c.is_alphabetic() {
+        if c as u32 >= 0x4E00 && c as u32 <= 0x9FFF {
+            count += 1;
+            in_word = false;
+        } else if c.is_alphabetic() {
             if !in_word {
                 count += 1;
                 in_word = true;
             }
-        } else if c as u32 >= 0x4E00 && c as u32 <= 0x9FFF {
-            // Chinese character
-            count += 1;
-            in_word = false;
         } else {
             in_word = false;
         }
