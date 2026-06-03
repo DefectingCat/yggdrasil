@@ -42,6 +42,21 @@ fn detect_initial_theme() -> Theme {
             }
         }
     }
+
+    #[cfg(feature = "server")]
+    {
+        if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
+            let parts = ctx.parts_mut();
+            if let Some(cookie) = parts.headers.get("cookie") {
+                if let Ok(cookie_str) = cookie.to_str() {
+                    if cookie_str.contains("theme=dark") {
+                        return Theme::Dark;
+                    }
+                }
+            }
+        }
+    }
+
     Theme::Light
 }
 
