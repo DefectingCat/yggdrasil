@@ -191,8 +191,6 @@ fn clean_html(input: &str) -> String {
 struct RenderedContent {
     html: String,
     toc_html: String,
-    word_count: u32,
-    reading_time: u32,
 }
 
 #[cfg(feature = "server")]
@@ -312,15 +310,9 @@ fn render_markdown_enhanced(md: &str) -> RenderedContent {
         pulldown_cmark::html::push_html(&mut html, non_heading_events.into_iter());
     }
 
-    // 4. Count words (Chinese characters + English words)
-    let word_count = count_words(md);
-    let reading_time = (word_count / 200).max(1);
-
     RenderedContent {
         html: clean_html(&html),
         toc_html,
-        word_count,
-        reading_time,
     }
 }
 
