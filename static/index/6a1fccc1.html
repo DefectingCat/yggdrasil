@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Yggdrasil - Dioxus SSR</title>
+        <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta charset="UTF-8">
+        <style>
+            /* Inter Font */
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap') layer;
+
+            #dx-toast-template {
+                display: none;
+                visibility: hidden;
+            }
+
+            .dx-toast {
+                position: absolute;
+                top: 10px;
+                right: 0;
+                padding-right: 10px;
+                user-select: none;
+                /* transition: transform 0.2s ease; */
+                z-index: 2147483647;
+            }
+
+            .dx-toast .dx-toast-inner {
+                /* transition: right 0.2s ease-out; */
+                position: fixed;
+
+                background-color: #181B20;
+                color: #ffffff;
+                font-family: "Inter", sans-serif;
+
+                display: grid;
+                grid-template-columns: auto auto;
+                max-width: 400px;
+                min-height: 56px;
+                border-radius: 5px;
+            }
+
+            .dx-toast .dx-toast-inner {
+                cursor: pointer;
+                margin-right: 10px;
+            }
+
+            .dx-toast .dx-toast-level-bar-container {
+                height: 100%;
+                width: 6px;
+            }
+
+            .dx-toast .dx-toast-level-bar-container .dx-toast-level-bar {
+                width: 100%;
+                height: 100%;
+                border-radius: 5px 0px 0px 5px;
+            }
+
+            .dx-toast .dx-toast-content {
+                padding: 8px;
+            }
+
+            .dx-toast .dx-toast-header {
+                display: flex;
+                flex-direction: row;
+                justify-content: start;
+                align-items: end;
+                margin-bottom: 10px;
+            }
+
+            .dx-toast .dx-toast-header>svg {
+                height: 18px;
+                margin-right: 5px;
+            }
+
+            .dx-toast .dx-toast-header .dx-toast-header-text {
+                font-size: 14px;
+                font-weight: 700;
+                padding: 0;
+                margin: 0;
+            }
+
+            .dx-toast .dx-toast-msg {
+                font-size: 11px;
+                font-weight: 400;
+                padding: 0;
+                margin: 0;
+            }
+
+            .dx-toast-level-bar.info {
+                background-color: #428EFF;
+            }
+
+            .dx-toast-level-bar.success {
+                background-color: #42FF65;
+            }
+
+            .dx-toast-level-bar.error {
+                background-color: #FF4242;
+            }
+        </style>
+        <script>
+            const STORAGE_KEY = "SCHEDULED-DX-TOAST";
+            let currentTimeout = null;
+            let currentToastId = 0;
+
+            // Show a toast, removing the previous one.
+            function showDXToast(headerText, message, progressLevel, durationMs) {
+                const decor = document.getElementById("__dx-toast-decor");
+                const text = document.getElementById("__dx-toast-text");
+                const msg = document.getElementById("__dx-toast-msg");
+                const inner = document.getElementById("__dx-toast-inner");
+                const toast = document.getElementById("__dx-toast");
+
+                if (decor) decor.className = `dx-toast-level-bar ${progressLevel}`;
+                if (text) text.innerText = headerText;
+                if (msg) msg.innerText = message;
+                if (inner) inner.style.right = "0";
+                if (toast) {
+                    toast.removeAttribute("aria-hidden");
+                    toast.addEventListener("click", closeDXToast);
+                }
+
+                // Wait a bit of time so animation plays correctly.
+                setTimeout(
+                    () => {
+                        let ourToastId = currentToastId;
+                        currentTimeout = setTimeout(() => {
+                            if (ourToastId == currentToastId) {
+                                closeDXToast();
+                            }
+                        }, durationMs);
+                    },
+                    100
+                );
+
+                currentToastId += 1;
+            }
+
+            // Schedule a toast to be displayed after reload.
+            function scheduleDXToast(headerText, message, level, durationMs) {
+                let data = {
+                    headerText,
+                    message,
+                    level,
+                    durationMs,
+                };
+
+                let jsonData = JSON.stringify(data);
+                sessionStorage.setItem(STORAGE_KEY, jsonData);
+            }
+
+            // Close the current toast.
+            function closeDXToast() {
+                document.getElementById("__dx-toast-inner").style.right = "-1000px";
+                document.getElementById("__dx-toast").setAttribute("aria-hidden", "true");
+                clearTimeout(currentTimeout);
+            }
+
+            // Handle any scheduled toasts after reload.
+            let potentialData = sessionStorage.getItem(STORAGE_KEY);
+            if (potentialData) {
+                sessionStorage.removeItem(STORAGE_KEY);
+                let data = JSON.parse(potentialData);
+                showDXToast(data.headerText, data.message, data.level, data.durationMs);
+            }
+
+            window.scheduleDXToast = scheduleDXToast;
+            window.showDXToast = showDXToast;
+            window.closeDXToast = closeDXToast;
+        </script>
+    <link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/highlight.css">
+<link rel="stylesheet" href="/tiptap/editor.css">
+<script src="/tiptap/editor.js"></script>
+</head>
+    <body>
+        <div id="__dx-toast" class="dx-toast" aria-hidden="true">
+            <div id="__dx-toast-inner" class="dx-toast-inner" style="right:-1000px;">
+                <div class="dx-toast-level-bar-container">
+                    <div id="__dx-toast-decor" class="dx-toast-level-bar __info"></div>
+                </div>
+                <div class="dx-toast-content">
+                    <div class="dx-toast-header">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" preserveAspectRatio="none">
+                            <path d="M22.158 1.783c0 3.077-.851 5.482-2.215 7.377s-3.32 3.557-5.447 5.33-4.425 3.657-6.252 6.195-3.102 5.515-3.102 9.532h4.699c0-3.077.853-5.377 2.217-7.272s3.32-3.557 5.447-5.33 4.425-3.657 6.252-6.195 3.102-5.62 3.102-9.637z" fill="#e96020"/>
+                            <path d="M9.531 25.927c-.635 0-1.021.515-1.02 1.15s.385 1.151 1.02 1.15H22.47a1.151 1.151 0 1 0 0-2.301zm1.361-4.076c-.608 0-.954.558-.953 1.166s.346 1.035.953 1.035h10.217a1.101 1.101 0 1 0 0-2.201zm0-13.594a1.101 1.101 0 1 0 0 2.201h10.217c.607 0 .953-.598.953-1.205s-.345-.996-.953-.996zM9.531 4.021A1.15 1.15 0 0 0 8.38 5.17a1.15 1.15 0 0 0 1.15 1.15h12.94c.635 0 1.021-.498 1.02-1.133s-.386-1.166-1.02-1.166z" fill="#2d323b"/>
+                            <path d="M5.142 1.783c0 4.016 1.275 7.099 3.102 9.637s4.125 4.422 6.252 6.195 4.083 3.656 5.447 5.551 2.215 3.974 2.215 7.051h4.701c0-4.016-1.275-7.038-3.102-9.576s-4.125-4.422-6.252-6.195-4.083-3.435-5.447-5.33S9.841 4.86 9.841 1.783z" fill="#00a8d6"/>
+                        </svg>
+                        <h3 id="__dx-toast-text" class="dx-toast-header-text">Your app is being rebuilt.</h3>
+                    </div>
+                    <p id="__dx-toast-msg" class="dx-toast-msg">A non-hot-reloadable change occurred and we must rebuild.</p>
+                </div>
+            </div>
+        </div>
+        <div id="main"><script>window.hydrate_queue=[];window.dx_hydrate=(id,data,debug_types,debug_locations)=>{let decoded=atob(data),bytes=Uint8Array.from(decoded,(c)=>c.charCodeAt(0));if(window.hydration_callback)window.hydration_callback(id,bytes,debug_types,debug_locations);else window.hydrate_queue.push([id,bytes,debug_types,debug_locations])};
+</script><div class="" data-node-hydration="0"><script data-node-hydration="1">
+(function() {
+    try {
+        var theme = localStorage.getItem('yggdrasil-theme');
+        if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+    } catch (e) {}
+})();
+</script><div class="min-h-screen flex flex-col bg-white dark:bg-[#1d1e20] transition-colors duration-300" data-node-hydration="2"><header class="sticky top-0 z-40 w-full border-b border-gray-200 dark:border-[#333] bg-white/80 dark:bg-[#1d1e20]/80 backdrop-blur-sm" data-node-hydration="3"><nav class="max-w-3xl mx-auto px-6 h-[60px] flex items-center justify-between"><a class="text-2xl font-bold text-gray-900 dark:text-[#dadadb] hover:opacity-80 transition-opacity" href="/" data-node-hydration="4,click:1">Yggdrasil</a><div class="flex items-center gap-2"><ul class="hidden md:flex items-center gap-1"><li data-node-hydration="5"><a class="px-3 py-1 text-base rounded-lg transition-colors font-medium text-gray-900 dark:text-[#dadadb] underline underline-offset-[0.3rem] decoration-2 decoration-gray-900 dark:decoration-[#dadadb]" href="/" data-node-hydration="6,click:1"><!--node-id7-->首页<!--#--></a></li><li data-node-hydration="8"><a class="px-3 py-1 text-base rounded-lg transition-colors text-gray-600 dark:text-[#9b9c9d] hover:text-gray-900 dark:hover:text-[#dadadb]" href="/archives" data-node-hydration="9,click:1"><!--node-id10-->归档<!--#--></a></li><li data-node-hydration="11"><a class="px-3 py-1 text-base rounded-lg transition-colors text-gray-600 dark:text-[#9b9c9d] hover:text-gray-900 dark:hover:text-[#dadadb]" href="/tags" data-node-hydration="12,click:1"><!--node-id13-->标签<!--#--></a></li><li data-node-hydration="14"><a class="px-3 py-1 text-base rounded-lg transition-colors text-gray-600 dark:text-[#9b9c9d] hover:text-gray-900 dark:hover:text-[#dadadb]" href="/search" data-node-hydration="15,click:1"><!--node-id16-->搜索<!--#--></a></li><li data-node-hydration="17"><a class="px-3 py-1 text-base rounded-lg transition-colors text-gray-600 dark:text-[#9b9c9d] hover:text-gray-900 dark:hover:text-[#dadadb]" href="/about" data-node-hydration="18,click:1"><!--node-id19-->关于<!--#--></a></li></ul><button class="theme-toggle p-2 rounded-full cursor-pointer hover:opacity-80 transition-opacity text-gray-600 dark:text-gray-300" data-node-hydration="20,click:1"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor" data-node-hydration="21"><path d="M440-800v-120h80v120h-80Zm0 760v-120h80v120h-80Zm360-400v-80h120v80H800Zm-760 0v-80h120v80H40Zm708-252-56-56 70-72 58 58-72 70ZM198-140l-58-58 72-70 56 56-70 72Zm564 0-70-72 56-56 72 70-58 58ZM212-692l-72-70 58-58 70 72-56 56Zm98 382q-70-70-70-170t70-170q70-70 170-70t170 70q70 70 70 170t-70 170q-70 70-170 70t-170-70Zm283.5-56.5Q640-413 640-480t-46.5-113.5Q547-640 480-640t-113.5 46.5Q320-547 320-480t46.5 113.5Q413-320 480-320t113.5-46.5ZM480-480Z"></path></svg></button></div></nav></header><main class="flex-1 w-full max-w-3xl mx-auto px-6 py-6"><div class="mb-10 text-center" data-node-hydration="22"><h1 class="text-[34px] font-bold leading-tight text-gray-900 dark:text-[#dadadb]">Yggdrasil</h1><p class="mt-3 text-base text-gray-500 dark:text-[#9b9c9d] leading-relaxed">以文字为主的简约博客系统</p></div><article class="relative mb-6 p-6 bg-white dark:bg-[#2e2e33] rounded-lg border border-gray-200 dark:border-[#333] hover:-translate-y-0.5 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-250" data-node-hydration="23"><a class="block group" href="/post/test-papermod" data-node-hydration="24,click:1"><h2 class="text-2xl font-bold leading-tight text-gray-900 dark:text-[#dadadb] group-hover:opacity-80 transition-opacity"><!--node-id25-->测试文章 - PaperMod 风格<!--#--></h2><div class="mt-2 text-sm text-gray-500 dark:text-[#9b9c9d] leading-relaxed line-clamp-2"><!--node-id26-->这是一篇测试文章，用于验证 PaperMod 风格的文章页面。<!--#--></div><div class="mt-3 flex items-center gap-3 text-[13px] text-gray-400 dark:text-[#9b9c9d]"><span><!--node-id27-->2026-06-02<!--#--></span><span data-node-hydration="28">·</span><span data-node-hydration="29"><a class="hover:text-gray-600 dark:hover:text-[#dadadb] transition-colors" href="/tags/PaperMod" data-node-hydration="30,click:1"><!--node-id31-->PaperMod<!--#--></a></span><span data-node-hydration="32"><a class="hover:text-gray-600 dark:hover:text-[#dadadb] transition-colors" href="/tags/Rust" data-node-hydration="33,click:1"><!--node-id34-->Rust<!--#--></a></span><span data-node-hydration="35"><a class="hover:text-gray-600 dark:hover:text-[#dadadb] transition-colors" href="/tags/测试" data-node-hydration="36,click:1"><!--node-id37-->测试<!--#--></a></span></div></a></article><article class="relative mb-6 p-6 bg-white dark:bg-[#2e2e33] rounded-lg border border-gray-200 dark:border-[#333] hover:-translate-y-0.5 hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-250" data-node-hydration="38"><a class="block group" href="/post/test-2" data-node-hydration="39,click:1"><h2 class="text-2xl font-bold leading-tight text-gray-900 dark:text-[#dadadb] group-hover:opacity-80 transition-opacity"><!--node-id40-->test<!--#--></h2><div class="mt-2 text-sm text-gray-500 dark:text-[#9b9c9d] leading-relaxed line-clamp-2"><!--node-id41-->test<!--#--></div><div class="mt-3 flex items-center gap-3 text-[13px] text-gray-400 dark:text-[#9b9c9d]"><span><!--node-id42-->2026-06-01<!--#--></span><!--placeholder43--></div></a></article><!--placeholder44--><nav class="flex mt-10 mb-6 justify-between" data-node-hydration="45"><!--placeholder46--><!--placeholder47--></nav></main><footer class="w-full border-t border-gray-200 dark:border-[#333] mt-auto" data-node-hydration="48"><div class="max-w-3xl mx-auto px-6 py-5 flex items-center justify-between text-sm text-gray-400 dark:text-[#9b9c9d]"><span>© 2026 Yggdrasil Blog</span><a class="p-2 rounded-full cursor-pointer hover:opacity-80 transition-all duration-300 text-gray-600 dark:text-gray-300 opacity-0 translate-y-2 pointer-events-none" href="#top" aria-label="go to top" title="Go to Top (Alt + G)" accesskey="g" data-node-hydration="49,click:1"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor"><path d="m296-224-56-56 240-240 240 240-56 56-184-183-184 183Zm0-240-56-56 240-240 240 240-56 56-184-183-184 183Z"></path></svg></a></div></footer></div></div><script>window.initial_dioxus_hydration_data="hIEY9oIYYRgv9pkEJhihGGIYTxhrGKEYZRhwGG8Ycxh0GHMYghiyGGIYaRhkAxhpGGEYdRh0GGgYbxhyGF8YaRhkARhlGHQYaRh0GGwYZRh4GB4Y5hi1GIsY6BivGJUY5hiWGIcY5xirGKAYIBgtGCAYUBhhGHAYZRhyGE0YbxhkGCAY6RijGI4Y5higGLwYZBhzGGwYdRhnGG0YdBhlGHMYdBgtGHAYYRhwGGUYchhtGG8YZBhnGHMYdRhtGG0YYRhyGHkYeBhJGOgYvxiZGOYYmBivGOQYuBiAGOcYrxiHGOYYtRiLGOgYrxiVGOYYlhiHGOcYqxigGO8YvBiMGOcYlBioGOQYuhiOGOkYqhiMGOgYrxiBGCAYUBhhGHAYZRhyGE0YbxhkGCAY6RijGI4Y5higGLwY5xiaGIQY5hiWGIcY5xirGKAY6RihGLUY6RidGKIY4xiAGIIYahhjGG8Ybhh0GGUYbhh0GF8YbRhkGHgY/BgjGCAY5xisGKwY5Bi4GIAY5xirGKAKChjoGL8YmRjmGJgYrxjnGKwYrBjkGLgYgBjnGKsYoBjnGJoYhBjlGIYYhRjlGK4YuRjjGIAYggoKGCMYIxggGDEYLhgxGCAY5RiwGI8Y6BiKGIIKChjoGL8YmRjmGJgYrxjlGLAYjxjoGIoYghjnGJoYhBjlGIYYhRjlGK4YuRjjGIAYggoKGGAYYBhgGHIYdRhzGHQKGGYYbhggGG0YYRhpGG4YKBgpGCAYewoYIBggGCAYIBhwGHIYaRhuGHQYbBhuGCEYKBgiGEgYZRhsGGwYbxgsGCAYVxhvGHIYbBhkGCEYIhgpGDsKGH0KGGAYYBhgCgoYIxggGOcYrBisGOQYuhiMGOcYqxigCgoY6Bi/GJkY5hiYGK8Y5xisGKwY5Bi6GIwY5xirGKAY5xiaGIQY5RiGGIUY5RiuGLkY4xiAGIIKChg+GCAY6Bi/GJkY5hiYGK8Y5Bi4GIAY5Bi4GKoY5Ri8GJUY5xiUGKgY5RidGJcY4xiAGIIKChgtGCAY5RiIGJcY6BihGKgY6RihGLkYIBgxChgtGCAY5RiIGJcY6BihGKgY6RihGLkYIBgyChgtGCAY5RiIGJcY6BihGKgY6RihGLkYIBgzGGwYYxhvGG4YdBhlGG4YdBhfGGgYdBhtGGwYYBhmGHMYdBhhGHQYdRhzGGkYUBh1GGIYbBhpGHMYaBhlGGQYbBhwGHUYYhhsGGkYcxhoGGUYZBhfGGEYdBh4GBsYMhgwGDIYNhgtGDAYNhgtGDAYMhhUGDEYMBg6GDIYNhg6GDMYMRguGDUYNhg2GDAYNRgzGFoYahhjGHIYZRhhGHQYZRhkGF8YYRh0GHgYGxgyGDAYMhg2GC0YMBg2GC0YMBgyGFQYMRgwGDoYMhg2GDoYMxgxGC4YNRg2GDYYMBg1GDMYWhhqGHUYcBhkGGEYdBhlGGQYXxhhGHQYeBgbGDIYMBgyGDYYLRgwGDYYLRgwGDIYVBgxGDAYOhgyGDYYOhgzGDEYLhg1GDYYNhgwGDUYMxhaGGQYdBhhGGcYcxiDGGgYUBhhGHAYZRhyGE0YbxhkGGQYUhh1GHMYdBhmGOYYtRiLGOgYrxiVGGsYYxhvGHYYZRhyGF8YaRhtGGEYZxhlGHgYQhhoGHQYdBhwGHMYOhgvGC8YaRhtGGEYZxhlGHMYLhh1GG4YcxhwGGwYYRhzGGgYLhhjGG8YbRgvGHAYaBhvGHQYbxgtGDEYNRgwGDYYORgwGDUYORgyGDUYMxg0GDYYLRgyGDEYYhhkGGEYNBhkGDMYMhhkGGYYNBg/GHcYPRg4GDAYMBhsGHIYZRhhGGQYaRhuGGcYXxh0GGkYbRhlARhqGHcYbxhyGGQYXxhjGG8YdRhuGHQYGBgvGGgYdBhvGGMYXxhoGHQYbRhsGPYYaRhwGHIYZRh2GF8YcBhvGHMYdBj2GGkYbhhlGHgYdBhfGHAYbxhzGHQY9hiyGGIYaRhkAhhpGGEYdRh0GGgYbxhyGF8YaRhkARhlGHQYaRh0GGwYZRhkGHQYZRhzGHQYZBhzGGwYdRhnGGYYdBhlGHMYdBgtGDIYZxhzGHUYbRhtGGEYchh5GGQYdBhlGHMYdBhqGGMYbxhuGHQYZRhuGHQYXxhtGGQYZBh0GGUYcxh0GGwYYxhvGG4YdBhlGG4YdBhfGGgYdBhtGGwYbBg8GHAYPhh0GGUYcxh0GDwYLxhwGD4KGGYYcxh0GGEYdBh1GHMYaRhQGHUYYhhsGGkYcxhoGGUYZBhsGHAYdRhiGGwYaRhzGGgYZRhkGF8YYRh0GHgYGxgyGDAYMhg2GC0YMBg2GC0YMBgxGFQYMRgwGDoYMhg5GDoYMRg2GC4YORgxGDUYORg4GDIYWhhqGGMYchhlGGEYdBhlGGQYXxhhGHQYeBgbGDIYMBgyGDYYLRgwGDYYLRgwGDEYVBgxGDAYOhgyGDkYOhgxGDYYLhg5GDEYNhgzGDIYMBhaGGoYdRhwGGQYYRh0GGUYZBhfGGEYdBh4GBsYMhgwGDIYNhgtGDAYNhgtGDAYMRhUGDEYMBg6GDIYORg6GDEYNhguGDkYMRg2GDMYMhgwGFoYZBh0GGEYZxhzGIAYaxhjGG8YdhhlGHIYXxhpGG0YYRhnGGUY9hhsGHIYZRhhGGQYaRhuGGcYXxh0GGkYbRhlARhqGHcYbxhyGGQYXxhjGG8YdRhuGHQBGGgYdBhvGGMYXxhoGHQYbRhsGPYYaRhwGHIYZRh2GF8YcBhvGHMYdBj2GGkYbhhlGHgYdBhfGHAYbxhzGHQY9g==";window.initial_dioxus_hydration_debug_types=["core::option::Option<dioxus_core::render_error::CapturedError>","unknown","alloc::string::String","unknown","unknown","unknown","core::result::Result<yggdrasil::api::posts::PostListResponse, dioxus_fullstack_core::error::ServerFnError>"];window.initial_dioxus_hydration_debug_locations=["/Users/issuser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/dioxus-server-0.7.9/src/ssr.rs:556:29","unknown","/Users/issuser/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/dioxus-fullstack-core-0.7.9/src/history.rs:44:30","unknown","unknown","unknown","src/pages/home.rs:35:21"];</script></div>
+    <script type="module" async src="/./wasm/yggdrasil.js"></script>
+            </body>
+</html>
