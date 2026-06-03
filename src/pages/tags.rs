@@ -4,7 +4,7 @@ use crate::api::posts::{get_posts_by_tag, list_tags, PostListResponse, TagListRe
 use crate::components::nav::use_nav_items;
 use crate::components::page_layout::PageLayout;
 use crate::components::post_card::PostCard;
-use crate::components::suspense_wrapper::SuspenseWrapper;
+use crate::components::skeletons::tags_skeleton::{TagsSkeleton, TagDetailSkeleton};
 use crate::router::Route;
 
 #[component]
@@ -19,7 +19,8 @@ pub fn Tags() -> Element {
                     "标签"
                 }
             }
-            SuspenseWrapper {
+            SuspenseBoundary {
+                fallback: |_| rsx! { TagsSkeleton {} },
                 TagsContent {}
             }
         }
@@ -73,9 +74,7 @@ fn TagsContent() -> Element {
         }
         _ => {
             rsx! {
-                div { class: "text-center text-gray-500 dark:text-[#9b9c9d] py-20",
-                    "加载中..."
-                }
+                // 骨架屏由 SuspenseBoundary fallback 处理
             }
         }
     }
@@ -93,7 +92,8 @@ pub fn TagDetail(tag: String) -> Element {
                     "{tag}"
                 }
             }
-            SuspenseWrapper {
+            SuspenseBoundary {
+                fallback: |_| rsx! { TagDetailSkeleton {} },
                 TagDetailContent { tag: tag.clone() }
             }
         }
@@ -131,9 +131,7 @@ fn TagDetailContent(tag: String) -> Element {
         }
         _ => {
             rsx! {
-                div { class: "text-center text-gray-500 dark:text-[#9b9c9d] py-20",
-                    "加载中..."
-                }
+                // 骨架屏由 SuspenseBoundary fallback 处理
             }
         }
     }
