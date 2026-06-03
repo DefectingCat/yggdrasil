@@ -4,65 +4,66 @@ use crate::api::posts::{list_published_posts, PostListResponse};
 use crate::components::nav::use_nav_items;
 use crate::components::page_layout::PageLayout;
 use crate::components::post_card::PostCard;
-use crate::hooks::delayed_loading::use_delayed_loading;
+use crate::components::suspense_wrapper::SuspenseWrapper;
 use crate::router::Route;
 
 const POSTS_PER_PAGE: i32 = 10;
 
 #[component]
 pub fn Home() -> Element {
-    rsx! { HomeContent { page: 1 } }
+    rsx! { HomePage { page: 1 } }
 }
 
 #[component]
 pub fn HomePage(page: i32) -> Element {
-    rsx! { HomeContent { page } }
-}
-
-#[component]
-fn HomeContent(page: i32) -> Element {
     let route = use_route::<Route>();
-    let current_page = page.max(1);
-    let posts_res = use_resource(move || list_published_posts(current_page, POSTS_PER_PAGE));
     let nav_items = use_nav_items(route);
-    let show_skeleton = use_delayed_loading(move || posts_res.read().is_none());
+    let current_page = page.max(1);
 
     rsx! {
         PageLayout { nav_items,
             HomeInfo {}
-            match &*posts_res.read() {
-                Some(Ok(PostListResponse { posts })) => {
-                    rsx! {
-                        for post in posts.iter() {
-                            PostCard { post: post.clone() }
-                        }
-                        if posts.is_empty() {
-                            div { class: "text-center text-gray-500 dark:text-[#9b9c9d] py-20",
-                                "暂无文章"
-                            }
-                        }
-                        Pagination { current_page, posts: posts.clone() }
+            SuspenseWrapper {
+                HomePosts { current_page }
+            }
+        }
+    }
+}
+
+#[component]
+fn HomePosts(current_page: i32) -> Element {
+    let posts_res = use_server_future(move || list_published_posts(current_page, POSTS_PER_PAGE))?;
+
+    let posts_data = posts_res.read().as_ref().map(|r| match r {
+        Ok(PostListResponse { posts }) => Ok(posts.clone()),
+        Err(e) => Err(e.to_string()),
+    });
+
+    match posts_data {
+        Some(Ok(posts)) => {
+            rsx! {
+                for post in posts.iter() {
+                    PostCard { post: post.clone() }
+                }
+                if posts.is_empty() {
+                    div { class: "text-center text-gray-500 dark:text-[#9b9c9d] py-20",
+                        "暂无文章"
                     }
                 }
-                Some(Err(e)) => {
-                    rsx! {
-                        div { class: "text-center text-red-500 dark:text-red-400 py-20",
-                            "加载失败: {e}"
-                        }
-                    }
+                Pagination { current_page, posts: posts.clone() }
+            }
+        }
+        Some(Err(e)) => {
+            rsx! {
+                div { class: "text-center text-red-500 dark:text-red-400 py-20",
+                    "加载失败: {e}"
                 }
-                None => {
-                    rsx! {
-                        div { class: if show_skeleton() { "space-y-6 py-4" } else { "space-y-6 py-4 opacity-0" },
-                            for _ in 0..3 {
-                                div { class: "mb-6 p-6 bg-white dark:bg-[#2e2e33] rounded-lg border border-gray-200 dark:border-[#333] animate-pulse",
-                                    div { class: "h-7 w-3/4 bg-gray-200 dark:bg-[#2a2a2a] rounded mb-3" }
-                                    div { class: "h-4 w-full bg-gray-200 dark:bg-[#2a2a2a] rounded mb-2" }
-                                    div { class: "h-4 w-2/3 bg-gray-200 dark:bg-[#2a2a2a] rounded" }
-                                }
-                            }
-                        }
-                    }
+            }
+        }
+        _ => {
+            rsx! {
+                div { class: "text-center text-gray-500 dark:text-[#9b9c9d] py-20",
+                    "加载中..."
                 }
             }
         }
