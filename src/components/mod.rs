@@ -7,5 +7,4 @@ pub mod page_layout;
 pub mod post;
 pub mod post_card;
 pub mod skeletons;
-pub mod suspense_wrapper;
 pub mod write_skeleton;
