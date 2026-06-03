@@ -1,27 +1,19 @@
 use dioxus::prelude::*;
 
 use crate::api::posts::{get_posts_by_tag, list_tags, PostListResponse, TagListResponse};
-use crate::components::nav::use_nav_items;
-use crate::components::page_layout::PageLayout;
 use crate::components::post_card::PostCard;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::tags_skeleton::{TagsSkeleton, TagDetailSkeleton};
-use crate::router::Route;
 
 #[component]
 pub fn Tags() -> Element {
-    let route = use_route::<Route>();
-    let nav_items = use_nav_items(route);
-
     rsx! {
-        PageLayout { nav_items,
-            header { class: "page-header mb-6",
-                h1 { class: "text-[34px] font-bold text-gray-900 dark:text-[#dadadb]",
-                    "标签"
-                }
+        header { class: "page-header mb-6",
+            h1 { class: "text-[34px] font-bold text-gray-900 dark:text-[#dadadb]",
+                "标签"
             }
-            TagsContent {}
         }
+        TagsContent {}
     }
 }
 
@@ -80,18 +72,13 @@ fn TagsContent() -> Element {
 
 #[component]
 pub fn TagDetail(tag: String) -> Element {
-    let route = use_route::<Route>();
-    let nav_items = use_nav_items(route);
-
     rsx! {
-        PageLayout { nav_items,
-            header { class: "page-header mb-6",
-                h1 { class: "text-[34px] font-bold text-gray-900 dark:text-[#dadadb]",
-                    "{tag}"
-                }
+        header { class: "page-header mb-6",
+            h1 { class: "text-[34px] font-bold text-gray-900 dark:text-[#dadadb]",
+                "{tag}"
             }
-            TagDetailContent { tag: tag.clone() }
         }
+        TagDetailContent { tag: tag.clone() }
     }
 }
 

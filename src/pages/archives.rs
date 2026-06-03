@@ -1,12 +1,9 @@
 use dioxus::prelude::*;
 
 use crate::api::posts::{list_published_posts, PostListResponse};
-use crate::components::nav::use_nav_items;
-use crate::components::page_layout::PageLayout;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::archive_skeleton::ArchiveSkeleton;
 use crate::models::post::Post;
-use crate::router::Route;
 
 #[derive(Clone, PartialEq)]
 struct YearGroup {
@@ -80,18 +77,13 @@ fn group_posts(posts: &[Post]) -> Vec<YearGroup> {
 
 #[component]
 pub fn Archives() -> Element {
-    let route = use_route::<Route>();
-    let nav_items = use_nav_items(route);
-
     rsx! {
-        PageLayout { nav_items,
-            header { class: "page-header mb-6",
-                h1 { class: "text-[34px] font-bold text-gray-900 dark:text-[#dadadb]",
-                    "归档"
-                }
+        header { class: "page-header mb-6",
+            h1 { class: "text-[34px] font-bold text-gray-900 dark:text-[#dadadb]",
+                "归档"
             }
-            ArchivesContent {}
         }
+        ArchivesContent {}
     }
 }
 
