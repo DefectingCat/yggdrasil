@@ -24,10 +24,7 @@ pub fn HomePage(page: i32) -> Element {
     rsx! {
         PageLayout { nav_items,
             HomeInfo {}
-            SuspenseBoundary {
-                fallback: |_| rsx! { DelayedSkeleton { HomeSkeleton {} } },
-                HomePosts { current_page }
-            }
+            HomePosts { current_page }
         }
     }
 }
@@ -64,7 +61,7 @@ fn HomePosts(current_page: i32) -> Element {
         }
         _ => {
             rsx! {
-                // 骨架屏由 SuspenseBoundary fallback 处理
+                DelayedSkeleton { HomeSkeleton {} }
             }
         }
     }

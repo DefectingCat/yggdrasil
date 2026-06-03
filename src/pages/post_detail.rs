@@ -19,10 +19,7 @@ pub fn PostDetail(slug: String) -> Element {
 
     rsx! {
         PageLayout { nav_items,
-            SuspenseBoundary {
-                fallback: |_| rsx! { DelayedSkeleton { PostDetailSkeleton {} } },
-                PostDetailContent { slug: slug.clone() }
-            }
+            PostDetailContent { slug: slug.clone() }
         }
     }
 }
@@ -87,7 +84,7 @@ fn PostDetailContent(slug: String) -> Element {
         }
         _ => {
             rsx! {
-                // 骨架屏由 SuspenseBoundary fallback 处理
+                DelayedSkeleton { PostDetailSkeleton {} }
             }
         }
     }
