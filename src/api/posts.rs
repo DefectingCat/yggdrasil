@@ -166,6 +166,17 @@ async fn ensure_unique_slug(
 // Markdown rendering (enhanced with TOC, word count, reading time, anchors)
 // ============================================================================
 
+#[cfg(feature = "server")]
+fn clean_html(input: &str) -> String {
+    let mut builder = ammonia::Builder::default();
+    builder
+        .add_generic_attributes(&["class", "aria-hidden", "aria-label", "id", "role", "accesskey", "title"])
+        .add_tags(&["details", "summary"])
+        .url_relative(ammonia::UrlRelative::PassThrough)
+        .clean(input)
+        .to_string()
+}
+
 #[derive(Debug, Clone)]
 #[cfg(feature = "server")]
 struct RenderedContent {
@@ -272,10 +283,10 @@ fn render_markdown_enhanced(md: &str) -> RenderedContent {
                 if in_heading {
                     // Manually render heading content
                     match event {
-                        Event::Text(text) => html.push_str(&ammonia::clean(&text)),
+                        Event::Text(text) => html.push_str(&clean_html(&text)),
                         Event::Code(code) => {
                             html.push_str("<code>");
-                            html.push_str(&ammonia::clean(&code));
+                            html.push_str(&clean_html(&code));
                             html.push_str("</code>");
                         }
                         _ => {}
@@ -297,7 +308,7 @@ fn render_markdown_enhanced(md: &str) -> RenderedContent {
     let reading_time = (word_count / 200).max(1);
 
     RenderedContent {
-        html: ammonia::clean(&html),
+        html: clean_html(&html),
         toc_html,
         word_count,
         reading_time,
@@ -343,8 +354,8 @@ fn generate_toc_html(headings: &[(u8, String, String)]) -> String {
         html.push_str(&format!(
             "<li><a href=\"#{}\" aria-label=\"{}\">{}</a>",
             id,
-            ammonia::clean(text),
-            ammonia::clean(text)
+            clean_html(text),
+            clean_html(text)
         ));
     }
 
