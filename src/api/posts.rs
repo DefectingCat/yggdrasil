@@ -94,7 +94,7 @@ fn slugify(title: &str) -> String {
         .to_lowercase()
         .chars()
         .map(|c| {
-            if c.is_alphanumeric() || c == '-' || c == '_' {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
                 c
             } else {
                 '-'
@@ -102,11 +102,13 @@ fn slugify(title: &str) -> String {
         })
         .collect();
 
-    // Collapse consecutive dashes
     let parts: Vec<&str> = slug.split('-').filter(|s| !s.is_empty()).collect();
     let slug = parts.join("-");
 
-    // Truncate to 100 chars
+    if slug.is_empty() {
+        return format!("{}", chrono::Utc::now().timestamp());
+    }
+
     slug.chars().take(100).collect()
 }
 
