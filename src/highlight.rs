@@ -1,17 +1,15 @@
 #[cfg(feature = "server")]
 pub mod server {
-    use std::sync::{LazyLock, OnceLock};
+    use std::sync::LazyLock;
 
     use syntect::html::{ClassedHTMLGenerator, ClassStyle};
-    use syntect::parsing::{SyntaxReference, SyntaxSet};
+    use syntect::parsing::SyntaxSet;
     use syntect::util::LinesWithEndings;
 
     static SYNTAX_SET: LazyLock<SyntaxSet> =
         LazyLock::new(SyntaxSet::load_defaults_newlines);
 
-    static FALLBACK_SYNTAX: OnceLock<SyntaxReference> = OnceLock::new();
-
-    fn find_syntax(lang: Option<&str>) -> &'static SyntaxReference {
+    fn find_syntax(lang: Option<&str>) -> &'static syntect::parsing::SyntaxReference {
         let ss = &*SYNTAX_SET;
         if let Some(lang) = lang {
             if !lang.is_empty() {
@@ -23,11 +21,9 @@ pub mod server {
                 }
             }
         }
-        let plain = ss
-            .find_syntax_by_extension("txt")
+        ss.find_syntax_by_extension("txt")
             .or_else(|| ss.find_syntax_by_name("Plain Text"))
-            .expect("no plain text syntax");
-        FALLBACK_SYNTAX.get_or_init(|| plain.clone())
+            .expect("no plain text syntax")
     }
 
     pub fn highlight_code(code: &str, lang: Option<&str>) -> String {
@@ -37,7 +33,9 @@ pub mod server {
             ClassedHTMLGenerator::new_with_class_style(syntax, ss, ClassStyle::Spaced);
 
         for line in LinesWithEndings::from(code) {
-            let _ = generator.parse_html_for_line_which_includes_newline(line);
+            if let Err(e) = generator.parse_html_for_line_which_includes_newline(line) {
+                tracing::warn!("syntect parse error: {:?}", e);
+            }
         }
 
         generator.finalize()

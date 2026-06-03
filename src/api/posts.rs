@@ -172,13 +172,11 @@ async fn ensure_unique_slug(
 fn clean_html(input: &str) -> String {
     let mut builder = ammonia::Builder::default();
     builder
-        .add_generic_attributes(&["class", "style", "aria-hidden", "aria-label", "id", "role", "accesskey", "title"])
+        .add_generic_attributes(&["class", "aria-hidden", "aria-label", "id", "role", "accesskey", "title"])
         .add_tags(&["details", "summary"])
         .url_relative(ammonia::UrlRelative::PassThrough)
         .add_tag_attributes("a", &["class", "aria-hidden", "aria-label"])
-        .add_tag_attributes("span", &["class", "style"])
-        .add_tag_attributes("pre", &["class", "style"])
-        .add_tag_attributes("code", &["class", "style"])
+        .add_tag_attributes("span", &["class"])
         .add_tag_attributes("h1", &["id", "class"])
         .add_tag_attributes("h2", &["id", "class"])
         .add_tag_attributes("h3", &["id", "class"])
@@ -319,8 +317,6 @@ fn render_markdown_enhanced(md: &str) -> RenderedContent {
                 html.push_str(&highlighted);
                 html.push_str("</code></pre>");
                 in_codeblock = false;
-                code_lang = None;
-                code_buffer.clear();
             }
             _ => {
                 if in_heading {
