@@ -6,7 +6,7 @@ use http::header::{HeaderValue, SET_COOKIE};
 
 use crate::auth::{password, session};
 use crate::db::pool::DB_POOL;
-use crate::models::user::{User, UserRole};
+use crate::models::user::{PublicUser, User, UserRole};
 
 #[allow(dead_code)]
 fn validate_username(username: &str) -> Result<(), String> {
@@ -261,7 +261,7 @@ pub async fn logout() -> Result<AuthResponse, ServerFnError> {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CurrentUserResponse {
-    pub user: Option<User>,
+    pub user: Option<PublicUser>,
 }
 
 #[server(GetCurrentUser, "/api")]
@@ -289,7 +289,7 @@ pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
 
     let row = client
         .query_opt(
-            "SELECT u.id, u.username, u.email, u.password_hash, u.role, u.created_at
+            "SELECT u.id, u.username, u.email, u.role, u.created_at
              FROM sessions s
              JOIN users u ON s.user_id = u.id
              WHERE s.token = $1 AND s.expires_at > NOW()",
@@ -305,11 +305,10 @@ pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
         Some(row) => {
             let role_str: String = row.get("role");
             let role = UserRole::from_str(&role_str).unwrap_or(UserRole::Blocked);
-            Some(User {
+            Some(PublicUser {
                 id: row.get("id"),
                 username: row.get("username"),
                 email: row.get("email"),
-                password_hash: row.get("password_hash"),
                 role,
                 created_at: row.get("created_at"),
             })

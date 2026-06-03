@@ -59,7 +59,7 @@ pub fn AppRouter() -> Element {
         Theme::Light => "",
     };
 
-    let user = use_signal(|| None::<Arc<crate::models::user::User>>);
+    let user = use_signal(|| None::<Arc<crate::models::user::PublicUser>>);
     let checked = use_signal(|| false);
     use_context_provider(|| UserContext { user, checked });
 
