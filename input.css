@@ -358,6 +358,11 @@
     line-height: 1.6;
   }
 
+  /* Reset display for syntax-highlighted spans to prevent Tailwind .block conflict */
+  .md-content pre code span {
+    display: inline !important;
+  }
+
   /* Copy Code Button */
   .copy-code {
     display: none;
