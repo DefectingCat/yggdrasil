@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use std::sync::Arc;
 
 use crate::components::admin_layout::AdminLayout;
+use crate::components::frontend_layout::FrontendLayout;
 use crate::context::UserContext;
 use crate::pages::about::About;
 use crate::pages::admin::{Admin, Posts, Write};
@@ -17,14 +18,24 @@ use crate::theme::{use_theme_provider, Theme, ThemePreload};
 #[derive(Clone, Routable, Debug, PartialEq)]
 #[rustfmt::skip]
 pub enum Route {
-    #[route("/")]
-    Home {},
-    #[route("/page/:page")]
-    HomePage { page: i32 },
-    #[route("/login")]
-    Login {},
-    #[route("/register")]
-    Register {},
+    #[layout(FrontendLayout)]
+        #[route("/")]
+        Home {},
+        #[route("/page/:page")]
+        HomePage { page: i32 },
+        #[route("/archives")]
+        Archives {},
+        #[route("/tags")]
+        Tags {},
+        #[route("/tags/:tag")]
+        TagDetail { tag: String },
+        #[route("/post/:slug")]
+        PostDetail { slug: String },
+        #[route("/search")]
+        Search {},
+        #[route("/about")]
+        About {},
+    #[end_layout]
 
     #[nest("/admin")]
     #[layout(AdminLayout)]
@@ -37,18 +48,10 @@ pub enum Route {
     #[end_layout]
     #[end_nest]
 
-    #[route("/archives")]
-    Archives {},
-    #[route("/tags")]
-    Tags {},
-    #[route("/tags/:tag")]
-    TagDetail { tag: String },
-    #[route("/post/:slug")]
-    PostDetail { slug: String },
-    #[route("/search")]
-    Search {},
-    #[route("/about")]
-    About {},
+    #[route("/login")]
+    Login {},
+    #[route("/register")]
+    Register {},
 }
 
 #[component]
