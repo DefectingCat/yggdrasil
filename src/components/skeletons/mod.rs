@@ -1,4 +1,5 @@
 pub mod archive_skeleton;
+pub mod delayed_skeleton;
 pub mod home_skeleton;
 pub mod post_card_skeleton;
 pub mod post_detail_skeleton;
