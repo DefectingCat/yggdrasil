@@ -1,8 +1,6 @@
 use dioxus::prelude::*;
 
 use crate::api::posts::{get_post_by_slug, SinglePostResponse};
-use crate::components::nav::use_nav_items;
-use crate::components::page_layout::PageLayout;
 use crate::components::post::post_content::PostContent;
 use crate::components::post::post_cover::PostCover;
 use crate::components::post::post_footer::PostFooter;
@@ -10,17 +8,11 @@ use crate::components::post::post_header::PostHeader;
 use crate::components::post::post_toc::PostToc;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::post_detail_skeleton::PostDetailSkeleton;
-use crate::router::Route;
 
 #[component]
 pub fn PostDetail(slug: String) -> Element {
-    let route = use_route::<Route>();
-    let nav_items = use_nav_items(route);
-
     rsx! {
-        PageLayout { nav_items,
-            PostDetailContent { slug: slug.clone() }
-        }
+        PostDetailContent { slug: slug.clone() }
     }
 }
 

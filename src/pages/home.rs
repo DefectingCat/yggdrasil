@@ -1,12 +1,9 @@
 use dioxus::prelude::*;
 
 use crate::api::posts::{list_published_posts, PostListResponse};
-use crate::components::nav::use_nav_items;
-use crate::components::page_layout::PageLayout;
 use crate::components::post_card::PostCard;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::home_skeleton::HomeSkeleton;
-use crate::router::Route;
 
 const POSTS_PER_PAGE: i32 = 10;
 
@@ -17,15 +14,11 @@ pub fn Home() -> Element {
 
 #[component]
 pub fn HomePage(page: i32) -> Element {
-    let route = use_route::<Route>();
-    let nav_items = use_nav_items(route);
     let current_page = page.max(1);
 
     rsx! {
-        PageLayout { nav_items,
-            HomeInfo {}
-            HomePosts { current_page }
-        }
+        HomeInfo {}
+        HomePosts { current_page }
     }
 }
 
