@@ -22,19 +22,6 @@
   --main-width-paper: 720px;
 }
 
-@theme dark {
-  /* PaperMod Dark Theme */
-  --color-paper-theme: #1d1e20;
-  --color-paper-entry: #2e2e33;
-  --color-paper-primary: #dadadb;
-  --color-paper-secondary: #9b9c9d;
-  --color-paper-tertiary: #414244;
-  --color-paper-content: #c4c4c5;
-  --color-paper-code-block: #2e2e33;
-  --color-paper-code-bg: #37383e;
-  --color-paper-border: #333333;
-}
-
 @layer base {
   html {
     scroll-behavior: smooth;
@@ -44,6 +31,18 @@
     background-color: var(--color-paper-theme);
     color: var(--color-paper-primary);
     transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  .dark {
+    --color-paper-theme: #1d1e20;
+    --color-paper-entry: #2e2e33;
+    --color-paper-primary: #dadadb;
+    --color-paper-secondary: #9b9c9d;
+    --color-paper-tertiary: #414244;
+    --color-paper-content: #c4c4c5;
+    --color-paper-code-block: #2e2e33;
+    --color-paper-code-bg: #37383e;
+    --color-paper-border: #333333;
   }
 }
 
