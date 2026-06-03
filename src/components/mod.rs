@@ -4,7 +4,6 @@ pub mod footer;
 pub mod frontend_layout;
 pub mod header;
 pub mod nav;
-pub mod page_layout;
 pub mod post;
 pub mod post_card;
 pub mod skeletons;
