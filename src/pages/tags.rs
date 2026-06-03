@@ -4,6 +4,7 @@ use crate::api::posts::{get_posts_by_tag, list_tags, PostListResponse, TagListRe
 use crate::components::nav::use_nav_items;
 use crate::components::page_layout::PageLayout;
 use crate::components::post_card::PostCard;
+use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::tags_skeleton::{TagsSkeleton, TagDetailSkeleton};
 use crate::router::Route;
 
@@ -20,7 +21,7 @@ pub fn Tags() -> Element {
                 }
             }
             SuspenseBoundary {
-                fallback: |_| rsx! { TagsSkeleton {} },
+                fallback: |_| rsx! { DelayedSkeleton { TagsSkeleton {} } },
                 TagsContent {}
             }
         }
@@ -93,7 +94,7 @@ pub fn TagDetail(tag: String) -> Element {
                 }
             }
             SuspenseBoundary {
-                fallback: |_| rsx! { TagDetailSkeleton {} },
+                fallback: |_| rsx! { DelayedSkeleton { TagDetailSkeleton {} } },
                 TagDetailContent { tag: tag.clone() }
             }
         }

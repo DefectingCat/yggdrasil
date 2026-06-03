@@ -3,6 +3,7 @@ use dioxus::prelude::*;
 use crate::api::posts::{list_published_posts, PostListResponse};
 use crate::components::nav::use_nav_items;
 use crate::components::page_layout::PageLayout;
+use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::archive_skeleton::ArchiveSkeleton;
 use crate::models::post::Post;
 use crate::router::Route;
@@ -90,7 +91,7 @@ pub fn Archives() -> Element {
                 }
             }
             SuspenseBoundary {
-                fallback: |_| rsx! { ArchiveSkeleton {} },
+                fallback: |_| rsx! { DelayedSkeleton { ArchiveSkeleton {} } },
                 ArchivesContent {}
             }
         }
