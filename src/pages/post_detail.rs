@@ -8,7 +8,7 @@ use crate::components::post::post_cover::PostCover;
 use crate::components::post::post_footer::PostFooter;
 use crate::components::post::post_header::PostHeader;
 use crate::components::post::post_toc::PostToc;
-use crate::components::suspense_wrapper::SuspenseWrapper;
+use crate::components::skeletons::post_detail_skeleton::PostDetailSkeleton;
 use crate::router::Route;
 
 #[component]
@@ -18,7 +18,8 @@ pub fn PostDetail(slug: String) -> Element {
 
     rsx! {
         PageLayout { nav_items,
-            SuspenseWrapper {
+            SuspenseBoundary {
+                fallback: |_| rsx! { PostDetailSkeleton {} },
                 PostDetailContent { slug: slug.clone() }
             }
         }
@@ -85,9 +86,7 @@ fn PostDetailContent(slug: String) -> Element {
         }
         _ => {
             rsx! {
-                div { class: "text-center py-20",
-                    "加载中..."
-                }
+                // 骨架屏由 SuspenseBoundary fallback 处理
             }
         }
     }
