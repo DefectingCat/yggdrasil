@@ -8,6 +8,7 @@ CREATE TABLE posts (
 
     content_md   TEXT NOT NULL,
     content_html TEXT,
+    cover_image  VARCHAR(500),
 
     status       TEXT NOT NULL DEFAULT 'draft',
     published_at TIMESTAMPTZ,
@@ -36,3 +37,6 @@ CREATE TABLE post_tags (
 
 CREATE INDEX idx_post_tags_post ON post_tags(post_id);
 CREATE INDEX idx_post_tags_tag ON post_tags(tag_id);
+
+-- 为封面图添加索引
+CREATE INDEX idx_posts_cover ON posts(cover_image) WHERE cover_image IS NOT NULL;
