@@ -46,11 +46,16 @@ fn detect_initial_theme() -> Theme {
     #[cfg(feature = "server")]
     {
         if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
-            let parts = ctx.parts_mut();
-            if let Some(cookie) = parts.headers.get("cookie") {
+            if let Some(cookie) = ctx.parts_mut().headers.get("cookie") {
                 if let Ok(cookie_str) = cookie.to_str() {
-                    if cookie_str.contains("theme=dark") {
-                        return Theme::Dark;
+                    // Parse cookies properly: split by ';' then by '='
+                    for cookie_pair in cookie_str.split(';') {
+                        let mut parts = cookie_pair.trim().splitn(2, '=');
+                        if let (Some(name), Some(value)) = (parts.next(), parts.next()) {
+                            if name == "theme" && value == "dark" {
+                                return Theme::Dark;
+                            }
+                        }
                     }
                 }
             }

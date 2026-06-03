@@ -1,11 +1,15 @@
 use dioxus::prelude::*;
 
 use crate::api::posts::{delete_post, list_posts, CreatePostResponse, PostListResponse};
-use crate::components::suspense_wrapper::SuspenseWrapper;
+use crate::hooks::delayed_loading::use_delayed_loading;
 use crate::models::post::{Post, PostStatus};
 
 #[component]
 pub fn Posts() -> Element {
+    let mut posts_res = use_resource(list_posts);
+    let mut deleting = use_signal(|| None::<i32>);
+    let show_skeleton = use_delayed_loading(move || posts_res.read().is_none());
+
     rsx! {
         div { class: "space-y-6",
             div { class: "flex items-center justify-between",
@@ -20,70 +24,52 @@ pub fn Posts() -> Element {
                     "+ 写文章"
                 }
             }
-            SuspenseWrapper {
-                PostsTable {}
-            }
-        }
-    }
-}
 
-#[component]
-fn PostsTable() -> Element {
-    let mut refresh = use_signal(|| 0);
-    let mut deleting = use_signal(|| None::<i32>);
-    let posts_res = use_server_future(move || {
-        let _ = refresh();
-        list_posts()
-    })?;
-
-    let posts_data = posts_res.read().as_ref().map(|r| match r {
-        Ok(PostListResponse { posts }) => Ok(posts.clone()),
-        Err(e) => Err(e.to_string()),
-    });
-
-    match posts_data {
-        Some(Ok(posts)) => {
-            if posts.is_empty() {
-                rsx! {
-                    div { class: "text-center py-20 text-gray-500 dark:text-[#9b9c9d]",
-                        "暂无文章"
-                    }
-                }
-            } else {
-                rsx! {
-                    div { class: "bg-white dark:bg-[#2e2e33] rounded-xl border border-gray-200 dark:border-[#333] overflow-hidden",
-                        table { class: "w-full text-sm",
-                            thead {
-                                tr { class: "border-b border-gray-200 dark:border-[#333] text-left text-gray-500 dark:text-[#9b9c9d]",
-                                    th { class: "px-4 py-3 font-medium", "标题" }
-                                    th { class: "px-4 py-3 font-medium w-24 text-center", "状态" }
-                                    th { class: "px-4 py-3 font-medium w-32", "日期" }
-                                    th { class: "px-4 py-3 font-medium w-24 text-right", "操作" }
-                                }
+            match &*posts_res.read() {
+                Some(Ok(PostListResponse { posts })) => {
+                    if posts.is_empty() {
+                        rsx! {
+                            div { class: "text-center py-20 text-gray-500 dark:text-[#9b9c9d]",
+                                "暂无文章"
                             }
-                            tbody {
-                                for post in posts.iter() {
-                                    PostRow {
-                                        post: post.clone(),
-                                        deleting: deleting() == Some(post.id),
-                                        on_delete: move |id| {
-                                            deleting.set(Some(id));
-                                            spawn(async move {
-                                                match delete_post(id).await {
-                                                    Ok(CreatePostResponse { success: true, .. }) => {
-                                                        refresh.set(refresh() + 1);
-                                                    }
-                                                    Ok(CreatePostResponse { success: false, message, .. }) => {
-                                                        #[cfg(target_arch = "wasm32")]
-                                                        web_sys::window().map(|w| w.alert_with_message(&message).ok());
-                                                    }
-                                                    Err(e) => {
-                                                        #[cfg(target_arch = "wasm32")]
-                                                        web_sys::window().map(|w| w.alert_with_message(&format!("删除失败: {}", e)).ok());
-                                                    }
+                        }
+                    } else {
+                        rsx! {
+                            div { class: "bg-white dark:bg-[#2e2e33] rounded-xl border border-gray-200 dark:border-[#333] overflow-hidden",
+                                table { class: "w-full text-sm",
+                                    thead {
+                                        tr { class: "border-b border-gray-200 dark:border-[#333] text-left text-gray-500 dark:text-[#9b9c9d]",
+                                            th { class: "px-4 py-3 font-medium", "标题" }
+                                            th { class: "px-4 py-3 font-medium w-24 text-center", "状态" }
+                                            th { class: "px-4 py-3 font-medium w-32", "日期" }
+                                            th { class: "px-4 py-3 font-medium w-24 text-right", "操作" }
+                                        }
+                                    }
+                                    tbody {
+                                        for post in posts.iter() {
+                                            PostRow {
+                                                post: post.clone(),
+                                                deleting: deleting() == Some(post.id),
+                                                on_delete: move |id| {
+                                                    deleting.set(Some(id));
+                                                    spawn(async move {
+                                                        match delete_post(id).await {
+                                                            Ok(CreatePostResponse { success: true, .. }) => {
+                                                                posts_res.restart();
+                                                            }
+                                                            Ok(CreatePostResponse { success: false, message, .. }) => {
+                                                                #[cfg(target_arch = "wasm32")]
+                                                                web_sys::window().map(|w| w.alert_with_message(&message).ok());
+                                                            }
+                                                            Err(_e) => {
+                                                                #[cfg(target_arch = "wasm32")]
+                                                                web_sys::window().map(|w| w.alert_with_message("删除失败").ok());
+                                                            }
+                                                        }
+                                                        deleting.set(None);
+                                                    });
                                                 }
-                                                deleting.set(None);
-                                            });
+                                            }
                                         }
                                     }
                                 }
@@ -91,19 +77,24 @@ fn PostsTable() -> Element {
                         }
                     }
                 }
-            }
-        }
-        Some(Err(e)) => {
-            rsx! {
-                div { class: "text-center text-red-500 dark:text-red-400 py-20",
-                    "加载失败: {e}"
+                Some(Err(_e)) => {
+                    rsx! {
+                        div { class: "text-center text-red-500 dark:text-red-400 py-20",
+                            "加载失败"
+                        }
+                    }
                 }
-            }
-        }
-        _ => {
-            rsx! {
-                div { class: "text-center text-gray-500 dark:text-[#9b9c9d] py-20",
-                    "加载中..."
+                None => {
+                    rsx! {
+                        div { class: if show_skeleton() { "bg-white dark:bg-[#2e2e33] rounded-xl border border-gray-200 dark:border-[#333] animate-pulse" } else { "bg-white dark:bg-[#2e2e33] rounded-xl border border-gray-200 dark:border-[#333] opacity-0" },
+                            for _ in 0..5 {
+                                div { class: "flex items-center px-4 py-3 border-b border-gray-100 dark:border-[#333] last:border-0",
+                                    div { class: "h-4 w-1/3 bg-gray-200 dark:bg-[#2a2a2a] rounded" }
+                                    div { class: "ml-auto h-4 w-16 bg-gray-200 dark:bg-[#2a2a2a] rounded" }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
