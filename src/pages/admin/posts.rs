@@ -57,11 +57,11 @@ pub fn Posts() -> Element {
                                                             Ok(CreatePostResponse { success: true, .. }) => {
                                                                 posts_res.restart();
                                                             }
-                                                            Ok(CreatePostResponse { success: false, message, .. }) => {
+                                                            Ok(CreatePostResponse { success: false, message: _, .. }) => {
                                                                 #[cfg(target_arch = "wasm32")]
                                                                 web_sys::window().map(|w| w.alert_with_message(&message).ok());
                                                             }
-                                                            Err(e) => {
+                                                            Err(_e) => {
                                                                 #[cfg(target_arch = "wasm32")]
                                                                 web_sys::window().map(|w| w.alert_with_message(&format!("删除失败: {}", e)).ok());
                                                             }

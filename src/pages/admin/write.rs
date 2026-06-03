@@ -3,7 +3,6 @@ use dioxus::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
 
-use crate::api::posts::{create_post, CreatePostResponse};
 use crate::components::write_skeleton::WriteSkeleton;
 
 #[component]
