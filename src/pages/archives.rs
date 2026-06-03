@@ -90,10 +90,7 @@ pub fn Archives() -> Element {
                     "归档"
                 }
             }
-            SuspenseBoundary {
-                fallback: |_| rsx! { DelayedSkeleton { ArchiveSkeleton {} } },
-                ArchivesContent {}
-            }
+            ArchivesContent {}
         }
     }
 }
@@ -126,7 +123,7 @@ fn ArchivesContent() -> Element {
         }
         None => {
             rsx! {
-                // 骨架屏由 SuspenseBoundary fallback 处理
+                DelayedSkeleton { ArchiveSkeleton {} }
             }
         }
     }

@@ -20,10 +20,7 @@ pub fn Tags() -> Element {
                     "标签"
                 }
             }
-            SuspenseBoundary {
-                fallback: |_| rsx! { DelayedSkeleton { TagsSkeleton {} } },
-                TagsContent {}
-            }
+            TagsContent {}
         }
     }
 }
@@ -75,7 +72,7 @@ fn TagsContent() -> Element {
         }
         _ => {
             rsx! {
-                // 骨架屏由 SuspenseBoundary fallback 处理
+                DelayedSkeleton { TagsSkeleton {} }
             }
         }
     }
@@ -93,10 +90,7 @@ pub fn TagDetail(tag: String) -> Element {
                     "{tag}"
                 }
             }
-            SuspenseBoundary {
-                fallback: |_| rsx! { DelayedSkeleton { TagDetailSkeleton {} } },
-                TagDetailContent { tag: tag.clone() }
-            }
+            TagDetailContent { tag: tag.clone() }
         }
     }
 }
@@ -132,7 +126,7 @@ fn TagDetailContent(tag: String) -> Element {
         }
         _ => {
             rsx! {
-                // 骨架屏由 SuspenseBoundary fallback 处理
+                DelayedSkeleton { TagDetailSkeleton {} }
             }
         }
     }
