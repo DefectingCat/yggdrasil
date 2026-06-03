@@ -57,7 +57,7 @@ pub fn Write() -> Element {
         #[cfg(target_arch = "wasm32")]
         {
             wasm_bindgen_futures::spawn_local(async move {
-                loop {
+                for _ in 0..100 {
                     if let Ok(promise_val) = js_sys::eval("new Promise(r => setTimeout(r, 100))") {
                         if let Ok(promise) = promise_val.dyn_into::<js_sys::Promise>() {
                             let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
@@ -66,10 +66,11 @@ pub fn Write() -> Element {
                     if let Ok(ready) = js_sys::eval("window.__tiptap_ready") {
                         if ready.as_bool().unwrap_or(false) {
                             loading.set(false);
-                            break;
+                            return;
                         }
                     }
                 }
+                loading.set(false);
             });
         }
         #[cfg(not(target_arch = "wasm32"))]
