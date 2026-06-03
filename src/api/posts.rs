@@ -261,7 +261,7 @@ fn render_markdown_enhanced(md: &str) -> RenderedContent {
                         HeadingLevel::H6 => "h6",
                     };
                     html.push_str(&format!(
-                        "<a hidden class=\"anchor\" aria-hidden=\"true\" href=\"#{}\">#</a></{}>",
+                        "<a class=\"anchor\" aria-hidden=\"true\" href=\"#{}\">#</a></{}>",
                         id, tag
                     ));
                     heading_idx += 1;
