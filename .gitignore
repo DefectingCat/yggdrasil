@@ -9,6 +9,6 @@ others/
 public/style.css
 public/highlight.css
 public/tiptap
-generated/
 /static
 .env
+docs/superpowers/
