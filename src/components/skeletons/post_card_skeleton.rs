@@ -6,7 +6,7 @@ use dioxus::prelude::*;
 pub fn PostCardSkeleton() -> Element {
     rsx! {
         article {
-            class: "mb-6 p-6 bg-white dark:bg-[#2e2e33] rounded-lg border border-gray-200 dark:border-[#333] animate-pulse",
+            class: "mb-6 p-6 bg-white dark:bg-[#2e2e33] rounded-lg border border-gray-200 dark:border-[#333]",
             // 标题占位 (模拟 h2 text-2xl font-bold)
             div { class: "h-7 w-3/4 bg-gray-200 dark:bg-[#2a2a2a] rounded mb-3" }
             // 摘要第一行

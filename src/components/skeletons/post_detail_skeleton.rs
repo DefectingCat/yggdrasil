@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 #[component]
 pub fn PostDetailSkeleton() -> Element {
     rsx! {
-        article { class: "post-single animate-pulse",
+        article { class: "post-single",
             // 面包屑占位
             div { class: "h-4 w-48 bg-gray-200 dark:bg-[#2a2a2a] rounded mb-6" }
 

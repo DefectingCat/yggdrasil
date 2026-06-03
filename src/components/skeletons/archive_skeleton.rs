@@ -6,7 +6,7 @@ use dioxus::prelude::*;
 #[component]
 pub fn ArchiveSkeleton() -> Element {
     rsx! {
-        div { class: "animate-pulse",
+        div {
             // 统计行占位
             div { class: "mt-2 mb-6",
                 div { class: "h-5 w-32 bg-gray-200 dark:bg-[#2a2a2a] rounded" }

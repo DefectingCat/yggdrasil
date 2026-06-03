@@ -7,7 +7,7 @@ use crate::components::skeletons::post_card_skeleton::PostCardSkeleton;
 #[component]
 pub fn HomeSkeleton() -> Element {
     rsx! {
-        div { class: "animate-pulse",
+        div {
             // 5 个文章卡片骨架
             for _ in 0..5 {
                 PostCardSkeleton {}
