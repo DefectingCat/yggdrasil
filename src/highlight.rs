@@ -2,23 +2,12 @@
 pub mod server {
     use std::sync::{LazyLock, OnceLock};
 
-    use syntect::highlighting::{Theme, ThemeSet};
     use syntect::html::{ClassedHTMLGenerator, ClassStyle};
     use syntect::parsing::{SyntaxReference, SyntaxSet};
     use syntect::util::LinesWithEndings;
 
     static SYNTAX_SET: LazyLock<SyntaxSet> =
-        LazyLock::new(|| SyntaxSet::load_defaults_newlines());
-
-    static LATTE_THEME: LazyLock<Theme> = LazyLock::new(|| {
-        ThemeSet::get_theme("themes/Catppuccin Latte.tmTheme")
-            .expect("Failed to load Catppuccin Latte theme")
-    });
-
-    static MOCHA_THEME: LazyLock<Theme> = LazyLock::new(|| {
-        ThemeSet::get_theme("themes/Catppuccin Mocha.tmTheme")
-            .expect("Failed to load Catppuccin Mocha theme")
-    });
+        LazyLock::new(SyntaxSet::load_defaults_newlines);
 
     static FALLBACK_SYNTAX: OnceLock<SyntaxReference> = OnceLock::new();
 
@@ -52,17 +41,5 @@ pub mod server {
         }
 
         generator.finalize()
-    }
-
-    pub fn get_latte_theme() -> &'static Theme {
-        &*LATTE_THEME
-    }
-
-    pub fn get_mocha_theme() -> &'static Theme {
-        &*MOCHA_THEME
-    }
-
-    pub fn get_syntax_set() -> &'static SyntaxSet {
-        &*SYNTAX_SET
     }
 }
