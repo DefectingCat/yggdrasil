@@ -7,7 +7,7 @@ use crate::components::skeletons::post_card_skeleton::PostCardSkeleton;
 #[component]
 pub fn TagsSkeleton() -> Element {
     rsx! {
-        div { class: "animate-pulse",
+        div {
             // 统计行占位
             div { class: "mt-2 mb-6",
                 div { class: "h-5 w-48 bg-gray-200 dark:bg-[#2a2a2a] rounded" }
@@ -39,7 +39,7 @@ pub fn TagsSkeleton() -> Element {
 #[component]
 pub fn TagDetailSkeleton() -> Element {
     rsx! {
-        div { class: "animate-pulse",
+        div {
             // 统计行占位
             div { class: "mt-2 mb-6",
                 div { class: "h-5 w-32 bg-gray-200 dark:bg-[#2a2a2a] rounded" }
