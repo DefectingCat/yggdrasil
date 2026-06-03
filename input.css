@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./generated/highlight.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -342,7 +343,6 @@
   .md-content pre {
     position: relative;
     margin-bottom: var(--content-gap-paper);
-    background: var(--color-paper-code-block);
     border-radius: var(--radius-paper);
     overflow-x: auto;
   }
@@ -350,7 +350,6 @@
   .md-content pre code {
     display: block;
     padding: 16px;
-    color: rgb(213, 213, 214);
     background: transparent;
     border-radius: 0;
     overflow-x: auto;

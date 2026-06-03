@@ -1,9 +1,13 @@
-.PHONY: dev build css css-watch clean build-editor
+.PHONY: dev build css css-watch clean build-editor highlight-css
 
 build:
 	@$(MAKE) build-editor
+	@$(MAKE) highlight-css
 	@tailwindcss -i input.css -o public/style.css --minify
 	@dx build --release
+
+highlight-css:
+	@cargo run --bin generate_highlight_css
 
 build-editor:
 	@echo "Building Tiptap editor..."

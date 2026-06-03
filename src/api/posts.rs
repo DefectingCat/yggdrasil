@@ -172,10 +172,13 @@ async fn ensure_unique_slug(
 fn clean_html(input: &str) -> String {
     let mut builder = ammonia::Builder::default();
     builder
-        .add_generic_attributes(&["class", "aria-hidden", "aria-label", "id", "role", "accesskey", "title"])
+        .add_generic_attributes(&["class", "style", "aria-hidden", "aria-label", "id", "role", "accesskey", "title"])
         .add_tags(&["details", "summary"])
         .url_relative(ammonia::UrlRelative::PassThrough)
         .add_tag_attributes("a", &["class", "aria-hidden", "aria-label"])
+        .add_tag_attributes("span", &["class", "style"])
+        .add_tag_attributes("pre", &["class", "style"])
+        .add_tag_attributes("code", &["class", "style"])
         .add_tag_attributes("h1", &["id", "class"])
         .add_tag_attributes("h2", &["id", "class"])
         .add_tag_attributes("h3", &["id", "class"])
@@ -243,12 +246,14 @@ fn render_markdown_enhanced(md: &str) -> RenderedContent {
     let mut html = String::new();
     let mut heading_idx = 0;
     let mut in_heading = false;
+    let mut in_codeblock = false;
+    let mut code_lang: Option<String> = None;
+    let mut code_buffer = String::new();
     let mut non_heading_events: Vec<Event> = Vec::new();
 
     for event in parser {
         match event {
             Event::Start(Tag::Heading { level, .. }) => {
-                // Flush non-heading events first
                 if !non_heading_events.is_empty() {
                     pulldown_cmark::html::push_html(&mut html, non_heading_events.into_iter());
                     non_heading_events = Vec::new();
@@ -286,9 +291,39 @@ fn render_markdown_enhanced(md: &str) -> RenderedContent {
                 }
                 in_heading = false;
             }
+            Event::Start(Tag::CodeBlock(kind)) => {
+                if !non_heading_events.is_empty() {
+                    pulldown_cmark::html::push_html(&mut html, non_heading_events.into_iter());
+                    non_heading_events = Vec::new();
+                }
+                in_codeblock = true;
+                code_lang = match kind {
+                    pulldown_cmark::CodeBlockKind::Fenced(lang) => {
+                        if lang.is_empty() {
+                            None
+                        } else {
+                            Some(lang.to_string())
+                        }
+                    }
+                    _ => None,
+                };
+                code_buffer.clear();
+            }
+            Event::Text(text) if in_codeblock => {
+                code_buffer.push_str(&text);
+            }
+            Event::End(TagEnd::CodeBlock) => {
+                let highlighted =
+                    crate::highlight::server::highlight_code(&code_buffer, code_lang.as_deref());
+                html.push_str("<pre><code>");
+                html.push_str(&highlighted);
+                html.push_str("</code></pre>");
+                in_codeblock = false;
+                code_lang = None;
+                code_buffer.clear();
+            }
             _ => {
                 if in_heading {
-                    // Manually render heading content
                     match event {
                         Event::Text(text) => html.push_str(&clean_html(&text)),
                         Event::Code(code) => {
@@ -298,7 +333,7 @@ fn render_markdown_enhanced(md: &str) -> RenderedContent {
                         }
                         _ => {}
                     }
-                } else {
+                } else if !in_codeblock {
                     non_heading_events.push(event);
                 }
             }
