@@ -38,7 +38,11 @@ fn main() {
                 tasks::session_cleanup::run_cleanup().await;
             });
 
-            let config = ServeConfig::new();
+            let config = ServeConfig::builder()
+                .incremental(
+                    dioxus::server::IncrementalRendererConfig::default()
+                        .invalidate_after(std::time::Duration::from_secs(300)),
+                );
             let router = axum::Router::new()
                 .serve_dioxus_application(config, router::AppRouter)
                 .layer(
