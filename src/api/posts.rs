@@ -569,13 +569,44 @@ async fn get_post_tags(client: &tokio_postgres::Client, post_id: i32) -> Vec<Str
 // ============================================================================
 
 #[cfg(feature = "server")]
-async fn row_to_post(client: &tokio_postgres::Client, row: &tokio_postgres::Row) -> Post {
+async fn row_to_post_list(client: &tokio_postgres::Client, row: &tokio_postgres::Row) -> Post {
     let id: i32 = row.get("id");
     let role_str: String = row.get("status");
     let status = PostStatus::from_str(&role_str).unwrap_or(PostStatus::Draft);
     let tags = get_post_tags(client, id).await;
 
-    // Get prev/next post info if present in the row
+    let content_md: String = row.get("content_md");
+    let word_count = count_words(&content_md);
+
+    Post {
+        id,
+        author_id: row.get("author_id"),
+        title: row.get("title"),
+        slug: row.get("slug"),
+        summary: row.get("summary"),
+        content_md,
+        content_html: row.get("content_html"),
+        status,
+        published_at: row.get("published_at"),
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
+        tags,
+        cover_image: row.get("cover_image"),
+        reading_time: (word_count / 200).max(1),
+        word_count,
+        toc_html: None,
+        prev_post: None,
+        next_post: None,
+    }
+}
+
+#[cfg(feature = "server")]
+async fn row_to_post_full(client: &tokio_postgres::Client, row: &tokio_postgres::Row) -> Post {
+    let id: i32 = row.get("id");
+    let role_str: String = row.get("status");
+    let status = PostStatus::from_str(&role_str).unwrap_or(PostStatus::Draft);
+    let tags = get_post_tags(client, id).await;
+
     let prev_post = if let Ok(prev_title) = row.try_get::<_, String>("prev_title") {
         if let Ok(prev_slug) = row.try_get::<_, String>("prev_slug") {
             Some(crate::models::post::PostNav {
@@ -602,12 +633,8 @@ async fn row_to_post(client: &tokio_postgres::Client, row: &tokio_postgres::Row)
         None
     };
 
-    // Calculate word count and reading time from content
     let content_md: String = row.get("content_md");
     let word_count = count_words(&content_md);
-    let reading_time = (word_count / 200).max(1);
-
-    // Generate TOC HTML from content
     let rendered = render_markdown_enhanced(&content_md);
 
     Post {
@@ -616,7 +643,7 @@ async fn row_to_post(client: &tokio_postgres::Client, row: &tokio_postgres::Row)
         title: row.get("title"),
         slug: row.get("slug"),
         summary: row.get("summary"),
-        content_md: row.get("content_md"),
+        content_md,
         content_html: Some(rendered.html),
         status,
         published_at: row.get("published_at"),
@@ -624,7 +651,7 @@ async fn row_to_post(client: &tokio_postgres::Client, row: &tokio_postgres::Row)
         updated_at: row.get("updated_at"),
         tags,
         cover_image: row.get("cover_image"),
-        reading_time,
+        reading_time: (word_count / 200).max(1),
         word_count,
         toc_html: if rendered.toc_html.is_empty() {
             None
@@ -1073,7 +1100,7 @@ pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, Server
         })?;
 
     let post = match row {
-        Some(row) => Some(row_to_post(&client, &row).await),
+        Some(row) => Some(row_to_post_full(&client, &row).await),
         None => None,
     };
 
@@ -1109,7 +1136,7 @@ pub async fn list_published_posts(
 
     let mut posts = Vec::new();
     for row in &rows {
-        posts.push(row_to_post(&client, row).await);
+        posts.push(row_to_post_list(&client, row).await);
     }
 
     Ok(PostListResponse { posts })
@@ -1140,7 +1167,7 @@ pub async fn list_posts() -> Result<PostListResponse, ServerFnError> {
 
     let mut posts = Vec::new();
     for row in &rows {
-        posts.push(row_to_post(&client, row).await);
+        posts.push(row_to_post_list(&client, row).await);
     }
 
     Ok(PostListResponse { posts })
@@ -1243,7 +1270,7 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
 
     let mut posts = Vec::new();
     for row in &rows {
-        posts.push(row_to_post(&client, row).await);
+        posts.push(row_to_post_list(&client, row).await);
     }
 
     Ok(PostListResponse { posts })
@@ -1317,7 +1344,7 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
 
     let mut posts = Vec::new();
     for row in &rows {
-        posts.push(row_to_post(&client, row).await);
+        posts.push(row_to_post_list(&client, row).await);
     }
 
     Ok(PostListResponse { posts })
