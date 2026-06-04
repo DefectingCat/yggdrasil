@@ -39,40 +39,4 @@ pub fn AdminDashboardSkeleton() -> Element {
     }
 }
 
-/// 完整的仪表盘页面骨架（含 header/footer + 内容）
-#[component]
-pub fn AdminSkeleton() -> Element {
-    rsx! {
-        div { class: "min-h-screen flex flex-col bg-white dark:bg-[#1d1e20]",
-            // Header 骨架
-            header { class: "sticky top-0 z-40 w-full border-b border-gray-200 dark:border-[#333] bg-white/80 dark:bg-[#1d1e20]/80 backdrop-blur-sm",
-                nav { class: "max-w-3xl mx-auto px-6 h-[60px] flex items-center justify-between",
-                    // Logo 占位
-                    SkeletonBox { class: "w-32 h-7 rounded" }
-                    // 导航项 + 右侧按钮占位
-                    div { class: "flex items-center gap-4",
-                        div { class: "hidden md:flex items-center gap-2",
-                            SkeletonBox { class: "w-12 h-5 rounded" }
-                            SkeletonBox { class: "w-12 h-5 rounded" }
-                            SkeletonBox { class: "w-10 h-5 rounded" }
-                        }
-                        SkeletonBox { class: "w-10 h-5 rounded" }
-                    }
-                }
-            }
 
-            // 内容区骨架
-            main { class: "flex-1 w-full max-w-5xl mx-auto px-6 py-8",
-                AdminDashboardSkeleton {}
-            }
-
-            // Footer 骨架
-            footer { class: "w-full border-t border-gray-200 dark:border-[#333] py-6",
-                div { class: "max-w-3xl mx-auto px-6 flex justify-between items-center",
-                    SkeletonBox { class: "h-4 w-32 rounded" }
-                    SkeletonBox { class: "h-4 w-24 rounded" }
-                }
-            }
-        }
-    }
-}
