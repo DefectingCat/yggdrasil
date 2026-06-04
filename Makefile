@@ -15,8 +15,6 @@ highlight-css:
 build-editor:
 	@echo "Building Tiptap editor..."
 	@cd libs/tiptap-editor && npm install && npx vite build
-	@mv public/tiptap/editor.iife.js public/tiptap/editor.js 2>/dev/null || true
-	@mv public/tiptap/editor.iife.js.map public/tiptap/editor.js.map 2>/dev/null || true
 	@echo "Tiptap editor built."
 
 dev:
