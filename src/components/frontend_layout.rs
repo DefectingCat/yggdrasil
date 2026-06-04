@@ -3,19 +3,26 @@ use dioxus::prelude::*;
 use crate::components::footer::Footer;
 use crate::components::header::Header;
 use crate::components::nav::use_nav_items;
+use crate::components::skeletons::home_skeleton::HomeSkeleton;
+use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::router::Route;
 use crate::theme::ThemeToggle;
 
 #[component]
 pub fn FrontendLayout() -> Element {
     let route = use_route::<Route>();
-    let nav_items = use_nav_items(route);
+    let nav_items = use_nav_items(route.clone());
 
     rsx! {
-        div { class: "min-h-screen flex flex-col bg-white dark:bg-[#1d1e20] transition-colors duration-300",
+        div { class: "min-h-screen flex flex-col bg-white dark:bg-[#1d1e20]",
             Header { nav_items, right_content: rsx! { ThemeToggle {} } }
             main { class: "flex-1 w-full max-w-3xl mx-auto px-6 py-6",
-                Outlet::<Route> {}
+                SuspenseBoundary {
+                    fallback: |_| rsx! {
+                        DelayedSkeleton { HomeSkeleton {} }
+                    },
+                    Outlet::<Route> {}
+                }
             }
             Footer {}
         }
