@@ -1,7 +1,9 @@
 use dioxus::prelude::*;
+use dioxus::router::components::Link;
 
 use crate::components::post::post_nav_links::PostNavLinks;
 use crate::models::post::Post;
+use crate::router::Route;
 
 #[component]
 pub fn PostFooter(post: Post) -> Element {
@@ -13,12 +15,8 @@ pub fn PostFooter(post: Post) -> Element {
                 ul { class: "post-tags",
                     for tag in tags.into_iter() {
                         li {
-                            a {
-                                href: "/tags/{tag}",
-                                onclick: move |evt| {
-                                    evt.prevent_default();
-                                    dioxus::router::navigator().push(format!("/tags/{}", tag));
-                                },
+                            Link {
+                                to: Route::TagDetail { tag: tag.clone() },
                                 "{tag}"
                             }
                         }
@@ -34,10 +32,8 @@ pub fn PostFooter(post: Post) -> Element {
             }
 
             div { class: "back-to-home",
-                button {
-                    onclick: move |_| {
-                        let _ = dioxus::router::navigator().push("/");
-                    },
+                Link {
+                    to: Route::Home {},
                     "← Back to Home"
                 }
             }

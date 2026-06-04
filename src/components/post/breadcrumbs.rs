@@ -1,4 +1,7 @@
 use dioxus::prelude::*;
+use dioxus::router::components::Link;
+
+use crate::router::Route;
 
 #[component]
 pub fn Breadcrumbs(title: String) -> Element {
@@ -7,12 +10,8 @@ pub fn Breadcrumbs(title: String) -> Element {
             class: "breadcrumbs",
             role: "navigation",
             aria_label: "Breadcrumb",
-            a {
-                href: "/",
-                onclick: move |evt| {
-                    evt.prevent_default();
-                    dioxus::router::navigator().push("/");
-                },
+            Link {
+                to: Route::Home {},
                 "Home"
             }
             svg {

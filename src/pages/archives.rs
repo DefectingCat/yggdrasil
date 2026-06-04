@@ -1,9 +1,11 @@
 use dioxus::prelude::*;
+use dioxus::router::components::Link;
 
 use crate::api::posts::{list_published_posts, PostListResponse};
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::archive_skeleton::ArchiveSkeleton;
 use crate::models::post::Post;
+use crate::router::Route;
 
 #[derive(Clone, PartialEq)]
 struct YearGroup {
@@ -185,14 +187,10 @@ fn ArchiveEntry(post: Post) -> Element {
             div { class: "archive-meta text-sm text-gray-400 dark:text-[#9b9c9d] mt-1",
                 "{date_str}"
             }
-            a {
+            Link {
                 class: "entry-link absolute inset-0 z-10",
                 aria_label: "post link to {post.title}",
-                href: "/post/{post.slug}",
-                onclick: move |evt| {
-                    evt.prevent_default();
-                    dioxus::router::navigator().push(format!("/post/{}", post.slug).as_str());
-                },
+                to: Route::PostDetail { slug: post.slug.clone() },
             }
         }
     }

@@ -1,9 +1,11 @@
 use dioxus::prelude::*;
+use dioxus::router::components::Link;
 
 use crate::api::posts::{list_published_posts, PostListResponse};
 use crate::components::post_card::PostCard;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::home_skeleton::HomeSkeleton;
+use crate::router::Route;
 
 const POSTS_PER_PAGE: i32 = 10;
 
@@ -78,30 +80,27 @@ fn HomeInfo() -> Element {
 fn Pagination(current_page: i32, posts: Vec<crate::models::post::Post>) -> Element {
     let has_prev = current_page > 1;
     let has_next = posts.len() >= POSTS_PER_PAGE as usize;
+    let prev = current_page - 1;
+    let prev_route = if prev <= 1 {
+        Route::Home {}
+    } else {
+        Route::HomePage { page: prev }
+    };
 
     rsx! {
         nav { class: "flex mt-10 mb-6 justify-between",
             if has_prev {
-                button {
+                Link {
                     class: "inline-flex items-center px-4 py-2 text-sm text-white bg-gray-900 dark:bg-[#dadadb] dark:text-gray-900 rounded-full hover:opacity-80 transition-opacity cursor-pointer",
-                    onclick: move |_| {
-                        let prev = current_page - 1;
-                        if prev <= 1 {
-                            dioxus::router::navigator().push("/");
-                        } else {
-                            dioxus::router::navigator().push(format!("/page/{}", prev).as_str());
-                        }
-                    },
+                    to: prev_route,
                     span { class: "mr-1", "«" }
                     "上一页"
                 }
             }
             if has_next {
-                button {
+                Link {
                     class: "ml-auto inline-flex items-center px-4 py-2 text-sm text-white bg-gray-900 dark:bg-[#dadadb] dark:text-gray-900 rounded-full hover:opacity-80 transition-opacity cursor-pointer",
-                    onclick: move |_| {
-                        dioxus::router::navigator().push(format!("/page/{}", current_page + 1).as_str());
-                    },
+                    to: Route::HomePage { page: current_page + 1 },
                     "下一页"
                     span { class: "ml-1", "»" }
                 }

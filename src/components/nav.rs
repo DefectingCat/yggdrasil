@@ -4,27 +4,27 @@ use crate::router::Route;
 pub fn use_nav_items(route: Route) -> Vec<NavItemConfig> {
     vec![
         NavItemConfig {
-            href: "/",
+            route: Route::Home {},
             label: "首页",
             is_active: matches!(route, Route::Home {}),
         },
         NavItemConfig {
-            href: "/archives",
+            route: Route::Archives {},
             label: "归档",
             is_active: matches!(route, Route::Archives {}),
         },
         NavItemConfig {
-            href: "/tags",
+            route: Route::Tags {},
             label: "标签",
             is_active: matches!(route, Route::Tags {}) || matches!(route, Route::TagDetail { .. }),
         },
         NavItemConfig {
-            href: "/search",
+            route: Route::Search {},
             label: "搜索",
             is_active: matches!(route, Route::Search {}),
         },
         NavItemConfig {
-            href: "/about",
+            route: Route::About {},
             label: "关于",
             is_active: matches!(route, Route::About {}),
         },

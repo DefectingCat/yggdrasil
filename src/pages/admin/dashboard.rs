@@ -1,8 +1,10 @@
 use dioxus::prelude::*;
+use dioxus::router::components::Link;
 
 use crate::api::posts::{get_post_stats, list_posts, PostListResponse, PostStatsResponse};
 use crate::hooks::delayed_loading::use_delayed_loading;
 use crate::models::post::Post;
+use crate::router::Route;
 
 #[component]
 pub fn Admin() -> Element {
@@ -36,18 +38,14 @@ pub fn Admin() -> Element {
             }
 
             div { class: "grid grid-cols-1 md:grid-cols-2 gap-4",
-                button {
+                Link {
                     class: "bg-gray-900 dark:bg-[#dadadb] text-white dark:text-gray-900 rounded-full px-6 py-3 text-center font-medium hover:opacity-80 transition-opacity cursor-pointer",
-                    onclick: move |_| {
-                        dioxus::router::navigator().push("/admin/write");
-                    },
+                    to: Route::Write {},
                     "写文章"
                 }
-                button {
+                Link {
                     class: "bg-gray-200 dark:bg-[#333] text-gray-700 dark:text-[#dadadb] rounded-full px-6 py-3 text-center font-medium hover:opacity-80 transition-opacity cursor-pointer",
-                    onclick: move |_| {
-                        dioxus::router::navigator().push("/admin/posts");
-                    },
+                    to: Route::Posts {},
                     "管理文章"
                 }
             }

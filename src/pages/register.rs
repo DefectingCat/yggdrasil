@@ -1,6 +1,8 @@
 use dioxus::prelude::*;
+use dioxus::router::components::Link;
 
 use crate::api::auth::{register, AuthResponse};
+use crate::router::Route;
 
 #[component]
 pub fn Register() -> Element {
@@ -60,8 +62,8 @@ pub fn Register() -> Element {
                 if success() {
                     div { class: "mb-4 p-3 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg text-center",
                         "注册成功！"
-                        button { class: "block mt-2 text-gray-700 dark:text-[#dadadb] hover:underline cursor-pointer",
-                            onclick: move |_| { dioxus::router::navigator().push("/login"); },
+                        Link { class: "block mt-2 text-gray-700 dark:text-[#dadadb] hover:underline cursor-pointer",
+                            to: Route::Login {},
                             "去登录"
                         }
                     }
@@ -130,8 +132,8 @@ pub fn Register() -> Element {
                 }
                 p { class: "mt-4 text-center text-sm text-gray-500 dark:text-[#9b9c9d]",
                     "已有账号？"
-                    button { class: "text-gray-700 dark:text-[#dadadb] hover:underline cursor-pointer",
-                        onclick: move |_| { dioxus::router::navigator().push("/login"); },
+                    Link { class: "text-gray-700 dark:text-[#dadadb] hover:underline cursor-pointer",
+                        to: Route::Login {},
                         "去登录"
                     }
                 }

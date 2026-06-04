@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use dioxus::router::components::Link;
 
 use crate::api::posts::{get_post_by_slug, SinglePostResponse};
 use crate::components::post::post_content::PostContent;
@@ -8,19 +9,21 @@ use crate::components::post::post_header::PostHeader;
 use crate::components::post::post_toc::PostToc;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::post_detail_skeleton::PostDetailSkeleton;
+use crate::router::Route;
 
 #[component]
 pub fn PostDetail(slug: String) -> Element {
-    rsx! {
-        PostDetailContent { slug: slug.clone() }
+    let mut slug_signal = use_signal(|| slug.clone());
+    if slug_signal() != slug {
+        slug_signal.set(slug.clone());
     }
-}
 
-#[component]
-fn PostDetailContent(slug: String) -> Element {
-    let post_res = use_server_future(move || get_post_by_slug(slug.clone()))?;
+    let post = use_server_future(move || {
+        let s = slug_signal();
+        get_post_by_slug(s)
+    })?;
 
-    let post_data = post_res.read().as_ref().map(|r| match r {
+    let post_data = post.read().as_ref().map(|r| match r {
         Ok(SinglePostResponse { post: Some(post) }) => Ok(post.clone()),
         Ok(SinglePostResponse { post: None }) => Err("not_found"),
         Err(_) => Err("error"),
@@ -57,11 +60,9 @@ fn PostDetailContent(slug: String) -> Element {
                     p { class: "text-paper-secondary mb-6",
                         "这篇文章可能已被删除或移动。"
                     }
-                    button {
+                    Link {
                         class: "px-6 py-2 bg-paper-primary text-paper-theme rounded-full font-medium hover:opacity-80 transition-opacity",
-                        onclick: move |_| {
-                            let _ = dioxus::router::navigator().push("/");
-                        },
+                        to: Route::Home {},
                         "返回首页"
                     }
                 }

@@ -1,6 +1,8 @@
 use dioxus::prelude::*;
+use dioxus::router::components::Link;
 
 use crate::api::auth::{login, AuthResponse};
+use crate::router::Route;
 
 #[component]
 pub fn Login() -> Element {
@@ -21,7 +23,7 @@ pub fn Login() -> Element {
                     token: Some(_token),
                     ..
                 }) => {
-                    let _ = dioxus::router::navigator().push("/admin");
+                    let _ = dioxus::router::navigator().push(Route::Admin {});
                 }
                 Ok(AuthResponse {
                     success: false,
@@ -89,9 +91,9 @@ pub fn Login() -> Element {
                         onclick: move |_| on_submit(()),
                         "登录"
                     }
-                    button {
+                    Link {
                         class: "block w-full py-2 px-4 text-center text-gray-500 dark:text-[#9b9c9d] hover:text-gray-700 dark:hover:text-[#dadadb] font-medium rounded-lg transition-colors cursor-pointer",
-                        onclick: move |_| { dioxus::router::navigator().push("/register"); },
+                        to: Route::Register {},
                         "还没有账号？去注册"
                     }
                 }
