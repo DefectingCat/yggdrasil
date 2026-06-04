@@ -23,34 +23,34 @@ pub enum Route {
         Home {},
         #[route("/page/:page")]
         HomePage { page: i32 },
-        #[route("/archives")]
+        #[route("/archives", wasm_split)]
         Archives {},
-        #[route("/tags")]
+        #[route("/tags", wasm_split)]
         Tags {},
-        #[route("/tags/:tag")]
+        #[route("/tags/:tag", wasm_split)]
         TagDetail { tag: String },
         #[route("/post/:slug")]
         PostDetail { slug: String },
-        #[route("/search")]
+        #[route("/search", wasm_split)]
         Search {},
-        #[route("/about")]
+        #[route("/about", wasm_split)]
         About {},
     #[end_layout]
 
     #[nest("/admin")]
     #[layout(AdminLayout)]
-        #[route("/")]
+        #[route("/", wasm_split)]
         Admin {},
-        #[route("/write")]
+        #[route("/write", wasm_split)]
         Write {},
-        #[route("/posts")]
+        #[route("/posts", wasm_split)]
         Posts {},
     #[end_layout]
     #[end_nest]
 
-    #[route("/login")]
+    #[route("/login", wasm_split)]
     Login {},
-    #[route("/register")]
+    #[route("/register", wasm_split)]
     Register {},
 }
 
