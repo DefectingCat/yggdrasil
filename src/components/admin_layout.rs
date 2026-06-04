@@ -26,11 +26,11 @@ pub fn AdminLayout() -> Element {
                         if let Some(user) = response.user {
                             ctx.user.set(Some(std::sync::Arc::new(user)));
                         } else {
-                            let _ = navigator.push("/login");
+                            let _ = navigator.push(Route::Login {});
                         }
                     }
                     Err(_) => {
-                        let _ = navigator.push("/login");
+                        let _ = navigator.push(Route::Login {});
                     }
                 }
             });
@@ -39,22 +39,22 @@ pub fn AdminLayout() -> Element {
 
     let admin_nav_items = vec![
         NavItemConfig {
-            href: "/admin",
+            route: Route::Admin {},
             label: "仪表盘",
             is_active: matches!(route, Route::Admin {}),
         },
         NavItemConfig {
-            href: "/admin/write",
+            route: Route::Write {},
             label: "写文章",
             is_active: matches!(route, Route::Write {}),
         },
         NavItemConfig {
-            href: "/admin/posts",
+            route: Route::Posts {},
             label: "管理文章",
             is_active: matches!(route, Route::Posts {}),
         },
         NavItemConfig {
-            href: "/",
+            route: Route::Home {},
             label: "前台",
             is_active: false,
         },
@@ -66,7 +66,7 @@ pub fn AdminLayout() -> Element {
             onclick: move |_| {
                 spawn(async move {
                     let _ = logout().await;
-                    let _ = navigator.push("/login");
+                    let _ = navigator.push(Route::Login {});
                 });
             },
             "登出"

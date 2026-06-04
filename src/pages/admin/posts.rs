@@ -1,8 +1,10 @@
 use dioxus::prelude::*;
+use dioxus::router::components::Link;
 
 use crate::api::posts::{delete_post, list_posts, CreatePostResponse, PostListResponse};
 use crate::hooks::delayed_loading::use_delayed_loading;
 use crate::models::post::{Post, PostStatus};
+use crate::router::Route;
 
 #[component]
 pub fn Posts() -> Element {
@@ -16,11 +18,9 @@ pub fn Posts() -> Element {
                 h1 { class: "text-2xl font-bold text-gray-900 dark:text-[#dadadb]",
                     "文章管理"
                 }
-                button {
+                Link {
                     class: "px-4 py-2 bg-gray-900 dark:bg-[#dadadb] text-white dark:text-gray-900 rounded-full text-sm font-medium hover:opacity-80 transition-opacity cursor-pointer",
-                    onclick: move |_| {
-                        dioxus::router::navigator().push("/admin/write");
-                    },
+                    to: Route::Write {},
                     "+ 写文章"
                 }
             }
@@ -123,13 +123,9 @@ fn PostRow(post: Post, deleting: bool, on_delete: EventHandler<i32>) -> Element 
     rsx! {
         tr { class: "border-b border-gray-100 dark:border-[#333] last:border-0 hover:bg-gray-50 dark:hover:bg-[#2a2a2a] transition-colors",
             td { class: "px-4 py-3",
-                a {
+                Link {
                     class: "text-gray-900 dark:text-[#dadadb] hover:opacity-80 transition-opacity",
-                    href: "/post/{post.slug}",
-                    onclick: move |evt| {
-                        evt.prevent_default();
-                        dioxus::router::navigator().push(format!("/post/{}", post.slug).as_str());
-                    },
+                    to: Route::PostDetail { slug: post.slug.clone() },
                     "{post.title}"
                 }
             }

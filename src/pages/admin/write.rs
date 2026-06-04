@@ -5,6 +5,7 @@ use wasm_bindgen::JsCast;
 
 use crate::api::posts::{create_post, CreatePostResponse};
 use crate::components::write_skeleton::WriteSkeleton;
+use crate::router::Route;
 
 #[component]
 #[allow(unused_mut, unused_variables)]
@@ -147,7 +148,7 @@ pub fn Write() -> Element {
                         {
                             let _ = js_sys::eval("new Promise(r => setTimeout(r, 800))");
                         }
-                        let _ = dioxus::router::navigator().push("/admin");
+                        let _ = dioxus::router::navigator().push(Route::Admin {});
                     }
                     Ok(CreatePostResponse {
                         success: false,
@@ -262,7 +263,7 @@ pub fn Write() -> Element {
                 button {
                     class: "px-6 py-2 bg-gray-200 dark:bg-[#333] text-gray-700 dark:text-[#dadadb] rounded-full font-medium hover:opacity-80 transition-opacity cursor-pointer",
                     onclick: move |_| {
-                        let _ = dioxus::router::navigator().push("/admin");
+                        let _ = dioxus::router::navigator().push(Route::Admin {});
                     },
                     "取消"
                 }

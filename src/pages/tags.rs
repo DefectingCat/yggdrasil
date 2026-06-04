@@ -1,9 +1,11 @@
 use dioxus::prelude::*;
+use dioxus::router::components::Link;
 
 use crate::api::posts::{get_posts_by_tag, list_tags, PostListResponse, TagListResponse};
 use crate::components::post_card::PostCard;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::tags_skeleton::{TagsSkeleton, TagDetailSkeleton};
+use crate::router::Route;
 
 #[component]
 pub fn Tags() -> Element {
@@ -40,13 +42,9 @@ fn TagsContent() -> Element {
                 ul { class: "flex flex-wrap gap-4 mt-6",
                     for tag in tags {
                         li {
-                            a {
+                            Link {
                                 class: "inline-flex items-center px-3 py-1.5 text-base font-medium bg-gray-100 dark:bg-[#2e2e33] text-gray-700 dark:text-[#9b9c9d] rounded-lg hover:bg-gray-200 dark:hover:bg-[#333] transition-colors",
-                                href: "/tags/{tag.name}",
-                                onclick: move |evt| {
-                                    evt.prevent_default();
-                                    dioxus::router::navigator().push(format!("/tags/{}", tag.name).as_str());
-                                },
+                                to: Route::TagDetail { tag: tag.name.clone() },
                                 "{tag.name}"
                                 sup { class: "ml-1 text-sm text-gray-500 dark:text-[#9b9c9d]", "{tag.post_count}" }
                             }
