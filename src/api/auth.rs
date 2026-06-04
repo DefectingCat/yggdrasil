@@ -5,6 +5,7 @@ use dioxus::prelude::*;
 use http::header::{HeaderValue, SET_COOKIE};
 
 use crate::auth::{password, session};
+#[cfg(feature = "server")]
 use crate::auth::session::get_session_from_ctx;
 use crate::db::pool::get_conn;
 use crate::models::user::{PublicUser, User, UserRole};
