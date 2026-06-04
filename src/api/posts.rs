@@ -2,7 +2,9 @@
 
 use dioxus::prelude::*;
 
+#[cfg(feature = "server")]
 use crate::auth::session::get_session_from_ctx;
+#[cfg(feature = "server")]
 use crate::api::utils::{db_conn_error, query_error};
 use crate::db::pool::get_conn;
 use crate::models::post::{Post, PostStats, PostStatus, Tag};
