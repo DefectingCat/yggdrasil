@@ -11,6 +11,7 @@ mod pages;
 mod router;
 mod tasks;
 mod theme;
+mod utils;
 
 fn main() {
     #[cfg(feature = "server")]
