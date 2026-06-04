@@ -3,10 +3,24 @@ use dioxus::prelude::*;
 use crate::components::footer::Footer;
 use crate::components::header::Header;
 use crate::components::nav::use_nav_items;
-use crate::components::skeletons::home_skeleton::HomeSkeleton;
+use crate::components::skeletons::archive_skeleton::ArchiveSkeleton;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
+use crate::components::skeletons::home_skeleton::HomeSkeleton;
+use crate::components::skeletons::post_detail_skeleton::PostDetailSkeleton;
+use crate::components::skeletons::search_skeleton::SearchSkeleton;
+use crate::components::skeletons::tags_skeleton::TagsSkeleton;
 use crate::router::Route;
 use crate::theme::ThemeToggle;
+
+fn route_skeleton(route: &Route) -> Element {
+    match route {
+        Route::Archives {} => rsx! { DelayedSkeleton { ArchiveSkeleton {} } },
+        Route::Tags {} | Route::TagDetail { .. } => rsx! { DelayedSkeleton { TagsSkeleton {} } },
+        Route::Search {} => rsx! { DelayedSkeleton { SearchSkeleton {} } },
+        Route::PostDetail { .. } => rsx! { DelayedSkeleton { PostDetailSkeleton {} } },
+        _ => rsx! { DelayedSkeleton { HomeSkeleton {} } },
+    }
+}
 
 #[component]
 pub fn FrontendLayout() -> Element {
@@ -18,9 +32,7 @@ pub fn FrontendLayout() -> Element {
             Header { nav_items, right_content: rsx! { ThemeToggle {} } }
             main { class: "flex-1 w-full max-w-3xl mx-auto px-6 py-6",
                 SuspenseBoundary {
-                    fallback: |_| rsx! {
-                        DelayedSkeleton { HomeSkeleton {} }
-                    },
+                    fallback: move |_| route_skeleton(&route),
                     Outlet::<Route> {}
                 }
             }
