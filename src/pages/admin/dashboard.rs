@@ -98,20 +98,9 @@ fn StatCard(value: String, label: String) -> Element {
 
 #[component]
 fn RecentPostItem(post: Post) -> Element {
-    let date_str = post
-        .published_at
-        .map(|d| d.format("%Y-%m-%d").to_string())
-        .unwrap_or_else(|| post.created_at.format("%Y-%m-%d").to_string());
-    let status_label = if post.status == crate::models::post::PostStatus::Published {
-        "已发布"
-    } else {
-        "草稿"
-    };
-    let status_class = if post.status == crate::models::post::PostStatus::Published {
-        "text-green-600 dark:text-green-400"
-    } else {
-        "text-gray-400 dark:text-[#9b9c9d]"
-    };
+    let date_str = post.formatted_date();
+    let status_label = post.status_label();
+    let status_class = post.status_class();
 
     rsx! {
         div { class: "flex justify-between items-center py-3 border-b border-gray-100 dark:border-[#333]",
