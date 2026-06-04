@@ -14,38 +14,13 @@ use crate::models::user::{User, UserRole};
 
 #[cfg(feature = "server")]
 async fn get_current_admin_user() -> Result<User, ServerFnError> {
-    let token = get_session_from_ctx();
-
-    let Some(token) = token else {
-        return Err(ServerFnError::new("未登录"));
+    let token = match get_session_from_ctx() {
+        Some(t) => t,
+        None => return Err(ServerFnError::new("未登录")),
     };
 
-    let client = get_conn().await.map_err(db_conn_error)?;
-
-    let row = client
-        .query_opt(
-            "SELECT u.id, u.username, u.email, u.password_hash, u.role, u.created_at
-             FROM sessions s
-             JOIN users u ON s.user_id = u.id
-             WHERE s.token = $1 AND s.expires_at > NOW()",
-            &[&token],
-        )
-        .await
-        .map_err(query_error)?;
-
-    let user = match row {
-        Some(row) => {
-            let role_str: String = row.get("role");
-            let role = UserRole::from_str(&role_str).unwrap_or(UserRole::Blocked);
-            User {
-                id: row.get("id"),
-                username: row.get("username"),
-                email: row.get("email"),
-                password_hash: row.get("password_hash"),
-                role,
-                created_at: row.get("created_at"),
-            }
-        }
+    let user = match crate::api::auth::get_user_by_token(&token).await? {
+        Some(u) => u,
         None => return Err(ServerFnError::new("会话已过期")),
     };
 

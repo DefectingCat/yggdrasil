@@ -241,14 +241,8 @@ pub struct CurrentUserResponse {
     pub user: Option<PublicUser>,
 }
 
-#[server(GetCurrentUser, "/api")]
-pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
-    let token = get_session_from_ctx();
-
-    let Some(token) = token else {
-        return Ok(CurrentUserResponse { user: None });
-    };
-
+#[cfg(feature = "server")]
+pub async fn get_user_by_token(token: &str) -> Result<Option<User>, ServerFnError> {
     let client = get_conn().await.map_err(|e| {
         tracing::error!("GetCurrentUser DB connection failed: {:?}", e);
         ServerFnError::new(format!("数据库连接失败: {}", e))
@@ -256,7 +250,7 @@ pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
 
     let row = client
         .query_opt(
-            "SELECT u.id, u.username, u.email, u.role, u.created_at
+            "SELECT u.id, u.username, u.email, u.password_hash, u.role, u.created_at
              FROM sessions s
              JOIN users u ON s.user_id = u.id
              WHERE s.token = $1 AND s.expires_at > NOW()",
@@ -272,14 +266,30 @@ pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
         Some(row) => {
             let role_str: String = row.get("role");
             let role = UserRole::from_str(&role_str).unwrap_or(UserRole::Blocked);
-            Some(PublicUser {
+            Some(User {
                 id: row.get("id"),
                 username: row.get("username"),
                 email: row.get("email"),
+                password_hash: row.get("password_hash"),
                 role,
                 created_at: row.get("created_at"),
             })
         }
+        None => None,
+    };
+
+    Ok(user)
+}
+
+#[server(GetCurrentUser, "/api")]
+pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
+    let token = match get_session_from_ctx() {
+        Some(t) => t,
+        None => return Ok(CurrentUserResponse { user: None }),
+    };
+
+    let user = match get_user_by_token(&token).await? {
+        Some(u) => Some(PublicUser::from(u)),
         None => None,
     };
 
