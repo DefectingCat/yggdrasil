@@ -105,7 +105,7 @@ pub fn Posts() -> Element {
 fn PostRow(post: Post, deleting: bool, on_delete: EventHandler<i32>) -> Element {
     let date_str = post.formatted_date();
     let status_label = post.status_label();
-    let status_class = post.status_class();
+    let status_badge_class = post.status_badge_class();
 
     rsx! {
         tr { class: "border-b border-gray-100 dark:border-[#333] last:border-0 hover:bg-gray-50 dark:hover:bg-[#2a2a2a] transition-colors",
@@ -117,7 +117,7 @@ fn PostRow(post: Post, deleting: bool, on_delete: EventHandler<i32>) -> Element 
                 }
             }
             td { class: "px-4 py-3 text-center",
-                span { class: "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {status_class}",
+                span { class: "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {status_badge_class}",
                     "{status_label}"
                 }
             }
