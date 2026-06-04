@@ -5,6 +5,9 @@ build:
 	@$(MAKE) highlight-css
 	@tailwindcss -i input.css -o public/style.css --minify
 	@dx build --release
+	@echo "Fixing WASM paths for production..."
+	@python3 scripts/fix-wasm-paths.py
+	@echo "WASM paths fixed."
 
 highlight-css:
 	@cargo run --bin generate_highlight_css
