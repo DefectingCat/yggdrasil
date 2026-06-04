@@ -70,12 +70,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3df27b8d5ddb458c5fb1bbc1ce172d4a38c614a97d550b0ac89003897fb01de4"
 
 [[package]]
-name = "async-once-cell"
-version = "0.5.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4288f83726785267c6f2ef073a3d83dc3f9b81464e9f99898240cced85fce35a"
-
-[[package]]
 name = "async-stream"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -855,7 +849,6 @@ dependencies = [
  "serde",
  "subsecond",
  "warnings",
- "wasm-splitter",
 ]
 
 [[package]]
@@ -4497,30 +4490,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasm-split-macro"
-version = "0.7.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "540776437e21577983e166d89a0c65f355c0409a20e27ca79f72798d7192f0a3"
-dependencies = [
- "base16",
- "digest 0.10.7",
- "proc-macro2",
- "quote",
- "sha2 0.10.9",
- "syn",
-]
-
-[[package]]
-name = "wasm-splitter"
-version = "0.7.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e70a57a19a59bd771cd2db8320d6a65de1763995e9fbdc0d1508301138526231"
-dependencies = [
- "async-once-cell",
- "wasm-split-macro",
-]
-
-[[package]]
 name = "wasm-streams"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5042,7 +5011,6 @@ dependencies = [
  "chrono",
  "deadpool-postgres",
  "dioxus",
- "dioxus-router",
  "dotenvy",
  "getrandom 0.2.17",
  "http",
