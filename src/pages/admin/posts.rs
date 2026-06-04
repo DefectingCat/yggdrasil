@@ -3,7 +3,7 @@ use dioxus::router::components::Link;
 
 use crate::api::posts::{delete_post, list_posts, CreatePostResponse, PostListResponse};
 use crate::hooks::delayed_loading::use_delayed_loading;
-use crate::models::post::{Post, PostStatus};
+use crate::models::post::Post;
 use crate::router::Route;
 
 #[component]
@@ -103,22 +103,9 @@ pub fn Posts() -> Element {
 
 #[component]
 fn PostRow(post: Post, deleting: bool, on_delete: EventHandler<i32>) -> Element {
-    let date_str = post
-        .published_at
-        .map(|d| d.format("%Y-%m-%d").to_string())
-        .unwrap_or_else(|| post.created_at.format("%Y-%m-%d").to_string());
-
-    let (status_label, status_class) = if post.status == PostStatus::Published {
-        (
-            "已发布",
-            "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300",
-        )
-    } else {
-        (
-            "草稿",
-            "bg-gray-100 dark:bg-[#333] text-gray-600 dark:text-[#9b9c9d]",
-        )
-    };
+    let date_str = post.formatted_date();
+    let status_label = post.status_label();
+    let status_class = post.status_class();
 
     rsx! {
         tr { class: "border-b border-gray-100 dark:border-[#333] last:border-0 hover:bg-gray-50 dark:hover:bg-[#2a2a2a] transition-colors",

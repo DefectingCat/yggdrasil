@@ -54,6 +54,20 @@ impl Post {
             .map(|d| d.format("%Y-%m-%d").to_string())
             .unwrap_or_else(|| self.created_at.format("%Y-%m-%d").to_string())
     }
+
+    pub fn status_label(&self) -> &'static str {
+        match self.status {
+            PostStatus::Published => "已发布",
+            PostStatus::Draft => "草稿",
+        }
+    }
+
+    pub fn status_class(&self) -> &'static str {
+        match self.status {
+            PostStatus::Published => "text-green-600 dark:text-green-400",
+            PostStatus::Draft => "text-gray-400 dark:text-[#9b9c9d]",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
