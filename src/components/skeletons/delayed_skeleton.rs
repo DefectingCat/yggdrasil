@@ -1,24 +1,9 @@
 use dioxus::prelude::*;
+use crate::utils::time::sleep_ms;
 
 /// 骨架屏 pulse 动画延迟（毫秒）
 /// 加载时间低于此值时骨架屏只显示静态灰色块，避免 pulse 动画一闪而过
 const SKELETON_PULSE_DELAY_MS: u32 = 200;
-
-#[cfg(target_arch = "wasm32")]
-async fn sleep_ms(ms: u32) {
-    use wasm_bindgen::JsCast;
-    let js_code = format!("new Promise(r => setTimeout(r, {}))", ms);
-    if let Ok(promise_val) = js_sys::eval(&js_code) {
-        if let Ok(promise) = promise_val.dyn_into::<js_sys::Promise>() {
-            let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
-        }
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-async fn sleep_ms(ms: u32) {
-    tokio::time::sleep(std::time::Duration::from_millis(ms as u64)).await;
-}
 
 /// 延迟 pulse 动画的骨架屏包装组件
 ///
