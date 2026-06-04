@@ -18,9 +18,8 @@ pub fn TagsSkeleton() -> Element {
             div { class: "flex flex-wrap gap-4 mt-6",
                 // 生成 24 个不同宽度的标签 pill
                 for i in 0..24 {
-                    div {
-                        class: "h-8 bg-gray-200 dark:bg-[#2a2a2a] rounded-lg animate-pulse",
-                        // 不同宽度模拟标签名长短
+                    SkeletonBox {
+                        class: "h-8 rounded-lg",
                         style: match i % 6 {
                             0 => "width: 60px;",
                             1 => "width: 80px;",
