@@ -2,6 +2,8 @@
 
 use dioxus::prelude::*;
 
+use crate::auth::session::get_session_from_ctx;
+use crate::api::utils::{db_conn_error, query_error};
 use crate::db::pool::get_conn;
 use crate::models::post::{Post, PostStats, PostStatus, Tag};
 use crate::models::user::{User, UserRole};
@@ -11,41 +13,14 @@ use crate::models::user::{User, UserRole};
 // ============================================================================
 
 #[cfg(feature = "server")]
-fn parse_session_token(cookie_header: &str) -> Option<&str> {
-    cookie_header.split(';').map(|s| s.trim()).find_map(|pair| {
-        let mut parts = pair.splitn(2, '=');
-        let name = parts.next()?.trim();
-        let value = parts.next()?.trim();
-        if name == "session" {
-            Some(value)
-        } else {
-            None
-        }
-    })
-}
-
-#[cfg(feature = "server")]
 async fn get_current_admin_user() -> Result<User, ServerFnError> {
-    let token = if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
-        let parts = ctx.parts_mut();
-        parts
-            .headers
-            .get("cookie")
-            .and_then(|h| h.to_str().ok())
-            .and_then(parse_session_token)
-            .map(|s| s.to_string())
-    } else {
-        None
-    };
+    let token = get_session_from_ctx();
 
     let Some(token) = token else {
         return Err(ServerFnError::new("未登录"));
     };
 
-    let client = get_conn().await.map_err(|e| {
-        tracing::error!("DB connection failed: {:?}", e);
-        ServerFnError::new(format!("数据库连接失败: {}", e))
-    })?;
+    let client = get_conn().await.map_err(db_conn_error)?;
 
     let row = client
         .query_opt(
@@ -56,10 +31,7 @@ async fn get_current_admin_user() -> Result<User, ServerFnError> {
             &[&token],
         )
         .await
-        .map_err(|e| {
-            tracing::error!("query failed: {:?}", e);
-            ServerFnError::new(format!("查询失败: {}", e))
-        })?;
+        .map_err(query_error)?;
 
     let user = match row {
         Some(row) => {
