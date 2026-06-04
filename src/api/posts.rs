@@ -2,7 +2,7 @@
 
 use dioxus::prelude::*;
 
-use crate::db::pool::DB_POOL;
+use crate::db::pool::get_conn;
 use crate::models::post::{Post, PostStats, PostStatus, Tag};
 use crate::models::user::{User, UserRole};
 
@@ -42,7 +42,7 @@ async fn get_current_admin_user() -> Result<User, ServerFnError> {
         return Err(ServerFnError::new("未登录"));
     };
 
-    let client = DB_POOL.get().await.map_err(|e| {
+    let client = get_conn().await.map_err(|e| {
         tracing::error!("DB connection failed: {:?}", e);
         ServerFnError::new(format!("数据库连接失败: {}", e))
     })?;
@@ -782,7 +782,7 @@ pub async fn create_post(
         _ => slugify(&title),
     };
 
-    let mut client = DB_POOL.get().await.map_err(|e| {
+    let mut client = get_conn().await.map_err(|e| {
         tracing::error!("DB connection failed: {:?}", e);
         ServerFnError::new(format!("数据库连接失败: {}", e))
     })?;
@@ -910,7 +910,7 @@ pub async fn update_post(
 ) -> Result<CreatePostResponse, ServerFnError> {
     let user = get_current_admin_user().await?;
 
-    let mut client = DB_POOL.get().await.map_err(|e| {
+    let mut client = get_conn().await.map_err(|e| {
         tracing::error!("DB connection failed: {:?}", e);
         ServerFnError::new(format!("数据库连接失败: {}", e))
     })?;
@@ -1086,7 +1086,7 @@ pub async fn update_post(
 
 #[server(GetPostBySlug, "/api")]
 pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, ServerFnError> {
-    let client = DB_POOL.get().await.map_err(|e| {
+    let client = get_conn().await.map_err(|e| {
         tracing::error!("DB connection failed: {:?}", e);
         ServerFnError::new(format!("数据库连接失败: {}", e))
     })?;
@@ -1137,7 +1137,7 @@ pub async fn list_published_posts(
     page: i32,
     per_page: i32,
 ) -> Result<PostListResponse, ServerFnError> {
-    let client = DB_POOL.get().await.map_err(|e| {
+    let client = get_conn().await.map_err(|e| {
         tracing::error!("DB connection failed: {:?}", e);
         ServerFnError::new(format!("数据库连接失败: {}", e))
     })?;
@@ -1171,7 +1171,7 @@ pub async fn list_published_posts(
 pub async fn list_posts() -> Result<PostListResponse, ServerFnError> {
     let _user = get_current_admin_user().await?;
 
-    let client = DB_POOL.get().await.map_err(|e| {
+    let client = get_conn().await.map_err(|e| {
         tracing::error!("DB connection failed: {:?}", e);
         ServerFnError::new(format!("数据库连接失败: {}", e))
     })?;
@@ -1202,7 +1202,7 @@ pub async fn list_posts() -> Result<PostListResponse, ServerFnError> {
 pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnError> {
     let _user = get_current_admin_user().await?;
 
-    let client = DB_POOL.get().await.map_err(|e| {
+    let client = get_conn().await.map_err(|e| {
         tracing::error!("DB connection failed: {:?}", e);
         ServerFnError::new(format!("数据库连接失败: {}", e))
     })?;
@@ -1237,7 +1237,7 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
 
 #[server(ListTags, "/api")]
 pub async fn list_tags() -> Result<TagListResponse, ServerFnError> {
-    let client = DB_POOL.get().await.map_err(|e| {
+    let client = get_conn().await.map_err(|e| {
         tracing::error!("DB connection failed: {:?}", e);
         ServerFnError::new(format!("数据库连接失败: {}", e))
     })?;
@@ -1272,7 +1272,7 @@ pub async fn list_tags() -> Result<TagListResponse, ServerFnError> {
 
 #[server(GetPostsByTag, "/api")]
 pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, ServerFnError> {
-    let client = DB_POOL.get().await.map_err(|e| {
+    let client = get_conn().await.map_err(|e| {
         tracing::error!("DB connection failed: {:?}", e);
         ServerFnError::new(format!("数据库连接失败: {}", e))
     })?;
@@ -1305,7 +1305,7 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
 pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
     let _user = get_current_admin_user().await?;
 
-    let client = DB_POOL.get().await.map_err(|e| {
+    let client = get_conn().await.map_err(|e| {
         tracing::error!("DB connection failed: {:?}", e);
         ServerFnError::new(format!("数据库连接失败: {}", e))
     })?;
@@ -1345,7 +1345,7 @@ pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
 
 #[server(SearchPosts, "/api")]
 pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnError> {
-    let client = DB_POOL.get().await.map_err(|e| {
+    let client = get_conn().await.map_err(|e| {
         tracing::error!("DB connection failed: {:?}", e);
         ServerFnError::new(format!("数据库连接失败: {}", e))
     })?;

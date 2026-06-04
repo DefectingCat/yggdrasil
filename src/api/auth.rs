@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use http::header::{HeaderValue, SET_COOKIE};
 
 use crate::auth::{password, session};
-use crate::db::pool::DB_POOL;
+use crate::db::pool::get_conn;
 use crate::models::user::{PublicUser, User, UserRole};
 
 #[allow(dead_code)]
@@ -85,7 +85,7 @@ pub async fn register(
         });
     }
 
-    let client = DB_POOL.get().await.map_err(|e| {
+    let client = get_conn().await.map_err(|e| {
         tracing::error!("Register DB connection failed: {:?}", e);
         ServerFnError::new(format!("数据库连接失败: {}", e))
     })?;
@@ -142,7 +142,7 @@ pub async fn register(
 
 #[server(Login, "/api")]
 pub async fn login(username: String, password: String) -> Result<AuthResponse, ServerFnError> {
-    let client = DB_POOL.get().await.map_err(|e| {
+    let client = get_conn().await.map_err(|e| {
         tracing::error!("Login DB connection failed: {:?}", e);
         ServerFnError::new(format!("数据库连接失败: {}", e))
     })?;
@@ -228,7 +228,7 @@ pub async fn logout() -> Result<AuthResponse, ServerFnError> {
         None
     };
 
-    let client = DB_POOL.get().await.map_err(|e| {
+    let client = get_conn().await.map_err(|e| {
         tracing::error!("Logout DB connection failed: {:?}", e);
         ServerFnError::new(format!("数据库连接失败: {}", e))
     })?;
@@ -282,7 +282,7 @@ pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
         return Ok(CurrentUserResponse { user: None });
     };
 
-    let client = DB_POOL.get().await.map_err(|e| {
+    let client = get_conn().await.map_err(|e| {
         tracing::error!("GetCurrentUser DB connection failed: {:?}", e);
         ServerFnError::new(format!("数据库连接失败: {}", e))
     })?;
