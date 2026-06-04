@@ -61,13 +61,12 @@ pub fn Register() -> Element {
                 }
 
                 if success() {
-                    AlertBox {
-                        message: "注册成功！".to_string(),
-                        variant: "success",
-                    }
-                    Link { class: "block text-center mt-2 text-gray-700 dark:text-[#dadadb] hover:underline cursor-pointer",
-                        to: Route::Login {},
-                        "去登录"
+                    div { class: "mb-4 p-3 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg text-center",
+                        "注册成功！"
+                        Link { class: "block mt-2 text-gray-700 dark:text-[#dadadb] hover:underline cursor-pointer",
+                            to: Route::Login {},
+                            "去登录"
+                        }
                     }
                 }
 
