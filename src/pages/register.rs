@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
 use crate::api::auth::{register, AuthResponse};
+use crate::components::forms::{AlertBox, FormInput, FormLabel, BUTTON_PRIMARY_CLASS};
 use crate::router::Route;
 
 #[component]
@@ -60,72 +61,63 @@ pub fn Register() -> Element {
                 }
 
                 if success() {
-                    div { class: "mb-4 p-3 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg text-center",
-                        "注册成功！"
-                        Link { class: "block mt-2 text-gray-700 dark:text-[#dadadb] hover:underline cursor-pointer",
-                            to: Route::Login {},
-                            "去登录"
-                        }
+                    AlertBox {
+                        message: "注册成功！".to_string(),
+                        variant: "success",
+                    }
+                    Link { class: "block text-center mt-2 text-gray-700 dark:text-[#dadadb] hover:underline cursor-pointer",
+                        to: Route::Login {},
+                        "去登录"
                     }
                 }
 
                 if let Some(err) = error() {
-                    div { class: "mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-center",
-                        "{err}"
-                    }
+                    AlertBox { message: err, variant: "error" }
                 }
 
                 div { class: "space-y-4",
                     div {
-                        label { class: "block text-sm font-medium text-gray-700 dark:text-[#9b9c9d] mb-1",
-                            "用户名"
-                        }
-                        input {
-                            class: "w-full px-4 py-2 border border-gray-200 dark:border-[#333] rounded-lg bg-white dark:bg-[#2e2e33] text-gray-900 dark:text-[#dadadb] focus:outline-none focus:border-gray-400 dark:focus:border-gray-600",
+                        FormLabel { label: "用户名" }
+                        FormInput {
                             r#type: "text",
                             placeholder: "3-50 位字符",
                             value: username(),
-                            oninput: move |e| username.set(e.value()),
+                            oninput: move |v: String| username.set(v),
+                            onkeydown: None,
                         }
                     }
                     div {
-                        label { class: "block text-sm font-medium text-gray-700 dark:text-[#9b9c9d] mb-1",
-                            "邮箱"
-                        }
-                        input {
-                            class: "w-full px-4 py-2 border border-gray-200 dark:border-[#333] rounded-lg bg-white dark:bg-[#2e2e33] text-gray-900 dark:text-[#dadadb] focus:outline-none focus:border-gray-400 dark:focus:border-gray-600",
+                        FormLabel { label: "邮箱" }
+                        FormInput {
                             r#type: "email",
                             placeholder: "your@email.com",
                             value: email(),
-                            oninput: move |e| email.set(e.value()),
+                            oninput: move |v: String| email.set(v),
+                            onkeydown: None,
                         }
                     }
                     div {
-                        label { class: "block text-sm font-medium text-gray-700 dark:text-[#9b9c9d] mb-1",
-                            "密码"
-                        }
-                        input {
-                            class: "w-full px-4 py-2 border border-gray-200 dark:border-[#333] rounded-lg bg-white dark:bg-[#2e2e33] text-gray-900 dark:text-[#dadadb] focus:outline-none focus:border-gray-400 dark:focus:border-gray-600",
+                        FormLabel { label: "密码" }
+                        FormInput {
                             r#type: "password",
                             placeholder: "至少 8 位",
                             value: password(),
-                            oninput: move |e| password.set(e.value()),
+                            oninput: move |v: String| password.set(v),
+                            onkeydown: None,
                         }
                     }
                     div {
-                        label { class: "block text-sm font-medium text-gray-700 dark:text-[#9b9c9d] mb-1",
-                            "确认密码"
-                        }
-                        input {
-                            class: "w-full px-4 py-2 border border-gray-200 dark:border-[#333] rounded-lg bg-white dark:bg-[#2e2e33] text-gray-900 dark:text-[#dadadb] focus:outline-none focus:border-gray-400 dark:focus:border-gray-600",
+                        FormLabel { label: "确认密码" }
+                        FormInput {
                             r#type: "password",
                             placeholder: "再次输入密码",
                             value: confirm_password(),
-                            oninput: move |e| confirm_password.set(e.value()),
+                            oninput: move |v: String| confirm_password.set(v),
+                            onkeydown: None,
                         }
                     }
                     button {
-                        class: "w-full py-2 px-4 bg-gray-900 dark:bg-[#dadadb] text-white dark:text-gray-900 font-medium rounded-full hover:opacity-80 transition-opacity",
+                        class: "{BUTTON_PRIMARY_CLASS}",
                         onclick: on_submit,
                         "注册"
                     }

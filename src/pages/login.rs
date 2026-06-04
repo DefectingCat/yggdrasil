@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
 use crate::api::auth::{login, AuthResponse};
+use crate::components::forms::{AlertBox, FormInput, FormLabel, BUTTON_PRIMARY_CLASS};
 use crate::router::Route;
 
 #[component]
@@ -54,40 +55,32 @@ pub fn Login() -> Element {
                 }
 
                 if let Some(err) = error() {
-                    div { class: "mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-center",
-                        "{err}"
-                    }
+                    AlertBox { message: err, variant: "error" }
                 }
 
                 div { class: "space-y-4",
                     div {
-                        label { class: "block text-sm font-medium text-gray-700 dark:text-[#9b9c9d] mb-1",
-                            "用户名 / 邮箱"
-                        }
-                        input {
-                            class: "w-full px-4 py-2 border border-gray-200 dark:border-[#333] rounded-lg bg-white dark:bg-[#2e2e33] text-gray-900 dark:text-[#dadadb] focus:outline-none focus:border-gray-400 dark:focus:border-gray-600",
+                        FormLabel { label: "用户名 / 邮箱" }
+                        FormInput {
                             r#type: "text",
                             placeholder: "用户名或邮箱",
                             value: username(),
-                            oninput: move |e| username.set(e.value()),
-                            onkeydown: move |e| if e.key() == Key::Enter { on_submit(()) },
+                            oninput: move |v: String| username.set(v),
+                            onkeydown: Some(EventHandler::new(move |e: KeyboardEvent| if e.key() == Key::Enter { on_submit(()) })),
                         }
                     }
                     div {
-                        label { class: "block text-sm font-medium text-gray-700 dark:text-[#9b9c9d] mb-1",
-                            "密码"
-                        }
-                        input {
-                            class: "w-full px-4 py-2 border border-gray-200 dark:border-[#333] rounded-lg bg-white dark:bg-[#2e2e33] text-gray-900 dark:text-[#dadadb] focus:outline-none focus:border-gray-400 dark:focus:border-gray-600",
+                        FormLabel { label: "密码" }
+                        FormInput {
                             r#type: "password",
                             placeholder: "密码",
                             value: password(),
-                            oninput: move |e| password.set(e.value()),
-                            onkeydown: move |e| if e.key() == Key::Enter { on_submit(()) },
+                            oninput: move |v: String| password.set(v),
+                            onkeydown: Some(EventHandler::new(move |e: KeyboardEvent| if e.key() == Key::Enter { on_submit(()) })),
                         }
                     }
                     button {
-                        class: "w-full py-2 px-4 bg-gray-900 dark:bg-[#dadadb] text-white dark:text-gray-900 font-medium rounded-full hover:opacity-80 transition-opacity",
+                        class: "{BUTTON_PRIMARY_CLASS}",
                         onclick: move |_| on_submit(()),
                         "登录"
                     }
