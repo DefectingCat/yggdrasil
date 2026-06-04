@@ -556,6 +556,21 @@
   }
 }
 
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: pageEnter 0.15s ease-out;
+}
+
 /* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
   html {
@@ -564,5 +579,9 @@
 
   details::details-content {
     transition: none;
+  }
+
+  .page-enter {
+    animation: none;
   }
 }
