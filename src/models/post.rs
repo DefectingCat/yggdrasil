@@ -68,6 +68,13 @@ impl Post {
             PostStatus::Draft => "text-gray-400 dark:text-[#9b9c9d]",
         }
     }
+
+    pub fn status_badge_class(&self) -> &'static str {
+        match self.status {
+            PostStatus::Published => "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300",
+            PostStatus::Draft => "bg-gray-100 dark:bg-[#333] text-gray-600 dark:text-[#9b9c9d]",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
