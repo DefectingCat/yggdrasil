@@ -11,4 +11,8 @@ pub mod pool {
         }
     }
     pub static DB_POOL: DummyPool = DummyPool;
+
+    pub async fn get_conn() -> Result<(), ()> {
+        Err(())
+    }
 }

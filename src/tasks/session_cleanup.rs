@@ -2,13 +2,13 @@ use std::time::Duration;
 
 use tokio::time::interval;
 
-use crate::db::pool::DB_POOL;
+use crate::db::pool::get_conn;
 
 pub async fn run_cleanup() {
     let mut ticker = interval(Duration::from_secs(3600));
     loop {
         ticker.tick().await;
-        match DB_POOL.get().await {
+        match get_conn().await {
             Ok(client) => {
                 if let Err(e) = client
                     .execute("DELETE FROM sessions WHERE expires_at < NOW()", &[])
