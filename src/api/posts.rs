@@ -7,6 +7,7 @@ use crate::api::utils::{db_conn_error, query_error};
 use crate::db::pool::get_conn;
 use crate::models::post::{Post, PostStats, PostStatus, Tag};
 use crate::models::user::{User, UserRole};
+use crate::utils::text::{count_words, auto_summary};
 
 // ============================================================================
 // Server-side helpers (only compiled when server feature is enabled)
@@ -372,82 +373,6 @@ fn slugify_heading(text: &str) -> String {
     }
 
     slug
-}
-
-#[cfg(feature = "server")]
-fn count_words(md: &str) -> u32 {
-    // Remove markdown syntax
-    let mut plain = md.to_string();
-    plain = regex::Regex::new(r"```[\s\S]*?```").unwrap().replace_all(&plain, "").to_string();
-    plain = regex::Regex::new(r"`[^`]*`").unwrap().replace_all(&plain, "").to_string();
-    plain = regex::Regex::new(r"\[([^\]]*)\]\([^)]*\)").unwrap().replace_all(&plain, "$1").to_string();
-    plain = regex::Regex::new(r"^#{1,6}\s*").unwrap().replace_all(&plain, "").to_string();
-    plain = regex::Regex::new(r"!\[([^\]]*)\]\([^)]*\)").unwrap().replace_all(&plain, "").to_string();
-    plain = plain.replace("**", "").replace("*", "").replace("__", "").replace("_", "");
-
-    // Count Chinese characters and English words
-    let mut count = 0u32;
-    let mut in_word = false;
-
-    for c in plain.chars() {
-        if c as u32 >= 0x4E00 && c as u32 <= 0x9FFF {
-            count += 1;
-            in_word = false;
-        } else if c.is_alphabetic() {
-            if !in_word {
-                count += 1;
-                in_word = true;
-            }
-        } else {
-            in_word = false;
-        }
-    }
-
-    count.max(1)
-}
-
-#[cfg(feature = "server")]
-fn auto_summary(md: &str) -> String {
-    // Strip markdown syntax roughly: remove heading markers, bold, italic, links, code fences
-    let mut plain = md.to_string();
-    // Remove code blocks
-    plain = regex::Regex::new(r"```[\s\S]*?```")
-        .unwrap()
-        .replace_all(&plain, "")
-        .to_string();
-    // Remove inline code
-    plain = regex::Regex::new(r"`[^`]*`")
-        .unwrap()
-        .replace_all(&plain, "")
-        .to_string();
-    // Remove links: [text](url) -> text
-    plain = regex::Regex::new(r"\[([^\]]*)\]\([^)]*\)")
-        .unwrap()
-        .replace_all(&plain, "$1")
-        .to_string();
-    // Remove heading markers
-    plain = regex::Regex::new(r"^#{1,6}\s*")
-        .unwrap()
-        .replace_all(&plain, "")
-        .to_string();
-    // Remove bold/italic markers
-    plain = plain
-        .replace("**", "")
-        .replace("*", "")
-        .replace("__", "")
-        .replace("_", "");
-    // Remove images
-    plain = regex::Regex::new(r"!\[([^\]]*)\]\([^)]*\)")
-        .unwrap()
-        .replace_all(&plain, "")
-        .to_string();
-    // Collapse whitespace
-    plain = regex::Regex::new(r"\s+")
-        .unwrap()
-        .replace_all(&plain, " ")
-        .to_string();
-
-    plain.trim().chars().take(200).collect()
 }
 
 // ============================================================================
