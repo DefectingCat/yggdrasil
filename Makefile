@@ -4,7 +4,7 @@ build:
 	@$(MAKE) build-editor
 	@$(MAKE) highlight-css
 	@tailwindcss -i input.css -o public/style.css --minify
-	@dx build --release
+	@dx build --release --wasm-split
 	@echo "Fixing WASM paths for production..."
 	@python3 scripts/fix-wasm-paths.py
 	@echo "WASM paths fixed."
