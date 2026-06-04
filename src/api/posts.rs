@@ -565,6 +565,7 @@ async fn row_to_post_full(client: &tokio_postgres::Client, row: &tokio_postgres:
 // ============================================================================
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[allow(dead_code)]
 pub struct CreatePostRequest {
     pub title: String,
     pub slug: Option<String>,
