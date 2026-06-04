@@ -1,6 +1,7 @@
 pub mod admin_layout;
 pub mod admin_skeleton;
 pub mod footer;
+pub mod forms;
 pub mod frontend_layout;
 pub mod header;
 pub mod nav;
