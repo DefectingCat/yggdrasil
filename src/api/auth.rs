@@ -5,6 +5,7 @@ use dioxus::prelude::*;
 use http::header::{HeaderValue, SET_COOKIE};
 
 use crate::auth::{password, session};
+use crate::auth::session::get_session_from_ctx;
 use crate::db::pool::get_conn;
 use crate::models::user::{PublicUser, User, UserRole};
 
@@ -34,20 +35,6 @@ fn validate_password(password: &str) -> Result<(), String> {
         return Err("密码长度至少 8 位".to_string());
     }
     Ok(())
-}
-
-#[cfg(feature = "server")]
-fn parse_session_token(cookie_header: &str) -> Option<&str> {
-    cookie_header.split(';').map(|s| s.trim()).find_map(|pair| {
-        let mut parts = pair.splitn(2, '=');
-        let name = parts.next()?.trim();
-        let value = parts.next()?.trim();
-        if name == "session" {
-            Some(value)
-        } else {
-            None
-        }
-    })
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -216,17 +203,7 @@ pub async fn login(username: String, password: String) -> Result<AuthResponse, S
 
 #[server(Logout, "/api")]
 pub async fn logout() -> Result<AuthResponse, ServerFnError> {
-    let token = if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
-        let parts = ctx.parts_mut();
-        parts
-            .headers
-            .get("cookie")
-            .and_then(|h| h.to_str().ok())
-            .and_then(parse_session_token)
-            .map(|s| s.to_string())
-    } else {
-        None
-    };
+    let token = get_session_from_ctx();
 
     let client = get_conn().await.map_err(|e| {
         tracing::error!("Logout DB connection failed: {:?}", e);
@@ -266,17 +243,7 @@ pub struct CurrentUserResponse {
 
 #[server(GetCurrentUser, "/api")]
 pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
-    let token = if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
-        let parts = ctx.parts_mut();
-        parts
-            .headers
-            .get("cookie")
-            .and_then(|h| h.to_str().ok())
-            .and_then(parse_session_token)
-            .map(|s| s.to_string())
-    } else {
-        None
-    };
+    let token = get_session_from_ctx();
 
     let Some(token) = token else {
         return Ok(CurrentUserResponse { user: None });
