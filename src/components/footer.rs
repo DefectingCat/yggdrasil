@@ -66,8 +66,8 @@ pub fn Footer() -> Element {
         }
     });
 
-    let link_class = use_memo(move || {
-        let base = "p-2 rounded-full cursor-pointer hover:opacity-80 transition-all duration-300 text-gray-600 dark:text-gray-300";
+    let btn_class = use_memo(move || {
+        let base = "fixed bottom-16 right-8 z-50 w-10 h-10 rounded-full bg-gray-100 dark:bg-[#2d2e30] shadow-md flex items-center justify-center cursor-pointer transition-all duration-300 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white";
         if visible() {
             format!("{} opacity-100 translate-y-0", base)
         } else {
@@ -79,26 +79,26 @@ pub fn Footer() -> Element {
         footer { class: "w-full border-t border-gray-200 dark:border-[#333] mt-auto",
             div { class: "max-w-3xl mx-auto px-6 py-5 flex items-center justify-between text-sm text-gray-400 dark:text-[#9b9c9d]",
                 span { "© 2026 Yggdrasil Blog" }
-                a {
-                    class: "{link_class}",
-                    href: "#top",
-                    aria_label: "go to top",
-                    title: "Go to Top (Alt + G)",
-                    accesskey: "g",
-                    onclick: move |evt| {
-                        evt.prevent_default();
-                        scroll_to_top();
-                    },
-                    svg {
-                        xmlns: "http://www.w3.org/2000/svg",
-                        height: "24px",
-                        view_box: "0 -960 960 960",
-                        width: "24px",
-                        fill: "currentColor",
-                        path {
-                            d: "m296-224-56-56 240-240 240 240-56 56-184-183-184 183Zm0-240-56-56 240-240 240 240-56 56-184-183-184 183Z",
-                        }
-                    }
+            }
+        }
+        a {
+            class: "{btn_class}",
+            href: "#top",
+            aria_label: "go to top",
+            title: "Go to Top (Alt + G)",
+            accesskey: "g",
+            onclick: move |evt| {
+                evt.prevent_default();
+                scroll_to_top();
+            },
+            svg {
+                xmlns: "http://www.w3.org/2000/svg",
+                height: "24px",
+                view_box: "0 -960 960 960",
+                width: "24px",
+                fill: "currentColor",
+                path {
+                    d: "m296-224-56-56 240-240 240 240-56 56-184-183-184 183Zm0-240-56-56 240-240 240 240-56 56-184-183-184 183Z",
                 }
             }
         }
