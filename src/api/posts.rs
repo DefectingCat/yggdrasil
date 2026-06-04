@@ -3,13 +3,13 @@
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
-use crate::auth::session::get_session_from_ctx;
-#[cfg(feature = "server")]
 use crate::api::utils::{db_conn_error, query_error};
+#[cfg(feature = "server")]
+use crate::auth::session::get_session_from_ctx;
 use crate::db::pool::get_conn;
 use crate::models::post::{Post, PostStats, PostStatus, Tag};
 use crate::models::user::{User, UserRole};
-use crate::utils::text::{count_words, auto_summary};
+use crate::utils::text::{auto_summary, count_words};
 
 // ============================================================================
 // Server-side helpers (only compiled when server feature is enabled)
@@ -122,7 +122,15 @@ async fn ensure_unique_slug(
 fn clean_html(input: &str) -> String {
     let mut builder = ammonia::Builder::default();
     builder
-        .add_generic_attributes(&["class", "aria-hidden", "aria-label", "id", "role", "accesskey", "title"])
+        .add_generic_attributes(&[
+            "class",
+            "aria-hidden",
+            "aria-label",
+            "id",
+            "role",
+            "accesskey",
+            "title",
+        ])
         .add_tags(&["details", "summary"])
         .url_relative(ammonia::UrlRelative::PassThrough)
         .add_tag_attributes("a", &["class", "aria-hidden", "aria-label"])
@@ -133,7 +141,7 @@ fn clean_html(input: &str) -> String {
         .add_tag_attributes("h4", &["id", "class"])
         .add_tag_attributes("h5", &["id", "class"])
         .add_tag_attributes("h6", &["id", "class"]);
-    
+
     builder.clean(input).to_string()
 }
 
@@ -146,10 +154,10 @@ struct RenderedContent {
 
 #[cfg(feature = "server")]
 fn render_markdown_enhanced(md: &str) -> RenderedContent {
-    use pulldown_cmark::{Event, Tag, TagEnd, HeadingLevel};
+    use pulldown_cmark::{Event, HeadingLevel, Options, Tag, TagEnd};
 
     // 1. Parse markdown and collect headings for TOC
-    let parser = pulldown_cmark::Parser::new(md);
+    let parser = pulldown_cmark::Parser::new_ext(md, Options::all());
     let mut headings: Vec<(u8, String, String)> = Vec::new(); // (level, text, id)
     let mut current_heading: Option<(u8, String)> = None;
 
@@ -190,7 +198,7 @@ fn render_markdown_enhanced(md: &str) -> RenderedContent {
     let toc_html = generate_toc_html(&headings);
 
     // 3. Generate HTML with heading anchors
-    let parser = pulldown_cmark::Parser::new(md);
+    let parser = pulldown_cmark::Parser::new_ext(md, Options::ENABLE_TABLES);
     let mut html = String::new();
     let mut heading_idx = 0;
     let mut in_heading = false;
