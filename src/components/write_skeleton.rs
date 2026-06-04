@@ -1,11 +1,12 @@
 use dioxus::prelude::*;
+use crate::components::skeletons::atoms::*;
 
 #[component]
 pub fn WriteSkeleton() -> Element {
     rsx! {
         div { class: "space-y-4",
             // 标题输入骨架
-            div { class: "w-full h-[52px] bg-gray-200 dark:bg-[#2a2a2a] rounded animate-pulse mb-4" }
+            SkeletonBox { class: "w-full h-[52px] mb-4".to_string() }
 
             // 编辑器区域骨架
             div {
@@ -13,28 +14,28 @@ pub fn WriteSkeleton() -> Element {
                 // 工具栏骨架
                 div { class: "flex gap-2 pb-4 border-b border-gray-100 dark:border-[#333]",
                     for _ in 0..8 {
-                        div { class: "w-8 h-8 bg-gray-200 dark:bg-[#2a2a2a] rounded animate-pulse" }
+                        SkeletonBox { class: "w-8 h-8".to_string() }
                     }
                 }
                 // 内容行骨架
                 div { class: "space-y-3 pt-2",
-                    div { class: "h-4 bg-gray-200 dark:bg-[#2a2a2a] rounded animate-pulse w-[90%]" }
-                    div { class: "h-4 bg-gray-200 dark:bg-[#2a2a2a] rounded animate-pulse w-full" }
-                    div { class: "h-4 bg-gray-200 dark:bg-[#2a2a2a] rounded animate-pulse w-[85%]" }
-                    div { class: "h-4 bg-gray-200 dark:bg-[#2a2a2a] rounded animate-pulse w-[95%]" }
-                    div { class: "h-4 bg-gray-200 dark:bg-[#2a2a2a] rounded animate-pulse w-[60%]" }
-                    div { class: "h-4 bg-gray-200 dark:bg-[#2a2a2a] rounded animate-pulse w-full" }
-                    div { class: "h-4 bg-gray-200 dark:bg-[#2a2a2a] rounded animate-pulse w-[75%]" }
-                    div { class: "h-4 bg-gray-200 dark:bg-[#2a2a2a] rounded animate-pulse w-[80%]" }
+                    SkeletonBox { class: "h-4 w-[90%]".to_string() }
+                    SkeletonBox { class: "h-4 w-full".to_string() }
+                    SkeletonBox { class: "h-4 w-[85%]".to_string() }
+                    SkeletonBox { class: "h-4 w-[95%]".to_string() }
+                    SkeletonBox { class: "h-4 w-[60%]".to_string() }
+                    SkeletonBox { class: "h-4 w-full".to_string() }
+                    SkeletonBox { class: "h-4 w-[75%]".to_string() }
+                    SkeletonBox { class: "h-4 w-[80%]".to_string() }
                     div { class: "h-4" }
-                    div { class: "h-4 bg-gray-200 dark:bg-[#2a2a2a] rounded animate-pulse w-[70%]" }
-                    div { class: "h-4 bg-gray-200 dark:bg-[#2a2a2a] rounded animate-pulse w-full" }
-                    div { class: "h-4 bg-gray-200 dark:bg-[#2a2a2a] rounded animate-pulse w-[90%]" }
+                    SkeletonBox { class: "h-4 w-[70%]".to_string() }
+                    SkeletonBox { class: "h-4 w-full".to_string() }
+                    SkeletonBox { class: "h-4 w-[90%]".to_string() }
                 }
             }
 
             // 保存按钮骨架
-            div { class: "mt-4 h-10 w-28 bg-gray-200 dark:bg-[#2a2a2a] rounded-full animate-pulse" }
+            SkeletonBox { class: "mt-4 h-10 w-28 rounded-full".to_string() }
         }
     }
 }
