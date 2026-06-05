@@ -35,13 +35,22 @@ fn write_editor(post_id: Option<i32>) -> Element {
     let mut error = use_signal(|| None::<String>);
     let mut success = use_signal(|| false);
     let mut editor_content_set = use_signal(|| false);
+    let mut has_backfilled = use_signal(|| false);
+    let mut load_error = use_signal(|| None::<String>);
 
     // 编辑模式：加载文章数据
     let post_res = use_resource(move || async move {
         if let Some(id) = post_id {
             match get_post_by_id(id).await {
-                Ok(SinglePostResponse { post }) => post,
-                Err(_) => None,
+                Ok(SinglePostResponse { post: Some(post) }) => Some(post),
+                Ok(SinglePostResponse { post: None }) => {
+                    load_error.set(Some("文章不存在".to_string()));
+                    None
+                }
+                Err(e) => {
+                    load_error.set(Some(format!("加载失败: {}", e)));
+                    None
+                }
             }
         } else {
             None
@@ -50,19 +59,18 @@ fn write_editor(post_id: Option<i32>) -> Element {
 
     // 数据回填 effect
     use_effect(move || {
-        if !is_edit {
+        if !is_edit || has_backfilled() {
             return;
         }
         if let Some(Some(post)) = post_res.read().as_ref() {
-            if title().is_empty() {
-                title.set(post.title.clone());
-                summary.set(post.summary.clone().unwrap_or_default());
-                slug.set(post.slug.clone());
-                tags.set(post.tags.join(", "));
-                cover_image.set(post.cover_image.clone().unwrap_or_default());
-                status.set(post.status.as_str().to_string());
-                content.set(post.content_md.clone());
-            }
+            has_backfilled.set(true);
+            title.set(post.title.clone());
+            summary.set(post.summary.clone().unwrap_or_default());
+            slug.set(post.slug.clone());
+            tags.set(post.tags.join(", "));
+            cover_image.set(post.cover_image.clone().unwrap_or_default());
+            status.set(post.status.as_str().to_string());
+            content.set(post.content_md.clone());
         }
     });
 
@@ -245,10 +253,6 @@ fn write_editor(post_id: Option<i32>) -> Element {
                         Ok(CreatePostResponse { success: true, .. }) => {
                             saving.set(false);
                             success.set(true);
-                            #[cfg(target_arch = "wasm32")]
-                            {
-                                let _ = js_sys::eval("new Promise(r => setTimeout(r, 800))");
-                            }
                             let _ = dioxus::router::navigator().push(Route::Posts {});
                         }
                         Ok(CreatePostResponse { success: false, message, .. }) => {
@@ -278,10 +282,6 @@ fn write_editor(post_id: Option<i32>) -> Element {
                         Ok(CreatePostResponse { success: true, .. }) => {
                             saving.set(false);
                             success.set(true);
-                            #[cfg(target_arch = "wasm32")]
-                            {
-                                let _ = js_sys::eval("new Promise(r => setTimeout(r, 800))");
-                            }
                             let _ = dioxus::router::navigator().push(Route::Admin {});
                         }
                         Ok(CreatePostResponse { success: false, message, .. }) => {
@@ -365,6 +365,12 @@ fn write_editor(post_id: Option<i32>) -> Element {
                 div {
                     class: "w-full h-[500px] border border-gray-200 dark:border-[#333] rounded-lg overflow-hidden bg-white dark:bg-[#1e1e1e]",
                     id: "tiptap-editor",
+                }
+
+                if let Some(err) = load_error() {
+                    div { class: "px-4 py-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30",
+                        "{err}"
+                    }
                 }
 
                 if let Some(err) = error() {
