@@ -5,6 +5,7 @@ import { TableKit } from '@tiptap/extension-table'
 import { Image } from '@tiptap/extension-image'
 import { Link } from '@tiptap/extension-link'
 import { TaskList, TaskItem } from '@tiptap/extension-list'
+import { FileHandler } from '@tiptap/extension-file-handler'
 import { SlashCommand } from './slash-command'
 import './style.css'
 
@@ -15,6 +16,8 @@ export interface EditorOptions {
   onFocus?: () => void
   onBlur?: () => void
   editable?: boolean
+  // 新增：图片上传回调
+  onImageUpload?: (file: File) => Promise<string>
 }
 
 class TiptapEditorInstance {
@@ -55,6 +58,35 @@ class TiptapEditorInstance {
         TaskList,
         TaskItem.configure({ nested: true }),
         SlashCommand,
+        FileHandler.configure({
+          allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+          onPaste: (editor, files) => {
+            if (this.options.onImageUpload) {
+              files.forEach((file) => {
+                this.options.onImageUpload!(file)
+                  .then((url) => {
+                    editor.chain().focus().setImage({ src: url }).run()
+                  })
+                  .catch((err) => {
+                    console.error('[TiptapEditor] Upload failed:', err)
+                  })
+              })
+            }
+          },
+          onDrop: (editor, files, pos) => {
+            if (this.options.onImageUpload) {
+              files.forEach((file) => {
+                this.options.onImageUpload!(file)
+                  .then((url) => {
+                    editor.chain().focus().setImage({ src: url }).run()
+                  })
+                  .catch((err) => {
+                    console.error('[TiptapEditor] Upload failed:', err)
+                  })
+              })
+            }
+          },
+        }),
       ],
       content: this.options.content || '',
       editable: this.options.editable !== false,
