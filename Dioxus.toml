@@ -14,5 +14,5 @@ style = ["/style.css", "/highlight.css", "/tiptap/editor.css"]
 script = ["/tiptap/editor.js"]
 
 [web.resource.dev]
-style = []
-script = []
+style = ["/tiptap/editor.css"]
+script = ["/tiptap/editor.js"]
