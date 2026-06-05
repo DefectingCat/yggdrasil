@@ -8,6 +8,7 @@ use crate::components::write_skeleton::WriteSkeleton;
 use crate::context::UserContext;
 use crate::hooks::delayed_loading::use_delayed_loading;
 use crate::router::Route;
+use crate::theme::ThemeToggle;
 
 #[component]
 pub fn AdminLayout() -> Element {
@@ -60,16 +61,19 @@ pub fn AdminLayout() -> Element {
         },
     ];
 
-    let logout_button = rsx! {
-        button {
-            class: "text-sm text-gray-600 dark:text-[#9b9c9d] hover:text-gray-900 dark:hover:text-[#dadadb] transition-colors",
-            onclick: move |_| {
-                spawn(async move {
-                    let _ = logout().await;
-                    let _ = navigator.push(Route::Login {});
-                });
-            },
-            "登出"
+    let right_content = rsx! {
+        div { class: "flex items-center gap-3",
+            ThemeToggle {}
+            button {
+                class: "text-sm text-gray-600 dark:text-[#9b9c9d] hover:text-gray-900 dark:hover:text-[#dadadb] transition-colors",
+                onclick: move |_| {
+                    spawn(async move {
+                        let _ = logout().await;
+                        let _ = navigator.push(Route::Login {});
+                    });
+                },
+                "登出"
+            }
         }
     };
 
@@ -77,7 +81,7 @@ pub fn AdminLayout() -> Element {
         (true, Some(_)) => {
             rsx! {
                 div { class: "min-h-screen flex flex-col bg-white dark:bg-[#1d1e20]",
-                    Header { nav_items: admin_nav_items, right_content: logout_button }
+                    Header { nav_items: admin_nav_items, right_content: right_content }
                     main { class: "flex-1 w-full max-w-5xl mx-auto px-6 py-8",
                         Outlet::<Route> {}
                     }
@@ -96,7 +100,7 @@ pub fn AdminLayout() -> Element {
             // 使用与真实布局完全相同的结构包裹内容骨架，避免 checked 变化时的布局闪烁
             rsx! {
                 div { class: "min-h-screen flex flex-col bg-white dark:bg-[#1d1e20]",
-                    Header { nav_items: admin_nav_items, right_content: logout_button }
+                    Header { nav_items: admin_nav_items, right_content: right_content }
                     main { class: "flex-1 w-full max-w-5xl mx-auto px-6 py-8",
                         div { class: if show_skeleton() { "" } else { "opacity-0" },
                             {match route {
