@@ -12,3 +12,7 @@ public/tiptap
 /static
 .env
 docs/superpowers/
+
+# Uploaded images
+uploads/*
+!uploads/.gitkeep
