@@ -6,8 +6,13 @@ pub mod server {
     use syntect::parsing::SyntaxSet;
     use syntect::util::LinesWithEndings;
 
-    static SYNTAX_SET: LazyLock<SyntaxSet> =
-        LazyLock::new(SyntaxSet::load_defaults_newlines);
+    static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(|| {
+        let mut builder = SyntaxSet::load_defaults_newlines().into_builder();
+        if let Err(e) = builder.add_from_folder("syntaxes/", true) {
+            tracing::warn!("Failed to load custom syntaxes: {:?}", e);
+        }
+        builder.build()
+    });
 
     fn find_syntax(lang: Option<&str>) -> &'static syntect::parsing::SyntaxReference {
         let ss = &*SYNTAX_SET;
@@ -30,13 +35,24 @@ pub mod server {
                 }
                 let aliases: &[(&str, &str)] = &[
                     ("rust", "rs"),
-                    ("js", "javascript"),
-                    ("ts", "typescript"),
-                    ("py", "python"),
-                    ("rb", "ruby"),
-                    ("sh", "bash"),
-                    ("yaml", "yml"),
-                    ("md", "markdown"),
+                    ("js", "js"),
+                    ("javascript", "js"),
+                    ("ts", "js"),
+                    ("typescript", "js"),
+                    ("tsx", "js"),
+                    ("py", "py"),
+                    ("python", "py"),
+                    ("rb", "rb"),
+                    ("ruby", "rb"),
+                    ("sh", "sh"),
+                    ("bash", "sh"),
+                    ("yaml", "yaml"),
+                    ("yml", "yaml"),
+                    ("md", "md"),
+                    ("markdown", "md"),
+                    ("kotlin", "kt"),
+                    ("swift", "swift"),
+                    ("golang", "go"),
                 ];
                 for &(from, to) in aliases {
                     if lang == from {
