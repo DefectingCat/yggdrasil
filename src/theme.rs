@@ -127,12 +127,17 @@ pub fn ThemePreload() -> Element {
 #[component]
 pub fn ThemeToggle() -> Element {
     let mut theme = use_theme();
+    let mut mounted = use_signal(|| false);
+
+    use_effect(move || {
+        mounted.set(true);
+    });
 
     rsx! {
         button {
             class: "theme-toggle p-2 rounded-full cursor-pointer hover:opacity-80 transition-opacity text-gray-600 dark:text-gray-300",
             onclick: move |_| theme.set(theme().toggle()),
-            if theme() == Theme::Dark {
+            if mounted() && theme() == Theme::Dark {
                 svg {
                     xmlns: "http://www.w3.org/2000/svg",
                     height: "24px",
