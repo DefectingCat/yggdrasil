@@ -5008,6 +5008,7 @@ version = "0.1.0"
 dependencies = [
  "ammonia",
  "argon2",
+ "axum",
  "chrono",
  "deadpool-postgres",
  "dioxus",
@@ -5019,6 +5020,7 @@ dependencies = [
  "rand 0.8.6",
  "regex",
  "serde",
+ "serde_json",
  "syntect",
  "tokio",
  "tokio-postgres",
