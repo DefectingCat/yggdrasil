@@ -253,12 +253,30 @@ pub fn Write() -> Element {
                         },
                         "取消"
                     }
-                    select {
-                        class: "text-sm bg-gray-50 dark:bg-[#1d1e20] border border-gray-200 dark:border-[#333] rounded-full px-4 py-2.5 text-gray-700 dark:text-[#9b9c9d] focus:outline-none cursor-pointer",
-                        value: "{status}",
-                        onchange: move |evt| status.set(evt.value()),
-                        option { value: "draft", "草稿" }
-                        option { value: "published", "发布" }
+                    div {
+                        class: "relative inline-flex items-center px-5 py-2.5 text-sm bg-gray-50 dark:bg-[#1d1e20] border border-gray-200 dark:border-[#333] rounded-full text-gray-700 dark:text-[#9b9c9d] cursor-pointer min-w-[80px]",
+                        select {
+                            class: "absolute inset-0 w-full h-full opacity-0 cursor-pointer",
+                            style: "appearance: none; -webkit-appearance: none;",
+                            value: "{status}",
+                            onchange: move |evt| status.set(evt.value()),
+                            option { value: "draft", "草稿" }
+                            option { value: "published", "发布" }
+                        }
+                        span { class: "pr-2",
+                            if status() == "draft" { "草稿" } else { "发布" }
+                        }
+                        svg {
+                            class: "h-4 w-4 text-gray-500 dark:text-[#666] pointer-events-none",
+                            xmlns: "http://www.w3.org/2000/svg",
+                            view_box: "0 0 20 20",
+                            fill: "currentColor",
+                            path {
+                                fill_rule: "evenodd",
+                                d: "M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z",
+                                clip_rule: "evenodd"
+                            }
+                        }
                     }
                     button {
                         class: if saving() {
