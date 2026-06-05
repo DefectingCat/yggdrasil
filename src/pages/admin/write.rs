@@ -75,7 +75,25 @@ fn write_editor(post_id: Option<i32>) -> Element {
         }
     });
 
-    // 初始化 Tiptap 编辑器
+    #[cfg(target_arch = "wasm32")]
+    use_drop(move || {
+        let _ = js_sys::eval(
+            r#"
+            (function() {
+                var editor = window.TiptapEditor && window.TiptapEditor._instances && window.TiptapEditor._instances.get('tiptap-editor');
+                if (editor && typeof editor.destroy === 'function') {
+                    editor.destroy();
+                }
+                if (window.TiptapEditor && window.TiptapEditor._instances) {
+                    window.TiptapEditor._instances.delete('tiptap-editor');
+                }
+                window.__tiptap_ready = false;
+                window.__tiptap_content = '';
+            })();
+            "#,
+        );
+    });
+
     use_effect(move || {
         #[cfg(target_arch = "wasm32")]
         {
