@@ -198,7 +198,7 @@ pub fn Write() -> Element {
 
                     div { class: "grid grid-cols-1 md:grid-cols-3 gap-3",
                         div {
-                            label { class: "block text-xs text-gray-400 dark:text-[#666] mb-1.5 font-medium", "Slug" }
+                            label { class: "block text-xs text-gray-600 dark:text-[#9b9c9d] mb-1.5 font-medium", "Slug" }
                             input {
                                 class: "w-full text-sm bg-gray-50 dark:bg-[#1d1e20] rounded-lg px-3 py-2.5 text-gray-700 dark:text-[#9b9c9d] placeholder-gray-400 dark:placeholder-[#555] focus:outline-none border border-gray-100 dark:border-[#333]",
                                 placeholder: "自动生成",
@@ -207,7 +207,7 @@ pub fn Write() -> Element {
                             }
                         }
                         div {
-                            label { class: "block text-xs text-gray-400 dark:text-[#666] mb-1.5 font-medium", "标签" }
+                            label { class: "block text-xs text-gray-600 dark:text-[#9b9c9d] mb-1.5 font-medium", "标签" }
                             input {
                                 class: "w-full text-sm bg-gray-50 dark:bg-[#1d1e20] rounded-lg px-3 py-2.5 text-gray-700 dark:text-[#9b9c9d] placeholder-gray-400 dark:placeholder-[#555] focus:outline-none border border-gray-100 dark:border-[#333]",
                                 placeholder: "逗号分隔",
@@ -216,7 +216,7 @@ pub fn Write() -> Element {
                             }
                         }
                         div {
-                            label { class: "block text-xs text-gray-400 dark:text-[#666] mb-1.5 font-medium", "封面图" }
+                            label { class: "block text-xs text-gray-600 dark:text-[#9b9c9d] mb-1.5 font-medium", "封面图" }
                             input {
                                 class: "w-full text-sm bg-gray-50 dark:bg-[#1d1e20] rounded-lg px-3 py-2.5 text-gray-700 dark:text-[#9b9c9d] placeholder-gray-400 dark:placeholder-[#555] focus:outline-none border border-gray-100 dark:border-[#333]",
                                 placeholder: "URL（可选）",
@@ -247,7 +247,7 @@ pub fn Write() -> Element {
                 div { class: "flex items-center gap-3 pt-2",
                     div { class: "flex-1" }
                     button {
-                        class: "px-5 py-2.5 text-sm bg-gray-200 dark:bg-[#333] text-gray-600 dark:text-[#9b9c9d] rounded-full font-medium hover:opacity-80 transition-opacity cursor-pointer",
+                        class: "px-5 py-2.5 text-sm bg-gray-200 dark:bg-[#333] text-gray-700 dark:text-[#dadadb] rounded-full font-medium hover:opacity-80 transition-opacity cursor-pointer",
                         onclick: move |_| {
                             let _ = dioxus::router::navigator().push(Route::Admin {});
                         },
