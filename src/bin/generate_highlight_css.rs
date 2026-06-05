@@ -1,20 +1,30 @@
+// Build-time script that generates public/highlight.css from Catppuccin .tmTheme files.
+// Run via `make highlight-css` (or `cargo run --bin generate_highlight_css`).
+//
+// Uses syntect to produce CSS class rules scoped under .md-content pre code,
+// with separate light/dark variants so Dioxus can toggle via the .dark class.
+
 use syntect::highlighting::ThemeSet;
 use syntect::html::{css_for_theme_with_class_style, ClassStyle};
 
 fn main() {
+    // Load Catppuccin Latte (light) and Mocha (dark) Sublime Text themes
     let latte = ThemeSet::get_theme("themes/Catppuccin Latte.tmTheme")
         .expect("Failed to load Catppuccin Latte theme");
     let mocha = ThemeSet::get_theme("themes/Catppuccin Mocha.tmTheme")
         .expect("Failed to load Catppuccin Mocha theme");
 
+    // Generate CSS with spaced class style (e.g. "kw", "kw kw2")
     let latte_css = css_for_theme_with_class_style(&latte, ClassStyle::Spaced)
         .expect("Failed to generate Latte CSS");
     let mocha_css = css_for_theme_with_class_style(&mocha, ClassStyle::Spaced)
         .expect("Failed to generate Mocha CSS");
 
+    // Strip upstream comments to reduce output size
     let latte_clean = strip_comments(&latte_css);
     let mocha_clean = strip_comments(&mocha_css);
 
+    // Rewrite selectors to scope under the markdown code container
     let latte_rewritten = rewrite_rules(&latte_clean, ".md-content pre code", "");
     let mocha_rewritten = rewrite_rules(&mocha_clean, ".md-content pre code", ".dark ");
 
@@ -32,12 +42,14 @@ fn main() {
     println!("Generated public/highlight.css");
 }
 
+/// Remove C-style /* ... */ comments from CSS text.
 fn strip_comments(css: &str) -> String {
     let mut result = String::with_capacity(css.len());
     let chars: Vec<char> = css.chars().collect();
     let mut i = 0;
     while i < chars.len() {
         if i + 1 < chars.len() && chars[i] == '/' && chars[i + 1] == '*' {
+            // Skip until closing */
             while i + 1 < chars.len() && !(chars[i] == '*' && chars[i + 1] == '/') {
                 i += 1;
             }
@@ -50,6 +62,17 @@ fn strip_comments(css: &str) -> String {
     result
 }
 
+/// Rewrite syntect-generated CSS selectors by wrapping each with a base selector
+/// and optionally prefixing (e.g. with ".dark " for dark-mode specificity).
+///
+/// Syntect outputs rules like:
+///   .code { ... }
+///   .kw { color: #xxx; }
+///   .kw, .kt { color: #yyy; }
+///
+/// This transforms them to:
+///   .md-content pre code { ... }
+///   .dark .md-content pre code .kw { ... }
 fn rewrite_rules(css: &str, base: &str, prefix: &str) -> String {
     let mut out = String::new();
     let mut pos = 0;
@@ -69,6 +92,7 @@ fn rewrite_rules(css: &str, base: &str, prefix: &str) -> String {
             continue;
         }
 
+        // Find matching closing brace, handling nested {}
         let after_open = pos + open + 1;
         let mut depth = 1usize;
         let mut close = after_open;
@@ -88,9 +112,11 @@ fn rewrite_rules(css: &str, base: &str, prefix: &str) -> String {
             continue;
         }
 
+        // .code is a special syntect class for the root scope — apply to base only
         if selector == ".code" {
             out.push_str(&format!("{}{} {{\n{}\n}}\n\n", prefix, base, body));
         } else {
+            // Prepend prefix + base to each comma-separated selector
             let rewritten = selector
                 .split(',')
                 .map(|s| format!("{}{} {}", prefix, base, s.trim()))
