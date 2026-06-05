@@ -13,13 +13,6 @@ use crate::auth::session::parse_session_token;
 const ALLOWED_MIME_TYPES: &[&str] = &["image/jpeg", "image/png", "image/gif", "image/webp"];
 const MAX_FILE_SIZE: usize = 5 * 1024 * 1024; // 5MB
 
-#[derive(Debug, Clone, serde::Serialize)]
-struct UploadResponse {
-    success: bool,
-    url: Option<String>,
-    error: Option<String>,
-}
-
 #[cfg(feature = "server")]
 pub async fn upload_image(
     headers: HeaderMap,
@@ -145,7 +138,7 @@ pub async fn upload_image(
     };
 
     let dir_path = format!("uploads/{}/{}/{}", year, month, day);
-    let file_name = format!("{}.{}. {}", now.format("%H%M%S"), uuid, ext);
+    let file_name = format!("{}.{ }.{}", now.format("%H%M%S"), uuid, ext);
     let file_path = format!("{}/{}", dir_path, file_name);
     let url_path = format!("/uploads/{}/{}/{}/{}", year, month, day, file_name);
 
