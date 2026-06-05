@@ -53,11 +53,6 @@ pub fn AdminLayout() -> Element {
             label: "管理文章",
             is_active: matches!(route, Route::Posts {}),
         },
-        NavItemConfig {
-            route: Route::Home {},
-            label: "前台",
-            is_active: false,
-        },
     ];
 
     let right_content = rsx! {
