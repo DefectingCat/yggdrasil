@@ -46,7 +46,7 @@ pub fn AdminLayout() -> Element {
         NavItemConfig {
             route: Route::Write {},
             label: "写文章",
-            is_active: matches!(route, Route::Write {}),
+            is_active: matches!(route, Route::Write {}) || matches!(route, Route::WriteEdit { .. }),
         },
         NavItemConfig {
             route: Route::Posts {},
