@@ -966,6 +966,36 @@ pub async fn update_post(
     })
 }
 
+#[server(GetPostById, "/api")]
+pub async fn get_post_by_id(post_id: i32) -> Result<SinglePostResponse, ServerFnError> {
+    let _user = get_current_admin_user().await?;
+
+    let client = get_conn().await.map_err(|e| {
+        tracing::error!("DB connection failed: {:?}", e);
+        ServerFnError::new(format!("数据库连接失败: {}", e))
+    })?;
+
+    let row = client
+        .query_opt(
+            "SELECT id, author_id, title, slug, summary, content_md, content_html, status, published_at, created_at, updated_at, cover_image
+             FROM posts
+             WHERE id = $1 AND deleted_at IS NULL",
+            &[&post_id],
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("query failed: {:?}", e);
+            ServerFnError::new(format!("查询失败: {}", e))
+        })?;
+
+    let post = match row {
+        Some(row) => Some(row_to_post_list(&client, &row).await),
+        None => None,
+    };
+
+    Ok(SinglePostResponse { post })
+}
+
 #[server(GetPostBySlug, "/api")]
 pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, ServerFnError> {
     let client = get_conn().await.map_err(|e| {
