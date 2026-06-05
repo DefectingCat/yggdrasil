@@ -1,16 +1,20 @@
 #![allow(clippy::unused_unit)]
 
+#[cfg(feature = "server")]
 use axum::{
     extract::Multipart,
     http::{HeaderMap, StatusCode},
     response::Json,
 };
+#[cfg(feature = "server")]
 use serde_json::{json, Value};
 
 #[cfg(feature = "server")]
 use crate::auth::session::parse_session_token;
 
+#[cfg(feature = "server")]
 const ALLOWED_MIME_TYPES: &[&str] = &["image/jpeg", "image/png", "image/gif", "image/webp"];
+#[cfg(feature = "server")]
 const MAX_FILE_SIZE: usize = 5 * 1024 * 1024; // 5MB
 
 #[cfg(feature = "server")]
@@ -174,15 +178,4 @@ pub async fn upload_image(
 }
 
 #[cfg(not(feature = "server"))]
-pub async fn upload_image(
-    _headers: HeaderMap,
-    _multipart: Multipart,
-) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    Err((
-        StatusCode::SERVICE_UNAVAILABLE,
-        Json(json!({
-            "success": false,
-            "error": "服务器功能未启用"
-        })),
-    ))
-}
+pub async fn upload_image() {}
