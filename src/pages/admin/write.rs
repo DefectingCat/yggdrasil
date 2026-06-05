@@ -3,13 +3,26 @@ use dioxus::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
 
-use crate::api::posts::{create_post, CreatePostResponse};
+use crate::api::posts::{create_post, get_post_by_id, update_post, CreatePostResponse, SinglePostResponse};
 use crate::components::write_skeleton::WriteSkeleton;
+use crate::models::post::PostStatus;
 use crate::router::Route;
 
 #[component]
 #[allow(unused_mut, unused_variables)]
 pub fn Write() -> Element {
+    write_editor(None)
+}
+
+#[component]
+#[allow(unused_mut, unused_variables)]
+pub fn WriteEdit(id: i32) -> Element {
+    write_editor(Some(id))
+}
+
+fn write_editor(post_id: Option<i32>) -> Element {
+    let is_edit = post_id.is_some();
+
     let mut title = use_signal(|| "".to_string());
     let mut summary = use_signal(|| "".to_string());
     let mut slug = use_signal(|| "".to_string());
@@ -21,11 +34,47 @@ pub fn Write() -> Element {
     let mut saving = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
     let mut success = use_signal(|| false);
+    let mut editor_content_set = use_signal(|| false);
+
+    // 编辑模式：加载文章数据
+    let post_res = use_resource(move || async move {
+        if let Some(id) = post_id {
+            match get_post_by_id(id).await {
+                Ok(SinglePostResponse { post }) => post,
+                Err(_) => None,
+            }
+        } else {
+            None
+        }
+    });
+
+    // 数据回填 effect
+    use_effect(move || {
+        if !is_edit {
+            return;
+        }
+        if let Some(Some(post)) = post_res.read().as_ref() {
+            if title().is_empty() {
+                title.set(post.title.clone());
+                summary.set(post.summary.clone().unwrap_or_default());
+                slug.set(post.slug.clone());
+                tags.set(post.tags.join(", "));
+                cover_image.set(post.cover_image.clone().unwrap_or_default());
+                status.set(post.status.as_str().to_string());
+                content.set(post.content_md.clone());
+            }
+        }
+    });
 
     // 初始化 Tiptap 编辑器
     use_effect(move || {
         #[cfg(target_arch = "wasm32")]
         {
+            // 编辑模式：等数据加载完再初始化
+            if is_edit && post_res.read().is_none() {
+                return;
+            }
+
             let _ = js_sys::eval(
                 r#"
                 (function initEditor() {
@@ -90,6 +139,11 @@ pub fn Write() -> Element {
     use_effect(move || {
         #[cfg(target_arch = "wasm32")]
         {
+            // 编辑模式：等数据加载完再开始轮询
+            if is_edit && post_res.read().is_none() {
+                return;
+            }
+
             wasm_bindgen_futures::spawn_local(async move {
                 for i in 0..100 {
                     if let Ok(promise_val) = js_sys::eval("new Promise(r => setTimeout(r, 100))") {
@@ -99,6 +153,19 @@ pub fn Write() -> Element {
                     }
                     if let Ok(ready) = js_sys::eval("window.__tiptap_ready") {
                         if ready.as_bool().unwrap_or(false) {
+                            // 编辑模式：回填编辑器内容
+                            if is_edit && !editor_content_set() {
+                                let md = content();
+                                if !md.is_empty() {
+                                    let md_json = serde_json::to_string(&md).unwrap_or_default();
+                                    let script = format!(
+                                        "(function() {{ var editor = window.TiptapEditor && window.TiptapEditor._instances && window.TiptapEditor._instances.get('tiptap-editor'); if (editor) {{ editor.setMarkdown({}); }} }})()",
+                                        md_json
+                                    );
+                                    let _ = js_sys::eval(&script);
+                                }
+                                editor_content_set.set(true);
+                            }
                             loading.set(false);
                             return;
                         }
@@ -160,43 +227,83 @@ pub fn Write() -> Element {
             saving.set(true);
             error.set(None);
 
-            spawn(async move {
-                match create_post(
-                    title().trim().to_string(),
-                    slug_opt,
-                    summary_opt,
-                    md,
-                    status(),
-                    tags_list,
-                    cover_image_opt,
-                )
-                .await
-                {
-                    Ok(CreatePostResponse { success: true, .. }) => {
-                        saving.set(false);
-                        success.set(true);
-                        // Delay navigation slightly so user sees success message
-                        #[cfg(target_arch = "wasm32")]
-                        {
-                            let _ = js_sys::eval("new Promise(r => setTimeout(r, 800))");
+            if let Some(id) = post_id {
+                // 编辑模式：调用 update_post
+                spawn(async move {
+                    match update_post(
+                        id,
+                        title().trim().to_string(),
+                        slug_opt,
+                        summary_opt,
+                        md,
+                        status(),
+                        tags_list,
+                        cover_image_opt,
+                    )
+                    .await
+                    {
+                        Ok(CreatePostResponse { success: true, .. }) => {
+                            saving.set(false);
+                            success.set(true);
+                            #[cfg(target_arch = "wasm32")]
+                            {
+                                let _ = js_sys::eval("new Promise(r => setTimeout(r, 800))");
+                            }
+                            let _ = dioxus::router::navigator().push(Route::Posts {});
                         }
-                        let _ = dioxus::router::navigator().push(Route::Admin {});
+                        Ok(CreatePostResponse { success: false, message, .. }) => {
+                            saving.set(false);
+                            error.set(Some(message));
+                        }
+                        Err(e) => {
+                            saving.set(false);
+                            error.set(Some(format!("更新失败: {}", e)));
+                        }
                     }
-                    Ok(CreatePostResponse {
-                        success: false,
-                        message,
-                        ..
-                    }) => {
-                        saving.set(false);
-                        error.set(Some(message));
+                });
+            } else {
+                // 新建模式：调用 create_post
+                spawn(async move {
+                    match create_post(
+                        title().trim().to_string(),
+                        slug_opt,
+                        summary_opt,
+                        md,
+                        status(),
+                        tags_list,
+                        cover_image_opt,
+                    )
+                    .await
+                    {
+                        Ok(CreatePostResponse { success: true, .. }) => {
+                            saving.set(false);
+                            success.set(true);
+                            #[cfg(target_arch = "wasm32")]
+                            {
+                                let _ = js_sys::eval("new Promise(r => setTimeout(r, 800))");
+                            }
+                            let _ = dioxus::router::navigator().push(Route::Admin {});
+                        }
+                        Ok(CreatePostResponse { success: false, message, .. }) => {
+                            saving.set(false);
+                            error.set(Some(message));
+                        }
+                        Err(e) => {
+                            saving.set(false);
+                            error.set(Some(format!("保存失败: {}", e)));
+                        }
                     }
-                    Err(e) => {
-                        saving.set(false);
-                        error.set(Some(format!("保存失败: {}", e)));
-                    }
-                }
-            });
+                });
+            }
         }
+    };
+
+    let save_button_text = if saving() {
+        "保存中..."
+    } else if is_edit {
+        "更新"
+    } else {
+        "保存"
     };
 
     rsx! {
@@ -277,7 +384,7 @@ pub fn Write() -> Element {
                     button {
                         class: "px-5 py-2.5 text-sm bg-gray-200 dark:bg-[#333] text-gray-700 dark:text-[#dadadb] rounded-full font-medium hover:opacity-80 transition-opacity cursor-pointer",
                         onclick: move |_| {
-                            let _ = dioxus::router::navigator().push(Route::Admin {});
+                            let _ = dioxus::router::navigator().push(Route::Posts {});
                         },
                         "取消"
                     }
@@ -314,7 +421,7 @@ pub fn Write() -> Element {
                         },
                         disabled: saving(),
                         onclick: on_submit,
-                        if saving() { "保存中..." } else { "保存" }
+                        "{save_button_text}"
                     }
                 }
             }
