@@ -68,7 +68,8 @@ class TiptapEditorInstance {
                     editor.chain().focus().setImage({ src: url }).run()
                   })
                   .catch((err) => {
-                    console.error('[TiptapEditor] Upload failed:', err)
+                    const msg = err instanceof Error ? err.message : String(err)
+                    console.error('[TiptapEditor] Upload failed:', msg)
                   })
               })
             }
@@ -84,7 +85,8 @@ class TiptapEditorInstance {
                     }).run()
                   })
                   .catch((err) => {
-                    console.error('[TiptapEditor] Upload failed:', err)
+                    const msg = err instanceof Error ? err.message : String(err)
+                    console.error('[TiptapEditor] Upload failed:', msg)
                   })
               })
             }

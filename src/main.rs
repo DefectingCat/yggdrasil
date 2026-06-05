@@ -45,7 +45,11 @@ fn main() {
                         .invalidate_after(std::time::Duration::from_secs(300)),
                 );
             let router = axum::Router::new()
-                .route("/api/upload", axum::routing::post(crate::api::upload::upload_image))
+                .route(
+                    "/api/upload",
+                    axum::routing::post(crate::api::upload::upload_image)
+                        .layer(axum::extract::DefaultBodyLimit::disable()),
+                )
                 .nest_service("/uploads", tower_http::services::ServeDir::new("uploads"))
                 .serve_dioxus_application(config, router::AppRouter)
                 .layer(
