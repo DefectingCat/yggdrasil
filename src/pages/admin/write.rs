@@ -43,6 +43,34 @@ pub fn Write() -> Element {
                                 placeholder: '在此输入内容...',
                                 onUpdate: function(markdown) {
                                     window.__tiptap_content = markdown;
+                                },
+                                onImageUpload: function(file) {
+                                    return new Promise(function(resolve, reject) {
+                                        var formData = new FormData();
+                                        formData.append('image', file);
+
+                                        fetch('/api/upload', {
+                                            method: 'POST',
+                                            body: formData,
+                                            credentials: 'same-origin'
+                                        })
+                                        .then(function(response) {
+                                            if (!response.ok) {
+                                                throw new Error('Upload failed: ' + response.status);
+                                            }
+                                            return response.json();
+                                        })
+                                        .then(function(data) {
+                                            if (data.success && data.url) {
+                                                resolve(data.url);
+                                            } else {
+                                                reject(new Error(data.error || 'Upload failed'));
+                                            }
+                                        })
+                                        .catch(function(err) {
+                                            reject(err);
+                                        });
+                                    });
                                 }
                             });
                             window.__tiptap_ready = true;
