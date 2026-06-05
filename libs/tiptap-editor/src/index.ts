@@ -78,7 +78,10 @@ class TiptapEditorInstance {
               files.forEach((file) => {
                 this.options.onImageUpload!(file)
                   .then((url) => {
-                    editor.chain().focus().setImage({ src: url }).run()
+                    editor.chain().focus().insertContentAt(pos, {
+                      type: 'image',
+                      attrs: { src: url }
+                    }).run()
                   })
                   .catch((err) => {
                     console.error('[TiptapEditor] Upload failed:', err)
