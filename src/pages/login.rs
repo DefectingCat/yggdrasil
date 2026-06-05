@@ -3,6 +3,7 @@ use dioxus::router::components::Link;
 
 use crate::api::auth::{login, AuthResponse};
 use crate::components::forms::{AlertBox, FormInput, FormLabel, BUTTON_PRIMARY_CLASS};
+use crate::context::UserContext;
 use crate::router::Route;
 
 #[component]
@@ -10,6 +11,7 @@ pub fn Login() -> Element {
     let mut username = use_signal(|| "".to_string());
     let mut password = use_signal(|| "".to_string());
     let mut error = use_signal(|| None::<String>);
+    let mut ctx: UserContext = use_context();
 
     let on_submit = Callback::new(move |_| {
         error.set(None);
@@ -24,6 +26,7 @@ pub fn Login() -> Element {
                     token: Some(_token),
                     ..
                 }) => {
+                    ctx.checked.set(false);
                     let _ = dioxus::router::navigator().push(Route::Admin {});
                 }
                 Ok(AuthResponse {

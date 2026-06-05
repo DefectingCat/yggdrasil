@@ -17,7 +17,6 @@ pub fn AdminLayout() -> Element {
     let route = use_route::<Route>();
     let show_skeleton = use_delayed_loading(move || !(ctx.checked)());
 
-    // 只在首次挂载时加载用户数据
     use_effect(move || {
         if !(ctx.checked)() {
             (ctx.checked).set(true);
@@ -69,6 +68,8 @@ pub fn AdminLayout() -> Element {
                 onclick: move |_| {
                     spawn(async move {
                         let _ = logout().await;
+                        ctx.user.set(None);
+                        ctx.checked.set(false);
                         let _ = navigator.push(Route::Login {});
                     });
                 },
