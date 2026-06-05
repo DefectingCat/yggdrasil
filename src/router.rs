@@ -5,7 +5,7 @@ use crate::components::admin_layout::AdminLayout;
 use crate::components::frontend_layout::FrontendLayout;
 use crate::context::UserContext;
 use crate::pages::about::About;
-use crate::pages::admin::{Admin, Posts, Write};
+use crate::pages::admin::{Admin, Posts, Write, WriteEdit};
 use crate::pages::archives::Archives;
 use crate::pages::home::{Home, HomePage};
 use crate::pages::login::Login;
@@ -43,6 +43,8 @@ pub enum Route {
         Admin {},
         #[route("/write")]
         Write {},
+        #[route("/write/:id")]
+        WriteEdit { id: i32 },
         #[route("/posts")]
         Posts {},
     #[end_layout]

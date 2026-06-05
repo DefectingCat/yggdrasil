@@ -4,4 +4,4 @@ pub mod write;
 
 pub use dashboard::Admin;
 pub use posts::Posts;
-pub use write::Write;
+pub use write::{Write, WriteEdit};
