@@ -84,7 +84,7 @@ async fn ensure_unique_slug(
         let exists = if let Some(exclude) = exclude_id {
             client
                 .query_opt(
-                    "SELECT 1 FROM posts WHERE slug = $1 AND id != $2",
+                    "SELECT 1 FROM posts WHERE slug = $1 AND deleted_at IS NULL AND id != $2",
                     &[&candidate, &exclude],
                 )
                 .await
@@ -93,7 +93,7 @@ async fn ensure_unique_slug(
         } else {
             client
                 .query_opt(
-                    "SELECT 1 FROM posts WHERE slug = $1",
+                    "SELECT 1 FROM posts WHERE slug = $1 AND deleted_at IS NULL",
                     &[&candidate],
                 )
                 .await
