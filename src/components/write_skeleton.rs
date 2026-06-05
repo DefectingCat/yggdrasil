@@ -18,8 +18,8 @@ pub fn WriteSkeleton() -> Element {
                 }
             }
 
-            div { class: "w-full h-[500px] rounded-lg border border-gray-200 dark:border-[#333] bg-white dark:bg-[#1e1e1e] p-6 space-y-4",
-                div { class: "flex gap-2 pb-4 border-b border-gray-100 dark:border-[#333]",
+            div { class: "w-full h-[500px] rounded-lg border border-gray-200 dark:border-[#333] bg-white dark:bg-[#1e1e1e] space-y-4",
+                div { class: "flex gap-2 p-4 border-b border-gray-100 dark:border-[#333]",
                     for _ in 0..8 {
                         SkeletonBox { class: "w-8 h-8 rounded" }
                     }
@@ -40,10 +40,11 @@ pub fn WriteSkeleton() -> Element {
                 }
             }
 
-            div { class: "flex justify-end gap-3 pt-2",
-                SkeletonBox { class: "h-10 w-20 rounded-full" }
-                SkeletonBox { class: "h-10 w-24 rounded-full" }
-                SkeletonBox { class: "h-10 w-20 rounded-full" }
+            div { class: "flex items-center gap-3 pt-2",
+                div { class: "flex-1" }
+                SkeletonBox { class: "h-10 w-[72px] rounded-full" }
+                SkeletonBox { class: "h-10 w-[100px] rounded-full" }
+                SkeletonBox { class: "h-10 w-[72px] rounded-full" }
             }
         }
     }
