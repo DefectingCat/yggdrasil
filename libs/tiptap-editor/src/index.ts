@@ -3,7 +3,6 @@ import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from '@tiptap/markdown'
 import { TableKit } from '@tiptap/extension-table'
 import { Image } from '@tiptap/extension-image'
-import { Link } from '@tiptap/extension-link'
 import { TaskList, TaskItem } from '@tiptap/extension-list'
 import { FileHandler } from '@tiptap/extension-file-handler'
 import { SlashCommand } from './slash-command'
@@ -43,18 +42,18 @@ class TiptapEditorInstance {
           heading: {
             levels: [1, 2, 3],
           },
+          link: {
+            openOnClick: false,
+            autolink: true,
+            linkOnPaste: true,
+            HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
+          },
         }),
         Markdown.configure({
           html: false,
         }),
         TableKit,
         Image.configure({ allowBase64: true }),
-        Link.configure({
-          openOnClick: false,
-          autolink: true,
-          linkOnPaste: true,
-          HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
-        }),
         TaskList,
         TaskItem.configure({ nested: true }),
         SlashCommand,
