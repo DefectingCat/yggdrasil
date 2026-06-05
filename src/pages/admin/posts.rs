@@ -124,7 +124,12 @@ fn PostRow(post: Post, deleting: bool, on_delete: EventHandler<i32>) -> Element 
             td { class: "px-4 py-3 text-gray-500 dark:text-[#9b9c9d]",
                 "{date_str}"
             }
-            td { class: "px-4 py-3 text-right",
+            td { class: "px-4 py-3 text-right space-x-3",
+                Link {
+                    class: "text-xs text-gray-600 dark:text-[#9b9c9d] hover:text-gray-900 dark:hover:text-[#dadadb] transition-colors cursor-pointer",
+                    to: Route::WriteEdit { id: post.id },
+                    "编辑"
+                }
                 button {
                     class: if deleting {
                         "text-xs text-gray-400 cursor-not-allowed"
