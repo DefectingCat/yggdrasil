@@ -20,6 +20,7 @@ pub fn WriteEdit(id: i32) -> Element {
     write_editor(Some(id))
 }
 
+#[allow(unused_mut, unused_variables)]
 fn write_editor(post_id: Option<i32>) -> Element {
     let is_edit = post_id.is_some();
 
