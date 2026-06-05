@@ -119,7 +119,7 @@ class TiptapEditorInstance {
   }
 
   setMarkdown(content: string): void {
-    this.editor?.commands.setContent(content, false, { contentType: 'markdown' })
+    this.editor?.commands.setContent(content, { emitUpdate: false, contentType: 'markdown' })
   }
 
   getHTML(): string {
