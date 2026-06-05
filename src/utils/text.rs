@@ -27,9 +27,10 @@ static WHITESPACE_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 pub fn strip_markdown(md: &str) -> String {
     let mut plain = CODE_BLOCK_RE.replace_all(md, "").to_string();
     plain = INLINE_CODE_RE.replace_all(&plain, "").to_string();
+    // Must strip images BEFORE links, otherwise `![](url)` becomes `!`
+    plain = IMAGE_RE.replace_all(&plain, "").to_string();
     plain = LINK_RE.replace_all(&plain, "$1").to_string();
     plain = HEADING_RE.replace_all(&plain, "").to_string();
-    plain = IMAGE_RE.replace_all(&plain, "").to_string();
     plain = plain
         .replace("**", "")
         .replace('*', "")
