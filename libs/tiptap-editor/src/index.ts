@@ -1,6 +1,11 @@
 import { Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from '@tiptap/markdown'
+import { TableKit } from '@tiptap/extension-table'
+import { Image } from '@tiptap/extension-image'
+import { Link } from '@tiptap/extension-link'
+import { TaskList, TaskItem } from '@tiptap/extension-list'
+import { SlashCommand } from './slash-command'
 import './style.css'
 
 export interface EditorOptions {
@@ -39,6 +44,17 @@ class TiptapEditorInstance {
         Markdown.configure({
           html: false,
         }),
+        TableKit,
+        Image.configure({ allowBase64: true }),
+        Link.configure({
+          openOnClick: false,
+          autolink: true,
+          linkOnPaste: true,
+          HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
+        }),
+        TaskList,
+        TaskItem.configure({ nested: true }),
+        SlashCommand,
       ],
       content: this.options.content || '',
       editable: this.options.editable !== false,

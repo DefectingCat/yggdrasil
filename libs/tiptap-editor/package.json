@@ -8,10 +8,15 @@
     "dev": "vite"
   },
   "dependencies": {
-    "@tiptap/core": "^3.0.0",
-    "@tiptap/markdown": "^3.0.0",
-    "@tiptap/pm": "^3.0.0",
-    "@tiptap/starter-kit": "^3.0.0"
+    "@tiptap/core": "^3.25.0",
+    "@tiptap/extension-image": "^3.25.0",
+    "@tiptap/extension-link": "^3.25.0",
+    "@tiptap/extension-list": "^3.25.0",
+    "@tiptap/extension-table": "^3.25.0",
+    "@tiptap/markdown": "^3.25.0",
+    "@tiptap/pm": "^3.25.0",
+    "@tiptap/starter-kit": "^3.25.0",
+    "@tiptap/suggestion": "^3.25.0"
   },
   "devDependencies": {
     "vite": "^5.4.20"
