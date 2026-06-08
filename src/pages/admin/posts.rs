@@ -7,6 +7,7 @@ use crate::models::post::Post;
 use crate::router::Route;
 
 #[component]
+#[allow(unused_variables)]
 pub fn Posts() -> Element {
     let mut posts_res = use_resource(list_posts);
     let mut deleting = use_signal(|| None::<i32>);

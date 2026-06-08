@@ -177,5 +177,4 @@ pub async fn upload_image(
     })))
 }
 
-#[cfg(not(feature = "server"))]
-pub async fn upload_image() {}
+
