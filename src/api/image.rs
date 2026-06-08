@@ -1,16 +1,15 @@
-
 #[cfg(feature = "server")]
 use axum::{
     extract::{Path, Query},
-    http::{HeaderValue, StatusCode, header},
+    http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
 };
+#[cfg(feature = "server")]
+use moka::future::Cache;
 #[cfg(feature = "server")]
 use serde::Deserialize;
 #[cfg(feature = "server")]
 use std::sync::LazyLock;
-#[cfg(feature = "server")]
-use moka::future::Cache;
 
 #[cfg(feature = "server")]
 const MAX_IMAGE_DIMENSION: u32 = 4096;
@@ -225,10 +224,7 @@ fn is_path_safe(path: &str) -> bool {
 }
 
 #[cfg(feature = "server")]
-pub async fn serve_image(
-    Path(path): Path<String>,
-    Query(params): Query<ImageParams>,
-) -> Response {
+pub async fn serve_image(Path(path): Path<String>, Query(params): Query<ImageParams>) -> Response {
     // Path traversal protection
     if !is_path_safe(&path) {
         return StatusCode::FORBIDDEN.into_response();
@@ -255,7 +251,11 @@ pub async fn serve_image(
     // Check cache
     let cache_key = params.cache_key(&path);
     if let Some(cached) = IMAGE_CACHE.get(&cache_key).await {
-        return (StatusCode::OK, [(header::CONTENT_TYPE, cached.content_type)], cached.data)
+        return (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, cached.content_type)],
+            cached.data,
+        )
             .into_response();
     }
 
@@ -289,7 +289,10 @@ pub async fn serve_image(
     };
     let _ = IMAGE_CACHE.insert(cache_key, cached).await;
 
-    (StatusCode::OK, [(header::CONTENT_TYPE, content_type)], processed).into_response()
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, content_type)],
+        processed,
+    )
+        .into_response()
 }
-
-
