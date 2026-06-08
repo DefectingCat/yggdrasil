@@ -3,8 +3,6 @@
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
-use crate::api::tags::get_post_tags;
-#[cfg(feature = "server")]
 use crate::api::utils::{db_conn_error, query_error, tx_error};
 #[cfg(feature = "server")]
 use crate::auth::session::get_session_from_ctx;
@@ -13,6 +11,14 @@ use crate::models::post::{Post, PostStats, PostStatus, Tag};
 use crate::models::user::{User, UserRole};
 #[cfg(feature = "server")]
 use crate::utils::text::{auto_summary, count_words};
+
+// Re-export extracted modules
+#[cfg(feature = "server")]
+pub use crate::api::markdown::render_markdown_enhanced;
+#[cfg(feature = "server")]
+pub use crate::api::slug::{ensure_unique_slug, is_valid_slug, slugify};
+#[cfg(feature = "server")]
+pub use crate::api::tags::{get_post_tags, set_post_tags};
 
 // ============================================================================
 // Server-side helpers (only compiled when server feature is enabled)
@@ -38,366 +44,21 @@ async fn get_current_admin_user() -> Result<User, ServerFnError> {
 }
 
 // ============================================================================
-// Slug utilities
-// ============================================================================
-
-#[cfg(feature = "server")]
-fn slugify(title: &str) -> String {
-    let slug: String = title
-        .to_lowercase()
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
-                c
-            } else {
-                '-'
-            }
-        })
-        .collect();
-
-    let parts: Vec<&str> = slug.split('-').filter(|s| !s.is_empty()).collect();
-    let slug = parts.join("-");
-
-    if slug.is_empty() {
-        return format!("{}", chrono::Utc::now().timestamp());
-    }
-
-    slug.chars().take(100).collect()
-}
-
-#[cfg(feature = "server")]
-fn is_valid_slug(slug: &str) -> bool {
-    if slug.is_empty() || slug.len() > 200 {
-        return false;
-    }
-    slug.chars()
-        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
-}
-
-#[cfg(feature = "server")]
-async fn ensure_unique_slug(
-    client: &tokio_postgres::Client,
-    base: &str,
-    exclude_id: Option<i32>,
-) -> Result<String, ServerFnError> {
-    let mut candidate = base.to_string();
-    let mut suffix = 2;
-
-    loop {
-        let exists = if let Some(exclude) = exclude_id {
-            client
-                .query_opt(
-                    "SELECT 1 FROM posts WHERE slug = $1 AND deleted_at IS NULL AND id != $2",
-                    &[&candidate, &exclude],
-                )
-                .await
-                .map_err(query_error)?
-                .is_some()
-        } else {
-            client
-                .query_opt(
-                    "SELECT 1 FROM posts WHERE slug = $1 AND deleted_at IS NULL",
-                    &[&candidate],
-                )
-                .await
-                .map_err(query_error)?
-                .is_some()
-        };
-
-        if !exists {
-            return Ok(candidate);
-        }
-
-        candidate = format!("{}-{}", base, suffix);
-        suffix += 1;
-
-        if candidate.len() > 200 {
-            return Err(ServerFnError::new("无法生成唯一 slug"));
-        }
-    }
-}
-
-// ============================================================================
-// Markdown rendering (enhanced with TOC, word count, reading time, anchors)
-// ============================================================================
-
-#[cfg(feature = "server")]
-fn clean_html(input: &str) -> String {
-    let mut builder = ammonia::Builder::default();
-    builder
-        .add_generic_attributes(&[
-            "class",
-            "aria-hidden",
-            "aria-label",
-            "id",
-            "role",
-            "accesskey",
-            "title",
-        ])
-        .add_tags(&["details", "summary"])
-        .url_relative(ammonia::UrlRelative::PassThrough)
-        .add_tag_attributes("a", &["class", "aria-hidden", "aria-label"])
-        .add_tag_attributes("span", &["class"])
-        .add_tag_attributes("h1", &["id", "class"])
-        .add_tag_attributes("h2", &["id", "class"])
-        .add_tag_attributes("h3", &["id", "class"])
-        .add_tag_attributes("h4", &["id", "class"])
-        .add_tag_attributes("h5", &["id", "class"])
-        .add_tag_attributes("h6", &["id", "class"]);
-
-    builder.clean(input).to_string()
-}
-
-#[derive(Debug, Clone)]
-#[cfg(feature = "server")]
-struct RenderedContent {
-    html: String,
-    toc_html: String,
-}
-
-#[cfg(feature = "server")]
-fn render_markdown_enhanced(md: &str) -> RenderedContent {
-    use pulldown_cmark::{Event, HeadingLevel, Options, Tag, TagEnd};
-
-    // 1. Parse markdown and collect headings for TOC
-    let parser = pulldown_cmark::Parser::new_ext(md, Options::all());
-    let mut headings: Vec<(u8, String, String)> = Vec::new(); // (level, text, id)
-    let mut current_heading: Option<(u8, String)> = None;
-
-    for event in parser {
-        match event {
-            Event::Start(Tag::Heading { level, .. }) => {
-                let lvl = match level {
-                    HeadingLevel::H1 => 1,
-                    HeadingLevel::H2 => 2,
-                    HeadingLevel::H3 => 3,
-                    HeadingLevel::H4 => 4,
-                    HeadingLevel::H5 => 5,
-                    HeadingLevel::H6 => 6,
-                };
-                current_heading = Some((lvl, String::new()));
-            }
-            Event::Text(text) => {
-                if let Some((_, ref mut content)) = current_heading {
-                    content.push_str(&text);
-                }
-            }
-            Event::Code(code) => {
-                if let Some((_, ref mut content)) = current_heading {
-                    content.push_str(&code);
-                }
-            }
-            Event::End(TagEnd::Heading(_)) => {
-                if let Some((lvl, text)) = current_heading.take() {
-                    let id = slugify_heading(&text);
-                    headings.push((lvl, text, id));
-                }
-            }
-            _ => {}
-        }
-    }
-
-    // 2. Generate TOC HTML
-    let toc_html = generate_toc_html(&headings);
-
-    // 3. Generate HTML with heading anchors
-    let parser = pulldown_cmark::Parser::new_ext(md, Options::ENABLE_TABLES);
-    let mut html = String::new();
-    let mut heading_idx = 0;
-    let mut in_heading = false;
-    let mut in_codeblock = false;
-    let mut code_lang: Option<String> = None;
-    let mut code_buffer = String::new();
-    let mut non_heading_events: Vec<Event> = Vec::new();
-
-    for event in parser {
-        match event {
-            Event::Start(Tag::Heading { level, .. }) => {
-                if !non_heading_events.is_empty() {
-                    pulldown_cmark::html::push_html(&mut html, non_heading_events.into_iter());
-                    non_heading_events = Vec::new();
-                }
-                in_heading = true;
-                if heading_idx < headings.len() {
-                    let (_, _, ref id) = headings[heading_idx];
-                    let tag = match level {
-                        HeadingLevel::H1 => "h1",
-                        HeadingLevel::H2 => "h2",
-                        HeadingLevel::H3 => "h3",
-                        HeadingLevel::H4 => "h4",
-                        HeadingLevel::H5 => "h5",
-                        HeadingLevel::H6 => "h6",
-                    };
-                    html.push_str(&format!("<{} id=\"{}\">", tag, id));
-                }
-            }
-            Event::End(TagEnd::Heading(level)) => {
-                if heading_idx < headings.len() {
-                    let (_, _, ref id) = headings[heading_idx];
-                    let tag = match level {
-                        HeadingLevel::H1 => "h1",
-                        HeadingLevel::H2 => "h2",
-                        HeadingLevel::H3 => "h3",
-                        HeadingLevel::H4 => "h4",
-                        HeadingLevel::H5 => "h5",
-                        HeadingLevel::H6 => "h6",
-                    };
-                    html.push_str(&format!(
-                        "<a class=\"anchor\" aria-hidden=\"true\" href=\"#{}\">#</a></{}>",
-                        id, tag
-                    ));
-                    heading_idx += 1;
-                }
-                in_heading = false;
-            }
-            Event::Start(Tag::CodeBlock(kind)) => {
-                if !non_heading_events.is_empty() {
-                    pulldown_cmark::html::push_html(&mut html, non_heading_events.into_iter());
-                    non_heading_events = Vec::new();
-                }
-                in_codeblock = true;
-                code_lang = match kind {
-                    pulldown_cmark::CodeBlockKind::Fenced(lang) => {
-                        if lang.is_empty() {
-                            None
-                        } else {
-                            Some(lang.to_string())
-                        }
-                    }
-                    _ => None,
-                };
-                code_buffer.clear();
-            }
-            Event::Text(text) if in_codeblock => {
-                code_buffer.push_str(&text);
-            }
-            Event::End(TagEnd::CodeBlock) => {
-                let highlighted =
-                    crate::highlight::server::highlight_code(&code_buffer, code_lang.as_deref());
-                html.push_str("<pre><code>");
-                html.push_str(&highlighted);
-                html.push_str("</code></pre>");
-                in_codeblock = false;
-            }
-            _ => {
-                if in_heading {
-                    match event {
-                        Event::Text(text) => html.push_str(&clean_html(&text)),
-                        Event::Code(code) => {
-                            html.push_str("<code>");
-                            html.push_str(&clean_html(&code));
-                            html.push_str("</code>");
-                        }
-                        _ => {}
-                    }
-                } else if !in_codeblock {
-                    non_heading_events.push(event);
-                }
-            }
-        }
-    }
-
-    // Flush remaining non-heading events
-    if !non_heading_events.is_empty() {
-        pulldown_cmark::html::push_html(&mut html, non_heading_events.into_iter());
-    }
-
-    RenderedContent {
-        html: clean_html(&html),
-        toc_html,
-    }
-}
-
-#[cfg(feature = "server")]
-fn generate_toc_html(headings: &[(u8, String, String)]) -> String {
-    if headings.is_empty() {
-        return String::new();
-    }
-
-    let mut html = String::from("<ul>");
-    let mut stack: Vec<u8> = vec![headings[0].0];
-
-    for (i, (level, text, id)) in headings.iter().enumerate() {
-        let level = *level;
-
-        if i > 0 {
-            let prev_level = headings[i - 1].0;
-            if level > prev_level {
-                // Open new nested lists
-                for _ in prev_level..level {
-                    html.push_str("<ul>");
-                    stack.push(level);
-                }
-            } else if level < prev_level {
-                // Close nested lists
-                while let Some(top) = stack.last() {
-                    if *top > level {
-                        html.push_str("</li></ul>");
-                        stack.pop();
-                    } else {
-                        break;
-                    }
-                }
-                html.push_str("</li>");
-            } else {
-                html.push_str("</li>");
-            }
-        }
-
-        html.push_str(&format!(
-            "<li><a href=\"#{}\" aria-label=\"{}\">{}</a>",
-            id,
-            clean_html(text),
-            clean_html(text)
-        ));
-    }
-
-    // Close remaining lists
-    while stack.len() > 1 {
-        html.push_str("</li></ul>");
-        stack.pop();
-    }
-    html.push_str("</li></ul>");
-
-    html
-}
-
-#[cfg(feature = "server")]
-fn slugify_heading(text: &str) -> String {
-    let mut slug = String::new();
-    let mut prev_dash = true;
-
-    for c in text.to_lowercase().chars() {
-        if c.is_alphanumeric() {
-            slug.push(c);
-            prev_dash = false;
-        } else if !prev_dash {
-            slug.push('-');
-            prev_dash = true;
-        }
-    }
-
-    if slug.ends_with('-') {
-        slug.pop();
-    }
-
-    if slug.is_empty() {
-        slug.push_str("heading");
-    }
-
-    slug
-}
-
-// ============================================================================
 // Row to Post conversion
 // ============================================================================
 
 #[cfg(feature = "server")]
-async fn row_to_post_list(client: &tokio_postgres::Client, row: &tokio_postgres::Row) -> Post {
+async fn row_to_post_list(_client: &tokio_postgres::Client, row: &tokio_postgres::Row) -> Post {
     let id: i32 = row.get("id");
     let role_str: String = row.get("status");
     let status = PostStatus::from_str(&role_str).unwrap_or(PostStatus::Draft);
-    let tags = get_post_tags(client, id).await;
+    
+    let tags: Vec<String> = row
+        .try_get::<_, Vec<String>>("tags")
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|t| !t.is_empty())
+        .collect();
 
     let content_md: String = row.get("content_md");
     let word_count = count_words(&content_md);
@@ -425,11 +86,17 @@ async fn row_to_post_list(client: &tokio_postgres::Client, row: &tokio_postgres:
 }
 
 #[cfg(feature = "server")]
-async fn row_to_post_full(client: &tokio_postgres::Client, row: &tokio_postgres::Row) -> Post {
+async fn row_to_post_full(_client: &tokio_postgres::Client, row: &tokio_postgres::Row) -> Post {
     let id: i32 = row.get("id");
     let role_str: String = row.get("status");
     let status = PostStatus::from_str(&role_str).unwrap_or(PostStatus::Draft);
-    let tags = get_post_tags(client, id).await;
+    
+    let tags: Vec<String> = row
+        .try_get::<_, Vec<String>>("tags")
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|t| !t.is_empty())
+        .collect();
 
     let prev_post = if let Ok(prev_title) = row.try_get::<_, String>("prev_title") {
         if let Ok(prev_slug) = row.try_get::<_, String>("prev_slug") {
@@ -459,7 +126,7 @@ async fn row_to_post_full(client: &tokio_postgres::Client, row: &tokio_postgres:
 
     let content_md: String = row.get("content_md");
     let word_count = count_words(&content_md);
-    let rendered = render_markdown_enhanced(&content_md);
+    let rendered = crate::api::markdown::render_markdown_enhanced(&content_md);
 
     Post {
         id,
@@ -568,7 +235,7 @@ pub async fn create_post(
     let base_slug = match slug {
         Some(s) if !s.trim().is_empty() => {
             let s = s.trim();
-            if !is_valid_slug(s) {
+            if !crate::api::slug::is_valid_slug(s) {
                 return Ok(CreatePostResponse {
                     success: false,
                     message: "slug 格式无效，只能包含字母、数字、连字符和下划线".to_string(),
@@ -578,15 +245,13 @@ pub async fn create_post(
             }
             s.to_string()
         }
-        _ => slugify(&title),
+        _ => crate::api::slug::slugify(&title),
     };
 
-    let mut client = get_conn().await.map_err(|e| {
-        db_conn_error(e)
-    })?;
+    let mut client = get_conn().await.map_err(db_conn_error)?;
 
-    let final_slug = ensure_unique_slug(&client, &base_slug, None).await?;
-    let rendered = render_markdown_enhanced(&content_md);
+    let final_slug = crate::api::slug::ensure_unique_slug(&client, &base_slug, None).await?;
+    let rendered = crate::api::markdown::render_markdown_enhanced(&content_md);
     let content_html = rendered.html;
     let summary = summary
         .filter(|s| !s.trim().is_empty())
@@ -600,9 +265,7 @@ pub async fn create_post(
         None
     };
 
-    let tx = client.transaction().await.map_err(|e| {
-        tx_error(e)
-    })?;
+    let tx = client.transaction().await.map_err(tx_error)?;
 
     let row = tx
         .query_one(
@@ -629,7 +292,6 @@ pub async fn create_post(
 
     let post_id: i32 = row.get(0);
 
-    // Set tags
     let tags_cleaned: Vec<String> = tags
         .into_iter()
         .map(|t| t.trim().to_string())
@@ -637,8 +299,6 @@ pub async fn create_post(
         .collect();
 
     if !tags_cleaned.is_empty() {
-        // Use the non-transaction client for tag operations (simpler)
-        // Actually we should use the transaction. Let's implement inline.
         for tag_name in &tags_cleaned {
             let tag_id: i32 = {
                 let row = tx
@@ -648,9 +308,9 @@ pub async fn create_post(
                     )
                     .await
                     .map_err(|e| {
-            tracing::error!("create tag failed: {:?}", e);
-            ServerFnError::new(format!("创建标签失败: {}", e))
-        })?;
+                        tracing::error!("create tag failed: {:?}", e);
+                        ServerFnError::new(format!("创建标签失败: {}", e))
+                    })?;
 
                 match row {
                     Some(r) => r.get(0),
@@ -681,9 +341,7 @@ pub async fn create_post(
         }
     }
 
-    tx.commit().await.map_err(|e| {
-        tx_error(e)
-    })?;
+    tx.commit().await.map_err(tx_error)?;
 
     Ok(CreatePostResponse {
         success: true,
@@ -706,11 +364,8 @@ pub async fn update_post(
 ) -> Result<CreatePostResponse, ServerFnError> {
     let user = get_current_admin_user().await?;
 
-    let mut client = get_conn().await.map_err(|e| {
-        db_conn_error(e)
-    })?;
+    let mut client = get_conn().await.map_err(db_conn_error)?;
 
-    // Verify ownership
     let exists: bool = client
         .query_opt(
             "SELECT 1 FROM posts WHERE id = $1 AND author_id = $2 AND deleted_at IS NULL",
@@ -732,7 +387,7 @@ pub async fn update_post(
     let base_slug = match slug {
         Some(s) if !s.trim().is_empty() => {
             let s = s.trim();
-            if !is_valid_slug(s) {
+            if !crate::api::slug::is_valid_slug(s) {
                 return Ok(CreatePostResponse {
                     success: false,
                     message: "slug 格式无效".to_string(),
@@ -742,11 +397,11 @@ pub async fn update_post(
             }
             s.to_string()
         }
-        _ => slugify(&title),
+        _ => crate::api::slug::slugify(&title),
     };
 
-    let final_slug = ensure_unique_slug(&client, &base_slug, Some(post_id)).await?;
-    let rendered = render_markdown_enhanced(&content_md);
+    let final_slug = crate::api::slug::ensure_unique_slug(&client, &base_slug, Some(post_id)).await?;
+    let rendered = crate::api::markdown::render_markdown_enhanced(&content_md);
     let content_html = rendered.html;
     let summary = summary
         .filter(|s| !s.trim().is_empty())
@@ -754,20 +409,15 @@ pub async fn update_post(
     let post_status = PostStatus::from_str(&status).unwrap_or(PostStatus::Draft);
     let cover_image = cover_image.filter(|s| !s.trim().is_empty());
 
-    let tx = client.transaction().await.map_err(|e| {
-        tx_error(e)
-    })?;
+    let tx = client.transaction().await.map_err(tx_error)?;
 
-    // Check if status changed to published and was not published before
     let old_status_row = tx
         .query_opt(
             "SELECT status, published_at FROM posts WHERE id = $1",
             &[&post_id],
         )
         .await
-        .map_err(|e| {
-            query_error(e)
-        })?;
+        .map_err(query_error)?;
 
     let published_at = if post_status == PostStatus::Published {
         let was_published = old_status_row
@@ -806,11 +456,10 @@ pub async fn update_post(
     )
     .await
     .map_err(|e| {
-            tracing::error!("update post failed: {:?}", e);
-            ServerFnError::new(format!("更新文章失败: {}", e))
-        })?;
+        tracing::error!("update post failed: {:?}", e);
+        ServerFnError::new(format!("更新文章失败: {}", e))
+    })?;
 
-    // Update tags
     let tags_cleaned: Vec<String> = tags
         .into_iter()
         .map(|t| t.trim().to_string())
@@ -833,9 +482,9 @@ pub async fn update_post(
                 )
                 .await
                 .map_err(|e| {
-            tracing::error!("create tag failed: {:?}", e);
-            ServerFnError::new(format!("创建标签失败: {}", e))
-        })?;
+                    tracing::error!("create tag failed: {:?}", e);
+                    ServerFnError::new(format!("创建标签失败: {}", e))
+                })?;
 
             match row {
                 Some(r) => r.get(0),
@@ -864,9 +513,7 @@ pub async fn update_post(
         })?;
     }
 
-    tx.commit().await.map_err(|e| {
-        tx_error(e)
-    })?;
+    tx.commit().await.map_err(tx_error)?;
 
     Ok(CreatePostResponse {
         success: true,
@@ -880,21 +527,23 @@ pub async fn update_post(
 pub async fn get_post_by_id(post_id: i32) -> Result<SinglePostResponse, ServerFnError> {
     let _user = get_current_admin_user().await?;
 
-    let client = get_conn().await.map_err(|e| {
-        db_conn_error(e)
-    })?;
+    let client = get_conn().await.map_err(db_conn_error)?;
 
     let row = client
         .query_opt(
-            "SELECT id, author_id, title, slug, summary, content_md, content_html, status, published_at, created_at, updated_at, cover_image
-             FROM posts
-             WHERE id = $1 AND deleted_at IS NULL",
+            "SELECT 
+                p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, 
+                p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
+                COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags
+             FROM posts p
+             LEFT JOIN post_tags pt ON p.id = pt.post_id
+             LEFT JOIN tags t ON pt.tag_id = t.id
+             WHERE p.id = $1 AND p.deleted_at IS NULL
+             GROUP BY p.id",
             &[&post_id],
         )
         .await
-        .map_err(|e| {
-            query_error(e)
-        })?;
+        .map_err(query_error)?;
 
     let post = match row {
         Some(row) => Some(row_to_post_list(&client, &row).await),
@@ -906,18 +555,19 @@ pub async fn get_post_by_id(post_id: i32) -> Result<SinglePostResponse, ServerFn
 
 #[server(GetPostBySlug, "/api")]
 pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, ServerFnError> {
-    let client = get_conn().await.map_err(|e| {
-        db_conn_error(e)
-    })?;
+    let client = get_conn().await.map_err(db_conn_error)?;
 
     let row = client
         .query_opt(
             "SELECT 
                 p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, 
                 p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
+                COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags,
                 prev.title as prev_title, prev.slug as prev_slug,
                 next.title as next_title, next.slug as next_slug
              FROM posts p
+             LEFT JOIN post_tags pt ON p.id = pt.post_id
+             LEFT JOIN tags t ON pt.tag_id = t.id
              LEFT JOIN LATERAL (
                  SELECT title, slug FROM posts 
                  WHERE published_at < p.published_at 
@@ -934,13 +584,12 @@ pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, Server
                  ORDER BY published_at ASC
                  LIMIT 1
              ) next ON true
-             WHERE p.slug = $1 AND p.deleted_at IS NULL",
+             WHERE p.slug = $1 AND p.deleted_at IS NULL
+             GROUP BY p.id, prev.title, prev.slug, next.title, next.slug",
             &[&slug],
         )
         .await
-        .map_err(|e| {
-            query_error(e)
-        })?;
+        .map_err(query_error)?;
 
     let post = match row {
         Some(row) => Some(row_to_post_full(&client, &row).await),
@@ -955,25 +604,27 @@ pub async fn list_published_posts(
     page: i32,
     per_page: i32,
 ) -> Result<PostListResponse, ServerFnError> {
-    let client = get_conn().await.map_err(|e| {
-        db_conn_error(e)
-    })?;
+    let client = get_conn().await.map_err(db_conn_error)?;
 
     let offset = ((page - 1).max(0) as i64) * (per_page as i64);
     let limit = per_page as i64;
     let rows = client
         .query(
-            "SELECT id, author_id, title, slug, summary, content_md, content_html, status, published_at, created_at, updated_at, cover_image
-             FROM posts
-             WHERE status = 'published' AND deleted_at IS NULL
-             ORDER BY published_at DESC
+            "SELECT 
+                p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, 
+                p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
+                COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags
+             FROM posts p
+             LEFT JOIN post_tags pt ON p.id = pt.post_id
+             LEFT JOIN tags t ON pt.tag_id = t.id
+             WHERE p.status = 'published' AND p.deleted_at IS NULL
+             GROUP BY p.id
+             ORDER BY p.published_at DESC
              LIMIT $1 OFFSET $2",
             &[&limit, &offset],
         )
         .await
-        .map_err(|e| {
-            query_error(e)
-        })?;
+        .map_err(query_error)?;
 
     let mut posts = Vec::new();
     for row in &rows {
@@ -987,22 +638,24 @@ pub async fn list_published_posts(
 pub async fn list_posts() -> Result<PostListResponse, ServerFnError> {
     let _user = get_current_admin_user().await?;
 
-    let client = get_conn().await.map_err(|e| {
-        db_conn_error(e)
-    })?;
+    let client = get_conn().await.map_err(db_conn_error)?;
 
     let rows = client
         .query(
-            "SELECT id, author_id, title, slug, summary, content_md, content_html, status, published_at, created_at, updated_at, cover_image
-             FROM posts
-             WHERE deleted_at IS NULL
-             ORDER BY created_at DESC",
+            "SELECT 
+                p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, 
+                p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
+                COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags
+             FROM posts p
+             LEFT JOIN post_tags pt ON p.id = pt.post_id
+             LEFT JOIN tags t ON pt.tag_id = t.id
+             WHERE p.deleted_at IS NULL
+             GROUP BY p.id
+             ORDER BY p.created_at DESC",
             &[],
         )
         .await
-        .map_err(|e| {
-            query_error(e)
-        })?;
+        .map_err(query_error)?;
 
     let mut posts = Vec::new();
     for row in &rows {
@@ -1016,9 +669,7 @@ pub async fn list_posts() -> Result<PostListResponse, ServerFnError> {
 pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnError> {
     let _user = get_current_admin_user().await?;
 
-    let client = get_conn().await.map_err(|e| {
-        db_conn_error(e)
-    })?;
+    let client = get_conn().await.map_err(db_conn_error)?;
 
     let result = client
         .execute(
@@ -1050,9 +701,7 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
 
 #[server(ListTags, "/api")]
 pub async fn list_tags() -> Result<TagListResponse, ServerFnError> {
-    let client = get_conn().await.map_err(|e| {
-        db_conn_error(e)
-    })?;
+    let client = get_conn().await.map_err(db_conn_error)?;
 
     let rows = client
         .query(
@@ -1065,9 +714,7 @@ pub async fn list_tags() -> Result<TagListResponse, ServerFnError> {
             &[],
         )
         .await
-        .map_err(|e| {
-            query_error(e)
-        })?;
+        .map_err(query_error)?;
 
     let tags: Vec<Tag> = rows
         .iter()
@@ -1083,24 +730,26 @@ pub async fn list_tags() -> Result<TagListResponse, ServerFnError> {
 
 #[server(GetPostsByTag, "/api")]
 pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, ServerFnError> {
-    let client = get_conn().await.map_err(|e| {
-        db_conn_error(e)
-    })?;
+    let client = get_conn().await.map_err(db_conn_error)?;
 
     let rows = client
         .query(
-            "SELECT p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, p.status, p.published_at, p.created_at, p.updated_at, p.cover_image
+            "SELECT 
+                p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, 
+                p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
+                COALESCE(array_agg(t2.name) FILTER (WHERE t2.name IS NOT NULL), '{}') as tags
              FROM posts p
              JOIN post_tags pt ON p.id = pt.post_id
              JOIN tags t ON pt.tag_id = t.id
+             LEFT JOIN post_tags pt2 ON p.id = pt2.post_id
+             LEFT JOIN tags t2 ON pt2.tag_id = t2.id
              WHERE t.name = $1 AND p.status = 'published' AND p.deleted_at IS NULL
+             GROUP BY p.id
              ORDER BY p.published_at DESC",
             &[&tag_name],
         )
         .await
-        .map_err(|e| {
-            query_error(e)
-        })?;
+        .map_err(query_error)?;
 
     let mut posts = Vec::new();
     for row in &rows {
@@ -1114,9 +763,7 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
 pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
     let _user = get_current_admin_user().await?;
 
-    let client = get_conn().await.map_err(|e| {
-        db_conn_error(e)
-    })?;
+    let client = get_conn().await.map_err(db_conn_error)?;
 
     let total: i64 = client
         .query_one("SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL", &[])
@@ -1153,25 +800,27 @@ pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
 
 #[server(SearchPosts, "/api")]
 pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnError> {
-    let client = get_conn().await.map_err(|e| {
-        db_conn_error(e)
-    })?;
+    let client = get_conn().await.map_err(db_conn_error)?;
 
     let search_pattern = format!("%{}%", query);
 
     let rows = client
         .query(
-            "SELECT p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, p.status, p.published_at, p.created_at, p.updated_at, p.cover_image
+            "SELECT 
+                p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, 
+                p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
+                COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags
              FROM posts p
+             LEFT JOIN post_tags pt ON p.id = pt.post_id
+             LEFT JOIN tags t ON pt.tag_id = t.id
              WHERE p.status = 'published' AND p.deleted_at IS NULL
                AND (p.title ILIKE $1 OR p.content_md ILIKE $1)
+             GROUP BY p.id
              ORDER BY p.published_at DESC",
             &[&search_pattern],
         )
         .await
-        .map_err(|e| {
-            query_error(e)
-        })?;
+        .map_err(query_error)?;
 
     let mut posts = Vec::new();
     for row in &rows {
