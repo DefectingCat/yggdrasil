@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
+use crate::components::image_viewer::ImageViewer;
 use crate::models::post::Post;
 use crate::router::Route;
 
@@ -8,6 +9,7 @@ use crate::router::Route;
 pub fn PostCard(post: Post) -> Element {
     let post_slug = post.slug.clone();
     let date_str = post.formatted_date();
+    let has_cover = post.cover_image.is_some();
 
     rsx! {
         article {
@@ -15,6 +17,17 @@ pub fn PostCard(post: Post) -> Element {
             Link {
                 class: "block group",
                 to: Route::PostDetail { slug: post_slug },
+                if has_cover {
+                    div {
+                        class: "mb-4 -mx-6 -mt-6 overflow-hidden rounded-t-lg",
+                        ImageViewer {
+                            src: post.cover_image.clone().unwrap_or_default(),
+                            thumb_params: "?thumb=400x300",
+                            alt: post.title.clone(),
+                            lazy_load: true,
+                        }
+                    }
+                }
                 h2 {
                     class: "text-2xl font-bold leading-tight text-gray-900 dark:text-[#dadadb] group-hover:opacity-80 transition-opacity",
                     "{post.title}"
