@@ -1,4 +1,3 @@
-#![allow(clippy::unused_unit)]
 
 #[cfg(feature = "server")]
 use axum::{
@@ -52,17 +51,30 @@ impl ImageParams {
             && self.thumb.is_none()
             && self.rotate.is_none()
             && self.format.is_none()
+            && self.quality.is_none()
     }
 
     fn cache_key(&self, path: &str) -> String {
-        let mut key = format!(
-            "{}?w={:?}&h={:?}&thumb={:?}&rotate={:?}&format={:?}",
-            path, self.w, self.h, self.thumb, self.rotate, self.format,
-        );
-        if let Some(q) = self.quality {
-            key.push_str(&format!("&quality={}", q));
+        let mut parts = vec![path.to_string()];
+        if let Some(w) = self.w {
+            parts.push(format!("w={}", w));
         }
-        key
+        if let Some(h) = self.h {
+            parts.push(format!("h={}", h));
+        }
+        if let Some(ref thumb) = self.thumb {
+            parts.push(format!("thumb={}", thumb));
+        }
+        if let Some(r) = self.rotate {
+            parts.push(format!("rotate={}", r));
+        }
+        if let Some(ref fmt) = self.format {
+            parts.push(format!("format={}", fmt));
+        }
+        if let Some(q) = self.quality {
+            parts.push(format!("quality={}", q));
+        }
+        parts.join("|")
     }
 
     fn validate(&self) -> Result<(), StatusCode> {
@@ -82,7 +94,18 @@ impl ImageParams {
             }
         }
         if let Some(ref fmt) = self.format {
-            if !matches!(fmt.as_str(), "jpeg" | "jpg" | "png" | "webp") {
+            if !matches!(fmt.to_lowercase().as_str(), "jpeg" | "jpg" | "png" | "webp") {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        }
+        if let Some(ref thumb) = self.thumb {
+            let parts: Vec<&str> = thumb.split('x').collect();
+            if parts.len() != 2 {
+                return Err(StatusCode::BAD_REQUEST);
+            }
+            let tw: u32 = parts[0].parse().map_err(|_| StatusCode::BAD_REQUEST)?;
+            let th: u32 = parts[1].parse().map_err(|_| StatusCode::BAD_REQUEST)?;
+            if tw == 0 || th == 0 || tw > MAX_IMAGE_DIMENSION || th > MAX_IMAGE_DIMENSION {
                 return Err(StatusCode::BAD_REQUEST);
             }
         }
@@ -269,5 +292,4 @@ pub async fn serve_image(
     (StatusCode::OK, [(header::CONTENT_TYPE, content_type)], processed).into_response()
 }
 
-#[cfg(not(feature = "server"))]
-pub async fn serve_image() {}
+
