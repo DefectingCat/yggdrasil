@@ -801,22 +801,27 @@ pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
 pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnError> {
     let client = get_conn().await.map_err(db_conn_error)?;
 
-    let search_pattern = format!("%{}%", query);
+    let q = query.trim();
+    if q.is_empty() {
+        return Ok(PostListResponse { posts: Vec::new() });
+    }
 
     let rows = client
         .query(
             "SELECT 
                 p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, 
                 p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
-                COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags
+                COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags,
+                word_similarity(p.search_text, $1) AS sml
              FROM posts p
              LEFT JOIN post_tags pt ON p.id = pt.post_id
              LEFT JOIN tags t ON pt.tag_id = t.id
              WHERE p.status = 'published' AND p.deleted_at IS NULL
-               AND (p.title ILIKE $1 OR p.content_md ILIKE $1)
-             GROUP BY p.id
-             ORDER BY p.published_at DESC",
-            &[&search_pattern],
+               AND p.search_text ILIKE '%' || $1 || '%'
+             GROUP BY p.id, p.search_text
+             ORDER BY sml DESC, p.published_at DESC
+             LIMIT 50",
+            &[&q],
         )
         .await
         .map_err(query_error)?;
