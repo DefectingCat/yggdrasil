@@ -812,12 +812,12 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
                 p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, 
                 p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
                 COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags,
-                similarity(p.search_text, $1) AS sml
+                word_similarity(p.search_text, $1) AS sml
              FROM posts p
              LEFT JOIN post_tags pt ON p.id = pt.post_id
              LEFT JOIN tags t ON pt.tag_id = t.id
              WHERE p.status = 'published' AND p.deleted_at IS NULL
-               AND p.search_text % $1
+               AND p.search_text ILIKE '%' || $1 || '%'
              GROUP BY p.id, p.search_text
              ORDER BY sml DESC, p.published_at DESC
              LIMIT 50",
