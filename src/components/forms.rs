@@ -4,9 +4,6 @@ pub const INPUT_CLASS: &str = "w-full px-4 py-2 border border-gray-200 dark:bord
 
 pub const BUTTON_PRIMARY_CLASS: &str = "w-full py-2 px-4 bg-gray-900 dark:bg-[#dadadb] text-white dark:text-gray-900 font-medium rounded-full hover:opacity-80 transition-opacity cursor-pointer";
 
-#[allow(dead_code)]
-pub const BUTTON_SECONDARY_CLASS: &str = "px-6 py-2 bg-gray-200 dark:bg-[#333] text-gray-700 dark:text-[#dadadb] rounded-full font-medium hover:opacity-80 transition-opacity cursor-pointer";
-
 #[component]
 pub fn FormInput(
     r#type: &'static str,
