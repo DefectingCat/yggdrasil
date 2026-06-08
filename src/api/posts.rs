@@ -3,6 +3,8 @@
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
+use crate::api::utils::{db_conn_error, query_error, tx_error};
+#[cfg(feature = "server")]
 use crate::auth::session::get_session_from_ctx;
 use crate::db::pool::get_conn;
 use crate::models::post::{Post, PostStats, PostStatus, Tag};
@@ -87,7 +89,7 @@ async fn ensure_unique_slug(
                     &[&candidate, &exclude],
                 )
                 .await
-                .map_err(|e| ServerFnError::new(format!("查询失败: {}", e)))?
+                .map_err(query_error)?
                 .is_some()
         } else {
             client
@@ -96,7 +98,7 @@ async fn ensure_unique_slug(
                     &[&candidate],
                 )
                 .await
-                .map_err(|e| ServerFnError::new(format!("查询失败: {}", e)))?
+                .map_err(query_error)?
                 .is_some()
         };
 
@@ -664,8 +666,7 @@ pub async fn create_post(
     };
 
     let mut client = get_conn().await.map_err(|e| {
-        tracing::error!("DB connection failed: {:?}", e);
-        ServerFnError::new(format!("数据库连接失败: {}", e))
+        db_conn_error(e)
     })?;
 
     let final_slug = ensure_unique_slug(&client, &base_slug, None).await?;
@@ -684,8 +685,7 @@ pub async fn create_post(
     };
 
     let tx = client.transaction().await.map_err(|e| {
-        tracing::error!("transaction start failed: {:?}", e);
-        ServerFnError::new(format!("事务开始失败: {}", e))
+        tx_error(e)
     })?;
 
     let row = tx
@@ -766,8 +766,7 @@ pub async fn create_post(
     }
 
     tx.commit().await.map_err(|e| {
-        tracing::error!("transaction commit failed: {:?}", e);
-        ServerFnError::new(format!("事务提交失败: {}", e))
+        tx_error(e)
     })?;
 
     Ok(CreatePostResponse {
@@ -792,8 +791,7 @@ pub async fn update_post(
     let user = get_current_admin_user().await?;
 
     let mut client = get_conn().await.map_err(|e| {
-        tracing::error!("DB connection failed: {:?}", e);
-        ServerFnError::new(format!("数据库连接失败: {}", e))
+        db_conn_error(e)
     })?;
 
     // Verify ownership
@@ -803,7 +801,7 @@ pub async fn update_post(
             &[&post_id, &user.id],
         )
         .await
-        .map_err(|e| ServerFnError::new(format!("查询失败: {}", e)))?
+        .map_err(query_error)?
         .is_some();
 
     if !exists {
@@ -841,8 +839,7 @@ pub async fn update_post(
     let cover_image = cover_image.filter(|s| !s.trim().is_empty());
 
     let tx = client.transaction().await.map_err(|e| {
-        tracing::error!("transaction start failed: {:?}", e);
-        ServerFnError::new(format!("事务开始失败: {}", e))
+        tx_error(e)
     })?;
 
     // Check if status changed to published and was not published before
@@ -853,8 +850,7 @@ pub async fn update_post(
         )
         .await
         .map_err(|e| {
-            tracing::error!("query failed: {:?}", e);
-            ServerFnError::new(format!("查询失败: {}", e))
+            query_error(e)
         })?;
 
     let published_at = if post_status == PostStatus::Published {
@@ -953,8 +949,7 @@ pub async fn update_post(
     }
 
     tx.commit().await.map_err(|e| {
-        tracing::error!("transaction commit failed: {:?}", e);
-        ServerFnError::new(format!("事务提交失败: {}", e))
+        tx_error(e)
     })?;
 
     Ok(CreatePostResponse {
@@ -970,8 +965,7 @@ pub async fn get_post_by_id(post_id: i32) -> Result<SinglePostResponse, ServerFn
     let _user = get_current_admin_user().await?;
 
     let client = get_conn().await.map_err(|e| {
-        tracing::error!("DB connection failed: {:?}", e);
-        ServerFnError::new(format!("数据库连接失败: {}", e))
+        db_conn_error(e)
     })?;
 
     let row = client
@@ -983,8 +977,7 @@ pub async fn get_post_by_id(post_id: i32) -> Result<SinglePostResponse, ServerFn
         )
         .await
         .map_err(|e| {
-            tracing::error!("query failed: {:?}", e);
-            ServerFnError::new(format!("查询失败: {}", e))
+            query_error(e)
         })?;
 
     let post = match row {
@@ -998,8 +991,7 @@ pub async fn get_post_by_id(post_id: i32) -> Result<SinglePostResponse, ServerFn
 #[server(GetPostBySlug, "/api")]
 pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, ServerFnError> {
     let client = get_conn().await.map_err(|e| {
-        tracing::error!("DB connection failed: {:?}", e);
-        ServerFnError::new(format!("数据库连接失败: {}", e))
+        db_conn_error(e)
     })?;
 
     let row = client
@@ -1031,8 +1023,7 @@ pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, Server
         )
         .await
         .map_err(|e| {
-            tracing::error!("query failed: {:?}", e);
-            ServerFnError::new(format!("查询失败: {}", e))
+            query_error(e)
         })?;
 
     let post = match row {
@@ -1049,8 +1040,7 @@ pub async fn list_published_posts(
     per_page: i32,
 ) -> Result<PostListResponse, ServerFnError> {
     let client = get_conn().await.map_err(|e| {
-        tracing::error!("DB connection failed: {:?}", e);
-        ServerFnError::new(format!("数据库连接失败: {}", e))
+        db_conn_error(e)
     })?;
 
     let offset = ((page - 1).max(0) as i64) * (per_page as i64);
@@ -1066,8 +1056,7 @@ pub async fn list_published_posts(
         )
         .await
         .map_err(|e| {
-            tracing::error!("query failed: {:?}", e);
-            ServerFnError::new(format!("查询失败: {}", e))
+            query_error(e)
         })?;
 
     let mut posts = Vec::new();
@@ -1083,8 +1072,7 @@ pub async fn list_posts() -> Result<PostListResponse, ServerFnError> {
     let _user = get_current_admin_user().await?;
 
     let client = get_conn().await.map_err(|e| {
-        tracing::error!("DB connection failed: {:?}", e);
-        ServerFnError::new(format!("数据库连接失败: {}", e))
+        db_conn_error(e)
     })?;
 
     let rows = client
@@ -1097,8 +1085,7 @@ pub async fn list_posts() -> Result<PostListResponse, ServerFnError> {
         )
         .await
         .map_err(|e| {
-            tracing::error!("query failed: {:?}", e);
-            ServerFnError::new(format!("查询失败: {}", e))
+            query_error(e)
         })?;
 
     let mut posts = Vec::new();
@@ -1114,8 +1101,7 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
     let _user = get_current_admin_user().await?;
 
     let client = get_conn().await.map_err(|e| {
-        tracing::error!("DB connection failed: {:?}", e);
-        ServerFnError::new(format!("数据库连接失败: {}", e))
+        db_conn_error(e)
     })?;
 
     let result = client
@@ -1149,8 +1135,7 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
 #[server(ListTags, "/api")]
 pub async fn list_tags() -> Result<TagListResponse, ServerFnError> {
     let client = get_conn().await.map_err(|e| {
-        tracing::error!("DB connection failed: {:?}", e);
-        ServerFnError::new(format!("数据库连接失败: {}", e))
+        db_conn_error(e)
     })?;
 
     let rows = client
@@ -1165,8 +1150,7 @@ pub async fn list_tags() -> Result<TagListResponse, ServerFnError> {
         )
         .await
         .map_err(|e| {
-            tracing::error!("query failed: {:?}", e);
-            ServerFnError::new(format!("查询失败: {}", e))
+            query_error(e)
         })?;
 
     let tags: Vec<Tag> = rows
@@ -1184,8 +1168,7 @@ pub async fn list_tags() -> Result<TagListResponse, ServerFnError> {
 #[server(GetPostsByTag, "/api")]
 pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, ServerFnError> {
     let client = get_conn().await.map_err(|e| {
-        tracing::error!("DB connection failed: {:?}", e);
-        ServerFnError::new(format!("数据库连接失败: {}", e))
+        db_conn_error(e)
     })?;
 
     let rows = client
@@ -1200,8 +1183,7 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
         )
         .await
         .map_err(|e| {
-            tracing::error!("query failed: {:?}", e);
-            ServerFnError::new(format!("查询失败: {}", e))
+            query_error(e)
         })?;
 
     let mut posts = Vec::new();
@@ -1217,14 +1199,13 @@ pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
     let _user = get_current_admin_user().await?;
 
     let client = get_conn().await.map_err(|e| {
-        tracing::error!("DB connection failed: {:?}", e);
-        ServerFnError::new(format!("数据库连接失败: {}", e))
+        db_conn_error(e)
     })?;
 
     let total: i64 = client
         .query_one("SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL", &[])
         .await
-        .map_err(|e| ServerFnError::new(format!("查询失败: {}", e)))?
+        .map_err(query_error)?
         .get(0);
 
     let drafts: i64 = client
@@ -1233,7 +1214,7 @@ pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
             &[],
         )
         .await
-        .map_err(|e| ServerFnError::new(format!("查询失败: {}", e)))?
+        .map_err(query_error)?
         .get(0);
 
     let published: i64 = client
@@ -1242,7 +1223,7 @@ pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
             &[],
         )
         .await
-        .map_err(|e| ServerFnError::new(format!("查询失败: {}", e)))?
+        .map_err(query_error)?
         .get(0);
 
     Ok(PostStatsResponse {
@@ -1257,8 +1238,7 @@ pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
 #[server(SearchPosts, "/api")]
 pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnError> {
     let client = get_conn().await.map_err(|e| {
-        tracing::error!("DB connection failed: {:?}", e);
-        ServerFnError::new(format!("数据库连接失败: {}", e))
+        db_conn_error(e)
     })?;
 
     let search_pattern = format!("%{}%", query);
@@ -1274,8 +1254,7 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
         )
         .await
         .map_err(|e| {
-            tracing::error!("query failed: {:?}", e);
-            ServerFnError::new(format!("查询失败: {}", e))
+            query_error(e)
         })?;
 
     let mut posts = Vec::new();
