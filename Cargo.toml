@@ -28,6 +28,7 @@ syntect = { version = "5", default-features = false, features = ["default-syntax
 image = { version = "0.25", optional = true }
 moka = { version = "0.12", features = ["future"], optional = true }
 tower_governor = { version = "0.7", optional = true }
+governor = { version = "0.8", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = ["Document", "Window", "HtmlDocument", "Storage", "Element", "DomTokenList", "MediaQueryList", "HtmlScriptElement", "HtmlImageElement", "MouseEvent", "KeyboardEvent", "Node", "HtmlButtonElement", "EventTarget", "HtmlElement"] }
@@ -61,4 +62,5 @@ server = [
     "dep:image",
     "dep:moka",
     "dep:tower_governor",
+    "dep:governor",
 ]
