@@ -7,6 +7,8 @@ use http::header::{HeaderValue, SET_COOKIE};
 use crate::auth::{password, session};
 #[cfg(feature = "server")]
 use crate::auth::session::get_session_from_ctx;
+#[cfg(feature = "server")]
+use crate::api::utils::{db_conn_error, query_error};
 use crate::db::pool::get_conn;
 use crate::models::user::{PublicUser, User, UserRole};
 
@@ -73,18 +75,12 @@ pub async fn register(
         });
     }
 
-    let client = get_conn().await.map_err(|e| {
-        tracing::error!("Register DB connection failed: {:?}", e);
-        ServerFnError::new(format!("数据库连接失败: {}", e))
-    })?;
+    let client = get_conn().await.map_err(db_conn_error)?;
 
     let admin_count: i64 = client
         .query_one("SELECT COUNT(*) FROM users WHERE role = 'admin'", &[])
         .await
-        .map_err(|e| {
-            tracing::error!("Register admin count query failed: {:?}", e);
-            ServerFnError::new(format!("查询失败: {}", e))
-        })?
+        .map_err(query_error)?
         .get(0);
 
     if admin_count > 0 {
@@ -130,10 +126,7 @@ pub async fn register(
 
 #[server(Login, "/api")]
 pub async fn login(username: String, password: String) -> Result<AuthResponse, ServerFnError> {
-    let client = get_conn().await.map_err(|e| {
-        tracing::error!("Login DB connection failed: {:?}", e);
-        ServerFnError::new(format!("数据库连接失败: {}", e))
-    })?;
+    let client = get_conn().await.map_err(db_conn_error)?;
 
     let row = match client
         .query_opt(
@@ -151,8 +144,7 @@ pub async fn login(username: String, password: String) -> Result<AuthResponse, S
             });
         }
         Err(e) => {
-            tracing::error!("Login user query failed: {:?}", e);
-            return Err(ServerFnError::new(format!("查询失败: {}", e)));
+            return Err(query_error(e));
         }
     };
 
@@ -206,10 +198,7 @@ pub async fn login(username: String, password: String) -> Result<AuthResponse, S
 pub async fn logout() -> Result<AuthResponse, ServerFnError> {
     let token = get_session_from_ctx();
 
-    let client = get_conn().await.map_err(|e| {
-        tracing::error!("Logout DB connection failed: {:?}", e);
-        ServerFnError::new(format!("数据库连接失败: {}", e))
-    })?;
+    let client = get_conn().await.map_err(db_conn_error)?;
 
     // 清除 cookie
     if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
@@ -244,10 +233,7 @@ pub struct CurrentUserResponse {
 
 #[cfg(feature = "server")]
 pub async fn get_user_by_token(token: &str) -> Result<Option<User>, ServerFnError> {
-    let client = get_conn().await.map_err(|e| {
-        tracing::error!("GetCurrentUser DB connection failed: {:?}", e);
-        ServerFnError::new(format!("数据库连接失败: {}", e))
-    })?;
+    let client = get_conn().await.map_err(db_conn_error)?;
 
     let row = client
         .query_opt(
@@ -258,10 +244,7 @@ pub async fn get_user_by_token(token: &str) -> Result<Option<User>, ServerFnErro
             &[&token],
         )
         .await
-        .map_err(|e| {
-            tracing::error!("GetCurrentUser session query failed: {:?}", e);
-            ServerFnError::new(format!("查询失败: {}", e))
-        })?;
+        .map_err(query_error)?;
 
     let user = match row {
         Some(row) => {
