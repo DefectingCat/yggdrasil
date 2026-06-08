@@ -323,6 +323,15 @@
     height: auto;
   }
 
+  .md-content-img-zoomable {
+    cursor: zoom-in;
+    transition: opacity 0.2s ease;
+  }
+
+  .md-content-img-zoomable:hover {
+    opacity: 0.9;
+  }
+
   .md-content iframe {
     max-width: 100%;
     border-radius: var(--radius-paper);
@@ -517,6 +526,124 @@
     text-decoration: underline;
     text-underline-offset: 0.3rem;
   }
+
+  /* Image Viewer Lightbox */
+  .image-viewer-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0.92);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .image-viewer-content {
+    position: relative;
+    max-width: 90vw;
+    max-height: 90vh;
+  }
+
+  .image-viewer-img {
+    max-width: 100%;
+    max-height: 90vh;
+    object-fit: contain;
+    border-radius: var(--radius-paper);
+  }
+
+  .image-viewer-close {
+    position: absolute;
+    top: -2.5rem;
+    right: 0;
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    font-size: 1.5rem;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease;
+  }
+
+  .image-viewer-close:hover {
+    background: rgba(255, 255, 255, 0.4);
+  }
+
+  /* Markdown Image Lightbox */
+  .md-image-lightbox-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0.92);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .md-image-lightbox-content {
+    position: relative;
+    max-width: 90vw;
+    max-height: 90vh;
+  }
+
+  .md-image-lightbox-content img {
+    max-width: 100%;
+    max-height: 90vh;
+    object-fit: contain;
+    border-radius: var(--radius-paper);
+  }
+
+  .md-image-lightbox-close {
+    position: absolute;
+    top: -2.5rem;
+    right: 0;
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    font-size: 1.5rem;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease;
+  }
+
+  .md-image-lightbox-close:hover {
+    background: rgba(255, 255, 255, 0.4);
+  }
+
+  /* Post Card Cover Thumbnail */
+  .post-card-cover {
+    overflow: hidden;
+    border-radius: var(--radius-paper);
+  }
+
+  .post-card-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+  }
+
+  .post-card-cover:hover img {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* Responsive */

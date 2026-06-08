@@ -29,7 +29,7 @@ image = { version = "0.25", optional = true }
 moka = { version = "0.12", features = ["future"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3", features = ["Document", "Window", "HtmlDocument", "Storage", "Element", "DomTokenList", "MediaQueryList", "HtmlScriptElement"] }
+web-sys = { version = "0.3", features = ["Document", "Window", "HtmlDocument", "Storage", "Element", "DomTokenList", "MediaQueryList", "HtmlScriptElement", "HtmlImageElement", "MouseEvent", "KeyboardEvent", "Node", "HtmlButtonElement", "EventTarget", "HtmlElement"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
