@@ -22,6 +22,18 @@ pub async fn upload_image(
     headers: HeaderMap,
     mut multipart: Multipart,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // 0. Rate limit check
+    let ip = crate::api::rate_limit::get_client_ip(&headers);
+    if let Err(msg) = crate::api::rate_limit::check_upload_limit(&ip) {
+        return Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({
+                "success": false,
+                "error": msg
+            })),
+        ));
+    }
+
     // 1. Extract session from cookie
     let cookie_header = headers
         .get("cookie")

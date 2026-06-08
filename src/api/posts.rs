@@ -17,8 +17,7 @@ use crate::utils::text::{auto_summary, count_words};
 pub use crate::api::markdown::render_markdown_enhanced;
 #[cfg(feature = "server")]
 pub use crate::api::slug::{ensure_unique_slug, is_valid_slug, slugify};
-#[cfg(feature = "server")]
-pub use crate::api::tags::{get_post_tags, set_post_tags};
+
 
 // ============================================================================
 // Server-side helpers (only compiled when server feature is enabled)
