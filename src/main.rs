@@ -51,6 +51,7 @@ fn main() {
                         .layer(axum::extract::DefaultBodyLimit::disable()),
                 )
                 .route("/uploads/{*path}", axum::routing::get(crate::api::image::serve_image))
+                .layer(crate::api::rate_limit::general_limit())
                 .serve_dioxus_application(config, router::AppRouter)
                 .layer(
                     TraceLayer::new_for_http()
