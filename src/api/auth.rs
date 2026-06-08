@@ -53,6 +53,21 @@ pub async fn register(
     email: String,
     password: String,
 ) -> Result<AuthResponse, ServerFnError> {
+    #[cfg(feature = "server")]
+    {
+        if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
+            let parts = ctx.parts_mut();
+            let ip = crate::api::rate_limit::get_client_ip(&parts.headers);
+            if let Err(msg) = crate::api::rate_limit::check_strict_limit(&ip) {
+                return Ok(AuthResponse {
+                    success: false,
+                    message: msg,
+                    token: None,
+                });
+            }
+        }
+    }
+
     if let Err(e) = validate_username(&username) {
         return Ok(AuthResponse {
             success: false,
@@ -126,6 +141,21 @@ pub async fn register(
 
 #[server(Login, "/api")]
 pub async fn login(username: String, password: String) -> Result<AuthResponse, ServerFnError> {
+    #[cfg(feature = "server")]
+    {
+        if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
+            let parts = ctx.parts_mut();
+            let ip = crate::api::rate_limit::get_client_ip(&parts.headers);
+            if let Err(msg) = crate::api::rate_limit::check_strict_limit(&ip) {
+                return Ok(AuthResponse {
+                    success: false,
+                    message: msg,
+                    token: None,
+                });
+            }
+        }
+    }
+
     let client = get_conn().await.map_err(db_conn_error)?;
 
     let row = match client
