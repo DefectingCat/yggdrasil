@@ -25,6 +25,8 @@ axum = { version = "0.8", optional = true, features = ["multipart"] }
 serde_json = "1.0"
 ammonia = { version = "4", optional = true }
 syntect = { version = "5", default-features = false, features = ["default-syntaxes", "default-themes", "default-fancy", "html", "parsing", "dump-load", "yaml-load"], optional = true }
+image = { version = "0.25", optional = true }
+moka = { version = "0.12", features = ["future"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = ["Document", "Window", "HtmlDocument", "Storage", "Element", "DomTokenList", "MediaQueryList", "HtmlScriptElement"] }
@@ -55,4 +57,6 @@ server = [
     "dep:ammonia",
     "dep:syntect",
     "dep:axum",
+    "dep:image",
+    "dep:moka",
 ]
