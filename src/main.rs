@@ -50,7 +50,7 @@ fn main() {
                     axum::routing::post(crate::api::upload::upload_image)
                         .layer(axum::extract::DefaultBodyLimit::disable()),
                 )
-                .nest_service("/uploads", tower_http::services::ServeDir::new("uploads"))
+                .route("/uploads/{*path}", axum::routing::get(crate::api::image::serve_image))
                 .serve_dioxus_application(config, router::AppRouter)
                 .layer(
                     TraceLayer::new_for_http()
