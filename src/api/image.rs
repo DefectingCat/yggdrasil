@@ -183,8 +183,8 @@ fn process_image(
         }
     }
 
-    // Output format
-    let output_format = match params.format.as_deref() {
+    // Output format (case-insensitive)
+    let output_format = match params.format.as_deref().map(str::to_lowercase).as_deref() {
         Some("webp") => image::ImageFormat::WebP,
         Some("png") => image::ImageFormat::Png,
         Some("jpeg") | Some("jpg") => image::ImageFormat::Jpeg,
