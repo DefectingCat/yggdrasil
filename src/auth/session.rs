@@ -11,6 +11,7 @@ pub fn default_expiry() -> DateTime<Utc> {
     Utc::now() + Duration::days(30)
 }
 
+#[cfg(feature = "server")]
 pub fn parse_session_token(cookie_header: &str) -> Option<&str> {
     cookie_header.split(';').map(|s| s.trim()).find_map(|pair| {
         let mut parts = pair.splitn(2, '=');

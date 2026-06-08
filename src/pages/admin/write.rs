@@ -3,9 +3,10 @@ use dioxus::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
 
-use crate::api::posts::{create_post, get_post_by_id, update_post, CreatePostResponse, SinglePostResponse};
+use crate::api::posts::{get_post_by_id, SinglePostResponse};
+#[cfg(target_arch = "wasm32")]
+use crate::api::posts::{create_post, update_post, CreatePostResponse};
 use crate::components::write_skeleton::WriteSkeleton;
-use crate::models::post::PostStatus;
 use crate::router::Route;
 
 #[component]
