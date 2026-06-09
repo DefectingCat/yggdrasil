@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 dioxus = { version = "0.7.9", features = ["fullstack", "router"] }
 serde = { version = "1.0", features = ["derive"] }
-tokio = { version = "1.52", features = ["full"], optional = true }
+tokio = { version = "1.52", features = ["rt-multi-thread", "macros", "fs", "time", "sync"], optional = true }
 tokio-postgres = { version = "0.7", features = ["with-chrono-0_4"], optional = true }
 deadpool-postgres = { version = "0.14", optional = true }
 argon2 = "0.5"
@@ -17,7 +17,7 @@ pulldown-cmark = "0.13"
 dotenvy = { version = "0.15", optional = true }
 tracing = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", optional = true }
-tower-http = { version = "0.6", features = ["trace", "fs"], optional = true }
+tower-http = { version = "0.6", features = ["trace"], optional = true }
 rand = { version = "0.8", features = ["getrandom"] }
 getrandom = { version = "0.2", features = ["js"] }
 http = "1"
@@ -27,17 +27,16 @@ ammonia = { version = "4", optional = true }
 syntect = { version = "5", default-features = false, features = ["default-syntaxes", "default-themes", "default-fancy", "html", "parsing", "dump-load", "yaml-load"], optional = true }
 image = { version = "0.25", optional = true }
 moka = { version = "0.12", features = ["future"], optional = true }
-tower_governor = { version = "0.7", optional = true }
 governor = { version = "0.8", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3", features = ["Document", "Window", "HtmlDocument", "Storage", "Element", "DomTokenList", "MediaQueryList", "HtmlScriptElement", "HtmlImageElement", "MouseEvent", "KeyboardEvent", "Node", "HtmlButtonElement", "EventTarget", "HtmlElement"] }
+web-sys = { version = "0.3", features = ["Document", "Window", "Storage", "Element", "DomTokenList", "MediaQueryList", "HtmlImageElement", "MouseEvent", "KeyboardEvent", "Node", "EventTarget"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 
 [dev-dependencies]
-tokio = { version = "1.52", features = ["full"] }
+tokio = { version = "1.52", features = ["rt-multi-thread", "macros", "fs", "time", "sync"] }
 
 [profile.release]
 debug = false
@@ -64,6 +63,5 @@ server = [
     "dep:axum",
     "dep:image",
     "dep:moka",
-    "dep:tower_governor",
     "dep:governor",
 ]
