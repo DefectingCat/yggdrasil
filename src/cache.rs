@@ -255,7 +255,7 @@ mod tests {
 
     #[tokio::test]
     async fn post_list_cache_roundtrip() {
-        let key = CacheKey::PublishedPosts { page: 1, per_page: 10 };
+        let key = CacheKey::PublishedPosts { page: 999, per_page: 99 };
         let posts = vec![];
         
         set_post_list(&key, posts.clone()).await;
