@@ -224,8 +224,19 @@ fn is_path_safe(path: &str) -> bool {
 }
 
 #[cfg(feature = "server")]
-pub async fn serve_image(Path(path): Path<String>, Query(params): Query<ImageParams>) -> Response {
-    // Path traversal protection
+use axum::http::HeaderMap;
+
+#[cfg(feature = "server")]
+pub async fn serve_image(
+    Path(path): Path<String>,
+    Query(params): Query<ImageParams>,
+    headers: HeaderMap,
+) -> Response {
+    let ip = crate::api::rate_limit::get_client_ip(&headers);
+    if let Err(status) = crate::api::rate_limit::check_image_limit(&ip) {
+        return status.into_response();
+    }
+
     if !is_path_safe(&path) {
         return StatusCode::FORBIDDEN.into_response();
     }
