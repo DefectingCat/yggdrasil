@@ -138,27 +138,59 @@ pub async fn upload_image(
         ));
     }
 
-    // 6. Generate path: uploads/{year}/{month}/{day}/{uuid}.{ext}
+    let is_gif = mime_type.as_str() == "image/gif";
+
+    let (final_data, final_ext) = if is_gif {
+        (data.to_vec(), "gif")
+    } else {
+        match image::load_from_memory(&data) {
+            Ok(img) => {
+                let mut buf = std::io::Cursor::new(Vec::new());
+                match img.write_to(&mut buf, image::ImageFormat::WebP) {
+                    Ok(_) => {
+                        tracing::info!(
+                            "Converted upload to WebP: {} bytes -> {} bytes",
+                            data.len(),
+                            buf.get_ref().len()
+                        );
+                        (buf.into_inner(), "webp")
+                    }
+                    Err(e) => {
+                        tracing::warn!("WebP encoding failed, storing original: {:?}", e);
+                        let ext = match mime_type.as_str() {
+                            "image/jpeg" => "jpg",
+                            "image/png" => "png",
+                            "image/webp" => "webp",
+                            _ => "bin",
+                        };
+                        (data.to_vec(), ext)
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Image decode failed, storing raw bytes: {:?}", e);
+                let ext = match mime_type.as_str() {
+                    "image/jpeg" => "jpg",
+                    "image/png" => "png",
+                    "image/webp" => "webp",
+                    _ => "bin",
+                };
+                (data.to_vec(), ext)
+            }
+        }
+    };
+
     let now = chrono::Utc::now();
     let year = now.format("%Y").to_string();
     let month = now.format("%m").to_string();
     let day = now.format("%d").to_string();
     let uuid = uuid::Uuid::new_v4().to_string();
 
-    let ext = match mime_type.as_str() {
-        "image/jpeg" => "jpg",
-        "image/png" => "png",
-        "image/gif" => "gif",
-        "image/webp" => "webp",
-        _ => "bin",
-    };
-
     let dir_path = format!("uploads/{}/{}/{}", year, month, day);
-    let file_name = format!("{}.{}.{}", now.format("%H%M%S"), uuid, ext);
+    let file_name = format!("{}.{}.{}", now.format("%H%M%S"), uuid, final_ext);
     let file_path = format!("{}/{}", dir_path, file_name);
     let url_path = format!("/uploads/{}/{}/{}/{}", year, month, day, file_name);
 
-    // 7. Create directory and write file
     if let Err(e) = tokio::fs::create_dir_all(&dir_path).await {
         tracing::error!("Create dir error: {:?}", e);
         return Err((
@@ -170,7 +202,7 @@ pub async fn upload_image(
         ));
     }
 
-    if let Err(e) = tokio::fs::write(&file_path, &data).await {
+    if let Err(e) = tokio::fs::write(&file_path, &final_data).await {
         tracing::error!("Write file error: {:?}", e);
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -181,7 +213,7 @@ pub async fn upload_image(
         ));
     }
 
-    tracing::info!("Image uploaded: {} ({} bytes)", file_path, data.len());
+    tracing::info!("Image uploaded: {} ({} bytes)", file_path, final_data.len());
 
     Ok(Json(json!({
         "success": true,
@@ -198,6 +230,43 @@ mod tests {
         let ext = "jpg";
         let file_name = format!("{}.{}.{}", now_str, uuid, ext);
         assert!(!file_name.contains(' '), "filename should not contain spaces: got '{}'", file_name);
+    }
+
+    #[test]
+    fn should_use_webp_ext_for_non_gif() {
+        let ext = "jpg";
+        let mime = "image/jpeg";
+        let is_gif = mime == "image/gif";
+        let final_ext = if is_gif { ext } else { "webp" };
+        assert_eq!(final_ext, "webp");
+    }
+
+    #[test]
+    fn should_preserve_gif_ext() {
+        let ext = "gif";
+        let mime = "image/gif";
+        let is_gif = mime == "image/gif";
+        let final_ext = if is_gif { ext } else { "webp" };
+        assert_eq!(final_ext, "gif");
+    }
+
+    #[test]
+    fn convert_to_webp_produces_bytes() {
+        let img = image::DynamicImage::new_rgb8(10, 10);
+        let mut buf = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut buf, image::ImageFormat::WebP).unwrap();
+        let result = buf.into_inner();
+        assert!(!result.is_empty());
+    }
+
+    #[test]
+    fn webp_roundtrip_from_rgba() {
+        let img = image::DynamicImage::new_rgba8(2, 2);
+        let mut buf = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut buf, image::ImageFormat::WebP).unwrap();
+        let webp_bytes = buf.into_inner();
+        let loaded = image::load_from_memory_with_format(&webp_bytes, image::ImageFormat::WebP);
+        assert!(loaded.is_ok());
     }
 }
 
