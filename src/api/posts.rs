@@ -601,7 +601,9 @@ pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, Server
         None => None,
     };
 
-    cache::set_post_by_slug(&slug, post.clone()).await;
+    if post.is_some() {
+        cache::set_post_by_slug(&slug, post.clone()).await;
+    }
     Ok(SinglePostResponse { post })
 }
 
@@ -783,11 +785,11 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
 
 #[server(GetPostStats, "/api")]
 pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
-    let _user = get_current_admin_user().await?;
-
     if let Some(cached) = cache::get_post_stats().await {
         return Ok(PostStatsResponse { stats: cached });
     }
+
+    let _user = get_current_admin_user().await?;
 
     let client = get_conn().await.map_err(db_conn_error)?;
 
