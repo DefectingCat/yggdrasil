@@ -65,3 +65,101 @@ pub fn auto_summary(md: &str) -> String {
     let plain = strip_markdown(md);
     plain.chars().take(200).collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strip_markdown_removes_code_blocks() {
+        let input = "before```code here```after";
+        assert_eq!(strip_markdown(input), "beforeafter");
+    }
+
+    #[test]
+    fn strip_markdown_removes_inline_code() {
+        assert_eq!(strip_markdown("text `code` more"), "text more");
+    }
+
+    #[test]
+    fn strip_markdown_removes_images() {
+        assert_eq!(strip_markdown("![alt](url)"), "");
+    }
+
+    #[test]
+    fn strip_markdown_keeps_link_text() {
+        assert_eq!(strip_markdown("[click me](https://example.com)"), "click me");
+    }
+
+    #[test]
+    fn strip_markdown_removes_headings() {
+        assert_eq!(strip_markdown("## Hello"), "Hello");
+    }
+
+    #[test]
+    fn strip_markdown_removes_bold_and_italic() {
+        assert_eq!(strip_markdown("**bold** *italic* __bold__ _italic_"), "bold italic bold italic");
+    }
+
+    #[test]
+    fn strip_markdown_empty_input() {
+        assert_eq!(strip_markdown(""), "");
+    }
+
+    #[test]
+    fn strip_markdown_mixed() {
+        let md = "# Title\n\nSome **bold** and `code` [link](url)\n\n![img](img.png)";
+        let result = strip_markdown(md);
+        assert!(result.contains("Title"));
+        assert!(result.contains("bold"));
+        assert!(result.contains("link"));
+        assert!(!result.contains("img"));
+        assert!(!result.contains("**"));
+        assert!(!result.contains("`"));
+    }
+
+    #[test]
+    fn count_words_english() {
+        assert_eq!(count_words("hello world"), 2);
+    }
+
+    #[test]
+    fn count_words_chinese() {
+        assert_eq!(count_words("你好世界"), 4);
+    }
+
+    #[test]
+    fn count_words_mixed() {
+        let count = count_words("Hello 你好 world 世界");
+        assert_eq!(count, 6);
+    }
+
+    #[test]
+    fn count_words_with_markdown() {
+        let count = count_words("# Hello **World**\n\nSome `code` here");
+        assert_eq!(count, 4);
+    }
+
+    #[test]
+    fn count_words_empty_returns_one() {
+        assert_eq!(count_words(""), 1);
+    }
+
+    #[test]
+    fn auto_summary_truncates_at_200_chars() {
+        let long_md: String = "a ".repeat(200);
+        let summary = auto_summary(&long_md);
+        assert_eq!(summary.chars().count(), 200);
+    }
+
+    #[test]
+    fn auto_summary_short_input() {
+        assert_eq!(auto_summary("short"), "short");
+    }
+
+    #[test]
+    fn auto_summary_strips_markdown() {
+        let summary = auto_summary("**bold** and `code`");
+        assert_eq!(summary, "bold and");
+    }
+}

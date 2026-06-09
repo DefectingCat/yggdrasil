@@ -79,3 +79,80 @@ pub async fn ensure_unique_slug(
         }
     }
 }
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn slugify_ascii_title() {
+        assert_eq!(slugify("Hello World"), "hello-world");
+    }
+
+    #[test]
+    fn slugify_special_characters() {
+        assert_eq!(slugify("Hello, World! (2024)"), "hello-world-2024");
+    }
+
+    #[test]
+    fn slugify_chinese_characters() {
+        let slug = slugify("你好世界 hello");
+        assert!(slug.contains("hello"));
+    }
+
+    #[test]
+    fn slugify_collapses_dashes() {
+        assert_eq!(slugify("a---b"), "a-b");
+    }
+
+    #[test]
+    fn slugify_empty_returns_timestamp() {
+        let slug = slugify("");
+        let _: i64 = slug.parse().expect("should be a valid timestamp");
+    }
+
+    #[test]
+    fn slugify_truncates_at_100_chars() {
+        let long_title = "a".repeat(200);
+        assert!(slugify(&long_title).len() <= 100);
+    }
+
+    #[test]
+    fn slugify_preserves_underscores() {
+        assert_eq!(slugify("hello_world"), "hello_world");
+    }
+
+    #[test]
+    fn is_valid_slug_normal() {
+        assert!(is_valid_slug("hello-world_123"));
+    }
+
+    #[test]
+    fn is_valid_slug_rejects_empty() {
+        assert!(!is_valid_slug(""));
+    }
+
+    #[test]
+    fn is_valid_slug_rejects_too_long() {
+        let long_slug = "a".repeat(201);
+        assert!(!is_valid_slug(&long_slug));
+    }
+
+    #[test]
+    fn is_valid_slug_accepts_max_length() {
+        let slug = "a".repeat(200);
+        assert!(is_valid_slug(&slug));
+    }
+
+    #[test]
+    fn is_valid_slug_rejects_special_chars() {
+        assert!(!is_valid_slug("hello world"));
+        assert!(!is_valid_slug("hello.world"));
+        assert!(!is_valid_slug("hello!world"));
+    }
+
+    #[test]
+    fn is_valid_slug_accepts_chinese() {
+        assert!(is_valid_slug("你好-world"));
+    }
+}

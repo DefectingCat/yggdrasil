@@ -36,6 +36,9 @@ wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 
+[dev-dependencies]
+tokio = { version = "1.52", features = ["full"] }
+
 [profile.release]
 debug = false
 opt-level = "z"

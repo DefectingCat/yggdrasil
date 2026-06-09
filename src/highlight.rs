@@ -84,3 +84,52 @@ pub mod server {
         generator.finalize()
     }
 }
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::server::*;
+
+    #[test]
+    fn highlight_code_rust() {
+        let result = highlight_code("fn main() {}", Some("rust"));
+        assert!(!result.is_empty());
+        assert!(result.contains("main"));
+    }
+
+    #[test]
+    fn highlight_code_javascript_alias() {
+        let result = highlight_code("console.log('hi')", Some("js"));
+        assert!(!result.is_empty());
+        assert!(result.contains("console"));
+    }
+
+    #[test]
+    fn highlight_code_python_alias() {
+        let result = highlight_code("print('hi')", Some("python"));
+        assert!(!result.is_empty());
+    }
+
+    #[test]
+    fn highlight_code_unknown_language() {
+        let result = highlight_code("some text", Some("brainfuck"));
+        assert!(!result.is_empty());
+    }
+
+    #[test]
+    fn highlight_code_none_language() {
+        let result = highlight_code("plain text", None);
+        assert!(!result.is_empty());
+    }
+
+    #[test]
+    fn highlight_code_empty() {
+        let result = highlight_code("", None);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn highlight_code_produces_span_tags() {
+        let result = highlight_code("let x = 1;", Some("rust"));
+        assert!(result.contains('<'));
+    }
+}

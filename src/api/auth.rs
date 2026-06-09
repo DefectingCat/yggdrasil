@@ -309,3 +309,78 @@ pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
 
     Ok(CurrentUserResponse { user })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_username_valid() {
+        assert!(validate_username("admin").is_ok());
+        assert!(validate_username("user_123").is_ok());
+        assert!(validate_username("abc").is_ok());
+    }
+
+    #[test]
+    fn validate_username_too_short() {
+        assert!(validate_username("ab").is_err());
+    }
+
+    #[test]
+    fn validate_username_too_long() {
+        assert!(validate_username(&"a".repeat(51)).is_err());
+    }
+
+    #[test]
+    fn validate_username_max_length() {
+        assert!(validate_username(&"a".repeat(50)).is_ok());
+    }
+
+    #[test]
+    fn validate_username_special_chars() {
+        assert!(validate_username("user name").is_err());
+        assert!(validate_username("user@name").is_err());
+        assert!(validate_username("user-name").is_err());
+    }
+
+    #[test]
+    fn validate_username_unicode() {
+        assert!(validate_username("用户名").is_ok());
+    }
+
+    #[test]
+    fn validate_email_valid() {
+        assert!(validate_email("user@example.com").is_ok());
+        assert!(validate_email("a.b+c@domain.co").is_ok());
+    }
+
+    #[test]
+    fn validate_email_invalid() {
+        assert!(validate_email("notanemail").is_err());
+        assert!(validate_email("@domain.com").is_err());
+        assert!(validate_email("user@").is_err());
+        assert!(validate_email("user@.com").is_err());
+        assert!(validate_email("").is_err());
+    }
+
+    #[test]
+    fn validate_password_valid() {
+        assert!(validate_password("12345678").is_ok());
+        assert!(validate_password("a very long password with spaces").is_ok());
+    }
+
+    #[test]
+    fn validate_password_too_short() {
+        assert!(validate_password("1234567").is_err());
+    }
+
+    #[test]
+    fn validate_password_exactly_8() {
+        assert!(validate_password("12345678").is_ok());
+    }
+
+    #[test]
+    fn validate_password_empty() {
+        assert!(validate_password("").is_err());
+    }
+}
