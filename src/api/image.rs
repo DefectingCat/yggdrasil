@@ -202,7 +202,7 @@ fn process_image(
         }
         image::ImageFormat::WebP => {
             let config = crate::webp::WEBP_CONFIG.clone();
-            let webp_quality = params.quality.unwrap_or(config.quality as u8) as f32;
+            let webp_quality = params.quality.map(|q| q as f32).unwrap_or(config.quality);
             let webp_data = crate::webp::encode(&img, webp_quality, config.method)
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
             buf = std::io::Cursor::new(webp_data);
