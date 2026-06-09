@@ -8,7 +8,7 @@ use crate::router::Route;
 #[component]
 pub fn PostFooter(post: Post) -> Element {
     let tags = post.tags.clone();
-    
+
     rsx! {
         footer { class: "post-footer",
             if !tags.is_empty() {
@@ -25,7 +25,7 @@ pub fn PostFooter(post: Post) -> Element {
             }
 
             if post.prev_post.is_some() || post.next_post.is_some() {
-                PostNavLinks { 
+                PostNavLinks {
                     prev: post.prev_post,
                     next: post.next_post
                 }

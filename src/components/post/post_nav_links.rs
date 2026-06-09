@@ -19,7 +19,7 @@ pub fn PostNavLinks(prev: Option<PostNav>, next: Option<PostNav>) -> Element {
             } else {
                 span { class: "prev" }
             }
-            
+
             if let Some(next_post) = next {
                 Link {
                     class: "next",

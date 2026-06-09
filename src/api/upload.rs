@@ -18,6 +18,17 @@ const ALLOWED_MIME_TYPES: &[&str] = &["image/jpeg", "image/png", "image/gif", "i
 const MAX_FILE_SIZE: usize = 5 * 1024 * 1024; // 5MB
 
 #[cfg(feature = "server")]
+fn mime_to_ext(mime: &str) -> &'static str {
+    match mime {
+        "image/jpeg" => "jpg",
+        "image/png" => "png",
+        "image/webp" => "webp",
+        "image/gif" => "gif",
+        _ => "bin",
+    }
+}
+
+#[cfg(feature = "server")]
 pub async fn upload_image(
     headers: HeaderMap,
     mut multipart: Multipart,
@@ -139,44 +150,47 @@ pub async fn upload_image(
     }
 
     let is_gif = mime_type.as_str() == "image/gif";
+    let is_webp = mime_type.as_str() == "image/webp";
 
     let (final_data, final_ext) = if is_gif {
-        (data.to_vec(), "gif")
+        (data.to_vec(), "gif".to_string())
+    } else if is_webp {
+        (data.to_vec(), "webp".to_string())
     } else {
-        match image::load_from_memory(&data) {
-            Ok(img) => {
-                let mut buf = std::io::Cursor::new(Vec::new());
-                match img.write_to(&mut buf, image::ImageFormat::WebP) {
-                    Ok(_) => {
-                        tracing::info!(
-                            "Converted upload to WebP: {} bytes -> {} bytes",
-                            data.len(),
-                            buf.get_ref().len()
-                        );
-                        (buf.into_inner(), "webp")
-                    }
-                    Err(e) => {
-                        tracing::warn!("WebP encoding failed, storing original: {:?}", e);
-                        let ext = match mime_type.as_str() {
-                            "image/jpeg" => "jpg",
-                            "image/png" => "png",
-                            "image/webp" => "webp",
-                            _ => "bin",
-                        };
-                        (data.to_vec(), ext)
+        let original_data = data.to_vec();
+        let mime = mime_type.clone();
+        let original_len = data.len();
+        let result = tokio::task::spawn_blocking(move || -> (Vec<u8>, String, bool) {
+            match image::load_from_memory(&original_data) {
+                Ok(img) => {
+                    let mut buf = std::io::Cursor::new(Vec::new());
+                    match img.write_to(&mut buf, image::ImageFormat::WebP) {
+                        Ok(_) => {
+                            let webp_data = buf.into_inner();
+                            if webp_data.len() < original_data.len() {
+                                (webp_data, "webp".to_string(), true)
+                            } else {
+                                (original_data, mime_to_ext(&mime).to_string(), false)
+                            }
+                        }
+                        Err(_) => (original_data, mime_to_ext(&mime).to_string(), false),
                     }
                 }
+                Err(_) => (original_data, mime_to_ext(&mime).to_string(), false),
             }
-            Err(e) => {
-                tracing::warn!("Image decode failed, storing raw bytes: {:?}", e);
-                let ext = match mime_type.as_str() {
-                    "image/jpeg" => "jpg",
-                    "image/png" => "png",
-                    "image/webp" => "webp",
-                    _ => "bin",
-                };
-                (data.to_vec(), ext)
+        })
+        .await;
+
+        match result {
+            Ok((converted_data, ext, was_converted)) => {
+                if was_converted {
+                    tracing::info!("Converted upload to WebP: {} bytes -> {} bytes", original_len, converted_data.len());
+                } else {
+                    tracing::info!("Keeping original format (ext: {})", ext);
+                }
+                (converted_data, ext)
             }
+            Err(_) => (data.to_vec(), mime_to_ext(&mime_type).to_string()),
         }
     };
 
