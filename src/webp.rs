@@ -86,6 +86,15 @@ pub fn decode(data: &[u8]) -> Result<image::DynamicImage, WebpError> {
     let height = info.height;
     let has_alpha = info.has_alpha;
 
+    let pixel_count = (width as u64) * (height as u64);
+
+    if pixel_count > crate::api::image::MAX_IMAGE_PIXELS as u64 {
+        return Err(WebpError::Decode(format!(
+            "Image dimensions {}x{} exceed maximum allowed pixels",
+            width, height
+        )));
+    }
+
     let buf_size = decoder
         .output_buffer_size()
         .ok_or_else(|| WebpError::Decode("Image too large".to_string()))?;

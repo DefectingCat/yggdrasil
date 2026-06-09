@@ -15,6 +15,8 @@ use std::sync::LazyLock;
 const MAX_IMAGE_DIMENSION: u32 = 4096;
 #[cfg(feature = "server")]
 const DEFAULT_JPEG_QUALITY: u8 = 85;
+#[cfg(feature = "server")]
+pub const MAX_IMAGE_PIXELS: u32 = 100_000_000; // ~10k x 10k
 
 #[cfg(feature = "server")]
 #[derive(Debug, Clone)]
