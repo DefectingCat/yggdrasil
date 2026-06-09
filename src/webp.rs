@@ -27,17 +27,39 @@ pub struct WebpConfig {
 
 #[cfg(feature = "server")]
 pub static WEBP_CONFIG: LazyLock<WebpConfig> = LazyLock::new(|| {
-    let quality = std::env::var("WEBP_QUALITY")
+    let (quality, quality_clamped) = std::env::var("WEBP_QUALITY")
         .ok()
         .and_then(|s| s.parse::<f32>().ok())
-        .map(|q| q.clamp(0.0, 100.0))
-        .unwrap_or(85.0);
+        .map(|q| {
+            let clamped = q.clamp(0.0, 100.0);
+            (clamped, clamped != q)
+        })
+        .unwrap_or((85.0, false));
 
-    let method = std::env::var("WEBP_METHOD")
+    if quality_clamped {
+        tracing::warn!(
+            "WEBP_QUALITY was clamped from {} to {} (valid range: 0.0-100.0)",
+            std::env::var("WEBP_QUALITY").unwrap_or_default(),
+            quality
+        );
+    }
+
+    let (method, method_clamped) = std::env::var("WEBP_METHOD")
         .ok()
         .and_then(|s| s.parse::<u8>().ok())
-        .map(|m| m.clamp(0, 6))
-        .unwrap_or(2);
+        .map(|m| {
+            let clamped = m.clamp(0, 6);
+            (clamped, clamped != m)
+        })
+        .unwrap_or((2, false));
+
+    if method_clamped {
+        tracing::warn!(
+            "WEBP_METHOD was clamped from {} to {} (valid range: 0-6)",
+            std::env::var("WEBP_METHOD").unwrap_or_default(),
+            method
+        );
+    }
 
     tracing::info!("WebP config loaded: quality={}, method={}", quality, method);
     WebpConfig { quality, method }
