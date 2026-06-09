@@ -131,7 +131,9 @@ pub async fn set_tag_list(tags: Vec<Tag>) {
 
 #[cfg(feature = "server")]
 pub async fn get_post_by_slug(slug: &str) -> Option<Option<Post>> {
-    SINGLE_POST_CACHE.get(&CacheKey::PostBySlug(slug.to_string())).await
+    SINGLE_POST_CACHE
+        .get(&CacheKey::PostBySlug(slug.to_string()))
+        .await
 }
 
 #[cfg(feature = "server")]
@@ -162,9 +164,7 @@ pub async fn get_post_stats() -> Option<PostStats> {
 
 #[cfg(feature = "server")]
 pub async fn set_post_stats(stats: PostStats) {
-    let _ = POST_STATS_CACHE
-        .insert(CacheKey::PostStats, stats)
-        .await;
+    let _ = POST_STATS_CACHE.insert(CacheKey::PostStats, stats).await;
 }
 
 // ============================================================================
@@ -207,4 +207,124 @@ pub fn invalidate_all_post_caches() {
     SINGLE_POST_CACHE.invalidate_all();
     POST_STATS_CACHE.invalidate_all();
     TAG_POSTS_CACHE.invalidate_all();
+}
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+    use crate::models::post::PostStatus;
+
+    #[test]
+    fn cache_key_published_posts_format() {
+        let key = CacheKey::PublishedPosts { page: 2, per_page: 10 };
+        assert_eq!(key.as_string(), "posts:list:2:10");
+    }
+
+    #[test]
+    fn cache_key_all_tags_format() {
+        let key = CacheKey::AllTags;
+        assert_eq!(key.as_string(), "tags:all");
+    }
+
+    #[test]
+    fn cache_key_post_by_slug_format() {
+        let key = CacheKey::PostBySlug("hello-world".to_string());
+        assert_eq!(key.as_string(), "post:slug:hello-world");
+    }
+
+    #[test]
+    fn cache_key_posts_by_tag_format() {
+        let key = CacheKey::PostsByTag("rust".to_string());
+        assert_eq!(key.as_string(), "posts:tag:rust");
+    }
+
+    #[test]
+    fn cache_key_post_stats_format() {
+        let key = CacheKey::PostStats;
+        assert_eq!(key.as_string(), "posts:stats");
+    }
+
+    #[test]
+    fn cache_key_equality() {
+        let k1 = CacheKey::PublishedPosts { page: 1, per_page: 10 };
+        let k2 = CacheKey::PublishedPosts { page: 1, per_page: 10 };
+        let k3 = CacheKey::PublishedPosts { page: 2, per_page: 10 };
+        assert_eq!(k1, k2);
+        assert_ne!(k1, k3);
+    }
+
+    #[tokio::test]
+    async fn post_list_cache_roundtrip() {
+        let key = CacheKey::PublishedPosts { page: 1, per_page: 10 };
+        let posts = vec![];
+        
+        set_post_list(&key, posts.clone()).await;
+        let cached = get_post_list(&key).await;
+        
+        assert!(cached.is_some());
+        assert_eq!(cached.unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn tag_list_cache_roundtrip() {
+        let tags = vec![Tag { id: 1, name: "rust".to_string(), post_count: 5 }];
+        
+        set_tag_list(tags.clone()).await;
+        let cached = get_tag_list().await;
+        
+        assert!(cached.is_some());
+        assert_eq!(cached.unwrap()[0].name, "rust");
+    }
+
+    #[tokio::test]
+    async fn single_post_cache_roundtrip() {
+        let post = Some(Post {
+            id: 1,
+            author_id: 1,
+            title: "Test".to_string(),
+            slug: "test".to_string(),
+            summary: None,
+            content_md: "content".to_string(),
+            content_html: None,
+            status: PostStatus::Published,
+            published_at: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            tags: vec![],
+            cover_image: None,
+            reading_time: 1,
+            word_count: 10,
+            toc_html: None,
+            prev_post: None,
+            next_post: None,
+        });
+        
+        set_post_by_slug("test", post.clone()).await;
+        let cached = get_post_by_slug("test").await;
+        
+        assert!(cached.is_some());
+        assert_eq!(cached.unwrap().unwrap().title, "Test");
+    }
+
+    #[tokio::test]
+    async fn post_stats_cache_roundtrip() {
+        let stats = PostStats { total: 10, drafts: 3, published: 7 };
+        
+        set_post_stats(stats.clone()).await;
+        let cached = get_post_stats().await;
+        
+        assert!(cached.is_some());
+        assert_eq!(cached.unwrap().total, 10);
+    }
+
+    #[tokio::test]
+    async fn cache_invalidation_works() {
+        let key = CacheKey::PublishedPosts { page: 1, per_page: 10 };
+        set_post_list(&key, vec![]).await;
+        
+        invalidate_post_lists();
+        
+        let cached = get_post_list(&key).await;
+        assert!(cached.is_none());
+    }
 }
