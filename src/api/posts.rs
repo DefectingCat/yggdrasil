@@ -350,6 +350,10 @@ pub async fn create_post(
         cache::invalidate_post_lists();
         cache::invalidate_all_tags();
         cache::invalidate_post_stats();
+
+        for tag_name in &tags_cleaned {
+            cache::invalidate_posts_by_tag(tag_name).await;
+        }
     }
 
     Ok(CreatePostResponse {
@@ -374,6 +378,13 @@ pub async fn update_post(
     let user = get_current_admin_user().await?;
 
     let mut client = get_conn().await.map_err(db_conn_error)?;
+
+    // Get old slug before updating (for cache invalidation)
+    let old_slug: Option<String> = client
+        .query_opt("SELECT slug FROM posts WHERE id = $1", &[&post_id])
+        .await
+        .map_err(query_error)?
+        .map(|r| r.get(0));
 
     let exists: bool = client
         .query_opt(
@@ -419,6 +430,18 @@ pub async fn update_post(
     let cover_image = cover_image.filter(|s| !s.trim().is_empty());
 
     let tx = client.transaction().await.map_err(tx_error)?;
+
+    // Get old tags before deleting them (for cache invalidation)
+    let old_tags: Vec<String> = {
+        let rows = tx
+            .query(
+                "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
+                &[&post_id],
+            )
+            .await
+            .map_err(query_error)?;
+        rows.iter().map(|r| r.get(0)).collect()
+    };
 
     let old_status_row = tx
         .query_opt(
@@ -474,6 +497,8 @@ pub async fn update_post(
         .map(|t| t.trim().to_string())
         .filter(|t| !t.is_empty())
         .collect();
+
+    let tags_for_invalidation = tags_cleaned.clone();
 
     tx.execute("DELETE FROM post_tags WHERE post_id = $1", &[&post_id])
         .await
@@ -532,9 +557,20 @@ pub async fn update_post(
         cache::invalidate_post_by_slug(&final_slug).await;
         cache::invalidate_post_stats();
 
-        // Invalidate tag-specific caches for new tags
-        for tag_name in &tags_cleaned {
+        // Invalidate caches for both old and new tags
+        let all_tags_to_invalidate: std::collections::HashSet<String> = old_tags
+            .into_iter()
+            .chain(tags_for_invalidation.into_iter())
+            .collect();
+        for tag_name in &all_tags_to_invalidate {
             cache::invalidate_posts_by_tag(tag_name).await;
+        }
+
+        // Invalidate old slug if changed
+        if let Some(ref old) = old_slug {
+            if old != &final_slug {
+                cache::invalidate_post_by_slug(old).await;
+            }
         }
     }
 
