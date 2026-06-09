@@ -1,4 +1,5 @@
 mod api;
+mod cache;
 mod auth;
 mod components;
 mod context;
