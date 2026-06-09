@@ -154,7 +154,7 @@ pub async fn upload_image(
     };
 
     let dir_path = format!("uploads/{}/{}/{}", year, month, day);
-    let file_name = format!("{}.{ }.{}", now.format("%H%M%S"), uuid, ext);
+    let file_name = format!("{}.{}.{}", now.format("%H%M%S"), uuid, ext);
     let file_path = format!("{}/{}", dir_path, file_name);
     let url_path = format!("/uploads/{}/{}/{}/{}", year, month, day, file_name);
 
@@ -187,6 +187,18 @@ pub async fn upload_image(
         "success": true,
         "url": url_path
     })))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn filename_format_no_spaces() {
+        let now_str = "120000";
+        let uuid = "abc-123";
+        let ext = "jpg";
+        let file_name = format!("{}.{}.{}", now_str, uuid, ext);
+        assert!(!file_name.contains(' '), "filename should not contain spaces: got '{}'", file_name);
+    }
 }
 
 
