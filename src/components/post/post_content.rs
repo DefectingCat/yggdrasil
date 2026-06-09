@@ -24,6 +24,44 @@ pub fn PostContent(content_html: String) -> Element {
                                 copybutton.set_text_content(Some("copy"));
                                 copybutton.set_attribute("aria-label", "Copy code").unwrap();
                                 
+                                let code_text = codeblock.text_content().unwrap_or_default();
+                                let btn = copybutton.clone();
+                                let copy_closure = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
+                                    let has_clipboard = web_sys::window()
+                                        .map(|w| {
+                                            let clip = js_sys::Reflect::get(&w.navigator(), &js_sys::JsString::from("clipboard")).unwrap_or(wasm_bindgen::JsValue::UNDEFINED);
+                                            !clip.is_undefined()
+                                        })
+                                        .unwrap_or(false);
+
+                                    if has_clipboard {
+                                        let _ = js_sys::eval(&format!(
+                                            "navigator.clipboard.writeText({})",
+                                            serde_json::to_string(&code_text).unwrap_or_default()
+                                        ));
+                                    } else {
+                                        let _ = js_sys::eval(&format!(
+                                            "((t)=>{{const e=document.createElement('textarea');e.value=t;e.style.position='fixed';e.style.opacity='0';document.body.appendChild(e);e.select();document.execCommand('copy');document.body.removeChild(e)}})({})",
+                                            serde_json::to_string(&code_text).unwrap_or_default()
+                                        ));
+                                    }
+
+                                    btn.set_text_content(Some("copied!"));
+                                    let btn_clone = btn.clone();
+                                    let reset_closure = Closure::wrap(Box::new(move || {
+                                        btn_clone.set_text_content(Some("copy"));
+                                    }) as Box<dyn FnMut()>);
+                                    let _ = web_sys::window()
+                                        .unwrap()
+                                        .set_timeout_with_callback_and_timeout_and_arguments_0(
+                                            reset_closure.as_ref().unchecked_ref(),
+                                            2000,
+                                        );
+                                    reset_closure.forget();
+                                }) as Box<dyn FnMut(_)>);
+                                copybutton.add_event_listener_with_callback("click", copy_closure.as_ref().unchecked_ref()).unwrap();
+                                copy_closure.forget();
+                                
                                 let _ = parent.append_child(&copybutton);
                             }
                         }
