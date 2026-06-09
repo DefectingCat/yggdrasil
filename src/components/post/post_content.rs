@@ -46,6 +46,10 @@ pub fn PostContent(content_html: String) -> Element {
                             let original_src = img_element.src();
                             let alt = img_element.alt();
                             
+                            if original_src.starts_with("data:") {
+                                continue;
+                            }
+                            
                             // Replace src with thumbnail version (add ?w=800)
                             let thumb_src = if original_src.contains('?') {
                                 format!("{}&w=800", original_src)

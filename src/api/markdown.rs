@@ -15,6 +15,7 @@ pub fn clean_html(input: &str) -> String {
         ])
         .add_tags(&["details", "summary"])
         .url_relative(ammonia::UrlRelative::PassThrough)
+        .add_url_schemes(&["data"])
         .add_tag_attributes("a", &["class", "aria-hidden", "aria-label"])
         .add_tag_attributes("span", &["class"])
         .add_tag_attributes("h1", &["id", "class"])
@@ -383,5 +384,12 @@ mod tests {
         let result = render_markdown_enhanced("```rust\nfn main() {}\n```");
         assert!(result.html.contains("<pre><code>"));
         assert!(result.html.contains("main"));
+    }
+
+    #[test]
+    fn render_markdown_data_uri_image() {
+        let result = render_markdown_enhanced("![alt](data:image/svg+xml,%3csvg%3e%3c/svg%3e)");
+        assert!(result.html.contains("data:image/svg+xml"), "data URI should be preserved in img src, got: {}", result.html);
+        assert!(result.html.contains("alt=\"alt\""));
     }
 }
