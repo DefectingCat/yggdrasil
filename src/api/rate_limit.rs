@@ -87,3 +87,37 @@ pub fn check_upload_limit(ip: &str) -> Result<(), String> {
         .map(|_| ())
         .map_err(|_| "上传过于频繁，请稍后再试".to_string())
 }
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+    use http::HeaderMap;
+
+    #[test]
+    fn get_client_ip_from_x_forwarded_for() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "1.2.3.4, 5.6.7.8".parse().unwrap());
+        assert_eq!(get_client_ip(&headers), "1.2.3.4");
+    }
+
+    #[test]
+    fn get_client_ip_from_x_real_ip() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-real-ip", "9.8.7.6".parse().unwrap());
+        assert_eq!(get_client_ip(&headers), "9.8.7.6");
+    }
+
+    #[test]
+    fn get_client_ip_x_forwarded_for_takes_priority() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "1.1.1.1".parse().unwrap());
+        headers.insert("x-real-ip", "2.2.2.2".parse().unwrap());
+        assert_eq!(get_client_ip(&headers), "1.1.1.1");
+    }
+
+    #[test]
+    fn get_client_ip_no_headers_returns_unknown() {
+        let headers = HeaderMap::new();
+        assert_eq!(get_client_ip(&headers), "unknown");
+    }
+}

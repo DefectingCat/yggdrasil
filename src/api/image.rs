@@ -296,3 +296,153 @@ pub async fn serve_image(Path(path): Path<String>, Query(params): Query<ImagePar
     )
         .into_response()
 }
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn image_params_validate_valid_defaults() {
+        let params = ImageParams::default();
+        assert!(params.validate().is_ok());
+    }
+
+    #[test]
+    fn image_params_validate_valid_width() {
+        let params = ImageParams { w: Some(100), ..Default::default() };
+        assert!(params.validate().is_ok());
+    }
+
+    #[test]
+    fn image_params_validate_zero_width_rejected() {
+        let params = ImageParams { w: Some(0), ..Default::default() };
+        assert!(params.validate().is_err());
+    }
+
+    #[test]
+    fn image_params_validate_oversized_width_rejected() {
+        let params = ImageParams { w: Some(5000), ..Default::default() };
+        assert!(params.validate().is_err());
+    }
+
+    #[test]
+    fn image_params_validate_valid_rotation() {
+        for angle in [0, 90, 180, 270] {
+            let params = ImageParams { rotate: Some(angle), ..Default::default() };
+            assert!(params.validate().is_ok(), "angle {} should be valid", angle);
+        }
+    }
+
+    #[test]
+    fn image_params_validate_invalid_rotation_rejected() {
+        let params = ImageParams { rotate: Some(45), ..Default::default() };
+        assert!(params.validate().is_err());
+    }
+
+    #[test]
+    fn image_params_validate_valid_format() {
+        for fmt in &["jpeg", "jpg", "png", "webp", "JPEG", "PNG"] {
+            let params = ImageParams { format: Some(fmt.to_string()), ..Default::default() };
+            assert!(params.validate().is_ok(), "format {} should be valid", fmt);
+        }
+    }
+
+    #[test]
+    fn image_params_validate_invalid_format_rejected() {
+        let params = ImageParams { format: Some("gif".to_string()), ..Default::default() };
+        assert!(params.validate().is_err());
+    }
+
+    #[test]
+    fn image_params_validate_valid_thumbnail() {
+        let params = ImageParams { thumb: Some("200x150".to_string()), ..Default::default() };
+        assert!(params.validate().is_ok());
+    }
+
+    #[test]
+    fn image_params_validate_invalid_thumbnail_rejected() {
+        let params = ImageParams { thumb: Some("200".to_string()), ..Default::default() };
+        assert!(params.validate().is_err());
+    }
+
+    #[test]
+    fn image_params_validate_valid_quality() {
+        let params = ImageParams { quality: Some(85), ..Default::default() };
+        assert!(params.validate().is_ok());
+    }
+
+    #[test]
+    fn image_params_validate_zero_quality_rejected() {
+        let params = ImageParams { quality: Some(0), ..Default::default() };
+        assert!(params.validate().is_err());
+    }
+
+    #[test]
+    fn image_params_validate_over_100_quality_rejected() {
+        let params = ImageParams { quality: Some(101), ..Default::default() };
+        assert!(params.validate().is_err());
+    }
+
+    #[test]
+    fn is_path_safe_normal() {
+        assert!(is_path_safe("images/photo.jpg"));
+        assert!(is_path_safe("2024/01/photo.png"));
+    }
+
+    #[test]
+    fn is_path_safe_rejects_parent_dir() {
+        assert!(!is_path_safe("../etc/passwd"));
+        assert!(!is_path_safe("foo/../../bar"));
+    }
+
+    #[test]
+    fn is_path_safe_rejects_null_bytes() {
+        assert!(!is_path_safe("foo\0bar"));
+    }
+
+    #[test]
+    fn is_path_safe_rejects_absolute_path() {
+        assert!(!is_path_safe("/etc/passwd"));
+    }
+
+    #[test]
+    fn detect_format_jpeg() {
+        assert!(matches!(detect_format("photo.jpg"), image::ImageFormat::Jpeg));
+        assert!(matches!(detect_format("photo.jpeg"), image::ImageFormat::Jpeg));
+        assert!(matches!(detect_format("PHOTO.JPG"), image::ImageFormat::Jpeg));
+    }
+
+    #[test]
+    fn detect_format_png() {
+        assert!(matches!(detect_format("icon.png"), image::ImageFormat::Png));
+    }
+
+    #[test]
+    fn detect_format_webp() {
+        assert!(matches!(detect_format("anim.webp"), image::ImageFormat::WebP));
+    }
+
+    #[test]
+    fn detect_format_defaults_to_jpeg() {
+        assert!(matches!(detect_format("file.xyz"), image::ImageFormat::Jpeg));
+    }
+
+    #[test]
+    fn cache_key_differs_for_different_params() {
+        let p1 = ImageParams { w: Some(100), ..Default::default() };
+        let p2 = ImageParams { w: Some(200), ..Default::default() };
+        assert_ne!(p1.cache_key("img.jpg"), p2.cache_key("img.jpg"));
+    }
+
+    #[test]
+    fn is_empty_true_when_all_none() {
+        let params = ImageParams::default();
+        assert!(params.is_empty());
+    }
+
+    #[test]
+    fn is_empty_false_when_any_set() {
+        let params = ImageParams { w: Some(100), ..Default::default() };
+        assert!(!params.is_empty());
+    }
+}

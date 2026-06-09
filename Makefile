@@ -1,4 +1,4 @@
-.PHONY: dev build css css-watch clean build-editor highlight-css
+.PHONY: dev build css css-watch clean build-editor highlight-css test
 
 build:
 	@$(MAKE) build-editor
@@ -26,6 +26,9 @@ css:
 
 css-watch:
 	@tailwindcss -i input.css -o public/style.css --watch
+
+test:
+	@cargo test
 
 clean:
 	@cargo clean

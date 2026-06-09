@@ -266,3 +266,122 @@ fn slugify_heading(text: &str) -> String {
 
     slug
 }
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn slugify_heading_simple() {
+        assert_eq!(slugify_heading("Hello World"), "hello-world");
+    }
+
+    #[test]
+    fn slugify_heading_special_chars() {
+        assert_eq!(slugify_heading("What's new? (2024)"), "what-s-new-2024");
+    }
+
+    #[test]
+    fn slugify_heading_chinese() {
+        let slug = slugify_heading("你好世界");
+        assert!(!slug.is_empty());
+    }
+
+    #[test]
+    fn slugify_heading_collapses_dashes() {
+        assert_eq!(slugify_heading("a--b"), "a-b");
+    }
+
+    #[test]
+    fn slugify_heading_strips_trailing_dash() {
+        assert_eq!(slugify_heading("hello!"), "hello");
+    }
+
+    #[test]
+    fn slugify_heading_empty_returns_heading() {
+        assert_eq!(slugify_heading(""), "heading");
+    }
+
+    #[test]
+    fn clean_html_allows_safe_tags() {
+        let input = "<p>Hello <strong>world</strong></p>";
+        assert_eq!(clean_html(input), input);
+    }
+
+    #[test]
+    fn clean_html_removes_script() {
+        let input = "<script>alert('xss')</script><p>safe</p>";
+        let result = clean_html(input);
+        assert!(!result.contains("script"));
+        assert!(result.contains("safe"));
+    }
+
+    #[test]
+    fn clean_html_allows_id_attribute() {
+        let input = "<h2 id=\"my-heading\">Title</h2>";
+        let result = clean_html(input);
+        assert!(result.contains("id=\"my-heading\""));
+    }
+
+    #[test]
+    fn clean_html_allows_class_attribute() {
+        let input = "<span class=\"highlight\">text</span>";
+        let result = clean_html(input);
+        assert!(result.contains("class=\"highlight\""));
+    }
+
+    #[test]
+    fn generate_toc_html_empty() {
+        assert_eq!(generate_toc_html(&[]), "");
+    }
+
+    #[test]
+    fn generate_toc_html_single_heading() {
+        let headings = vec![(2u8, "Title".to_string(), "title".to_string())];
+        let html = generate_toc_html(&headings);
+        assert!(html.contains("href=\"#title\""));
+        assert!(html.contains("<ul>"));
+        assert!(html.contains("</ul>"));
+    }
+
+    #[test]
+    fn generate_toc_html_nested() {
+        let headings = vec![
+            (2u8, "Chapter".to_string(), "chapter".to_string()),
+            (3u8, "Section".to_string(), "section".to_string()),
+        ];
+        let html = generate_toc_html(&headings);
+        assert!(html.contains("href=\"#chapter\""));
+        assert!(html.contains("href=\"#section\""));
+        let ul_count = html.matches("<ul>").count();
+        assert_eq!(ul_count, 2);
+    }
+
+    #[test]
+    fn render_markdown_simple_paragraph() {
+        let result = render_markdown_enhanced("Hello **world**");
+        assert!(result.html.contains("<strong>world</strong>"));
+        assert!(result.toc_html.is_empty());
+    }
+
+    #[test]
+    fn render_markdown_with_heading_generates_toc() {
+        let result = render_markdown_enhanced("## My Heading\n\nSome text.");
+        assert!(result.toc_html.contains("My Heading"));
+        assert!(result.html.contains("id=\"my-heading\""));
+    }
+
+    #[test]
+    fn render_markdown_empty() {
+        let result = render_markdown_enhanced("");
+        assert_eq!(result.html, "");
+        assert_eq!(result.toc_html, "");
+    }
+
+    #[test]
+    fn render_markdown_code_block() {
+        let result = render_markdown_enhanced("```rust\nfn main() {}\n```");
+        assert!(result.html.contains("<pre><code>"));
+        assert!(result.html.contains("main"));
+    }
+}

@@ -39,3 +39,64 @@ pub fn get_session_from_ctx() -> Option<String> {
             .map(|s| s.to_string())
     })
 }
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_session_found() {
+        let header = "session=abc123; path=/";
+        assert_eq!(parse_session_token(header), Some("abc123"));
+    }
+
+    #[test]
+    fn parse_session_single_cookie() {
+        assert_eq!(parse_session_token("session=token456"), Some("token456"));
+    }
+
+    #[test]
+    fn parse_session_not_found() {
+        assert_eq!(parse_session_token("other=value"), None);
+    }
+
+    #[test]
+    fn parse_session_empty_string() {
+        assert_eq!(parse_session_token(""), None);
+    }
+
+    #[test]
+    fn parse_session_multiple_cookies() {
+        let header = "theme=dark; session=my-secret; lang=en";
+        assert_eq!(parse_session_token(header), Some("my-secret"));
+    }
+
+    #[test]
+    fn parse_session_empty_value() {
+        assert_eq!(parse_session_token("session="), Some(""));
+    }
+
+    #[test]
+    fn parse_session_trailing_semicolon() {
+        assert_eq!(parse_session_token("session=abc;"), Some("abc"));
+    }
+
+    #[test]
+    fn generate_token_is_uuid() {
+        let token = generate_token();
+        assert!(uuid::Uuid::parse_str(&token).is_ok());
+    }
+
+    #[test]
+    fn default_expiry_is_future() {
+        let expiry = default_expiry();
+        assert!(expiry > chrono::Utc::now());
+    }
+
+    #[test]
+    fn default_expiry_is_about_30_days() {
+        let expiry = default_expiry();
+        let diff = expiry - chrono::Utc::now();
+        assert!(diff.num_days() >= 29 && diff.num_days() <= 31);
+    }
+}
