@@ -72,26 +72,29 @@ pub fn encode(img: &image::DynamicImage, quality: f32, method: u8) -> Result<Vec
     let (width, height) = (img.width(), img.height());
     let config = LossyConfig::new().with_quality(quality).with_method(method);
 
+    fn do_encode(
+        config: &LossyConfig,
+        pixels: &[u8],
+        layout: zenwebp::PixelLayout,
+        width: u32,
+        height: u32,
+    ) -> Result<Vec<u8>, WebpError> {
+        EncodeRequest::lossy(config, pixels, layout, width, height)
+            .encode()
+            .map_err(|e| WebpError::Encode(e.to_string()))
+    }
+
     match img {
         image::DynamicImage::ImageRgba8(rgba) => {
-            let pixels = rgba.as_raw();
-            EncodeRequest::lossy(&config, pixels, PixelLayout::Rgba8, width, height)
-                .encode()
-                .map_err(|e| WebpError::Encode(e.to_string()))
+            do_encode(&config, rgba.as_raw(), PixelLayout::Rgba8, width, height)
         }
         image::DynamicImage::ImageRgb8(rgb) => {
-            let pixels = rgb.as_raw();
-            EncodeRequest::lossy(&config, pixels, PixelLayout::Rgb8, width, height)
-                .encode()
-                .map_err(|e| WebpError::Encode(e.to_string()))
+            do_encode(&config, rgb.as_raw(), PixelLayout::Rgb8, width, height)
         }
         _ => {
             // Convert other formats to RGBA8
             let rgba = img.to_rgba8();
-            let pixels = rgba.as_raw();
-            EncodeRequest::lossy(&config, pixels, PixelLayout::Rgba8, width, height)
-                .encode()
-                .map_err(|e| WebpError::Encode(e.to_string()))
+            do_encode(&config, rgba.as_raw(), PixelLayout::Rgba8, width, height)
         }
     }
 }
