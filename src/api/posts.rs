@@ -11,6 +11,8 @@ use crate::models::post::{Post, PostStats, PostStatus, Tag};
 use crate::models::user::{User, UserRole};
 #[cfg(feature = "server")]
 use crate::utils::text::{auto_summary, count_words};
+#[cfg(feature = "server")]
+use crate::cache;
 
 // Re-export extracted modules
 #[cfg(feature = "server")]
@@ -554,6 +556,10 @@ pub async fn get_post_by_id(post_id: i32) -> Result<SinglePostResponse, ServerFn
 
 #[server(GetPostBySlug, "/api")]
 pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, ServerFnError> {
+    if let Some(cached) = cache::get_post_by_slug(&slug).await {
+        return Ok(SinglePostResponse { post: cached });
+    }
+
     let client = get_conn().await.map_err(db_conn_error)?;
 
     let row = client
@@ -595,6 +601,7 @@ pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, Server
         None => None,
     };
 
+    cache::set_post_by_slug(&slug, post.clone()).await;
     Ok(SinglePostResponse { post })
 }
 
@@ -603,6 +610,11 @@ pub async fn list_published_posts(
     page: i32,
     per_page: i32,
 ) -> Result<PostListResponse, ServerFnError> {
+    let cache_key = cache::CacheKey::PublishedPosts { page, per_page };
+    if let Some(cached) = cache::get_post_list(&cache_key).await {
+        return Ok(PostListResponse { posts: cached });
+    }
+
     let client = get_conn().await.map_err(db_conn_error)?;
 
     let offset = ((page - 1).max(0) as i64) * (per_page as i64);
@@ -630,6 +642,7 @@ pub async fn list_published_posts(
         posts.push(row_to_post_list(&client, row).await);
     }
 
+    cache::set_post_list(&cache_key, posts.clone()).await;
     Ok(PostListResponse { posts })
 }
 
@@ -700,6 +713,10 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
 
 #[server(ListTags, "/api")]
 pub async fn list_tags() -> Result<TagListResponse, ServerFnError> {
+    if let Some(cached) = cache::get_tag_list().await {
+        return Ok(TagListResponse { tags: cached });
+    }
+
     let client = get_conn().await.map_err(db_conn_error)?;
 
     let rows = client
@@ -724,11 +741,16 @@ pub async fn list_tags() -> Result<TagListResponse, ServerFnError> {
         })
         .collect();
 
+    cache::set_tag_list(tags.clone()).await;
     Ok(TagListResponse { tags })
 }
 
 #[server(GetPostsByTag, "/api")]
 pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, ServerFnError> {
+    if let Some(cached) = cache::get_posts_by_tag(&tag_name).await {
+        return Ok(PostListResponse { posts: cached });
+    }
+
     let client = get_conn().await.map_err(db_conn_error)?;
 
     let rows = client
@@ -755,12 +777,17 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
         posts.push(row_to_post_list(&client, row).await);
     }
 
+    cache::set_posts_by_tag(&tag_name, posts.clone()).await;
     Ok(PostListResponse { posts })
 }
 
 #[server(GetPostStats, "/api")]
 pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
     let _user = get_current_admin_user().await?;
+
+    if let Some(cached) = cache::get_post_stats().await {
+        return Ok(PostStatsResponse { stats: cached });
+    }
 
     let client = get_conn().await.map_err(db_conn_error)?;
 
@@ -788,13 +815,13 @@ pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
         .map_err(query_error)?
         .get(0);
 
-    Ok(PostStatsResponse {
-        stats: PostStats {
-            total,
-            drafts,
-            published,
-        },
-    })
+    let stats = PostStats {
+        total,
+        drafts,
+        published,
+    };
+    cache::set_post_stats(stats.clone()).await;
+    Ok(PostStatsResponse { stats })
 }
 
 #[server(SearchPosts, "/api")]
