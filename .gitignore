@@ -16,3 +16,4 @@ docs/superpowers/
 # Uploaded images
 uploads/*
 !uploads/.gitkeep
+uploads/.cache/

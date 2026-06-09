@@ -227,6 +227,46 @@ fn is_path_safe(path: &str) -> bool {
 use axum::http::HeaderMap;
 
 #[cfg(feature = "server")]
+const CACHE_DIR: &str = "uploads/.cache";
+
+#[cfg(feature = "server")]
+fn disk_cache_base(cache_key: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    cache_key.hash(&mut hasher);
+    let hash = hasher.finish();
+    format!("{}/cache_{:016x}", CACHE_DIR, hash)
+}
+
+#[cfg(feature = "server")]
+async fn read_disk_cache(cache_key: &str) -> Option<CachedImage> {
+    let base = disk_cache_base(cache_key);
+    let data = tokio::fs::read(format!("{}.dat", base)).await.ok()?;
+    let ct_str = tokio::fs::read_to_string(format!("{}.ct", base))
+        .await
+        .ok()
+        .unwrap_or_else(|| "application/octet-stream".to_string());
+    let content_type = HeaderValue::from_str(&ct_str).ok()?;
+    Some(CachedImage { data, content_type })
+}
+
+#[cfg(feature = "server")]
+async fn write_disk_cache(cache_key: &str, cached: &CachedImage) {
+    let base = disk_cache_base(cache_key);
+    if let Err(e) = tokio::fs::create_dir_all(CACHE_DIR).await {
+        tracing::warn!("Failed to create cache dir: {:?}", e);
+        return;
+    }
+    let ct_str = cached.content_type.to_str().unwrap_or("application/octet-stream");
+    if let Err(e) = tokio::fs::write(format!("{}.dat", base), &cached.data).await {
+        tracing::warn!("Failed to write disk cache data: {:?}", e);
+    }
+    if let Err(e) = tokio::fs::write(format!("{}.ct", base), ct_str).await {
+        tracing::warn!("Failed to write disk cache content type: {:?}", e);
+    }
+}
+
+#[cfg(feature = "server")]
 pub async fn serve_image(
     Path(path): Path<String>,
     Query(params): Query<ImageParams>,
@@ -259,7 +299,6 @@ pub async fn serve_image(
         };
     }
 
-    // Check cache
     let cache_key = params.cache_key(&path);
     if let Some(cached) = IMAGE_CACHE.get(&cache_key).await {
         return (
@@ -270,35 +309,44 @@ pub async fn serve_image(
             .into_response();
     }
 
-    // Read file
+    if let Some(cached) = read_disk_cache(&cache_key).await {
+        let _ = IMAGE_CACHE.insert(cache_key.clone(), CachedImage {
+            data: cached.data.clone(),
+            content_type: cached.content_type.clone(),
+        }).await;
+        return (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, cached.content_type)],
+            cached.data,
+        )
+            .into_response();
+    }
+
     let data = match tokio::fs::read(&file_path).await {
         Ok(d) => d,
         Err(_) => return StatusCode::NOT_FOUND.into_response(),
     };
 
-    // Load image
     let original_format = detect_format(&path);
     let img = match image::load_from_memory_with_format(&data, original_format) {
         Ok(img) => img,
         Err(_) => {
-            // Not a valid image or unsupported format, return raw
             let ct = content_type(original_format);
             return (StatusCode::OK, [(header::CONTENT_TYPE, ct)], data).into_response();
         }
     };
 
-    // Process
     let (processed, content_type) = match process_image(img, &params, original_format) {
         Ok(r) => r,
         Err(status) => return status.into_response(),
     };
 
-    // Cache result
     let cached = CachedImage {
         data: processed.clone(),
         content_type: content_type.clone(),
     };
-    let _ = IMAGE_CACHE.insert(cache_key, cached).await;
+    let _ = IMAGE_CACHE.insert(cache_key.clone(), cached.clone()).await;
+    write_disk_cache(&cache_key, &cached).await;
 
     (
         StatusCode::OK,
@@ -455,5 +503,21 @@ mod tests {
     fn is_empty_false_when_any_set() {
         let params = ImageParams { w: Some(100), ..Default::default() };
         assert!(!params.is_empty());
+    }
+
+    #[test]
+    fn disk_cache_base_is_deterministic() {
+        let key = "path|w=800";
+        let base1 = disk_cache_base(key);
+        let base2 = disk_cache_base(key);
+        assert_eq!(base1, base2);
+        assert!(base1.starts_with("uploads/.cache/cache_"));
+    }
+
+    #[test]
+    fn disk_cache_base_differs_for_different_keys() {
+        let base1 = disk_cache_base("path|w=800");
+        let base2 = disk_cache_base("path|w=1200");
+        assert_ne!(base1, base2);
     }
 }
