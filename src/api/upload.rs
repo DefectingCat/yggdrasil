@@ -159,38 +159,56 @@ pub async fn upload_image(
     } else {
         let original_data = data.to_vec();
         let mime = mime_type.clone();
-        let original_len = data.len();
+        let config = crate::webp::WEBP_CONFIG.clone();
         let result = tokio::task::spawn_blocking(move || -> (Vec<u8>, String, bool) {
+            let total_start = std::time::Instant::now();
             match image::load_from_memory(&original_data) {
                 Ok(img) => {
-                    let mut buf = std::io::Cursor::new(Vec::new());
-                    match img.write_to(&mut buf, image::ImageFormat::WebP) {
-                        Ok(_) => {
-                            let webp_data = buf.into_inner();
+                    let decode_time = total_start.elapsed();
+                    let enc_start = std::time::Instant::now();
+                    let result = match crate::webp::encode(&img, config.quality, config.method) {
+                        Ok(webp_data) => {
+                            let enc_time = enc_start.elapsed();
+                            let total_time = total_start.elapsed();
                             if webp_data.len() < original_data.len() {
+                                tracing::info!(
+                                    "WebP conversion: decode={:?} encode={:?} total={:?} {}x{} {} bytes -> {} bytes",
+                                    decode_time, enc_time, total_time,
+                                    img.width(), img.height(),
+                                    original_data.len(), webp_data.len()
+                                );
                                 (webp_data, "webp".to_string(), true)
                             } else {
+                                tracing::info!(
+                                    "WebP conversion larger, keeping original: decode={:?} encode={:?} total={:?} {}x{} original={} webp={}",
+                                    decode_time, enc_time, total_time,
+                                    img.width(), img.height(),
+                                    original_data.len(), webp_data.len()
+                                );
                                 (original_data, mime_to_ext(&mime).to_string(), false)
                             }
                         }
-                        Err(_) => (original_data, mime_to_ext(&mime).to_string(), false),
-                    }
+                        Err(e) => {
+                            tracing::warn!("WebP encode failed ({}), keeping original format", e);
+                            (original_data, mime_to_ext(&mime).to_string(), false)
+                        }
+                    };
+                    result
                 }
-                Err(_) => (original_data, mime_to_ext(&mime).to_string(), false),
+                Err(_) => {
+                    tracing::warn!("Failed to decode image, keeping original format");
+                    (original_data, mime_to_ext(&mime).to_string(), false)
+                }
             }
         })
         .await;
 
         match result {
-            Ok((converted_data, ext, was_converted)) => {
-                if was_converted {
-                    tracing::info!("Converted upload to WebP: {} bytes -> {} bytes", original_len, converted_data.len());
-                } else {
-                    tracing::info!("Keeping original format (ext: {})", ext);
-                }
-                (converted_data, ext)
+            Ok((converted_data, ext, _was_converted)) => (converted_data, ext),
+            Err(_) => {
+                tracing::warn!("spawn_blocking task panicked, keeping original format");
+                (data.to_vec(), mime_to_ext(&mime_type).to_string())
             }
-            Err(_) => (data.to_vec(), mime_to_ext(&mime_type).to_string()),
         }
     };
 
@@ -235,7 +253,7 @@ pub async fn upload_image(
     })))
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "server"))]
 mod tests {
     #[test]
     fn filename_format_no_spaces() {
@@ -267,19 +285,15 @@ mod tests {
     #[test]
     fn convert_to_webp_produces_bytes() {
         let img = image::DynamicImage::new_rgb8(10, 10);
-        let mut buf = std::io::Cursor::new(Vec::new());
-        img.write_to(&mut buf, image::ImageFormat::WebP).unwrap();
-        let result = buf.into_inner();
+        let result = crate::webp::encode(&img, 85.0, 4).unwrap();
         assert!(!result.is_empty());
     }
 
     #[test]
     fn webp_roundtrip_from_rgba() {
         let img = image::DynamicImage::new_rgba8(2, 2);
-        let mut buf = std::io::Cursor::new(Vec::new());
-        img.write_to(&mut buf, image::ImageFormat::WebP).unwrap();
-        let webp_bytes = buf.into_inner();
-        let loaded = image::load_from_memory_with_format(&webp_bytes, image::ImageFormat::WebP);
+        let webp_bytes = crate::webp::encode(&img, 85.0, 4).unwrap();
+        let loaded = crate::webp::decode(&webp_bytes);
         assert!(loaded.is_ok());
     }
 }

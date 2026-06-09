@@ -12,6 +12,7 @@ mod router;
 mod tasks;
 mod theme;
 mod utils;
+mod webp;
 
 fn main() {
     #[cfg(feature = "server")]

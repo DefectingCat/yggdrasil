@@ -200,6 +200,13 @@ fn process_image(
             img.write_with_encoder(encoder)
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         }
+        image::ImageFormat::WebP => {
+            let config = crate::webp::WEBP_CONFIG.clone();
+            let webp_quality = params.quality.unwrap_or(config.quality as u8) as f32;
+            let webp_data = crate::webp::encode(&img, webp_quality, config.method)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            buf = std::io::Cursor::new(webp_data);
+        }
         _ => {
             img.write_to(&mut buf, output_format)
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -328,11 +335,22 @@ pub async fn serve_image(
     };
 
     let original_format = detect_format(&path);
-    let img = match image::load_from_memory_with_format(&data, original_format) {
-        Ok(img) => img,
-        Err(_) => {
-            let ct = content_type(original_format);
-            return (StatusCode::OK, [(header::CONTENT_TYPE, ct)], data).into_response();
+    let img = if original_format == image::ImageFormat::WebP {
+        match crate::webp::decode(&data) {
+            Ok(img) => img,
+            Err(e) => {
+                tracing::warn!("WebP decode failed ({}), returning raw bytes", e);
+                let ct = content_type(original_format);
+                return (StatusCode::OK, [(header::CONTENT_TYPE, ct)], data).into_response();
+            }
+        }
+    } else {
+        match image::load_from_memory_with_format(&data, original_format) {
+            Ok(img) => img,
+            Err(_) => {
+                let ct = content_type(original_format);
+                return (StatusCode::OK, [(header::CONTENT_TYPE, ct)], data).into_response();
+            }
         }
     };
 
