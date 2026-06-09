@@ -319,12 +319,34 @@ mod tests {
 
     #[tokio::test]
     async fn cache_invalidation_works() {
-        let key = CacheKey::PublishedPosts { page: 1, per_page: 10 };
-        set_post_list(&key, vec![]).await;
+        let post = Some(Post {
+            id: 42,
+            author_id: 1,
+            title: "Invalidation Test".to_string(),
+            slug: "invalidation-test".to_string(),
+            summary: None,
+            content_md: "test".to_string(),
+            content_html: None,
+            status: PostStatus::Published,
+            published_at: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            tags: vec![],
+            cover_image: None,
+            reading_time: 1,
+            word_count: 4,
+            toc_html: None,
+            prev_post: None,
+            next_post: None,
+        });
         
-        invalidate_post_lists();
+        set_post_by_slug("invalidation-test", post.clone()).await;
+        let cached_before = get_post_by_slug("invalidation-test").await;
+        assert!(cached_before.is_some());
         
-        let cached = get_post_list(&key).await;
-        assert!(cached.is_none());
+        invalidate_post_by_slug("invalidation-test").await;
+        
+        let cached_after = get_post_by_slug("invalidation-test").await;
+        assert!(cached_after.is_none());
     }
 }
