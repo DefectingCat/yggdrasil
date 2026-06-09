@@ -125,6 +125,10 @@ The following are generated and gitignored:
 
 `rust-analyzer.toml` excludes generated directories (`node_modules`, `public`, `.dioxus`, `.omc`, `dist`). If rust-analyzer shows spurious errors in generated files, check that the exclusion list is respected by your editor.
 
+## Image Processing
+
+- **WebP handling**: The `image` crate is configured without WebP support (`default-features = false, features = ["jpeg", "png", "gif"]`). All WebP encode/decode operations go through `zenwebp` via `src/webp.rs`. This ensures consistent WebP handling across the codebase. Do not add WebP to the image crate features.
+
 ## Notes
 
 - `rand` + `getrandom` with `js` feature are required for Argon2 salt generation in WASM builds.

@@ -25,6 +25,9 @@ axum = { version = "0.8", optional = true, features = ["multipart"] }
 serde_json = "1.0"
 ammonia = { version = "4", optional = true }
 syntect = { version = "5", default-features = false, features = ["default-syntaxes", "default-themes", "default-fancy", "html", "parsing", "dump-load", "yaml-load"], optional = true }
+# NOTE: WebP decoder is intentionally excluded from the image crate.
+# We use zenwebp for both encoding and decoding to ensure consistency.
+# Do NOT add "webp" to the features list without updating src/webp.rs.
 image = { version = "0.25", optional = true, default-features = false, features = ["jpeg", "png", "gif"] }
 zenwebp = { version = "0.3", optional = true }
 moka = { version = "0.12", features = ["future"], optional = true }
