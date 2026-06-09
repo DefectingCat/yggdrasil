@@ -344,6 +344,14 @@ pub async fn create_post(
 
     tx.commit().await.map_err(tx_error)?;
 
+    // Invalidate caches after successful creation
+    #[cfg(feature = "server")]
+    {
+        cache::invalidate_post_lists();
+        cache::invalidate_all_tags();
+        cache::invalidate_post_stats();
+    }
+
     Ok(CreatePostResponse {
         success: true,
         message: "创建成功".to_string(),
@@ -515,6 +523,20 @@ pub async fn update_post(
     }
 
     tx.commit().await.map_err(tx_error)?;
+
+    // Invalidate caches after successful update
+    #[cfg(feature = "server")]
+    {
+        cache::invalidate_post_lists();
+        cache::invalidate_all_tags();
+        cache::invalidate_post_by_slug(&final_slug).await;
+        cache::invalidate_post_stats();
+
+        // Invalidate tag-specific caches for new tags
+        for tag_name in &tags_cleaned {
+            cache::invalidate_posts_by_tag(tag_name).await;
+        }
+    }
 
     Ok(CreatePostResponse {
         success: true,
@@ -703,6 +725,12 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
             post_id: None,
             slug: None,
         });
+    }
+
+    // Invalidate all post-related caches
+    #[cfg(feature = "server")]
+    {
+        cache::invalidate_all_post_caches();
     }
 
     Ok(CreatePostResponse {
