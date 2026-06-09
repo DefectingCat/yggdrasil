@@ -5,6 +5,7 @@ use std::sync::LazyLock;
 #[cfg(feature = "server")]
 use std::time::Duration;
 
+#[cfg(feature = "server")]
 use crate::models::post::{Post, PostStats, Tag};
 
 // ============================================================================
@@ -26,6 +27,7 @@ const TTL_TAG_POSTS: Duration = Duration::from_secs(120);
 // Cache Key Types
 // ============================================================================
 
+#[cfg(feature = "server")]
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum CacheKey {
     PublishedPosts { page: i32, per_page: i32 },
@@ -35,19 +37,7 @@ pub enum CacheKey {
     PostStats,
 }
 
-impl CacheKey {
-    pub(crate) fn as_string(&self) -> String {
-        match self {
-            CacheKey::PublishedPosts { page, per_page } => {
-                format!("posts:list:{}:{}", page, per_page)
-            }
-            CacheKey::AllTags => "tags:all".to_string(),
-            CacheKey::PostBySlug(slug) => format!("post:slug:{}", slug),
-            CacheKey::PostsByTag(tag) => format!("posts:tag:{}", tag),
-            CacheKey::PostStats => "posts:stats".to_string(),
-        }
-    }
-}
+
 
 // ============================================================================
 // Cache Instances
@@ -213,36 +203,6 @@ pub fn invalidate_all_post_caches() {
 mod tests {
     use super::*;
     use crate::models::post::PostStatus;
-
-    #[test]
-    fn cache_key_published_posts_format() {
-        let key = CacheKey::PublishedPosts { page: 2, per_page: 10 };
-        assert_eq!(key.as_string(), "posts:list:2:10");
-    }
-
-    #[test]
-    fn cache_key_all_tags_format() {
-        let key = CacheKey::AllTags;
-        assert_eq!(key.as_string(), "tags:all");
-    }
-
-    #[test]
-    fn cache_key_post_by_slug_format() {
-        let key = CacheKey::PostBySlug("hello-world".to_string());
-        assert_eq!(key.as_string(), "post:slug:hello-world");
-    }
-
-    #[test]
-    fn cache_key_posts_by_tag_format() {
-        let key = CacheKey::PostsByTag("rust".to_string());
-        assert_eq!(key.as_string(), "posts:tag:rust");
-    }
-
-    #[test]
-    fn cache_key_post_stats_format() {
-        let key = CacheKey::PostStats;
-        assert_eq!(key.as_string(), "posts:stats");
-    }
 
     #[test]
     fn cache_key_equality() {

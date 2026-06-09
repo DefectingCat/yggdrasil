@@ -1,12 +1,14 @@
 #[cfg(feature = "server")]
 use std::sync::LazyLock;
 
+#[cfg(feature = "server")]
 #[derive(Debug)]
 pub enum WebpError {
     Encode(String),
     Decode(String),
 }
 
+#[cfg(feature = "server")]
 impl std::fmt::Display for WebpError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -16,6 +18,7 @@ impl std::fmt::Display for WebpError {
     }
 }
 
+#[cfg(feature = "server")]
 impl std::error::Error for WebpError {}
 
 #[cfg(feature = "server")]
