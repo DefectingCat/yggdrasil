@@ -40,11 +40,9 @@ tokio = { version = "1.52", features = ["rt-multi-thread", "macros", "fs", "time
 
 [profile.release]
 debug = false
-opt-level = "z"
-lto = true
+opt-level = 3
+lto = "thin"
 codegen-units = 1
-panic = "abort"
-strip = true
 
 [features]
 default = ["web", "server"]

@@ -1,10 +1,16 @@
-.PHONY: dev build css css-watch clean build-editor highlight-css test
+.PHONY: dev build build-linux css css-watch clean build-editor highlight-css test
 
 build:
 	@$(MAKE) build-editor
 	@$(MAKE) highlight-css
 	@tailwindcss -i input.css -o public/style.css --minify
-	@dx build --release
+	@dx build --release --debug-symbols=false
+
+build-linux:
+	@$(MAKE) build-editor
+	@$(MAKE) highlight-css
+	@tailwindcss -i input.css -o public/style.css --minify
+	@dx build --release --debug-symbols=false --target x86_64-unknown-linux-musl
 
 highlight-css:
 	@cargo run --bin generate_highlight_css
