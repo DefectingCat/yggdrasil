@@ -44,15 +44,22 @@ fn main() {
                     dioxus::server::IncrementalRendererConfig::default()
                         .invalidate_after(std::time::Duration::from_secs(300)),
                 );
-            let router = axum::Router::new()
+            let api_routes = axum::Router::new()
                 .route(
                     "/api/upload",
                     axum::routing::post(crate::api::upload::upload_image)
                         .layer(axum::extract::DefaultBodyLimit::disable()),
-                )
-                .route("/uploads/{*path}", axum::routing::get(crate::api::image::serve_image))
-                .layer(crate::api::rate_limit::general_limit())
-                .serve_dioxus_application(config, router::AppRouter)
+                );
+
+            let static_routes = axum::Router::new()
+                .route("/uploads/{*path}", axum::routing::get(crate::api::image::serve_image));
+
+            let dioxus_app = axum::Router::new()
+                .serve_dioxus_application(config, router::AppRouter);
+
+            let router = api_routes
+                .merge(static_routes)
+                .merge(dioxus_app)
                 .layer(
                     TraceLayer::new_for_http()
                         .make_span_with(
