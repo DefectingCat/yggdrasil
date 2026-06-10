@@ -29,12 +29,12 @@ fn HomePosts(current_page: i32) -> Element {
     let posts_res = use_server_future(move || list_published_posts(current_page, POSTS_PER_PAGE))?;
 
     let posts_data = posts_res.read().as_ref().map(|r| match r {
-        Ok(PostListResponse { posts }) => Ok(posts.clone()),
+        Ok(PostListResponse { posts, total }) => Ok((posts.clone(), *total)),
         Err(e) => Err(e.to_string()),
     });
 
     match posts_data {
-        Some(Ok(posts)) => {
+        Some(Ok((posts, total))) => {
             rsx! {
                 for post in posts.iter() {
                     PostCard { post: post.clone() }
@@ -44,7 +44,7 @@ fn HomePosts(current_page: i32) -> Element {
                         "暂无文章"
                     }
                 }
-                Pagination { current_page, posts: posts.clone() }
+                Pagination { current_page, total }
             }
         }
         Some(Err(e)) => {
@@ -77,9 +77,10 @@ fn HomeInfo() -> Element {
 }
 
 #[component]
-fn Pagination(current_page: i32, posts: Vec<crate::models::post::Post>) -> Element {
+fn Pagination(current_page: i32, total: i64) -> Element {
     let has_prev = current_page > 1;
-    let has_next = posts.len() >= POSTS_PER_PAGE as usize;
+    let total_pages = ((total + POSTS_PER_PAGE as i64 - 1) / POSTS_PER_PAGE as i64).max(1) as i32;
+    let has_next = current_page < total_pages;
     let prev = current_page - 1;
     let prev_route = if prev <= 1 {
         Route::Home {}
