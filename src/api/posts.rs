@@ -1,9 +1,9 @@
-#![allow(clippy::unused_unit, deprecated, unused_imports)]
+#![allow(clippy::unused_unit, deprecated, unused_imports, clippy::too_many_arguments)]
 
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
-use crate::api::utils::{db_conn_error, query_error, tx_error};
+use crate::api::error::AppError;
 #[cfg(feature = "server")]
 use crate::auth::session::get_session_from_ctx;
 use crate::db::pool::get_conn;
@@ -26,19 +26,16 @@ pub use crate::api::slug::{ensure_unique_slug, is_valid_slug, slugify};
 // ============================================================================
 
 #[cfg(feature = "server")]
-async fn get_current_admin_user() -> Result<User, ServerFnError> {
-    let token = match get_session_from_ctx() {
-        Some(t) => t,
-        None => return Err(ServerFnError::new("未登录")),
-    };
+async fn get_current_admin_user() -> Result<User, AppError> {
+    let token = get_session_from_ctx().ok_or(AppError::Unauthorized("未登录"))?;
 
-    let user = match crate::api::auth::get_user_by_token(&token).await? {
-        Some(u) => u,
-        None => return Err(ServerFnError::new("会话已过期")),
-    };
+    let user = crate::api::auth::get_user_by_token(&token)
+        .await
+        .map_err(AppError::query)?
+        .ok_or(AppError::Unauthorized("会话已过期"))?;
 
     if user.role != UserRole::Admin {
-        return Err(ServerFnError::new("权限不足"));
+        return Err(AppError::Forbidden("权限不足"));
     }
 
     Ok(user)
@@ -249,7 +246,7 @@ pub async fn create_post(
         _ => crate::api::slug::slugify(&title),
     };
 
-    let mut client = get_conn().await.map_err(db_conn_error)?;
+    let mut client = get_conn().await.map_err(AppError::db_conn)?;
 
     let final_slug = crate::api::slug::ensure_unique_slug(&client, &base_slug, None).await?;
     let rendered = crate::api::markdown::render_markdown_enhanced(&content_md);
@@ -266,7 +263,7 @@ pub async fn create_post(
         None
     };
 
-    let tx = client.transaction().await.map_err(tx_error)?;
+    let tx = client.transaction().await.map_err(AppError::db_conn)?;
 
     let row = tx
         .query_one(
@@ -286,10 +283,7 @@ pub async fn create_post(
             ],
         )
         .await
-        .map_err(|e| {
-            tracing::error!("create post failed: {:?}", e);
-            ServerFnError::new(format!("创建文章失败: {}", e))
-        })?;
+        .map_err(AppError::tx)?;
 
     let post_id: i32 = row.get(0);
 
@@ -308,10 +302,7 @@ pub async fn create_post(
                         &[&tag_name.as_str()],
                     )
                     .await
-                    .map_err(|e| {
-                        tracing::error!("create tag failed: {:?}", e);
-                        ServerFnError::new(format!("创建标签失败: {}", e))
-                    })?;
+                    .map_err(AppError::tx)?;
 
                 match row {
                     Some(r) => r.get(0),
@@ -319,13 +310,8 @@ pub async fn create_post(
                         let row = tx
                             .query_opt("SELECT id FROM tags WHERE name = $1", &[&tag_name.as_str()])
                             .await
-                            .map_err(|e| {
-                                tracing::error!("query tag failed: {:?}", e);
-                                ServerFnError::new(format!("查询标签失败: {}", e))
-                            })?;
-                        row.map(|r| r.get(0)).ok_or_else(|| {
-                            ServerFnError::new(format!("标签不存在: {}", tag_name))
-                        })?
+                            .map_err(AppError::query)?;
+                        row.map(|r| r.get(0)).ok_or(AppError::NotFound("标签不存在"))?
                     }
                 }
             };
@@ -335,14 +321,11 @@ pub async fn create_post(
                 &[&post_id, &tag_id],
             )
             .await
-            .map_err(|e| {
-                tracing::error!("link tag failed: {:?}", e);
-                ServerFnError::new(format!("关联标签失败: {}", e))
-            })?;
+            .map_err(AppError::tx)?;
         }
     }
 
-    tx.commit().await.map_err(tx_error)?;
+    tx.commit().await.map_err(AppError::tx)?;
 
     // Invalidate caches after successful creation
     #[cfg(feature = "server")]
@@ -377,13 +360,12 @@ pub async fn update_post(
 ) -> Result<CreatePostResponse, ServerFnError> {
     let user = get_current_admin_user().await?;
 
-    let mut client = get_conn().await.map_err(db_conn_error)?;
+    let mut client = get_conn().await.map_err(AppError::db_conn)?;
 
-    // Get old slug before updating (for cache invalidation)
     let old_slug: Option<String> = client
         .query_opt("SELECT slug FROM posts WHERE id = $1", &[&post_id])
         .await
-        .map_err(query_error)?
+        .map_err(AppError::query)?
         .map(|r| r.get(0));
 
     let exists: bool = client
@@ -392,7 +374,7 @@ pub async fn update_post(
             &[&post_id, &user.id],
         )
         .await
-        .map_err(query_error)?
+        .map_err(AppError::query)?
         .is_some();
 
     if !exists {
@@ -429,9 +411,8 @@ pub async fn update_post(
     let post_status = PostStatus::from_str(&status).unwrap_or(PostStatus::Draft);
     let cover_image = cover_image.filter(|s| !s.trim().is_empty());
 
-    let tx = client.transaction().await.map_err(tx_error)?;
+    let tx = client.transaction().await.map_err(AppError::db_conn)?;
 
-    // Get old tags before deleting them (for cache invalidation)
     let old_tags: Vec<String> = {
         let rows = tx
             .query(
@@ -439,7 +420,7 @@ pub async fn update_post(
                 &[&post_id],
             )
             .await
-            .map_err(query_error)?;
+            .map_err(AppError::query)?;
         rows.iter().map(|r| r.get(0)).collect()
     };
 
@@ -449,7 +430,7 @@ pub async fn update_post(
             &[&post_id],
         )
         .await
-        .map_err(query_error)?;
+        .map_err(AppError::query)?;
 
     let published_at = if post_status == PostStatus::Published {
         let was_published = old_status_row
@@ -487,10 +468,7 @@ pub async fn update_post(
         ],
     )
     .await
-    .map_err(|e| {
-        tracing::error!("update post failed: {:?}", e);
-        ServerFnError::new(format!("更新文章失败: {}", e))
-    })?;
+    .map_err(AppError::tx)?;
 
     let tags_cleaned: Vec<String> = tags
         .into_iter()
@@ -502,10 +480,7 @@ pub async fn update_post(
 
     tx.execute("DELETE FROM post_tags WHERE post_id = $1", &[&post_id])
         .await
-        .map_err(|e| {
-            tracing::error!("delete old tags failed: {:?}", e);
-            ServerFnError::new(format!("删除旧标签失败: {}", e))
-        })?;
+        .map_err(AppError::tx)?;
 
     for tag_name in &tags_cleaned {
         let tag_id: i32 = {
@@ -515,10 +490,7 @@ pub async fn update_post(
                     &[&tag_name.as_str()],
                 )
                 .await
-                .map_err(|e| {
-                    tracing::error!("create tag failed: {:?}", e);
-                    ServerFnError::new(format!("创建标签失败: {}", e))
-                })?;
+                .map_err(AppError::tx)?;
 
             match row {
                 Some(r) => r.get(0),
@@ -526,12 +498,9 @@ pub async fn update_post(
                     let row = tx
                         .query_opt("SELECT id FROM tags WHERE name = $1", &[&tag_name.as_str()])
                         .await
-                        .map_err(|e| {
-                            tracing::error!("query tag failed: {:?}", e);
-                            ServerFnError::new(format!("查询标签失败: {}", e))
-                        })?;
+                        .map_err(AppError::query)?;
                     row.map(|r| r.get(0))
-                        .ok_or_else(|| ServerFnError::new(format!("标签不存在: {}", tag_name)))?
+                        .ok_or(AppError::NotFound("标签不存在"))?
                 }
             }
         };
@@ -541,13 +510,10 @@ pub async fn update_post(
             &[&post_id, &tag_id],
         )
         .await
-        .map_err(|e| {
-            tracing::error!("link tag failed: {:?}", e);
-            ServerFnError::new(format!("关联标签失败: {}", e))
-        })?;
+        .map_err(AppError::tx)?;
     }
 
-    tx.commit().await.map_err(tx_error)?;
+    tx.commit().await.map_err(AppError::tx)?;
 
     // Invalidate caches after successful update
     #[cfg(feature = "server")]
@@ -586,7 +552,7 @@ pub async fn update_post(
 pub async fn get_post_by_id(post_id: i32) -> Result<SinglePostResponse, ServerFnError> {
     let _user = get_current_admin_user().await?;
 
-    let client = get_conn().await.map_err(db_conn_error)?;
+    let client = get_conn().await.map_err(AppError::db_conn)?;
 
     let row = client
         .query_opt(
@@ -602,7 +568,7 @@ pub async fn get_post_by_id(post_id: i32) -> Result<SinglePostResponse, ServerFn
             &[&post_id],
         )
         .await
-        .map_err(query_error)?;
+        .map_err(AppError::query)?;
 
     let post = match row {
         Some(row) => Some(row_to_post_list(&client, &row).await),
@@ -618,7 +584,7 @@ pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, Server
         return Ok(SinglePostResponse { post: cached });
     }
 
-    let client = get_conn().await.map_err(db_conn_error)?;
+    let client = get_conn().await.map_err(AppError::db_conn)?;
 
     let row = client
         .query_opt(
@@ -652,7 +618,7 @@ pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, Server
             &[&slug],
         )
         .await
-        .map_err(query_error)?;
+        .map_err(AppError::query)?;
 
     let post = match row {
         Some(row) => Some(row_to_post_full(&client, &row).await),
@@ -675,7 +641,7 @@ pub async fn list_published_posts(
         return Ok(PostListResponse { posts: cached });
     }
 
-    let client = get_conn().await.map_err(db_conn_error)?;
+    let client = get_conn().await.map_err(AppError::db_conn)?;
 
     let offset = ((page - 1).max(0) as i64) * (per_page as i64);
     let limit = per_page as i64;
@@ -695,7 +661,7 @@ pub async fn list_published_posts(
             &[&limit, &offset],
         )
         .await
-        .map_err(query_error)?;
+        .map_err(AppError::query)?;
 
     let mut posts = Vec::new();
     for row in &rows {
@@ -710,7 +676,7 @@ pub async fn list_published_posts(
 pub async fn list_posts() -> Result<PostListResponse, ServerFnError> {
     let _user = get_current_admin_user().await?;
 
-    let client = get_conn().await.map_err(db_conn_error)?;
+    let client = get_conn().await.map_err(AppError::db_conn)?;
 
     let rows = client
         .query(
@@ -727,7 +693,7 @@ pub async fn list_posts() -> Result<PostListResponse, ServerFnError> {
             &[],
         )
         .await
-        .map_err(query_error)?;
+        .map_err(AppError::query)?;
 
     let mut posts = Vec::new();
     for row in &rows {
@@ -741,7 +707,7 @@ pub async fn list_posts() -> Result<PostListResponse, ServerFnError> {
 pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnError> {
     let _user = get_current_admin_user().await?;
 
-    let client = get_conn().await.map_err(db_conn_error)?;
+    let client = get_conn().await.map_err(AppError::db_conn)?;
 
     let result = client
         .execute(
@@ -749,10 +715,7 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
             &[&post_id],
         )
         .await
-        .map_err(|e| {
-            tracing::error!("delete failed: {:?}", e);
-            ServerFnError::new(format!("删除失败: {}", e))
-        })?;
+        .map_err(AppError::tx)?;
 
     if result == 0 {
         return Ok(CreatePostResponse {
@@ -783,7 +746,7 @@ pub async fn list_tags() -> Result<TagListResponse, ServerFnError> {
         return Ok(TagListResponse { tags: cached });
     }
 
-    let client = get_conn().await.map_err(db_conn_error)?;
+    let client = get_conn().await.map_err(AppError::db_conn)?;
 
     let rows = client
         .query(
@@ -796,7 +759,7 @@ pub async fn list_tags() -> Result<TagListResponse, ServerFnError> {
             &[],
         )
         .await
-        .map_err(query_error)?;
+        .map_err(AppError::query)?;
 
     let tags: Vec<Tag> = rows
         .iter()
@@ -817,7 +780,7 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
         return Ok(PostListResponse { posts: cached });
     }
 
-    let client = get_conn().await.map_err(db_conn_error)?;
+    let client = get_conn().await.map_err(AppError::db_conn)?;
 
     let rows = client
         .query(
@@ -836,7 +799,7 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
             &[&tag_name],
         )
         .await
-        .map_err(query_error)?;
+        .map_err(AppError::query)?;
 
     let mut posts = Vec::new();
     for row in &rows {
@@ -855,12 +818,12 @@ pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
 
     let _user = get_current_admin_user().await?;
 
-    let client = get_conn().await.map_err(db_conn_error)?;
+    let client = get_conn().await.map_err(AppError::db_conn)?;
 
     let total: i64 = client
         .query_one("SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL", &[])
         .await
-        .map_err(query_error)?
+        .map_err(AppError::query)?
         .get(0);
 
     let drafts: i64 = client
@@ -869,7 +832,7 @@ pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
             &[],
         )
         .await
-        .map_err(query_error)?
+        .map_err(AppError::query)?
         .get(0);
 
     let published: i64 = client
@@ -878,7 +841,7 @@ pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
             &[],
         )
         .await
-        .map_err(query_error)?
+        .map_err(AppError::query)?
         .get(0);
 
     let stats = PostStats {
@@ -892,7 +855,7 @@ pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
 
 #[server(SearchPosts, "/api")]
 pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnError> {
-    let client = get_conn().await.map_err(db_conn_error)?;
+    let client = get_conn().await.map_err(AppError::db_conn)?;
 
     let q = query.trim();
     if q.is_empty() {
@@ -917,7 +880,7 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
             &[&q],
         )
         .await
-        .map_err(query_error)?;
+        .map_err(AppError::query)?;
 
     let mut posts = Vec::new();
     for row in &rows {

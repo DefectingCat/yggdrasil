@@ -211,6 +211,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
     let on_submit = move |_| {
         if title().trim().is_empty() {
             error.set(Some("标题不能为空".to_string()));
+            #[allow(clippy::needless_return)]
             return;
         }
 

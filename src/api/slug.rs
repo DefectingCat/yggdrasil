@@ -41,7 +41,7 @@ pub async fn ensure_unique_slug(
     base: &str,
     exclude_id: Option<i32>,
 ) -> Result<String, ServerFnError> {
-    use crate::api::utils::query_error;
+    use crate::api::error::AppError;
 
     let mut candidate = base.to_string();
     let mut suffix = 2;
@@ -54,7 +54,7 @@ pub async fn ensure_unique_slug(
                     &[&candidate, &exclude],
                 )
                 .await
-                .map_err(query_error)?
+                .map_err(AppError::query)?
                 .is_some()
         } else {
             client
@@ -63,7 +63,7 @@ pub async fn ensure_unique_slug(
                     &[&candidate],
                 )
                 .await
-                .map_err(query_error)?
+                .map_err(AppError::query)?
                 .is_some()
         };
 
@@ -75,7 +75,7 @@ pub async fn ensure_unique_slug(
         suffix += 1;
 
         if candidate.len() > 200 {
-            return Err(ServerFnError::new("无法生成唯一 slug"));
+            return Err(AppError::Internal("无法生成唯一 slug").into());
         }
     }
 }

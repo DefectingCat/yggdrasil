@@ -8,7 +8,7 @@ use crate::auth::{password, session};
 #[cfg(feature = "server")]
 use crate::auth::session::get_session_from_ctx;
 #[cfg(feature = "server")]
-use crate::api::utils::{db_conn_error, query_error};
+use crate::api::error::AppError;
 use crate::db::pool::get_conn;
 use crate::models::user::{PublicUser, User, UserRole};
 
@@ -90,12 +90,12 @@ pub async fn register(
         });
     }
 
-    let client = get_conn().await.map_err(db_conn_error)?;
+    let client = get_conn().await.map_err(AppError::db_conn)?;
 
     let admin_count: i64 = client
         .query_one("SELECT COUNT(*) FROM users WHERE role = 'admin'", &[])
         .await
-        .map_err(query_error)?
+        .map_err(AppError::query)?
         .get(0);
 
     if admin_count > 0 {
@@ -106,10 +106,7 @@ pub async fn register(
         });
     }
 
-    let password_hash = password::hash_password(&password).map_err(|e| {
-        tracing::error!("Register password hash failed: {:?}", e);
-        ServerFnError::new(format!("密码哈希失败: {}", e))
-    })?;
+    let password_hash = password::hash_password(&password).map_err(|_| AppError::Internal("密码处理失败"))?;
 
     let result = client
         .query_one(
@@ -156,7 +153,7 @@ pub async fn login(username: String, password: String) -> Result<AuthResponse, S
         }
     }
 
-    let client = get_conn().await.map_err(db_conn_error)?;
+    let client = get_conn().await.map_err(AppError::db_conn)?;
 
     let row = match client
         .query_opt(
@@ -174,15 +171,12 @@ pub async fn login(username: String, password: String) -> Result<AuthResponse, S
             });
         }
         Err(e) => {
-            return Err(query_error(e));
+            return Err(AppError::query(e).into());
         }
     };
 
     let password_hash: String = row.get("password_hash");
-    let valid = password::verify_password(&password, &password_hash).map_err(|e| {
-        tracing::error!("Login password verify failed: {:?}", e);
-        ServerFnError::new(format!("密码验证失败: {}", e))
-    })?;
+    let valid = password::verify_password(&password, &password_hash).map_err(|_| AppError::Internal("密码处理失败"))?;
 
     if !valid {
         return Ok(AuthResponse {
@@ -202,10 +196,7 @@ pub async fn login(username: String, password: String) -> Result<AuthResponse, S
             &[&user_id, &token, &expires_at],
         )
         .await
-        .map_err(|e| {
-            tracing::error!("Login session insert failed: {:?}", e);
-            ServerFnError::new(format!("创建 session 失败: {}", e))
-        })?;
+        .map_err(AppError::db_conn)?;
 
     let cookie = format!(
         "session={token}; HttpOnly; Path=/; Max-Age={}; SameSite=Lax",
@@ -228,9 +219,8 @@ pub async fn login(username: String, password: String) -> Result<AuthResponse, S
 pub async fn logout() -> Result<AuthResponse, ServerFnError> {
     let token = get_session_from_ctx();
 
-    let client = get_conn().await.map_err(db_conn_error)?;
+    let client = get_conn().await.map_err(AppError::db_conn)?;
 
-    // 清除 cookie
     if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
         ctx.add_response_header(
             SET_COOKIE,
@@ -238,15 +228,11 @@ pub async fn logout() -> Result<AuthResponse, ServerFnError> {
         );
     }
 
-    // 删除当前 session
     if let Some(t) = token {
         client
             .execute("DELETE FROM sessions WHERE token = $1", &[&t])
             .await
-            .map_err(|e| {
-                tracing::error!("Logout session delete failed: {:?}", e);
-                ServerFnError::new(format!("删除 session 失败: {}", e))
-            })?;
+            .map_err(AppError::query)?;
     }
 
     Ok(AuthResponse {
@@ -263,7 +249,7 @@ pub struct CurrentUserResponse {
 
 #[cfg(feature = "server")]
 pub async fn get_user_by_token(token: &str) -> Result<Option<User>, ServerFnError> {
-    let client = get_conn().await.map_err(db_conn_error)?;
+    let client = get_conn().await.map_err(AppError::db_conn)?;
 
     let row = client
         .query_opt(
@@ -274,7 +260,7 @@ pub async fn get_user_by_token(token: &str) -> Result<Option<User>, ServerFnErro
             &[&token],
         )
         .await
-        .map_err(query_error)?;
+        .map_err(AppError::query)?;
 
     let user = match row {
         Some(row) => {
@@ -302,10 +288,7 @@ pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
         None => return Ok(CurrentUserResponse { user: None }),
     };
 
-    let user = match get_user_by_token(&token).await? {
-        Some(u) => Some(PublicUser::from(u)),
-        None => None,
-    };
+    let user = get_user_by_token(&token).await?.map(PublicUser::from);
 
     Ok(CurrentUserResponse { user })
 }
