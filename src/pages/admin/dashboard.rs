@@ -55,7 +55,7 @@ pub fn Admin() -> Element {
                     "最近文章"
                 }
                 match &*posts_res.read() {
-                    Some(Ok(PostListResponse { posts, .. })) => {
+                    Some(Ok(PostListResponse { posts, total: _ })) => {
                         rsx! {
                             div { class: "space-y-0",
                                 for post in posts.iter().take(5) {
@@ -64,7 +64,14 @@ pub fn Admin() -> Element {
                             }
                         }
                     }
-                    _ => {
+                    Some(Err(_e)) => {
+                        rsx! {
+                            div { class: "text-center text-red-500 dark:text-red-400 py-20",
+                                "加载失败"
+                            }
+                        }
+                    }
+                    None => {
                         rsx! {
                             div { class: if show_posts_skeleton() { "space-y-4 animate-pulse" } else { "space-y-4 opacity-0" },
                                 for _ in 0..5 {

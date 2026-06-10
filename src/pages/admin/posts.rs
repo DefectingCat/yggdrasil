@@ -27,7 +27,7 @@ pub fn Posts() -> Element {
             }
 
             match &*posts_res.read() {
-                Some(Ok(PostListResponse { posts, .. })) => {
+                Some(Ok(PostListResponse { posts, total: _ })) => {
                     if posts.is_empty() {
                         rsx! {
                             div { class: "text-center py-20 text-gray-500 dark:text-[#9b9c9d]",
