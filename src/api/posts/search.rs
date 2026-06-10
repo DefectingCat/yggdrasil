@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 
+#[cfg(feature = "server")]
 use super::helpers::row_to_post_list;
 use super::types::PostListResponse;
 #[cfg(feature = "server")]

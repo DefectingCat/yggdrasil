@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 
+#[cfg(feature = "server")]
 use super::helpers::get_current_admin_user;
 use super::types::CreatePostResponse;
 #[cfg(feature = "server")]

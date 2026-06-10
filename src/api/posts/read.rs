@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 
+#[cfg(feature = "server")]
 use super::helpers::{get_current_admin_user, row_to_post_full, row_to_post_list};
 use super::types::SinglePostResponse;
 #[cfg(feature = "server")]

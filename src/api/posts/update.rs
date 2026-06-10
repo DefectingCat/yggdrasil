@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 
+#[cfg(feature = "server")]
 use super::helpers::{clean_tags, get_current_admin_user, sync_tags};
 use super::types::CreatePostResponse;
 #[cfg(feature = "server")]
