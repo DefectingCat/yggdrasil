@@ -3,9 +3,9 @@ use dioxus::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
 
-use crate::api::posts::{get_post_by_id, SinglePostResponse};
 #[cfg(target_arch = "wasm32")]
 use crate::api::posts::{create_post, update_post, CreatePostResponse};
+use crate::api::posts::{get_post_by_id, SinglePostResponse};
 use crate::components::write_skeleton::WriteSkeleton;
 use crate::router::Route;
 
@@ -276,7 +276,11 @@ fn write_editor(post_id: Option<i32>) -> Element {
                             success.set(true);
                             let _ = dioxus::router::navigator().push(Route::Posts {});
                         }
-                        Ok(CreatePostResponse { success: false, message, .. }) => {
+                        Ok(CreatePostResponse {
+                            success: false,
+                            message,
+                            ..
+                        }) => {
                             saving.set(false);
                             error.set(Some(message));
                         }
@@ -305,7 +309,11 @@ fn write_editor(post_id: Option<i32>) -> Element {
                             success.set(true);
                             let _ = dioxus::router::navigator().push(Route::Admin {});
                         }
-                        Ok(CreatePostResponse { success: false, message, .. }) => {
+                        Ok(CreatePostResponse {
+                            success: false,
+                            message,
+                            ..
+                        }) => {
                             saving.set(false);
                             error.set(Some(message));
                         }
@@ -392,9 +400,6 @@ fn write_editor(post_id: Option<i32>) -> Element {
                         }
                     }
                 }
-
-                // 分隔线
-                div { class: "h-px bg-[var(--color-paper-tertiary)]" }
             }
 
             // 编辑器区域 - 沾满剩余高度
