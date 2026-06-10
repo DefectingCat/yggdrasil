@@ -31,6 +31,7 @@ const TTL_TAG_POSTS: Duration = Duration::from_secs(120);
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum CacheKey {
     PublishedPosts { page: i32, per_page: i32 },
+    TotalPublishedPosts,
     AllTags,
     PostBySlug(String),
     PostsByTag(String),
@@ -107,6 +108,16 @@ pub async fn get_post_list(key: &CacheKey) -> Option<(Vec<Post>, i64)> {
 #[cfg(feature = "server")]
 pub async fn set_post_list(key: &CacheKey, posts: Vec<Post>, total: i64) {
     let _ = POST_LIST_CACHE.insert(key.clone(), (posts, total)).await;
+}
+
+#[cfg(feature = "server")]
+pub async fn get_total_published_posts() -> Option<i64> {
+    POST_LIST_CACHE.get(&CacheKey::TotalPublishedPosts).await.map(|(_, total)| total)
+}
+
+#[cfg(feature = "server")]
+pub async fn set_total_published_posts(total: i64) {
+    let _ = POST_LIST_CACHE.insert(CacheKey::TotalPublishedPosts, (vec![], total)).await;
 }
 
 #[cfg(feature = "server")]

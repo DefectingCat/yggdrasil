@@ -20,15 +20,21 @@ pub async fn list_published_posts(
 
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
-        // Get total count
-        let count_row = client
-            .query_one(
-                "SELECT COUNT(*) FROM posts WHERE status = 'published' AND deleted_at IS NULL",
-                &[],
-            )
-            .await
-            .map_err(AppError::query)?;
-        let total: i64 = count_row.get(0);
+        // Get total count from cache or query
+        let total = if let Some(cached_total) = crate::cache::get_total_published_posts().await {
+            cached_total
+        } else {
+            let count_row = client
+                .query_one(
+                    "SELECT COUNT(*) FROM posts WHERE status = 'published' AND deleted_at IS NULL",
+                    &[],
+                )
+                .await
+                .map_err(AppError::query)?;
+            let total: i64 = count_row.get(0);
+            crate::cache::set_total_published_posts(total).await;
+            total
+        };
 
         let offset = ((page - 1).max(0) as i64) * (per_page as i64);
         let limit = per_page as i64;
@@ -139,6 +145,9 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
             posts.push(row_to_post_list(&client, row).await);
         }
 
+        // NOTE: total = posts.len() is correct because get_posts_by_tag
+        // currently fetches ALL matching posts (no LIMIT/OFFSET).
+        // If pagination is added later, switch to a proper COUNT(*) query.
         let total = posts.len() as i64;
         crate::cache::set_posts_by_tag(&tag_name, posts.clone(), total).await;
         Ok(PostListResponse { posts, total })
