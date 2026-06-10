@@ -263,7 +263,7 @@ pub async fn create_post(
         None
     };
 
-    let tx = client.transaction().await.map_err(AppError::db_conn)?;
+    let tx = client.transaction().await.map_err(AppError::tx)?;
 
     let row = tx
         .query_one(
@@ -411,7 +411,7 @@ pub async fn update_post(
     let post_status = PostStatus::from_str(&status).unwrap_or(PostStatus::Draft);
     let cover_image = cover_image.filter(|s| !s.trim().is_empty());
 
-    let tx = client.transaction().await.map_err(AppError::db_conn)?;
+    let tx = client.transaction().await.map_err(AppError::tx)?;
 
     let old_tags: Vec<String> = {
         let rows = tx
@@ -715,7 +715,7 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
             &[&post_id],
         )
         .await
-        .map_err(AppError::tx)?;
+        .map_err(AppError::query)?;
 
     if result == 0 {
         return Ok(CreatePostResponse {

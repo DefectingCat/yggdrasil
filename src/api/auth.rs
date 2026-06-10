@@ -196,7 +196,7 @@ pub async fn login(username: String, password: String) -> Result<AuthResponse, S
             &[&user_id, &token, &expires_at],
         )
         .await
-        .map_err(AppError::db_conn)?;
+        .map_err(AppError::query)?;
 
     let cookie = format!(
         "session={token}; HttpOnly; Path=/; Max-Age={}; SameSite=Lax",
