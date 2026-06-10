@@ -23,6 +23,7 @@ pub struct CreatePostResponse {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PostListResponse {
     pub posts: Vec<Post>,
+    pub total: i64,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
