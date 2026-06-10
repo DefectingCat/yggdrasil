@@ -4,5 +4,6 @@ pub mod delayed_skeleton;
 pub mod home_skeleton;
 pub mod post_card_skeleton;
 pub mod post_detail_skeleton;
+pub mod posts_skeleton;
 pub mod search_skeleton;
 pub mod tags_skeleton;

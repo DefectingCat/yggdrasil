@@ -2,7 +2,8 @@ use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
 use crate::api::posts::{delete_post, list_posts, CreatePostResponse, PostListResponse};
-use crate::hooks::delayed_loading::use_delayed_loading;
+use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
+use crate::components::skeletons::posts_skeleton::PostsSkeleton;
 use crate::models::post::Post;
 use crate::router::Route;
 
@@ -20,7 +21,6 @@ pub fn PostsPage(page: i32) -> Element {
     let current_page = page.max(1);
     let mut posts_res = use_server_future(move || list_posts(current_page, POSTS_PER_PAGE))?;
     let mut deleting = use_signal(|| None::<i32>);
-    let show_skeleton = use_delayed_loading(move || posts_res.read().is_none());
 
     let posts_data = posts_res.read().as_ref().map(|r| match r {
         Ok(PostListResponse { posts, total }) => Ok((posts.clone(), *total)),
@@ -102,14 +102,7 @@ pub fn PostsPage(page: i32) -> Element {
                 }
                 None => {
                     rsx! {
-                        div { class: if show_skeleton() { "bg-white dark:bg-[#2e2e33] rounded-xl border border-gray-200 dark:border-[#333] animate-pulse" } else { "bg-white dark:bg-[#2e2e33] rounded-xl border border-gray-200 dark:border-[#333] opacity-0" },
-                            for _ in 0..5 {
-                                div { class: "flex items-center px-4 py-3 border-b border-gray-100 dark:border-[#333] last:border-0",
-                                    div { class: "h-4 w-1/3 bg-gray-200 dark:bg-[#2a2a2a] rounded" }
-                                    div { class: "ml-auto h-4 w-16 bg-gray-200 dark:bg-[#2a2a2a] rounded" }
-                                }
-                            }
-                        }
+                        DelayedSkeleton { PostsSkeleton {} }
                     }
                 }
             }
