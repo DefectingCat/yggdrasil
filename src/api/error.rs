@@ -11,6 +11,7 @@ pub enum AppError {
     Internal(&'static str),
 }
 
+#[cfg(feature = "server")]
 impl AppError {
     pub fn db_conn(e: impl std::fmt::Display) -> Self {
         tracing::error!("DB connection failed: {e}");
