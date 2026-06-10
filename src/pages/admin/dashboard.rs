@@ -55,7 +55,7 @@ pub fn Admin() -> Element {
                     "最近文章"
                 }
                 match &*posts_res.read() {
-                    Some(Ok(PostListResponse { posts })) => {
+                    Some(Ok(PostListResponse { posts, .. })) => {
                         rsx! {
                             div { class: "space-y-0",
                                 for post in posts.iter().take(5) {
