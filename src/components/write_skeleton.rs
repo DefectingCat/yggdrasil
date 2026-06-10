@@ -4,47 +4,61 @@ use crate::components::skeletons::atoms::*;
 #[component]
 pub fn WriteSkeleton() -> Element {
     rsx! {
-        div { class: "space-y-6 p-1",
-            div { class: "rounded-xl bg-white dark:bg-[#2e2e33] border border-gray-200 dark:border-[#333] p-6 space-y-5",
-                SkeletonBox { class: "h-9 w-2/3 rounded-lg" }
-                SkeletonBox { class: "h-16 w-full rounded-lg" }
-                div { class: "grid grid-cols-1 md:grid-cols-3 gap-3",
+        div { class: "relative flex flex-col flex-1 min-h-0 overflow-hidden",
+            // 顶部元信息骨架 - 固定高度
+            div { class: "flex-shrink-0 space-y-5 pt-8",
+                // 标题骨架
+                SkeletonBox { class: "h-12 w-2/3 rounded-lg" }
+
+                // 摘要骨架
+                SkeletonBox { class: "h-14 w-full rounded-lg" }
+
+                // 元数据行骨架
+                div { class: "flex flex-wrap items-end gap-x-8 gap-y-4",
                     for _ in 0..3 {
-                        div { class: "space-y-2",
-                            SkeletonBox { class: "h-3 w-10 rounded" }
-                            SkeletonBox { class: "h-10 w-full rounded-lg" }
+                        div { class: "flex-1 min-w-[140px] space-y-2",
+                            SkeletonBox { class: "h-3 w-12 rounded" }
+                            SkeletonBox { class: "h-8 w-full rounded-lg" }
                         }
                     }
                 }
+
+                // 分隔线
+                div { class: "h-px bg-[var(--color-paper-tertiary)]" }
             }
 
-            div { class: "w-full h-[500px] rounded-lg border border-gray-200 dark:border-[#333] bg-white dark:bg-[#1e1e1e] space-y-4",
-                div { class: "flex gap-2 p-4 border-b border-gray-100 dark:border-[#333]",
-                    for _ in 0..8 {
-                        SkeletonBox { class: "w-8 h-8 rounded" }
+            // 编辑器骨架 - 沾满剩余高度
+            div { class: "flex-1 min-h-0 flex flex-col my-4",
+                div { class: "flex-1 min-h-0 w-full rounded-xl border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] space-y-4 p-4",
+                    // 编辑器工具栏骨架
+                    div { class: "flex gap-2 pb-3 border-b border-[var(--color-paper-border)]",
+                        for _ in 0..8 {
+                            SkeletonBox { class: "w-8 h-8 rounded" }
+                        }
+                    }
+                    // 编辑器内容骨架
+                    div { class: "space-y-3 pt-2",
+                        SkeletonBox { class: "h-4 w-[90%] rounded" }
+                        SkeletonBox { class: "h-4 w-full rounded" }
+                        SkeletonBox { class: "h-4 w-[85%] rounded" }
+                        SkeletonBox { class: "h-4 w-[95%] rounded" }
+                        SkeletonBox { class: "h-4 w-[60%] rounded" }
+                        SkeletonBox { class: "h-4 w-full rounded" }
+                        SkeletonBox { class: "h-4 w-[75%] rounded" }
+                        SkeletonBox { class: "h-4 w-[80%] rounded" }
+                        div { class: "h-4" }
+                        SkeletonBox { class: "h-4 w-[70%] rounded" }
+                        SkeletonBox { class: "h-4 w-full rounded" }
+                        SkeletonBox { class: "h-4 w-[90%] rounded" }
                     }
                 }
-                div { class: "space-y-3 pt-2",
-                    SkeletonBox { class: "h-4 w-[90%] rounded" }
-                    SkeletonBox { class: "h-4 w-full rounded" }
-                    SkeletonBox { class: "h-4 w-[85%] rounded" }
-                    SkeletonBox { class: "h-4 w-[95%] rounded" }
-                    SkeletonBox { class: "h-4 w-[60%] rounded" }
-                    SkeletonBox { class: "h-4 w-full rounded" }
-                    SkeletonBox { class: "h-4 w-[75%] rounded" }
-                    SkeletonBox { class: "h-4 w-[80%] rounded" }
-                    div { class: "h-4" }
-                    SkeletonBox { class: "h-4 w-[70%] rounded" }
-                    SkeletonBox { class: "h-4 w-full rounded" }
-                    SkeletonBox { class: "h-4 w-[90%] rounded" }
-                }
             }
 
-            div { class: "flex items-center gap-3 pt-2",
-                div { class: "flex-1" }
-                SkeletonBox { class: "h-10 w-[72px] rounded-full" }
-                SkeletonBox { class: "h-10 w-[100px] rounded-full" }
-                SkeletonBox { class: "h-10 w-[72px] rounded-full" }
+            // 按钮行骨架
+            div { class: "flex-shrink-0 flex items-center gap-2 pt-2 pb-4",
+                SkeletonBox { class: "h-9 w-[60px] rounded-full" }
+                SkeletonBox { class: "h-9 w-[80px] rounded-full" }
+                SkeletonBox { class: "h-9 w-[60px] rounded-full" }
             }
         }
     }

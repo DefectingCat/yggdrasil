@@ -73,12 +73,26 @@ pub fn AdminLayout() -> Element {
         }
     };
 
+    let is_write_route = matches!(route, Route::Write {}) || matches!(route, Route::WriteEdit { .. });
+    let main_class = if is_write_route {
+        "flex-1 w-full max-w-5xl mx-auto px-6 flex flex-col overflow-hidden"
+    } else {
+        "flex-1 w-full max-w-5xl mx-auto px-6 py-8"
+    };
+
+    // Write 路由：页面固定高度，不滚动，由编辑器内部处理滚动
+    let root_class = if is_write_route {
+        "h-dvh flex flex-col overflow-hidden bg-white dark:bg-[#1d1e20]"
+    } else {
+        "min-h-screen flex flex-col bg-white dark:bg-[#1d1e20]"
+    };
+
     match ((ctx.checked)(), (ctx.user)()) {
         (true, Some(_)) => {
             rsx! {
-                div { class: "min-h-screen flex flex-col bg-white dark:bg-[#1d1e20]",
+                div { class: "{root_class}",
                     Header { nav_items: admin_nav_items, right_content: right_content }
-                    main { class: "flex-1 w-full max-w-5xl mx-auto px-6 py-8",
+                    main { class: "{main_class}",
                         Outlet::<Route> {}
                     }
                     Footer {}
@@ -87,17 +101,19 @@ pub fn AdminLayout() -> Element {
         }
         (true, None) => {
             rsx! {
-                div { class: "min-h-screen flex items-center justify-center bg-white dark:bg-[#1d1e20]",
-                    p { class: "text-gray-600 dark:text-[#9b9c9d]", "未登录，正在跳转..." }
+                div { class: "{root_class}",
+                    div { class: "flex-1 flex items-center justify-center",
+                        p { class: "text-gray-600 dark:text-[#9b9c9d]", "未登录，正在跳转..." }
+                    }
                 }
             }
         }
         (false, _) => {
             // 使用与真实布局完全相同的结构包裹内容骨架，避免 checked 变化时的布局闪烁
             rsx! {
-                div { class: "min-h-screen flex flex-col bg-white dark:bg-[#1d1e20]",
+                div { class: "{root_class}",
                     Header { nav_items: admin_nav_items, right_content: right_content }
-                    main { class: "flex-1 w-full max-w-5xl mx-auto px-6 py-8",
+                    main { class: "{main_class}",
                         div { class: if show_skeleton() { "" } else { "opacity-0" },
                             {match route {
                                 Route::Write {} => rsx! { WriteSkeleton {} },

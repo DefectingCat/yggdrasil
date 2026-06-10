@@ -328,128 +328,147 @@ fn write_editor(post_id: Option<i32>) -> Element {
     };
 
     rsx! {
-        div { class: "relative",
+        div { class: "relative flex flex-col flex-1 min-h-0 overflow-hidden",
             if loading() {
-                div { class: "absolute inset-0 z-10 bg-white dark:bg-[#1d1e20]",
+                div { class: "absolute inset-0 z-10 bg-[var(--color-paper-theme)]",
                     WriteSkeleton {}
                 }
             }
 
-            div { class: "space-y-6",
-                div { class: "rounded-xl bg-white dark:bg-[#2e2e33] border border-gray-200 dark:border-[#333] p-6 space-y-5",
+            // 顶部元信息区域 - 固定高度，不滚动
+            div { class: "flex-shrink-0 space-y-5 pt-8",
+                // 标题区域 - 大字号无框输入
+                div {
                     input {
-                        class: "w-full text-2xl font-bold bg-transparent text-gray-900 dark:text-[#dadadb] placeholder-gray-300 dark:placeholder-[#555] focus:outline-none",
+                        class: "w-full text-3xl md:text-4xl font-bold bg-transparent text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none tracking-tight leading-tight",
                         placeholder: "文章标题",
                         value: "{title}",
                         oninput: move |evt| title.set(evt.value()),
                     }
+                }
 
-                    textarea {
-                        class: "w-full text-sm bg-gray-50 dark:bg-[#1d1e20] rounded-lg px-4 py-3 text-gray-700 dark:text-[#9b9c9d] placeholder-gray-400 dark:placeholder-[#555] focus:outline-none resize-none border border-gray-100 dark:border-[#333]",
-                        placeholder: "摘要（留空则自动生成）",
-                        rows: "2",
-                        value: "{summary}",
-                        oninput: move |evt| summary.set(evt.value()),
+                // 摘要
+                textarea {
+                    class: "w-full text-base bg-transparent text-[var(--color-paper-secondary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none resize-none leading-relaxed",
+                    placeholder: "摘要（留空则自动生成）",
+                    rows: "2",
+                    value: "{summary}",
+                    oninput: move |evt| summary.set(evt.value()),
+                }
+
+                // 元数据行 - 紧凑精致
+                div { class: "flex flex-wrap items-end gap-x-8 gap-y-4 text-sm",
+                    div { class: "flex-1 min-w-[140px]",
+                        label { class: "block text-[11px] font-medium text-[var(--color-paper-secondary)] tracking-wider mb-2",
+                            "Slug"
+                        }
+                        input {
+                            class: "w-full text-sm bg-transparent text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border-b border-[var(--color-paper-tertiary)] focus:border-[var(--color-paper-primary)] transition-colors pb-1.5",
+                            placeholder: "自动生成",
+                            value: "{slug}",
+                            oninput: move |evt| slug.set(evt.value()),
+                        }
                     }
-
-                    div { class: "grid grid-cols-1 md:grid-cols-3 gap-3",
-                        div {
-                            label { class: "block text-xs text-gray-600 dark:text-[#9b9c9d] mb-1.5 font-medium", "Slug" }
-                            input {
-                                class: "w-full text-sm bg-gray-50 dark:bg-[#1d1e20] rounded-lg px-3 py-2.5 text-gray-700 dark:text-[#9b9c9d] placeholder-gray-400 dark:placeholder-[#555] focus:outline-none border border-gray-100 dark:border-[#333]",
-                                placeholder: "自动生成",
-                                value: "{slug}",
-                                oninput: move |evt| slug.set(evt.value()),
-                            }
+                    div { class: "flex-1 min-w-[140px]",
+                        label { class: "block text-[11px] font-medium text-[var(--color-paper-secondary)] tracking-wider mb-2",
+                            "标签"
                         }
-                        div {
-                            label { class: "block text-xs text-gray-600 dark:text-[#9b9c9d] mb-1.5 font-medium", "标签" }
-                            input {
-                                class: "w-full text-sm bg-gray-50 dark:bg-[#1d1e20] rounded-lg px-3 py-2.5 text-gray-700 dark:text-[#9b9c9d] placeholder-gray-400 dark:placeholder-[#555] focus:outline-none border border-gray-100 dark:border-[#333]",
-                                placeholder: "逗号分隔",
-                                value: "{tags}",
-                                oninput: move |evt| tags.set(evt.value()),
-                            }
+                        input {
+                            class: "w-full text-sm bg-transparent text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border-b border-[var(--color-paper-tertiary)] focus:border-[var(--color-paper-primary)] transition-colors pb-1.5",
+                            placeholder: "逗号分隔",
+                            value: "{tags}",
+                            oninput: move |evt| tags.set(evt.value()),
                         }
-                        div {
-                            label { class: "block text-xs text-gray-600 dark:text-[#9b9c9d] mb-1.5 font-medium", "封面图" }
-                            input {
-                                class: "w-full text-sm bg-gray-50 dark:bg-[#1d1e20] rounded-lg px-3 py-2.5 text-gray-700 dark:text-[#9b9c9d] placeholder-gray-400 dark:placeholder-[#555] focus:outline-none border border-gray-100 dark:border-[#333]",
-                                placeholder: "URL（可选）",
-                                value: "{cover_image}",
-                                oninput: move |evt| cover_image.set(evt.value()),
-                            }
+                    }
+                    div { class: "flex-1 min-w-[140px]",
+                        label { class: "block text-[11px] font-medium text-[var(--color-paper-secondary)] tracking-wider mb-2",
+                            "封面图"
+                        }
+                        input {
+                            class: "w-full text-sm bg-transparent text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border-b border-[var(--color-paper-tertiary)] focus:border-[var(--color-paper-primary)] transition-colors pb-1.5",
+                            placeholder: "URL（可选）",
+                            value: "{cover_image}",
+                            oninput: move |evt| cover_image.set(evt.value()),
                         }
                     }
                 }
 
+                // 分隔线
+                div { class: "h-px bg-[var(--color-paper-tertiary)]" }
+            }
+
+            // 编辑器区域 - 沾满剩余高度
+            div { class: "flex-1 min-h-0 flex flex-col my-4",
                 div {
-                    class: "w-full h-[500px] border border-gray-200 dark:border-[#333] rounded-lg overflow-hidden bg-white dark:bg-[#1e1e1e]",
+                    class: "flex-1 min-h-0 w-full border border-[var(--color-paper-border)] rounded-xl overflow-hidden bg-[var(--color-paper-entry)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none",
                     id: "tiptap-editor",
                 }
+            }
 
-                if let Some(err) = load_error() {
-                    div { class: "px-4 py-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30",
-                        "{err}"
+            // 错误和成功提示
+            if let Some(err) = load_error() {
+                div { class: "flex-shrink-0 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30 mb-2",
+                    "{err}"
+                }
+            }
+
+            if let Some(err) = error() {
+                div { class: "flex-shrink-0 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30 mb-2",
+                    "{err}"
+                }
+            }
+
+            if success() {
+                div { class: "flex-shrink-0 px-4 py-2 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-xl text-sm border border-green-100 dark:border-green-900/30 mb-2",
+                    "保存成功"
+                }
+            }
+
+            // 底部操作栏 - 在编辑器下方，左对齐
+            div { class: "flex-shrink-0 flex items-center gap-2 pt-2 pb-4",
+                button {
+                    class: "px-4 py-1.5 text-sm text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors cursor-pointer",
+                    onclick: move |_| {
+                        let _ = dioxus::router::navigator().push(Route::Posts {});
+                    },
+                    "取消"
+                }
+                div { class: "w-px h-5 bg-[var(--color-paper-border)]" }
+                div {
+                    class: "relative inline-flex items-center px-3 py-1.5 text-sm text-[var(--color-paper-secondary)] cursor-pointer",
+                    select {
+                        class: "absolute inset-0 w-full h-full opacity-0 cursor-pointer",
+                        style: "appearance: none; -webkit-appearance: none;",
+                        value: "{status}",
+                        onchange: move |evt| status.set(evt.value()),
+                        option { value: "draft", "草稿" }
+                        option { value: "published", "发布" }
+                    }
+                    span { class: "pr-1.5 text-[var(--color-paper-primary)] font-medium",
+                        if status() == "draft" { "草稿" } else { "发布" }
+                    }
+                    svg {
+                        class: "h-3.5 w-3.5 text-[var(--color-paper-tertiary)] pointer-events-none",
+                        xmlns: "http://www.w3.org/2000/svg",
+                        view_box: "0 0 20 20",
+                        fill: "currentColor",
+                        path {
+                            fill_rule: "evenodd",
+                            d: "M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z",
+                            clip_rule: "evenodd"
+                        }
                     }
                 }
-
-                if let Some(err) = error() {
-                    div { class: "px-4 py-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30",
-                        "{err}"
-                    }
-                }
-
-                if success() {
-                    div { class: "px-4 py-3 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-xl text-sm border border-green-100 dark:border-green-900/30",
-                        "保存成功"
-                    }
-                }
-
-                div { class: "flex items-center gap-3 pt-2",
-                    div { class: "flex-1" }
-                    button {
-                        class: "px-5 py-2.5 text-sm bg-gray-200 dark:bg-[#333] text-gray-700 dark:text-[#dadadb] rounded-full font-medium hover:opacity-80 transition-opacity cursor-pointer",
-                        onclick: move |_| {
-                            let _ = dioxus::router::navigator().push(Route::Posts {});
-                        },
-                        "取消"
-                    }
-                    div {
-                        class: "relative inline-flex items-center px-5 py-2.5 text-sm bg-gray-50 dark:bg-[#1d1e20] border border-gray-200 dark:border-[#333] rounded-full text-gray-700 dark:text-[#9b9c9d] cursor-pointer min-w-[80px]",
-                        select {
-                            class: "absolute inset-0 w-full h-full opacity-0 cursor-pointer",
-                            style: "appearance: none; -webkit-appearance: none;",
-                            value: "{status}",
-                            onchange: move |evt| status.set(evt.value()),
-                            option { value: "draft", "草稿" }
-                            option { value: "published", "发布" }
-                        }
-                        span { class: "pr-2",
-                            if status() == "draft" { "草稿" } else { "发布" }
-                        }
-                        svg {
-                            class: "h-4 w-4 text-gray-500 dark:text-[#666] pointer-events-none",
-                            xmlns: "http://www.w3.org/2000/svg",
-                            view_box: "0 0 20 20",
-                            fill: "currentColor",
-                            path {
-                                fill_rule: "evenodd",
-                                d: "M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z",
-                                clip_rule: "evenodd"
-                            }
-                        }
-                    }
-                    button {
-                        class: if saving() {
-                            "px-6 py-2.5 text-sm bg-gray-400 text-white rounded-full font-medium cursor-not-allowed"
-                        } else {
-                            "px-6 py-2.5 text-sm bg-gray-900 dark:bg-[#dadadb] text-white dark:text-gray-900 rounded-full font-medium hover:opacity-80 transition-opacity cursor-pointer"
-                        },
-                        disabled: saving(),
-                        onclick: on_submit,
-                        "{save_button_text}"
-                    }
+                div { class: "w-px h-5 bg-[var(--color-paper-border)]" }
+                button {
+                    class: if saving() {
+                        "px-5 py-1.5 text-sm bg-[var(--color-paper-tertiary)] text-[var(--color-paper-secondary)] rounded-xl font-medium cursor-not-allowed"
+                    } else {
+                        "px-5 py-1.5 text-sm bg-[var(--color-paper-primary)] text-[var(--color-paper-theme)] rounded-xl font-medium hover:opacity-90 transition-opacity cursor-pointer"
+                    },
+                    disabled: saving(),
+                    onclick: on_submit,
+                    "{save_button_text}"
                 }
             }
         }
