@@ -49,7 +49,7 @@ pub fn Search() -> Element {
         }
         if is_searching() {
             DelayedSkeleton { SearchSkeleton {} }
-        } else if let Some(Ok(PostListResponse { posts })) = search_res() {
+        } else if let Some(Ok(PostListResponse { posts, total: _ })) = search_res() {
             if posts.is_empty() {
                 div { class: "text-center text-gray-500 dark:text-[#9b9c9d] py-20",
                     "未找到相关文章"
