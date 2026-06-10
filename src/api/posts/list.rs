@@ -14,11 +14,21 @@ pub async fn list_published_posts(
     #[cfg(feature = "server")]
     {
         let cache_key = crate::cache::CacheKey::PublishedPosts { page, per_page };
-        if let Some(cached) = crate::cache::get_post_list(&cache_key).await {
-            return Ok(PostListResponse { posts: cached });
+        if let Some((cached_posts, cached_total)) = crate::cache::get_post_list(&cache_key).await {
+            return Ok(PostListResponse { posts: cached_posts, total: cached_total });
         }
 
         let client = get_conn().await.map_err(AppError::db_conn)?;
+
+        // Get total count
+        let count_row = client
+            .query_one(
+                "SELECT COUNT(*) FROM posts WHERE status = 'published' AND deleted_at IS NULL",
+                &[],
+            )
+            .await
+            .map_err(AppError::query)?;
+        let total: i64 = count_row.get(0);
 
         let offset = ((page - 1).max(0) as i64) * (per_page as i64);
         let limit = per_page as i64;
@@ -45,13 +55,13 @@ pub async fn list_published_posts(
             posts.push(row_to_post_list(&client, row).await);
         }
 
-        crate::cache::set_post_list(&cache_key, posts.clone()).await;
-        Ok(PostListResponse { posts })
+        crate::cache::set_post_list(&cache_key, posts.clone(), total).await;
+        Ok(PostListResponse { posts, total })
     }
 
     #[cfg(not(feature = "server"))]
     {
-        Ok(PostListResponse { posts: Vec::new() })
+        Ok(PostListResponse { posts: Vec::new(), total: 0 })
     }
 }
 
@@ -85,12 +95,13 @@ pub async fn list_posts() -> Result<PostListResponse, ServerFnError> {
             posts.push(row_to_post_list(&client, row).await);
         }
 
-        Ok(PostListResponse { posts })
+        let total = posts.len() as i64;
+        Ok(PostListResponse { posts, total })
     }
 
     #[cfg(not(feature = "server"))]
     {
-        Ok(PostListResponse { posts: Vec::new() })
+        Ok(PostListResponse { posts: Vec::new(), total: 0 })
     }
 }
 
@@ -98,8 +109,8 @@ pub async fn list_posts() -> Result<PostListResponse, ServerFnError> {
 pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, ServerFnError> {
     #[cfg(feature = "server")]
     {
-        if let Some(cached) = crate::cache::get_posts_by_tag(&tag_name).await {
-            return Ok(PostListResponse { posts: cached });
+        if let Some((cached_posts, cached_total)) = crate::cache::get_posts_by_tag(&tag_name).await {
+            return Ok(PostListResponse { posts: cached_posts, total: cached_total });
         }
 
         let client = get_conn().await.map_err(AppError::db_conn)?;
@@ -128,12 +139,13 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
             posts.push(row_to_post_list(&client, row).await);
         }
 
-        crate::cache::set_posts_by_tag(&tag_name, posts.clone()).await;
-        Ok(PostListResponse { posts })
+        let total = posts.len() as i64;
+        crate::cache::set_posts_by_tag(&tag_name, posts.clone(), total).await;
+        Ok(PostListResponse { posts, total })
     }
 
     #[cfg(not(feature = "server"))]
     {
-        Ok(PostListResponse { posts: Vec::new() })
+        Ok(PostListResponse { posts: Vec::new(), total: 0 })
     }
 }

@@ -14,7 +14,7 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
 
         let q = query.trim();
         if q.is_empty() {
-            return Ok(PostListResponse { posts: Vec::new() });
+            return Ok(PostListResponse { posts: Vec::new(), total: 0 });
         }
 
         let rows = client
@@ -42,11 +42,12 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
             posts.push(row_to_post_list(&client, row).await);
         }
 
-        Ok(PostListResponse { posts })
+        let total = posts.len() as i64;
+        Ok(PostListResponse { posts, total })
     }
 
     #[cfg(not(feature = "server"))]
     {
-        Ok(PostListResponse { posts: Vec::new() })
+        Ok(PostListResponse { posts: Vec::new(), total: 0 })
     }
 }
