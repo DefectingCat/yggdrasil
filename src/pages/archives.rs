@@ -95,12 +95,12 @@ fn ArchivesContent() -> Element {
 
     let posts_data = posts_res.read();
     match &*posts_data {
-        Some(Ok(PostListResponse { posts })) => {
+        Some(Ok(PostListResponse { posts, total })) => {
             let grouped = group_posts(posts);
             rsx! {
                 div { class: "mt-2 text-base text-gray-500 dark:text-[#9b9c9d]",
                     "共 "
-                    span { class: "font-medium text-gray-700 dark:text-[#dadadb]", "{posts.len()}" }
+                    span { class: "font-medium text-gray-700 dark:text-[#dadadb]", "{total}" }
                     " 篇文章"
                 }
                 for year_group in grouped.iter() {
