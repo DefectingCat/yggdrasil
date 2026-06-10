@@ -73,13 +73,27 @@ pub async fn list_published_posts(
 }
 
 #[server(ListPosts, "/api")]
-pub async fn list_posts() -> Result<PostListResponse, ServerFnError> {
+pub async fn list_posts(
+    page: i32,
+    per_page: i32,
+) -> Result<PostListResponse, ServerFnError> {
     let _user = get_current_admin_user().await?;
 
     #[cfg(feature = "server")]
     {
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
+        let count_row = client
+            .query_one(
+                "SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL",
+                &[],
+            )
+            .await
+            .map_err(AppError::query)?;
+        let total: i64 = count_row.get(0);
+
+        let offset = ((page - 1).max(0) as i64) * (per_page as i64);
+        let limit = per_page as i64;
         let rows = client
             .query(
                 "SELECT 
@@ -91,8 +105,9 @@ pub async fn list_posts() -> Result<PostListResponse, ServerFnError> {
                  LEFT JOIN tags t ON pt.tag_id = t.id
                  WHERE p.deleted_at IS NULL
                  GROUP BY p.id
-                 ORDER BY p.created_at DESC",
-                &[],
+                 ORDER BY p.created_at DESC
+                 LIMIT $1 OFFSET $2",
+                &[&limit, &offset],
             )
             .await
             .map_err(AppError::query)?;
@@ -102,7 +117,6 @@ pub async fn list_posts() -> Result<PostListResponse, ServerFnError> {
             posts.push(row_to_post_list(&client, row).await);
         }
 
-        let total = posts.len() as i64;
         Ok(PostListResponse { posts, total })
     }
 

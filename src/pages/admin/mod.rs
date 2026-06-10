@@ -3,5 +3,5 @@ pub mod posts;
 pub mod write;
 
 pub use dashboard::Admin;
-pub use posts::Posts;
+pub use posts::{Posts, PostsPage};
 pub use write::{Write, WriteEdit};

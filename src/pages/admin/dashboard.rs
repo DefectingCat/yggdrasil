@@ -9,7 +9,7 @@ use crate::router::Route;
 #[component]
 pub fn Admin() -> Element {
     let stats_res = use_resource(get_post_stats);
-    let posts_res = use_resource(list_posts);
+    let posts_res = use_resource(|| list_posts(1, 5));
     let show_stats_skeleton = use_delayed_loading(move || stats_res.read().is_none());
     let show_posts_skeleton = use_delayed_loading(move || posts_res.read().is_none());
 

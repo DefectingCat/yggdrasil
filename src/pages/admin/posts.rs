@@ -6,12 +6,26 @@ use crate::hooks::delayed_loading::use_delayed_loading;
 use crate::models::post::Post;
 use crate::router::Route;
 
+const POSTS_PER_PAGE: i32 = 20;
+
 #[component]
 #[allow(unused_variables)]
 pub fn Posts() -> Element {
-    let mut posts_res = use_resource(list_posts);
+    rsx! { PostsPage { page: 1 } }
+}
+
+#[component]
+#[allow(unused_variables)]
+pub fn PostsPage(page: i32) -> Element {
+    let current_page = page.max(1);
+    let mut posts_res = use_server_future(move || list_posts(current_page, POSTS_PER_PAGE))?;
     let mut deleting = use_signal(|| None::<i32>);
     let show_skeleton = use_delayed_loading(move || posts_res.read().is_none());
+
+    let posts_data = posts_res.read().as_ref().map(|r| match r {
+        Ok(PostListResponse { posts, total }) => Ok((posts.clone(), *total)),
+        Err(e) => Err(e.to_string()),
+    });
 
     rsx! {
         div { class: "space-y-6",
@@ -26,8 +40,8 @@ pub fn Posts() -> Element {
                 }
             }
 
-            match &*posts_res.read() {
-                Some(Ok(PostListResponse { posts, total: _ })) => {
+            match posts_data {
+                Some(Ok((posts, total))) => {
                     if posts.is_empty() {
                         rsx! {
                             div { class: "text-center py-20 text-gray-500 dark:text-[#9b9c9d]",
@@ -75,6 +89,7 @@ pub fn Posts() -> Element {
                                     }
                                 }
                             }
+                            Pagination { current_page, total }
                         }
                     }
                 }
@@ -96,6 +111,51 @@ pub fn Posts() -> Element {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn Pagination(current_page: i32, total: i64) -> Element {
+    let has_prev = current_page > 1;
+    let total_pages = ((total + POSTS_PER_PAGE as i64 - 1) / POSTS_PER_PAGE as i64).max(1) as i32;
+    let has_next = current_page < total_pages;
+
+    rsx! {
+        nav { class: "flex mt-6 justify-between",
+            if has_prev {
+                Link {
+                    class: "inline-flex items-center px-4 py-2 text-sm text-white bg-gray-900 dark:bg-[#dadadb] dark:text-gray-900 rounded-full hover:opacity-80 transition-opacity cursor-pointer",
+                    to: if current_page - 1 <= 1 {
+                        Route::Posts {}
+                    } else {
+                        Route::PostsPage { page: current_page - 1 }
+                    },
+                    span { class: "mr-1", "«" }
+                    "上一页"
+                }
+            } else {
+                span { class: "inline-flex items-center px-4 py-2 text-sm text-gray-400 bg-gray-100 dark:bg-[#2a2a2a] rounded-full cursor-not-allowed",
+                    span { class: "mr-1", "«" }
+                    "上一页"
+                }
+            }
+            span { class: "text-sm text-gray-500 dark:text-[#9b9c9d] self-center",
+                "{current_page} / {total_pages} 页 (共 {total} 篇)"
+            }
+            if has_next {
+                Link {
+                    class: "inline-flex items-center px-4 py-2 text-sm text-white bg-gray-900 dark:bg-[#dadadb] dark:text-gray-900 rounded-full hover:opacity-80 transition-opacity cursor-pointer",
+                    to: Route::PostsPage { page: current_page + 1 },
+                    "下一页"
+                    span { class: "ml-1", "»" }
+                }
+            } else {
+                span { class: "inline-flex items-center px-4 py-2 text-sm text-gray-400 bg-gray-100 dark:bg-[#2a2a2a] rounded-full cursor-not-allowed",
+                    "下一页"
+                    span { class: "ml-1", "»" }
                 }
             }
         }
