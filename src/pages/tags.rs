@@ -85,16 +85,16 @@ fn TagDetailContent(tag: String) -> Element {
     let posts_res = use_server_future(move || get_posts_by_tag(tag.clone()))?;
 
     let posts_data = posts_res.read().as_ref().map(|r| match r {
-        Ok(PostListResponse { posts }) => Ok(posts.clone()),
+        Ok(PostListResponse { posts, total }) => Ok((posts.clone(), *total)),
         Err(e) => Err(e.to_string()),
     });
 
     match posts_data {
-        Some(Ok(posts)) => {
+        Some(Ok((posts, total))) => {
             rsx! {
                 div { class: "mt-2 text-base text-gray-500 dark:text-[#9b9c9d]",
                     "共 "
-                    span { class: "font-medium text-gray-700 dark:text-[#dadadb]", "{posts.len()}" }
+                    span { class: "font-medium text-gray-700 dark:text-[#dadadb]", "{total}" }
                     " 篇文章"
                 }
                 for post in posts.iter() {
