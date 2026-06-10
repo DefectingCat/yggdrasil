@@ -9,6 +9,7 @@ use crate::pages::admin::{Admin, Posts, Write, WriteEdit};
 use crate::pages::archives::Archives;
 use crate::pages::home::{Home, HomePage};
 use crate::pages::login::Login;
+use crate::pages::not_found::NotFound;
 use crate::pages::post_detail::PostDetail;
 use crate::pages::register::Register;
 use crate::pages::search::Search;
@@ -35,6 +36,8 @@ pub enum Route {
         Search {},
         #[route("/about")]
         About {},
+        #[route("/:..segments")]
+        NotFound { segments: Vec<String> },
     #[end_layout]
 
     #[nest("/admin")]

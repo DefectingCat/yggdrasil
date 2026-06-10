@@ -18,6 +18,7 @@ fn route_skeleton(route: &Route) -> Element {
         Route::Tags {} | Route::TagDetail { .. } => rsx! { DelayedSkeleton { TagsSkeleton {} } },
         Route::Search {} => rsx! { DelayedSkeleton { SearchSkeleton {} } },
         Route::PostDetail { .. } => rsx! { DelayedSkeleton { PostDetailSkeleton {} } },
+        Route::NotFound { .. } => rsx! { div { class: "py-20 md:py-28" } },
         _ => rsx! { DelayedSkeleton { HomeSkeleton {} } },
     }
 }
