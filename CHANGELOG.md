@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-06-10
+
+### Added
+
+- 404 Not Found 页面
+- 基于 moka 的内存缓存模块（文章、标签、统计查询缓存）
+- 读写操作缓存支持：读操作命中缓存，写操作自动失效相关缓存
+- 文章列表返回准确的总条目数，前台首页/归档/标签页分页使用准确总数
+- WebP 图片编码支持（zenwebp），上传图片自动转换为 WebP 以节省存储空间
+- 图片变体磁盘级缓存
+
+### Changed
+
+- `posts.rs` API 拆分为模块目录结构
+- 统一错误处理为 `AppError` 枚举
+- 缓存层优化：直接返回命中结果，COUNT(*) 结果单独缓存
+- 提取 WebP 编码辅助函数减少重复代码
+- 简化 TraceLayer 配置并重新格式化路由定义
+
+### Fixed
+
+- 修复多处 `#[cfg(feature = "server")]` 门控缺失导致的编译问题
+- 缓存正确失效旧 slug 和新 slug
+- WebP 解码缓冲区大小限制，防止恶意大分配
+- 代码块复制按钮点击处理
+- 其他细节修复
+
+### Internal
+
+- 新增缓存、WebP 配置测试用例
+- 添加 release 自动化技能
+
 ## [0.1.0] - 2026-06-09
 
 ### Added
