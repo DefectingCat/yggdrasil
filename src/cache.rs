@@ -44,7 +44,7 @@ pub enum CacheKey {
 // ============================================================================
 
 #[cfg(feature = "server")]
-pub type PostListCache = Cache<CacheKey, Vec<Post>>;
+pub type PostListCache = Cache<CacheKey, (Vec<Post>, i64)>;
 
 #[cfg(feature = "server")]
 pub type TagListCache = Cache<CacheKey, Vec<Tag>>;
@@ -100,13 +100,13 @@ static TAG_POSTS_CACHE: LazyLock<PostListCache> = LazyLock::new(|| {
 // ============================================================================
 
 #[cfg(feature = "server")]
-pub async fn get_post_list(key: &CacheKey) -> Option<Vec<Post>> {
+pub async fn get_post_list(key: &CacheKey) -> Option<(Vec<Post>, i64)> {
     POST_LIST_CACHE.get(key).await
 }
 
 #[cfg(feature = "server")]
-pub async fn set_post_list(key: &CacheKey, posts: Vec<Post>) {
-    let _ = POST_LIST_CACHE.insert(key.clone(), posts).await;
+pub async fn set_post_list(key: &CacheKey, posts: Vec<Post>, total: i64) {
+    let _ = POST_LIST_CACHE.insert(key.clone(), (posts, total)).await;
 }
 
 #[cfg(feature = "server")]
@@ -134,16 +134,16 @@ pub async fn set_post_by_slug(slug: &str, post: Option<Post>) {
 }
 
 #[cfg(feature = "server")]
-pub async fn get_posts_by_tag(tag: &str) -> Option<Vec<Post>> {
+pub async fn get_posts_by_tag(tag: &str) -> Option<(Vec<Post>, i64)> {
     TAG_POSTS_CACHE
         .get(&CacheKey::PostsByTag(tag.to_string()))
         .await
 }
 
 #[cfg(feature = "server")]
-pub async fn set_posts_by_tag(tag: &str, posts: Vec<Post>) {
+pub async fn set_posts_by_tag(tag: &str, posts: Vec<Post>, total: i64) {
     let _ = TAG_POSTS_CACHE
-        .insert(CacheKey::PostsByTag(tag.to_string()), posts)
+        .insert(CacheKey::PostsByTag(tag.to_string()), (posts, total))
         .await;
 }
 
@@ -218,11 +218,13 @@ mod tests {
         let key = CacheKey::PublishedPosts { page: 999, per_page: 99 };
         let posts = vec![];
         
-        set_post_list(&key, posts.clone()).await;
+        set_post_list(&key, posts.clone(), 0).await;
         let cached = get_post_list(&key).await;
         
         assert!(cached.is_some());
-        assert_eq!(cached.unwrap().len(), 0);
+        let (cached_posts, cached_total) = cached.unwrap();
+        assert_eq!(cached_posts.len(), 0);
+        assert_eq!(cached_total, 0);
     }
 
     #[tokio::test]
