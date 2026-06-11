@@ -11,10 +11,15 @@ pub fn Login() -> Element {
     let mut username = use_signal(|| "".to_string());
     let mut password = use_signal(|| "".to_string());
     let mut error = use_signal(|| None::<String>);
+    let mut loading = use_signal(|| false);
     let mut ctx: UserContext = use_context();
 
     let on_submit = Callback::new(move |_| {
+        if loading() {
+            return;
+        }
         error.set(None);
+        loading.set(true);
 
         let username_val = username();
         let password_val = password();
@@ -47,8 +52,11 @@ pub fn Login() -> Element {
                     error.set(Some(format!("请求失败: {}", e)));
                 }
             }
+            loading.set(false);
         });
     });
+
+    let is_loading = loading();
 
     rsx! {
         div { class: "min-h-screen flex items-center justify-center bg-paper-theme",
@@ -68,6 +76,7 @@ pub fn Login() -> Element {
                             r#type: "text",
                             placeholder: "用户名或邮箱",
                             value: username(),
+                            disabled: is_loading,
                             oninput: move |v: String| username.set(v),
                             onkeydown: Some(EventHandler::new(move |e: KeyboardEvent| if e.key() == Key::Enter { on_submit(()) })),
                         }
@@ -78,14 +87,17 @@ pub fn Login() -> Element {
                             r#type: "password",
                             placeholder: "密码",
                             value: password(),
+                            disabled: is_loading,
                             oninput: move |v: String| password.set(v),
                             onkeydown: Some(EventHandler::new(move |e: KeyboardEvent| if e.key() == Key::Enter { on_submit(()) })),
                         }
                     }
                     button {
                         class: "{BUTTON_PRIMARY_CLASS}",
+                        class: if is_loading { "opacity-60 cursor-not-allowed" },
+                        disabled: is_loading,
                         onclick: move |_| on_submit(()),
-                        "登录"
+                        if is_loading { "登录中..." } else { "登录" }
                     }
                     Link {
                         class: "block w-full py-2 px-4 text-center text-paper-secondary hover:text-paper-accent font-medium rounded-lg transition-all duration-200 cursor-pointer",

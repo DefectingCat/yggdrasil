@@ -9,15 +9,18 @@ pub fn FormInput(
     r#type: &'static str,
     placeholder: &'static str,
     value: String,
+    disabled: bool,
     oninput: EventHandler<String>,
     onkeydown: Option<EventHandler<KeyboardEvent>>,
 ) -> Element {
+    let disabled_class = if disabled { "opacity-60 cursor-not-allowed" } else { "" };
     rsx! {
         input {
-            class: "{INPUT_CLASS}",
+            class: "{INPUT_CLASS} {disabled_class}",
             r#type: "{r#type}",
             placeholder: "{placeholder}",
             value: "{value}",
+            disabled,
             oninput: move |e| oninput.call(e.value()),
             onkeydown: move |e| {
                 if let Some(ref handler) = onkeydown {

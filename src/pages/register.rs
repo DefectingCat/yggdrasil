@@ -13,8 +13,12 @@ pub fn Register() -> Element {
     let mut confirm_password = use_signal(|| "".to_string());
     let mut error = use_signal(|| None::<String>);
     let mut success = use_signal(|| false);
+    let mut loading = use_signal(|| false);
 
-    let on_submit = move |_| {
+    let on_submit = Callback::new(move |_| {
+        if loading() {
+            return;
+        }
         error.set(None);
         success.set(false);
 
@@ -30,6 +34,8 @@ pub fn Register() -> Element {
         let username_val = username();
         let email_val = email();
         let password_val = password();
+
+        loading.set(true);
 
         spawn(async move {
             match register(username_val, email_val, password_val).await {
@@ -47,8 +53,11 @@ pub fn Register() -> Element {
                     error.set(Some(format!("请求失败: {}", e)));
                 }
             }
+            loading.set(false);
         });
-    };
+    });
+
+    let is_loading = loading();
 
     rsx! {
         div { class: "min-h-screen flex items-center justify-center bg-paper-theme",
@@ -81,6 +90,7 @@ pub fn Register() -> Element {
                             r#type: "text",
                             placeholder: "3-50 位字符",
                             value: username(),
+                            disabled: is_loading,
                             oninput: move |v: String| username.set(v),
                             onkeydown: None,
                         }
@@ -91,6 +101,7 @@ pub fn Register() -> Element {
                             r#type: "email",
                             placeholder: "your@email.com",
                             value: email(),
+                            disabled: is_loading,
                             oninput: move |v: String| email.set(v),
                             onkeydown: None,
                         }
@@ -101,6 +112,7 @@ pub fn Register() -> Element {
                             r#type: "password",
                             placeholder: "至少 8 位",
                             value: password(),
+                            disabled: is_loading,
                             oninput: move |v: String| password.set(v),
                             onkeydown: None,
                         }
@@ -111,14 +123,17 @@ pub fn Register() -> Element {
                             r#type: "password",
                             placeholder: "再次输入密码",
                             value: confirm_password(),
+                            disabled: is_loading,
                             oninput: move |v: String| confirm_password.set(v),
                             onkeydown: None,
                         }
                     }
                     button {
                         class: "{BUTTON_PRIMARY_CLASS}",
-                        onclick: on_submit,
-                        "注册"
+                        class: if is_loading { "opacity-60 cursor-not-allowed" },
+                        disabled: is_loading,
+                        onclick: move |_| on_submit(()),
+                        if is_loading { "注册中..." } else { "注册" }
                     }
                 }
                 p { class: "mt-4 text-center text-sm text-paper-secondary",
