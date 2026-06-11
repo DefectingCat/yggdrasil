@@ -52,14 +52,14 @@ pub fn CommentSection(post_id: i32) -> Element {
         }
     });
 
-    let comments_resource = use_server_future(move || {
-        let _ = ctx.refresh_trigger;
-        get_comments(post_id)
-    })?;
+    let comments_resource = use_resource(move || async move {
+        let _ = (ctx.refresh_trigger)();
+        get_comments(post_id).await
+    });
 
     let data = comments_resource.read();
 
-    match data.as_ref().map(|r| r.as_ref()) {
+    match &*data {
         Some(Ok(CommentTreeResponse { comments, count })) => {
             let approved_count = *count;
             let pending_count = ctx.pending_comments.read().len() as i64;
