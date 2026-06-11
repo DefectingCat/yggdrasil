@@ -3,25 +3,10 @@ use crate::api::error::AppError;
 #[cfg(feature = "server")]
 use crate::models::post::{Post, PostStatus};
 #[cfg(feature = "server")]
-use crate::models::user::{User, UserRole};
-#[cfg(feature = "server")]
 use crate::utils::text::count_words;
 
 #[cfg(feature = "server")]
-pub(super) async fn get_current_admin_user() -> Result<User, AppError> {
-    let token = crate::auth::session::get_session_from_ctx().ok_or(AppError::Unauthorized("未登录"))?;
-
-    let user = crate::api::auth::get_user_by_token(&token)
-        .await
-        .map_err(AppError::query)?
-        .ok_or(AppError::Unauthorized("会话已过期"))?;
-
-    if user.role != UserRole::Admin {
-        return Err(AppError::Forbidden("权限不足"));
-    }
-
-    Ok(user)
-}
+pub(super) use crate::api::auth::get_current_admin_user;
 
 #[cfg(feature = "server")]
 pub(super) async fn row_to_post_list(

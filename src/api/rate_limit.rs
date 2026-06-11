@@ -43,6 +43,22 @@ static IMAGE_LIMITER: LazyLock<DefaultKeyedRateLimiter<String>> = LazyLock::new(
 });
 
 #[cfg(feature = "server")]
+static COMMENT_LIMITER: LazyLock<DefaultKeyedRateLimiter<String>> = LazyLock::new(|| {
+    RateLimiter::keyed(
+        Quota::per_second(env_or("RATE_LIMIT_COMMENT_PER_SEC", 1))
+            .allow_burst(env_or("RATE_LIMIT_COMMENT_BURST", 5)),
+    )
+});
+
+#[cfg(feature = "server")]
+pub fn check_comment_limit(ip: &str) -> Result<(), String> {
+    COMMENT_LIMITER
+        .check_key(&ip.to_string())
+        .map(|_| ())
+        .map_err(|_| "评论过于频繁，请稍后再试".to_string())
+}
+
+#[cfg(feature = "server")]
 pub fn check_image_limit(ip: &str) -> Result<(), StatusCode> {
     IMAGE_LIMITER
         .check_key(&ip.to_string())

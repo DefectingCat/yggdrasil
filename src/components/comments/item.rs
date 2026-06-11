@@ -1,0 +1,105 @@
+use dioxus::prelude::*;
+
+use crate::context::UserContext;
+use crate::models::comment::PublicComment;
+use crate::components::comments::section::CommentContext;
+use crate::components::comments::form::CommentForm;
+use crate::components::comments::actions::CommentActions;
+
+#[component]
+pub fn CommentItem(comment: PublicComment, post_id: i32) -> Element {
+    let ctx: CommentContext = use_context();
+    let mut active_reply = ctx.active_reply;
+    let refresh_trigger = ctx.refresh_trigger;
+    let user_ctx: UserContext = use_context();
+
+    let depth = if comment.parent_id.is_none() && comment.depth > 0 {
+        0
+    } else {
+        comment.depth
+    };
+
+    let indent = depth.min(6) * 24;
+
+    let is_admin = user_ctx.user.read().as_ref().is_some();
+    let is_replying = active_reply() == Some(comment.id);
+    let show_reply = depth < 20;
+
+    let _ = refresh_trigger;
+
+    let author_element = match &comment.author_url {
+        Some(url) if !url.is_empty() => rsx! {
+            a {
+                href: "{url}",
+                rel: "nofollow noopener",
+                target: "_blank",
+                class: "font-medium text-paper-primary hover:text-paper-accent transition-colors",
+                "{comment.author_name}"
+            }
+        },
+        _ => rsx! {
+            span { class: "font-medium text-paper-primary",
+                "{comment.author_name}"
+            }
+        },
+    };
+
+    rsx! {
+        div {
+            class: "py-4",
+            style: "margin-left: {indent}px",
+
+            div { class: "flex gap-3",
+                img {
+                    src: "{comment.avatar_url}",
+                    alt: "{comment.author_name} 的头像",
+                    loading: "lazy",
+                    decoding: "async",
+                    class: "w-8 h-8 rounded-full shrink-0 mt-0.5 bg-gray-200 dark:bg-[#2a2a2a]",
+                }
+
+                div { class: "flex-1 min-w-0",
+                    div { class: "flex items-center gap-1.5 text-sm mb-1.5 flex-wrap",
+                        {author_element}
+                        span { class: "text-paper-tertiary", "·" }
+                        span {
+                            class: "text-paper-tertiary",
+                            title: "{comment.created_at_iso}",
+                            "{comment.created_at}"
+                        }
+                    }
+
+                    div {
+                        class: "prose prose-sm dark:prose-invert max-w-none text-paper-secondary",
+                        dangerous_inner_html: comment.content_html.as_deref().unwrap_or(""),
+                    }
+
+                    div { class: "flex items-center gap-3 mt-2",
+                        if show_reply {
+                            button {
+                                class: "text-xs text-paper-tertiary hover:text-paper-accent transition-colors cursor-pointer",
+                                aria_label: "回复 {comment.author_name} 的评论",
+                                onclick: move |_| {
+                                    if is_replying {
+                                        active_reply.set(None);
+                                    } else {
+                                        active_reply.set(Some(comment.id));
+                                    }
+                                },
+                                if is_replying { "取消回复" } else { "回复" }
+                            }
+                        }
+
+                        if is_admin {
+                            CommentActions { comment_id: comment.id, post_id }
+                        }
+                    }
+
+                    if is_replying {
+                        CommentForm { post_id, parent_id: Some(comment.id) }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -37,6 +37,10 @@ fn main() {
             use tower_http::trace::TraceLayer;
 
             tokio::spawn(async {
+                tasks::ip_purge::run_purge().await;
+            });
+
+            tokio::spawn(async {
                 tasks::session_cleanup::run_cleanup().await;
             });
 

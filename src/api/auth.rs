@@ -326,6 +326,22 @@ pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
     Ok(CurrentUserResponse { user })
 }
 
+#[cfg(feature = "server")]
+pub async fn get_current_admin_user() -> Result<User, AppError> {
+    let token = get_session_from_ctx().ok_or(AppError::Unauthorized("未登录"))?;
+
+    let user = get_user_by_token(&token)
+        .await
+        .map_err(AppError::query)?
+        .ok_or(AppError::Unauthorized("会话已过期"))?;
+
+    if user.role != UserRole::Admin {
+        return Err(AppError::Forbidden("权限不足"));
+    }
+
+    Ok(user)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

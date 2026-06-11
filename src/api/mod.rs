@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod comments;
 pub mod error;
 pub mod image;
 pub mod markdown;

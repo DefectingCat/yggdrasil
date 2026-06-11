@@ -34,6 +34,7 @@ image = { version = "0.25", optional = true, default-features = false, features 
 zenwebp = { version = "0.3", optional = true }
 moka = { version = "0.12", features = ["future"], optional = true }
 governor = { version = "0.8", optional = true }
+md-5 = { version = "0.10", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = ["Document", "Window", "Storage", "Element", "DomTokenList", "MediaQueryList", "HtmlImageElement", "MouseEvent", "KeyboardEvent", "Node", "EventTarget", "Navigator"] }
@@ -69,4 +70,5 @@ server = [
     "dep:zenwebp",
     "dep:moka",
     "dep:governor",
+    "dep:md-5",
 ]

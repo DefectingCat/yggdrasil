@@ -1,5 +1,6 @@
 pub mod atoms;
 pub mod archive_skeleton;
+pub mod comment_skeleton;
 pub mod delayed_skeleton;
 pub mod home_skeleton;
 pub mod post_card_skeleton;

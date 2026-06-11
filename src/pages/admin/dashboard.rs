@@ -1,6 +1,7 @@
 use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
+use crate::api::comments::get_pending_count;
 use crate::api::posts::{get_post_stats, list_posts, PostListResponse, PostStatsResponse};
 use crate::hooks::delayed_loading::use_delayed_loading;
 use crate::models::post::Post;
@@ -10,6 +11,7 @@ use crate::router::Route;
 pub fn Admin() -> Element {
     let stats_res = use_resource(get_post_stats);
     let posts_res = use_resource(|| list_posts(1, 5));
+    let pending_res = use_resource(get_pending_count);
     let show_stats_skeleton = use_delayed_loading(move || stats_res.read().is_none());
     let show_posts_skeleton = use_delayed_loading(move || posts_res.read().is_none());
 
@@ -32,6 +34,29 @@ pub fn Admin() -> Element {
                                     div { class: "h-4 w-20 mx-auto bg-gray-200 dark:bg-[#2a2a2a] rounded" }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            Link {
+                class: "block rounded-xl bg-white dark:bg-[#2e2e33] border border-gray-200 dark:border-[#333] p-6 text-center hover:border-gray-300 dark:hover:border-[#555] transition-colors",
+                to: Route::AdminComments {},
+                match &*pending_res.read() {
+                    Some(Ok(resp)) => {
+                        rsx! {
+                            div { class: "text-3xl font-bold text-amber-600 dark:text-amber-400",
+                                "{resp.count}"
+                            }
+                            div { class: "text-sm text-gray-500 dark:text-[#9b9c9d] mt-2",
+                                "待审核评论"
+                            }
+                        }
+                    }
+                    _ => {
+                        rsx! {
+                            div { class: "h-9 w-16 mx-auto bg-gray-200 dark:bg-[#2a2a2a] rounded animate-pulse" }
+                            div { class: "h-4 w-20 mx-auto bg-gray-200 dark:bg-[#2a2a2a] rounded mt-3 animate-pulse" }
                         }
                     }
                 }

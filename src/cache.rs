@@ -6,6 +6,8 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 #[cfg(feature = "server")]
+use crate::models::comment::PublicComment;
+#[cfg(feature = "server")]
 use crate::models::post::{Post, PostStats, Tag};
 
 // ============================================================================
@@ -22,6 +24,12 @@ const TTL_SINGLE_POST: Duration = Duration::from_secs(600);
 const TTL_POST_STATS: Duration = Duration::from_secs(60);
 #[cfg(feature = "server")]
 const TTL_TAG_POSTS: Duration = Duration::from_secs(120);
+#[cfg(feature = "server")]
+const TTL_COMMENTS: Duration = Duration::from_secs(60);
+#[cfg(feature = "server")]
+const TTL_COMMENT_COUNT: Duration = Duration::from_secs(60);
+#[cfg(feature = "server")]
+const TTL_PENDING_COUNT: Duration = Duration::from_secs(10);
 
 // ============================================================================
 // Cache Key Types
@@ -36,6 +44,9 @@ pub enum CacheKey {
     PostBySlug(String),
     PostsByTag(String),
     PostStats,
+    CommentsByPost { post_id: i32 },
+    CommentCount { post_id: i32 },
+    PendingCommentCount,
 }
 
 
@@ -93,6 +104,36 @@ static TAG_POSTS_CACHE: LazyLock<PostListCache> = LazyLock::new(|| {
     Cache::builder()
         .max_capacity(100)
         .time_to_live(TTL_TAG_POSTS)
+        .build()
+});
+
+#[cfg(feature = "server")]
+pub type CommentListCache = Cache<CacheKey, Vec<PublicComment>>;
+
+#[cfg(feature = "server")]
+pub type CommentCountCache = Cache<CacheKey, i64>;
+
+#[cfg(feature = "server")]
+static COMMENT_CACHE: LazyLock<CommentListCache> = LazyLock::new(|| {
+    Cache::builder()
+        .max_capacity(200)
+        .time_to_live(TTL_COMMENTS)
+        .build()
+});
+
+#[cfg(feature = "server")]
+static COMMENT_COUNT_CACHE: LazyLock<CommentCountCache> = LazyLock::new(|| {
+    Cache::builder()
+        .max_capacity(200)
+        .time_to_live(TTL_COMMENT_COUNT)
+        .build()
+});
+
+#[cfg(feature = "server")]
+static PENDING_COUNT_CACHE: LazyLock<CommentCountCache> = LazyLock::new(|| {
+    Cache::builder()
+        .max_capacity(10)
+        .time_to_live(TTL_PENDING_COUNT)
         .build()
 });
 
@@ -210,9 +251,81 @@ pub fn invalidate_all_post_caches() {
     TAG_POSTS_CACHE.invalidate_all();
 }
 
+#[cfg(feature = "server")]
+pub async fn get_comments_by_post(post_id: i32) -> Option<Vec<PublicComment>> {
+    COMMENT_CACHE
+        .get(&CacheKey::CommentsByPost { post_id })
+        .await
+}
+
+#[cfg(feature = "server")]
+pub async fn set_comments_by_post(post_id: i32, comments: Vec<PublicComment>) {
+    let _ = COMMENT_CACHE
+        .insert(CacheKey::CommentsByPost { post_id }, comments)
+        .await;
+}
+
+#[cfg(feature = "server")]
+pub async fn get_comment_count(post_id: i32) -> Option<i64> {
+    COMMENT_COUNT_CACHE
+        .get(&CacheKey::CommentCount { post_id })
+        .await
+}
+
+#[cfg(feature = "server")]
+pub async fn set_comment_count(post_id: i32, count: i64) {
+    let _ = COMMENT_COUNT_CACHE
+        .insert(CacheKey::CommentCount { post_id }, count)
+        .await;
+}
+
+#[cfg(feature = "server")]
+pub async fn get_pending_count() -> Option<i64> {
+    PENDING_COUNT_CACHE
+        .get(&CacheKey::PendingCommentCount)
+        .await
+}
+
+#[cfg(feature = "server")]
+pub async fn set_pending_count(count: i64) {
+    let _ = PENDING_COUNT_CACHE
+        .insert(CacheKey::PendingCommentCount, count)
+        .await;
+}
+
+#[cfg(feature = "server")]
+pub async fn invalidate_comments_by_post(post_id: i32) {
+    COMMENT_CACHE
+        .invalidate(&CacheKey::CommentsByPost { post_id })
+        .await;
+}
+
+#[cfg(feature = "server")]
+pub async fn invalidate_comment_count(post_id: i32) {
+    COMMENT_COUNT_CACHE
+        .invalidate(&CacheKey::CommentCount { post_id })
+        .await;
+}
+
+#[cfg(feature = "server")]
+pub async fn invalidate_pending_count() {
+    PENDING_COUNT_CACHE
+        .invalidate(&CacheKey::PendingCommentCount)
+        .await;
+}
+
+#[cfg(feature = "server")]
+#[allow(dead_code)]
+pub async fn invalidate_all_comment_caches() {
+    COMMENT_CACHE.invalidate_all();
+    COMMENT_COUNT_CACHE.invalidate_all();
+    PENDING_COUNT_CACHE.invalidate_all();
+}
+
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use super::*;
+    use crate::models::comment::PublicComment;
     use crate::models::post::PostStatus;
 
     #[test]
@@ -321,5 +434,84 @@ mod tests {
         
         let cached_after = get_post_by_slug("invalidation-test").await;
         assert!(cached_after.is_none());
+    }
+
+    #[tokio::test]
+    async fn comment_cache_roundtrip() {
+        let comments = vec![PublicComment {
+            id: 1,
+            parent_id: None,
+            depth: 0,
+            author_name: "Alice".to_string(),
+            author_url: None,
+            avatar_url: "https://example.com/avatar".to_string(),
+            content_html: Some("<p>Hello</p>".to_string()),
+            created_at: "刚刚".to_string(),
+            created_at_iso: "2026-01-01T00:00:00Z".to_string(),
+        }];
+
+        set_comments_by_post(42, comments.clone()).await;
+        let cached = get_comments_by_post(42).await;
+
+        assert!(cached.is_some());
+        assert_eq!(cached.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn comment_count_cache_roundtrip() {
+        set_comment_count(42, 15).await;
+        let cached = get_comment_count(42).await;
+
+        assert!(cached.is_some());
+        assert_eq!(cached.unwrap(), 15);
+    }
+
+    #[tokio::test]
+    async fn pending_count_cache_roundtrip() {
+        set_pending_count(7).await;
+        let cached = get_pending_count().await;
+
+        assert!(cached.is_some());
+        assert_eq!(cached.unwrap(), 7);
+    }
+
+    #[tokio::test]
+    async fn comment_cache_invalidation() {
+        set_comments_by_post(99, vec![]).await;
+        assert!(get_comments_by_post(99).await.is_some());
+
+        invalidate_comments_by_post(99).await;
+        assert!(get_comments_by_post(99).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn comment_count_invalidation() {
+        set_comment_count(99, 5).await;
+        assert!(get_comment_count(99).await.is_some());
+
+        invalidate_comment_count(99).await;
+        assert!(get_comment_count(99).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn pending_count_invalidation() {
+        set_pending_count(3).await;
+        assert!(get_pending_count().await.is_some());
+
+        invalidate_pending_count().await;
+        assert!(get_pending_count().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn invalidate_all_comment_caches_clears_everything() {
+        set_comments_by_post(1, vec![]).await;
+        set_comment_count(1, 10).await;
+        set_pending_count(5).await;
+
+        invalidate_all_comment_caches().await;
+
+        assert!(get_comments_by_post(1).await.is_none());
+        assert!(get_comment_count(1).await.is_none());
+        assert!(get_pending_count().await.is_none());
     }
 }
