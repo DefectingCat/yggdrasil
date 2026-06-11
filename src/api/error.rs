@@ -13,19 +13,19 @@ pub enum AppError {
 
 #[cfg(feature = "server")]
 impl AppError {
-    pub fn db_conn(e: impl std::fmt::Display) -> Self {
-        tracing::error!("DB connection failed: {e}");
-        AppError::DbConn(e.to_string())
+    pub fn db_conn(e: impl std::fmt::Debug) -> Self {
+        tracing::error!("DB connection failed: {e:?}");
+        AppError::DbConn(format!("{e:?}"))
     }
 
-    pub fn query(e: impl std::fmt::Display) -> Self {
-        tracing::error!("Query failed: {e}");
-        AppError::Query(e.to_string())
+    pub fn query(e: impl std::fmt::Debug) -> Self {
+        tracing::error!("Query failed: {e:?}");
+        AppError::Query(format!("{e:?}"))
     }
 
-    pub fn tx(e: impl std::fmt::Display) -> Self {
-        tracing::error!("Transaction failed: {e}");
-        AppError::Transaction(e.to_string())
+    pub fn tx(e: impl std::fmt::Debug) -> Self {
+        tracing::error!("Transaction failed: {e:?}");
+        AppError::Transaction(format!("{e:?}"))
     }
 }
 
