@@ -1,17 +1,14 @@
 use dioxus::prelude::*;
 
-use crate::context::UserContext;
 use crate::models::comment::PublicComment;
 use crate::components::comments::section::CommentContext;
 use crate::components::comments::form::CommentForm;
-use crate::components::comments::actions::CommentActions;
 
 #[component]
 pub fn CommentItem(comment: PublicComment, post_id: i32) -> Element {
     let ctx: CommentContext = use_context();
     let mut active_reply = ctx.active_reply;
     let refresh_trigger = ctx.refresh_trigger;
-    let user_ctx: UserContext = use_context();
 
     let depth = if comment.parent_id.is_none() && comment.depth > 0 {
         0
@@ -21,7 +18,6 @@ pub fn CommentItem(comment: PublicComment, post_id: i32) -> Element {
 
     let indent = depth.min(6) * 24;
 
-    let is_admin = user_ctx.user.read().as_ref().is_some();
     let is_replying = active_reply() == Some(comment.id);
     let show_reply = depth < 20;
 
@@ -90,9 +86,6 @@ pub fn CommentItem(comment: PublicComment, post_id: i32) -> Element {
                             }
                         }
 
-                        if is_admin {
-                            CommentActions { comment_id: comment.id, post_id }
-                        }
                     }
 
                     if is_replying {
