@@ -19,11 +19,13 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
     let mut honeypot = use_signal(String::new);
     let mut submitting = use_signal(|| false);
     let mut message = use_signal(|| Option::<(String, &'static str)>::None);
+    let mut loaded = use_signal(|| false);
 
     use_effect(move || {
-        if !author_name().is_empty() {
+        if loaded() {
             return;
         }
+        loaded.set(true);
         if let Some(info) = comment_storage::load_author() {
             author_name.set(info.name);
             author_email.set(info.email);
@@ -117,6 +119,10 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
                     class: BUTTON_PRIMARY_CLASS,
                     disabled: submitting(),
                     onclick: move |_| {
+                        if submitting() {
+                            return;
+                        }
+
                         let post_id = post_id;
                         let parent_id = parent_id;
                         let name = author_name();
