@@ -4,9 +4,9 @@ use dioxus::prelude::*;
 use wasm_bindgen::JsCast;
 
 #[cfg(target_arch = "wasm32")]
-use crate::api::posts::{create_post, update_post, CreatePostResponse};
-use crate::api::posts::{get_post_by_id, SinglePostResponse};
+use crate::api::posts::{create_post, get_post_by_id, update_post, CreatePostResponse, SinglePostResponse};
 use crate::components::write_skeleton::WriteSkeleton;
+use crate::models::post::Post;
 use crate::router::Route;
 
 #[component]
@@ -40,31 +40,14 @@ fn write_editor(post_id: Option<i32>) -> Element {
     let mut has_backfilled = use_signal(|| false);
     let mut load_error = use_signal(|| None::<String>);
 
-    // 编辑模式：加载文章数据
-    let post_res = use_resource(move || async move {
-        if let Some(id) = post_id {
-            match get_post_by_id(id).await {
-                Ok(SinglePostResponse { post: Some(post) }) => Some(post),
-                Ok(SinglePostResponse { post: None }) => {
-                    load_error.set(Some("文章不存在".to_string()));
-                    None
-                }
-                Err(e) => {
-                    load_error.set(Some(format!("加载失败: {}", e)));
-                    None
-                }
-            }
-        } else {
-            None
-        }
-    });
+    // 编辑模式：加载文章数据（CSR）
+    let mut edit_post = use_signal(|| None::<Post>);
 
-    // 数据回填 effect
     use_effect(move || {
         if !is_edit || has_backfilled() {
             return;
         }
-        if let Some(Some(post)) = post_res.read().as_ref() {
+        if let Some(ref post) = edit_post() {
             has_backfilled.set(true);
             title.set(post.title.clone());
             summary.set(post.summary.clone().unwrap_or_default());
@@ -74,6 +57,27 @@ fn write_editor(post_id: Option<i32>) -> Element {
             status.set(post.status.as_str().to_string());
             content.set(post.content_md.clone());
         }
+    });
+
+    use_effect(move || {
+        if is_edit {
+            #[cfg(target_arch = "wasm32")]
+            if let Some(id) = post_id {
+            spawn(async move {
+                match get_post_by_id(id).await {
+                    Ok(SinglePostResponse { post: Some(post) }) => {
+                        edit_post.set(Some(post));
+                    }
+                    Ok(SinglePostResponse { post: None }) => {
+                        load_error.set(Some("文章不存在".to_string()));
+                    }
+                    Err(e) => {
+                        load_error.set(Some(format!("加载失败: {}", e)));
+                    }
+                }
+            });
+        }
+    }
     });
 
     #[cfg(target_arch = "wasm32")]
@@ -99,7 +103,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
         #[cfg(target_arch = "wasm32")]
         {
             // 编辑模式：等数据加载完再初始化
-            if is_edit && post_res.read().is_none() {
+            if is_edit && edit_post().is_none() {
                 return;
             }
 
@@ -168,7 +172,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
         #[cfg(target_arch = "wasm32")]
         {
             // 编辑模式：等数据加载完再开始轮询
-            if is_edit && post_res.read().is_none() {
+            if is_edit && edit_post().is_none() {
                 return;
             }
 

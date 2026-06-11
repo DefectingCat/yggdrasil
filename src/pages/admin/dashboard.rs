@@ -1,35 +1,63 @@
 use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
+#[cfg(target_arch = "wasm32")]
 use crate::api::comments::get_pending_count;
-use crate::api::posts::{get_post_stats, list_posts, PostListResponse, PostStatsResponse};
-use crate::hooks::delayed_loading::use_delayed_loading;
-use crate::models::post::Post;
+#[cfg(target_arch = "wasm32")]
+use crate::api::posts::{get_post_stats, list_posts};
+#[cfg(target_arch = "wasm32")]
+use crate::api::posts::{PostListResponse, PostStatsResponse};
+use crate::models::post::{Post, PostStats};
 use crate::router::Route;
 
 #[component]
+#[allow(unused_mut)]
 pub fn Admin() -> Element {
-    let stats_res = use_resource(get_post_stats);
-    let posts_res = use_resource(|| list_posts(1, 5));
-    let pending_res = use_resource(get_pending_count);
-    let show_stats_skeleton = use_delayed_loading(move || stats_res.read().is_none());
-    let show_posts_skeleton = use_delayed_loading(move || posts_res.read().is_none());
+    let mut stats = use_signal(|| None::<PostStats>);
+    let mut recent_posts = use_signal(|| None::<Vec<Post>>);
+    let mut pending_count = use_signal(|| None::<i64>);
+    let mut loaded = use_signal(|| false);
+
+    use_effect(move || {
+        if !loaded() {
+            loaded.set(true);
+
+            #[cfg(target_arch = "wasm32")]
+            {
+                spawn(async move {
+                    if let Ok(PostStatsResponse { stats: s }) = get_post_stats().await {
+                        stats.set(Some(s));
+                    }
+                });
+                spawn(async move {
+                    if let Ok(PostListResponse { posts, total: _ }) = list_posts(1, 5).await {
+                        recent_posts.set(Some(posts));
+                    }
+                });
+                spawn(async move {
+                    if let Ok(resp) = get_pending_count().await {
+                        pending_count.set(Some(resp.count));
+                    }
+                });
+            }
+        }
+    });
 
     rsx! {
         div { class: "space-y-8",
             div { class: "grid grid-cols-1 md:grid-cols-3 gap-6",
-                match &*stats_res.read() {
-                    Some(Ok(PostStatsResponse { stats })) => {
+                match stats() {
+                    Some(s) => {
                         rsx! {
-                            StatCard { value: stats.total.to_string(), label: "文章总数" }
-                            StatCard { value: stats.drafts.to_string(), label: "草稿数" }
-                            StatCard { value: stats.published.to_string(), label: "已发布" }
+                            StatCard { value: s.total.to_string(), label: "文章总数" }
+                            StatCard { value: s.drafts.to_string(), label: "草稿数" }
+                            StatCard { value: s.published.to_string(), label: "已发布" }
                         }
                     }
-                    _ => {
+                    None => {
                         rsx! {
                             for _ in 0..3 {
-                                div { class: if show_stats_skeleton() { "rounded-xl bg-white dark:bg-[#2e2e33] border border-gray-200 dark:border-[#333] p-6 text-center space-y-3 animate-pulse" } else { "rounded-xl bg-white dark:bg-[#2e2e33] border border-gray-200 dark:border-[#333] p-6 text-center space-y-3 opacity-0" },
+                                div { class: "rounded-xl bg-white dark:bg-[#2e2e33] border border-gray-200 dark:border-[#333] p-6 text-center space-y-3 animate-pulse",
                                     div { class: "h-9 w-16 mx-auto bg-gray-200 dark:bg-[#2a2a2a] rounded" }
                                     div { class: "h-4 w-20 mx-auto bg-gray-200 dark:bg-[#2a2a2a] rounded" }
                                 }
@@ -42,18 +70,18 @@ pub fn Admin() -> Element {
             Link {
                 class: "block rounded-xl bg-white dark:bg-[#2e2e33] border border-gray-200 dark:border-[#333] p-6 text-center hover:border-gray-300 dark:hover:border-[#555] transition-colors",
                 to: Route::AdminComments {},
-                match &*pending_res.read() {
-                    Some(Ok(resp)) => {
+                match pending_count() {
+                    Some(count) => {
                         rsx! {
                             div { class: "text-3xl font-bold text-amber-600 dark:text-amber-400",
-                                "{resp.count}"
+                                "{count}"
                             }
                             div { class: "text-sm text-gray-500 dark:text-[#9b9c9d] mt-2",
                                 "待审核评论"
                             }
                         }
                     }
-                    _ => {
+                    None => {
                         rsx! {
                             div { class: "h-9 w-16 mx-auto bg-gray-200 dark:bg-[#2a2a2a] rounded animate-pulse" }
                             div { class: "h-4 w-20 mx-auto bg-gray-200 dark:bg-[#2a2a2a] rounded mt-3 animate-pulse" }
@@ -79,8 +107,8 @@ pub fn Admin() -> Element {
                 h2 { class: "text-xl font-bold text-gray-900 dark:text-[#dadadb] mb-4",
                     "最近文章"
                 }
-                match &*posts_res.read() {
-                    Some(Ok(PostListResponse { posts, total: _ })) => {
+                match recent_posts() {
+                    Some(posts) => {
                         rsx! {
                             div { class: "space-y-0",
                                 for post in posts.iter().take(5) {
@@ -89,16 +117,9 @@ pub fn Admin() -> Element {
                             }
                         }
                     }
-                    Some(Err(_e)) => {
-                        rsx! {
-                            div { class: "text-center text-red-500 dark:text-red-400 py-20",
-                                "加载失败"
-                            }
-                        }
-                    }
                     None => {
                         rsx! {
-                            div { class: if show_posts_skeleton() { "space-y-4 animate-pulse" } else { "space-y-4 opacity-0" },
+                            div { class: "space-y-4 animate-pulse",
                                 for _ in 0..5 {
                                     div { class: "flex justify-between items-center py-3 border-b border-gray-100 dark:border-[#333]",
                                         div { class: "h-4 w-[45%] bg-gray-200 dark:bg-[#2a2a2a] rounded" }

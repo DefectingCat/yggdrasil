@@ -1,7 +1,11 @@
 use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
-use crate::api::posts::{delete_post, list_posts, CreatePostResponse, PostListResponse};
+#[cfg(target_arch = "wasm32")]
+use crate::api::posts::list_posts;
+#[cfg(target_arch = "wasm32")]
+use crate::api::posts::PostListResponse;
+use crate::api::posts::{delete_post, CreatePostResponse};
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::posts_skeleton::PostsSkeleton;
 use crate::models::post::Post;
@@ -10,22 +14,43 @@ use crate::router::Route;
 const POSTS_PER_PAGE: i32 = 20;
 
 #[component]
-#[allow(unused_variables)]
 pub fn Posts() -> Element {
     rsx! { PostsPage { page: 1 } }
 }
 
 #[component]
-#[allow(unused_variables)]
 pub fn PostsPage(page: i32) -> Element {
     let current_page = page.max(1);
-    let mut posts_res = use_server_future(move || list_posts(current_page, POSTS_PER_PAGE))?;
+    let mut posts = use_signal(Vec::new);
+    let mut total = use_signal(|| 0_i64);
+    let mut loading = use_signal(|| true);
     let mut deleting = use_signal(|| None::<i32>);
 
-    let posts_data = posts_res.read().as_ref().map(|r| match r {
-        Ok(PostListResponse { posts, total }) => Ok((posts.clone(), *total)),
-        Err(e) => Err(e.to_string()),
+    use_effect(move || {
+        let _ = current_page;
+
+        loading.set(true);
+        #[cfg(target_arch = "wasm32")]
+        {
+            let p = current_page;
+            spawn(async move {
+                match list_posts(p, POSTS_PER_PAGE).await {
+                    Ok(PostListResponse { posts: list, total: t }) => {
+                        posts.set(list);
+                        total.set(t);
+                    }
+                    Err(_) => {}
+                }
+                loading.set(false);
+            });
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            loading.set(false);
+        }
     });
+
+    let get_posts = move || -> Vec<Post> { posts() };
 
     rsx! {
         div { class: "space-y-6",
@@ -40,71 +65,54 @@ pub fn PostsPage(page: i32) -> Element {
                 }
             }
 
-            match posts_data {
-                Some(Ok((posts, total))) => {
-                    if posts.is_empty() {
-                        rsx! {
-                            div { class: "text-center py-20 text-gray-500 dark:text-[#9b9c9d]",
-                                "暂无文章"
+            if loading() && posts().is_empty() {
+                DelayedSkeleton { PostsSkeleton {} }
+            } else if posts().is_empty() {
+                div { class: "text-center py-20 text-gray-500 dark:text-[#9b9c9d]",
+                    "暂无文章"
+                }
+            } else {
+                div { class: "bg-white dark:bg-[#2e2e33] rounded-xl border border-gray-200 dark:border-[#333] overflow-hidden",
+                        table { class: "w-full text-sm",
+                            thead {
+                                tr { class: "border-b border-gray-200 dark:border-[#333] text-left text-gray-500 dark:text-[#9b9c9d]",
+                                    th { class: "px-4 py-3 font-medium", "标题" }
+                                    th { class: "px-4 py-3 font-medium w-24 text-center", "状态" }
+                                    th { class: "px-4 py-3 font-medium w-32", "日期" }
+                                    th { class: "px-4 py-3 font-medium w-24 text-right", "操作" }
+                                }
                             }
-                        }
-                    } else {
-                        rsx! {
-                            div { class: "bg-white dark:bg-[#2e2e33] rounded-xl border border-gray-200 dark:border-[#333] overflow-hidden",
-                                table { class: "w-full text-sm",
-                                    thead {
-                                        tr { class: "border-b border-gray-200 dark:border-[#333] text-left text-gray-500 dark:text-[#9b9c9d]",
-                                            th { class: "px-4 py-3 font-medium", "标题" }
-                                            th { class: "px-4 py-3 font-medium w-24 text-center", "状态" }
-                                            th { class: "px-4 py-3 font-medium w-32", "日期" }
-                                            th { class: "px-4 py-3 font-medium w-24 text-right", "操作" }
-                                        }
-                                    }
-                                    tbody {
-                                        for post in posts.iter() {
-                                            PostRow {
-                                                post: post.clone(),
-                                                deleting: deleting() == Some(post.id),
-                                                on_delete: move |id| {
-                                                    deleting.set(Some(id));
-                                                    spawn(async move {
-                                                        match delete_post(id).await {
-                                                            Ok(CreatePostResponse { success: true, .. }) => {
-                                                                posts_res.restart();
-                                                            }
-                                                            Ok(CreatePostResponse { success: false, message, .. }) => {
-                                                                #[cfg(target_arch = "wasm32")]
-                                                                web_sys::window().map(|w| w.alert_with_message(&message).ok());
-                                                            }
-                                                            Err(_e) => {
-                                                                #[cfg(target_arch = "wasm32")]
-                                                                web_sys::window().map(|w| w.alert_with_message("删除失败").ok());
-                                                            }
-                                                        }
-                                                        deleting.set(None);
-                                                    });
+                            tbody {
+                                for post in get_posts().iter() {
+                                    PostRow {
+                                        post: post.clone(),
+                                        deleting: deleting() == Some(post.id),
+                                        on_delete: move |id| {
+                                            deleting.set(Some(id));
+                                            let id_for_api = id;
+                                            posts.with_mut(|list| list.retain(|p| p.id != id));
+                                            total.with_mut(|t| *t = t.saturating_sub(1));
+                                            spawn(async move {
+                                                match delete_post(id_for_api).await {
+                                                    Ok(CreatePostResponse { success: false, message: _message, .. }) => {
+                                                        #[cfg(target_arch = "wasm32")]
+                                                        web_sys::window().map(|w| w.alert_with_message(&_message).ok());
+                                                    }
+                                                    Err(_e) => {
+                                                        #[cfg(target_arch = "wasm32")]
+                                                        web_sys::window().map(|w| w.alert_with_message("删除失败").ok());
+                                                    }
+                                                    _ => {}
                                                 }
-                                            }
+                                                deleting.set(None);
+                                            });
                                         }
                                     }
                                 }
                             }
-                            Pagination { current_page, total }
                         }
                     }
-                }
-                Some(Err(_e)) => {
-                    rsx! {
-                        div { class: "text-center text-red-500 dark:text-red-400 py-20",
-                            "加载失败"
-                        }
-                    }
-                }
-                None => {
-                    rsx! {
-                        DelayedSkeleton { PostsSkeleton {} }
-                    }
-                }
+                    Pagination { current_page, total: total() }
             }
         }
     }
@@ -178,21 +186,23 @@ fn PostRow(post: Post, deleting: bool, on_delete: EventHandler<i32>) -> Element 
             td { class: "px-4 py-3 text-gray-500 dark:text-[#9b9c9d]",
                 "{date_str}"
             }
-            td { class: "px-4 py-3 text-right flex justify-end gap-3",
-                Link {
-                    class: "text-xs text-gray-600 dark:text-[#9b9c9d] hover:text-gray-900 dark:hover:text-[#dadadb] transition-colors cursor-pointer",
-                    to: Route::WriteEdit { id: post.id },
-                    "编辑"
-                }
-                button {
-                    class: if deleting {
-                        "text-xs text-gray-400 cursor-not-allowed"
-                    } else {
-                        "text-xs text-red-500 hover:text-red-700 dark:hover:text-red-300 transition-colors cursor-pointer"
-                    },
-                    disabled: deleting,
-                    onclick: move |_| on_delete.call(post.id),
-                    if deleting { "删除中..." } else { "删除" }
+            td { class: "px-4 py-3 text-right",
+                div { class: "flex justify-end gap-3",
+                    Link {
+                        class: "text-xs text-gray-600 dark:text-[#9b9c9d] hover:text-gray-900 dark:hover:text-[#dadadb] transition-colors cursor-pointer",
+                        to: Route::WriteEdit { id: post.id },
+                        "编辑"
+                    }
+                    button {
+                        class: if deleting {
+                            "text-xs text-gray-400 cursor-not-allowed"
+                        } else {
+                            "text-xs text-red-500 hover:text-red-700 dark:hover:text-red-300 transition-colors cursor-pointer"
+                        },
+                        disabled: deleting,
+                        onclick: move |_| on_delete.call(post.id),
+                        if deleting { "删除中..." } else { "删除" }
+                    }
                 }
             }
         }
