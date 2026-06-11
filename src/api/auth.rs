@@ -188,12 +188,43 @@ pub async fn login(username: String, password: String) -> Result<AuthResponse, S
 
     let user_id: i32 = row.get("id");
     let token = session::generate_token();
+    let token_hash = session::hash_token(&token);
     let expires_at = session::default_expiry();
+
+    let max_sessions = std::env::var("MAX_SESSIONS_PER_USER")
+        .ok()
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(5)
+        .max(1);
+
+    let session_count: i64 = client
+        .query_one(
+            "SELECT COUNT(*) FROM sessions WHERE user_id = $1 AND expires_at > NOW()",
+            &[&user_id],
+        )
+        .await
+        .map_err(AppError::query)?
+        .get(0);
+
+    if session_count >= max_sessions {
+        client
+            .execute(
+                "DELETE FROM sessions WHERE id IN (
+                    SELECT id FROM sessions
+                    WHERE user_id = $1 AND expires_at > NOW()
+                    ORDER BY created_at ASC
+                    LIMIT 1
+                )",
+                &[&user_id],
+            )
+            .await
+            .map_err(AppError::query)?;
+    }
 
     client
         .execute(
-            "INSERT INTO sessions (user_id, token, expires_at) VALUES ($1, $2, $3)",
-            &[&user_id, &token, &expires_at],
+            "INSERT INTO sessions (user_id, token_hash, user_agent, expires_at) VALUES ($1, $2, $3, $4)",
+            &[&user_id, &token_hash, &None::<String>, &expires_at],
         )
         .await
         .map_err(AppError::query)?;
@@ -229,8 +260,9 @@ pub async fn logout() -> Result<AuthResponse, ServerFnError> {
     }
 
     if let Some(t) = token {
+        let token_hash = session::hash_token(&t);
         client
-            .execute("DELETE FROM sessions WHERE token = $1", &[&t])
+            .execute("DELETE FROM sessions WHERE token_hash = $1", &[&token_hash])
             .await
             .map_err(AppError::query)?;
     }
@@ -251,13 +283,14 @@ pub struct CurrentUserResponse {
 pub async fn get_user_by_token(token: &str) -> Result<Option<User>, ServerFnError> {
     let client = get_conn().await.map_err(AppError::db_conn)?;
 
+    let token_hash = session::hash_token(token);
     let row = client
         .query_opt(
             "SELECT u.id, u.username, u.email, u.password_hash, u.role, u.created_at
              FROM sessions s
              JOIN users u ON s.user_id = u.id
-             WHERE s.token = $1 AND s.expires_at > NOW()",
-            &[&token],
+             WHERE s.token_hash = $1 AND s.expires_at > NOW()",
+            &[&token_hash],
         )
         .await
         .map_err(AppError::query)?;
