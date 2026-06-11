@@ -52,18 +52,24 @@ fn write_storage(key: &str, value: &str) {
     }
 }
 
-fn now_iso() -> String {
-    Utc::now().to_rfc3339()
+fn now_millis() -> i64 {
+    #[cfg(target_arch = "wasm32")]
+    {
+        js_sys::Date::now() as i64
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        chrono::Utc::now().timestamp_millis()
+    }
 }
 
 fn is_expired(stored_at: &str) -> bool {
     let Ok(dt) = DateTime::parse_from_rfc3339(stored_at) else {
         return true;
     };
-    let Ok(now) = DateTime::parse_from_rfc3339(&now_iso()) else {
-        return false;
-    };
-    (now - dt).num_days() > TTL_DAYS
+    let now_ms = now_millis();
+    let stored_ms = dt.timestamp_millis();
+    (now_ms - stored_ms) > (TTL_DAYS * 24 * 60 * 60 * 1000)
 }
 
 pub fn save_author(name: &str, email: &str, url: &str) {
@@ -107,11 +113,14 @@ pub fn load_pending_comments(post_id: i32) -> Vec<PendingComment> {
         .filter(|c| !is_expired(&c.stored_at))
         .collect();
 
+    let pruned = non_expired.len() != comments.len();
     if !non_expired.is_empty() {
         map.insert(key, non_expired.clone());
     }
-    if let Ok(json) = serde_json::to_string(&map) {
-        write_storage(PENDING_KEY, &json);
+    if pruned || non_expired.is_empty() {
+        if let Ok(json) = serde_json::to_string(&map) {
+            write_storage(PENDING_KEY, &json);
+        }
     }
 
     non_expired
@@ -173,7 +182,7 @@ fn load_all_pending() -> PendingMap {
     serde_json::from_str(&json).unwrap_or_default()
 }
 
-pub fn escape_html(input: &str) -> String {
+pub(crate) fn escape_html(input: &str) -> String {
     input
         .replace('&', "&amp;")
         .replace('<', "&lt;")
