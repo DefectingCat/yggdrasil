@@ -45,8 +45,8 @@ pub fn CommentSection(post_id: i32) -> Element {
                         pending.write().retain(|c| !to_remove.contains(&c.id));
                     }
                 }
-                Err(e) => {
-                    tracing::warn!("check_pending_status failed: {}", e);
+                Err(_e) => {
+                    // Silently ignore on WASM; server-only logging not available
                 }
             }
         }

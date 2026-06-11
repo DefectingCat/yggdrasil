@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 
 const AUTHOR_KEY: &str = "yggdrasil-comment-author";
@@ -28,6 +28,7 @@ pub struct PendingComment {
 
 type PendingMap = std::collections::HashMap<String, Vec<PendingComment>>;
 
+#[allow(unused_variables)]
 fn read_storage(key: &str) -> Option<String> {
     #[cfg(target_arch = "wasm32")]
     {
@@ -41,6 +42,7 @@ fn read_storage(key: &str) -> Option<String> {
     }
 }
 
+#[allow(unused_variables)]
 fn write_storage(key: &str, value: &str) {
     #[cfg(target_arch = "wasm32")]
     {
