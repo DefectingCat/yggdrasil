@@ -13,7 +13,7 @@ pub struct AuthorInfo {
     pub url: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PendingComment {
     pub id: i64,
     pub parent_id: Option<i64>,
@@ -108,12 +108,13 @@ pub fn load_pending_comments(post_id: i32) -> Vec<PendingComment> {
     let key = post_id.to_string();
 
     let comments = map.remove(&key).unwrap_or_default();
+    let original_len = comments.len();
     let non_expired: Vec<PendingComment> = comments
         .into_iter()
         .filter(|c| !is_expired(&c.stored_at))
         .collect();
 
-    let pruned = non_expired.len() != comments.len();
+    let pruned = non_expired.len() != original_len;
     if !non_expired.is_empty() {
         map.insert(key, non_expired.clone());
     }

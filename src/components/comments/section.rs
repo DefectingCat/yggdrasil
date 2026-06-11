@@ -27,7 +27,7 @@ pub fn CommentSection(post_id: i32) -> Element {
     });
 
     use_future(move || {
-        let pending = ctx.pending_comments;
+        let mut pending = ctx.pending_comments;
         async move {
             let ids: Vec<i64> = pending().iter().map(|c| c.id).collect();
             if ids.is_empty() {
