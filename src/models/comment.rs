@@ -47,7 +47,6 @@ pub struct Comment {
     pub status: CommentStatus,
     pub ip_address: Option<String>,
     pub user_agent: Option<String>,
-    pub consented_at: Option<DateTime<Utc>>,
     pub approved_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

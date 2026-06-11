@@ -12,7 +12,6 @@ CREATE TABLE IF NOT EXISTS comments (
     status       TEXT NOT NULL DEFAULT 'pending',
     ip_address   VARCHAR(45),
     user_agent   VARCHAR(500),
-    consented_at TIMESTAMPTZ,
     approved_at  TIMESTAMPTZ,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
