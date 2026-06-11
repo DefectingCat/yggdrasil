@@ -3,7 +3,8 @@ use dioxus::prelude::*;
 use crate::hooks::comment_storage::{PendingComment, render_pending_content};
 
 #[component]
-pub fn PendingCommentItem(comment: PendingComment, _post_id: i32) -> Element {
+#[allow(unused_variables)]
+pub fn PendingCommentItem(comment: PendingComment, post_id: i32) -> Element {
 
     let depth = if comment.parent_id.is_none() && comment.depth > 0 {
         0

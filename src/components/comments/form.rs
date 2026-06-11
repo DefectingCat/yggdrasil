@@ -3,12 +3,15 @@ use dioxus::prelude::*;
 use crate::api::comments::create_comment;
 use crate::components::comments::section::CommentContext;
 use crate::components::forms::{INPUT_CLASS, BUTTON_PRIMARY_CLASS, AlertBox};
+use crate::hooks::comment_storage::{self, PendingComment};
 
 #[component]
 pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
     let ctx: CommentContext = use_context();
     let mut active_reply = ctx.active_reply;
     let mut refresh_trigger = ctx.refresh_trigger;
+    let mut pending_comments = ctx.pending_comments;
+
     let mut author_name = use_signal(String::new);
     let mut author_email = use_signal(String::new);
     let mut author_url = use_signal(String::new);
@@ -16,6 +19,17 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
     let mut honeypot = use_signal(String::new);
     let mut submitting = use_signal(|| false);
     let mut message = use_signal(|| Option::<(String, &'static str)>::None);
+
+    use_effect(move || {
+        if !author_name().is_empty() {
+            return;
+        }
+        if let Some(info) = comment_storage::load_author() {
+            author_name.set(info.name);
+            author_email.set(info.email);
+            author_url.set(info.url);
+        }
+    });
 
     if let Some(pid) = parent_id {
         if active_reply() != Some(pid) {
@@ -127,10 +141,10 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
                             let result = create_comment(
                                 post_id,
                                 parent_id,
-                                name,
-                                email,
-                                if url_val.trim().is_empty() { None } else { Some(url_val) },
-                                content,
+                                name.clone(),
+                                email.clone(),
+                                if url_val.trim().is_empty() { None } else { Some(url_val.clone()) },
+                                content.clone(),
                             ).await;
 
                             submitting.set(false);
@@ -138,6 +152,33 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
                             match result {
                                 Ok(resp) => {
                                     if resp.success {
+                                        comment_storage::save_author(
+                                            &name,
+                                            &email,
+                                            &url_val,
+                                        );
+
+                                        if let Some(comment_id) = resp.comment_id {
+                                            let avatar_url = resp.avatar_url.unwrap_or_default();
+                                            let depth = resp.depth.unwrap_or(0);
+
+                                            let now = chrono::Utc::now().to_rfc3339();
+                                            let pending = PendingComment {
+                                                id: comment_id,
+                                                parent_id,
+                                                depth,
+                                                author_name: name.clone(),
+                                                author_url: if url_val.trim().is_empty() { None } else { Some(url_val) },
+                                                avatar_url,
+                                                content_md: content,
+                                                created_at: now.clone(),
+                                                stored_at: now,
+                                            };
+
+                                            comment_storage::save_pending_comment(post_id, pending.clone());
+                                            pending_comments.write().push(pending);
+                                        }
+
                                         content_md.set(String::new());
                                         message.set(Some((resp.message, "success")));
                                         if parent_id.is_some() {
