@@ -38,53 +38,50 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
             }
 
             div { class: "space-y-3",
-                if !is_reply {
-                    div { class: "grid grid-cols-1 sm:grid-cols-2 gap-3",
-                        div {
-                            label { class: "block text-sm font-medium text-paper-secondary mb-1",
-                                "昵称 *"
-                            }
-                            input {
-                                class: INPUT_CLASS,
-                                r#type: "text",
-                                placeholder: "你的昵称",
-                                value: "{author_name}",
-                                disabled: submitting(),
-                                oninput: move |e| author_name.set(e.value()),
-                            }
+                div { class: "grid grid-cols-1 sm:grid-cols-2 gap-3",
+                    div {
+                        label { class: "block text-sm font-medium text-paper-secondary mb-1",
+                            "昵称 *"
                         }
-                        div {
-                            label { class: "block text-sm font-medium text-paper-secondary mb-1",
-                                "邮箱 *"
-                            }
-                            input {
-                                class: INPUT_CLASS,
-                                r#type: "email",
-                                placeholder: "your@email.com",
-                                value: "{author_email}",
-                                disabled: submitting(),
-                                oninput: move |e| author_email.set(e.value()),
-                            }
+                        input {
+                            class: INPUT_CLASS,
+                            r#type: "text",
+                            placeholder: "你的昵称",
+                            value: "{author_name}",
+                            disabled: submitting(),
+                            oninput: move |e| author_name.set(e.value()),
                         }
                     }
                     div {
                         label { class: "block text-sm font-medium text-paper-secondary mb-1",
-                            "网站"
+                            "邮箱 *"
                         }
                         input {
                             class: INPUT_CLASS,
-                            r#type: "url",
-                            placeholder: "https://example.com（可选）",
-                            value: "{author_url}",
+                            r#type: "email",
+                            placeholder: "your@email.com",
+                            value: "{author_email}",
                             disabled: submitting(),
-                            oninput: move |e| author_url.set(e.value()),
+                            oninput: move |e| author_email.set(e.value()),
                         }
+                    }
+                }
+                div {
+                    label { class: "block text-sm font-medium text-paper-secondary mb-1",
+                        "网站"
+                    }
+                    input {
+                        class: INPUT_CLASS,
+                        r#type: "url",
+                        placeholder: "https://example.com（可选）",
+                        value: "{author_url}",
+                        disabled: submitting(),
+                        oninput: move |e| author_url.set(e.value()),
                     }
                 }
 
                 textarea {
                     class: "{INPUT_CLASS} min-h-[100px] resize-y",
-                    placeholder: "写下你的评论…",
                     value: "{content_md}",
                     disabled: submitting(),
                     oninput: move |e| content_md.set(e.value()),
