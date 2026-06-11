@@ -46,12 +46,16 @@ pub fn CommentList(
     rsx! {
         div { class: "space-y-0 divide-y divide-gray-100 dark:divide-[#2a2a2a]",
             for item in merged {
+                let key_id = match &item {
+                    MergedComment::Approved(c) => c.id,
+                    MergedComment::Pending(c) => c.id,
+                };
                 match item {
                     MergedComment::Approved(comment) => rsx! {
-                        CommentItem { comment, post_id }
+                        CommentItem { key: "{key_id}", comment, post_id }
                     },
                     MergedComment::Pending(comment) => rsx! {
-                        PendingCommentItem { comment, post_id }
+                        PendingCommentItem { key: "{key_id}", comment, post_id }
                     },
                 }
             }
