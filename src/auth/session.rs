@@ -1,9 +1,17 @@
 use chrono::{DateTime, Duration, Utc};
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 #[allow(dead_code)]
 pub fn generate_token() -> String {
     Uuid::new_v4().to_string()
+}
+
+#[allow(dead_code)]
+pub fn hash_token(token: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(token.as_bytes());
+    hex::encode(hasher.finalize())
 }
 
 #[allow(dead_code)]
@@ -98,5 +106,30 @@ mod tests {
         let expiry = default_expiry();
         let diff = expiry - chrono::Utc::now();
         assert!(diff.num_days() >= 29 && diff.num_days() <= 31);
+    }
+
+    #[test]
+    fn hash_token_is_deterministic() {
+        let token = "test-token-123";
+        assert_eq!(hash_token(token), hash_token(token));
+    }
+
+    #[test]
+    fn hash_token_is_64_chars() {
+        let hash = hash_token("any-token");
+        assert_eq!(hash.len(), 64);
+    }
+
+    #[test]
+    fn hash_token_differs_from_input() {
+        let token = "my-secret-token";
+        assert_ne!(hash_token(token), token);
+    }
+
+    #[test]
+    fn hash_token_known_value() {
+        let hash = hash_token("hello");
+        let expected = sha2::Sha256::digest(b"hello");
+        assert_eq!(hash, hex::encode(expected));
     }
 }
