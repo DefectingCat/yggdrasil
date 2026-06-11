@@ -5,38 +5,28 @@ use crate::components::skeletons::atoms::*;
 pub fn WriteSkeleton() -> Element {
     rsx! {
         div { class: "relative flex flex-col flex-1 min-h-0 overflow-hidden",
-            // 顶部元信息骨架 - 固定高度
             div { class: "flex-shrink-0 space-y-5 pt-8",
-                // 标题骨架
                 SkeletonBox { class: "h-12 w-2/3 rounded-lg" }
 
-                // 摘要骨架
                 SkeletonBox { class: "h-14 w-full rounded-lg" }
 
-                // 元数据行骨架
-                div { class: "flex flex-wrap items-end gap-x-8 gap-y-4",
+                div { class: "flex flex-wrap items-end gap-x-8 gap-y-4 text-sm",
                     for _ in 0..3 {
-                        div { class: "flex-1 min-w-[140px] space-y-2",
-                            SkeletonBox { class: "h-3 w-12 rounded" }
-                            SkeletonBox { class: "h-8 w-full rounded-lg" }
+                        div { class: "flex-1 min-w-[140px]",
+                            SkeletonBox { class: "h-[11px] w-10 rounded mb-2" }
+                            SkeletonBox { class: "h-5 w-full rounded" }
                         }
                     }
                 }
-
-                // 分隔线
-                div { class: "h-px bg-[var(--color-paper-tertiary)]" }
             }
 
-            // 编辑器骨架 - 沾满剩余高度
             div { class: "flex-1 min-h-0 flex flex-col my-4",
-                div { class: "flex-1 min-h-0 w-full rounded-xl border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] space-y-4 p-4",
-                    // 编辑器工具栏骨架
+                div { class: "flex-1 min-h-0 w-full border border-[var(--color-paper-border)] rounded-xl overflow-hidden bg-[var(--color-paper-entry)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none space-y-4 p-4",
                     div { class: "flex gap-2 pb-3 border-b border-[var(--color-paper-border)]",
                         for _ in 0..8 {
                             SkeletonBox { class: "w-8 h-8 rounded" }
                         }
                     }
-                    // 编辑器内容骨架
                     div { class: "space-y-3 pt-2",
                         SkeletonBox { class: "h-4 w-[90%] rounded" }
                         SkeletonBox { class: "h-4 w-full rounded" }
@@ -54,11 +44,12 @@ pub fn WriteSkeleton() -> Element {
                 }
             }
 
-            // 按钮行骨架
             div { class: "flex-shrink-0 flex items-center gap-2 pt-2 pb-4",
-                SkeletonBox { class: "h-9 w-[60px] rounded-full" }
-                SkeletonBox { class: "h-9 w-[80px] rounded-full" }
-                SkeletonBox { class: "h-9 w-[60px] rounded-full" }
+                SkeletonBox { class: "h-9 w-[56px] rounded-xl" }
+                div { class: "w-px h-5 bg-[var(--color-paper-border)]" }
+                SkeletonBox { class: "h-9 w-[72px] rounded-xl" }
+                div { class: "w-px h-5 bg-[var(--color-paper-border)]" }
+                SkeletonBox { class: "h-9 w-[56px] rounded-xl" }
             }
         }
     }
