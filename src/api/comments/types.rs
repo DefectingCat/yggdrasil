@@ -17,6 +17,12 @@ pub struct CommentResponse {
     pub success: bool,
     pub message: String,
     pub error_code: Option<String>,
+    #[serde(default)]
+    pub comment_id: Option<i64>,
+    #[serde(default)]
+    pub avatar_url: Option<String>,
+    #[serde(default)]
+    pub depth: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

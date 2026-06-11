@@ -29,6 +29,9 @@ pub async fn approve_comment(id: i64) -> Result<CommentResponse, ServerFnError> 
                     success: false,
                     message: "评论不存在".to_string(),
                     error_code: Some("not_found".into()),
+                    comment_id: None,
+                    avatar_url: None,
+                    depth: None,
                 });
             }
         };
@@ -63,6 +66,9 @@ pub async fn approve_comment(id: i64) -> Result<CommentResponse, ServerFnError> 
             success: true,
             message: "已通过".to_string(),
             error_code: None,
+            comment_id: None,
+            avatar_url: None,
+            depth: None,
         })
     }
     #[cfg(not(feature = "server"))]
@@ -113,6 +119,9 @@ pub async fn spam_comment(id: i64) -> Result<CommentResponse, ServerFnError> {
             success: true,
             message: "已标记为垃圾".to_string(),
             error_code: None,
+            comment_id: None,
+            avatar_url: None,
+            depth: None,
         })
     }
     #[cfg(not(feature = "server"))]
@@ -160,6 +169,9 @@ pub async fn trash_comment(id: i64) -> Result<CommentResponse, ServerFnError> {
             success: true,
             message: "已删除".to_string(),
             error_code: None,
+            comment_id: None,
+            avatar_url: None,
+            depth: None,
         })
     }
     #[cfg(not(feature = "server"))]

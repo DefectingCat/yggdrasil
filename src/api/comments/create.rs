@@ -28,6 +28,9 @@ pub async fn create_comment(
                     success: false,
                     message: msg,
                     error_code: Some("rate_limited".into()),
+                    comment_id: None,
+                    avatar_url: None,
+                    depth: None,
                 });
             }
         }
@@ -37,6 +40,9 @@ pub async fn create_comment(
                 success: false,
                 message: e,
                 error_code: Some("invalid_input".into()),
+                comment_id: None,
+                avatar_url: None,
+                depth: None,
             });
         }
         if let Err(e) = validate_comment_email(&author_email) {
@@ -44,6 +50,9 @@ pub async fn create_comment(
                 success: false,
                 message: e,
                 error_code: Some("invalid_input".into()),
+                comment_id: None,
+                avatar_url: None,
+                depth: None,
             });
         }
         if let Some(ref url) = author_url {
@@ -52,6 +61,9 @@ pub async fn create_comment(
                     success: false,
                     message: e,
                     error_code: Some("invalid_input".into()),
+                    comment_id: None,
+                    avatar_url: None,
+                    depth: None,
                 });
             }
         }
@@ -60,6 +72,9 @@ pub async fn create_comment(
                 success: false,
                 message: e,
                 error_code: Some("invalid_input".into()),
+                comment_id: None,
+                avatar_url: None,
+                depth: None,
             });
         }
 
@@ -79,6 +94,9 @@ pub async fn create_comment(
                     success: false,
                     message: "文章不存在".to_string(),
                     error_code: Some("post_not_found".into()),
+                    comment_id: None,
+                    avatar_url: None,
+                    depth: None,
                 });
             }
             Some(row) => {
@@ -89,6 +107,9 @@ pub async fn create_comment(
                         success: false,
                         message: "文章不存在".to_string(),
                         error_code: Some("post_not_found".into()),
+                        comment_id: None,
+                        avatar_url: None,
+                        depth: None,
                     });
                 }
             }
@@ -110,6 +131,9 @@ pub async fn create_comment(
                         success: false,
                         message: "父评论不存在".to_string(),
                         error_code: Some("parent_not_found".into()),
+                        comment_id: None,
+                        avatar_url: None,
+                        depth: None,
                     });
                 }
                 Some(row) => {
@@ -122,6 +146,9 @@ pub async fn create_comment(
                             success: false,
                             message: "父评论不存在".to_string(),
                             error_code: Some("parent_not_found".into()),
+                            comment_id: None,
+                            avatar_url: None,
+                            depth: None,
                         });
                     }
                     if parent_status != "approved" {
@@ -129,6 +156,9 @@ pub async fn create_comment(
                             success: false,
                             message: "父评论未通过审核".to_string(),
                             error_code: Some("parent_not_approved".into()),
+                            comment_id: None,
+                            avatar_url: None,
+                            depth: None,
                         });
                     }
 
@@ -138,6 +168,9 @@ pub async fn create_comment(
                             success: false,
                             message: "评论嵌套层级过深".to_string(),
                             error_code: Some("too_deep".into()),
+                            comment_id: None,
+                            avatar_url: None,
+                            depth: None,
                         });
                     }
                 }
@@ -165,6 +198,9 @@ pub async fn create_comment(
                 success: false,
                 message: "请勿重复提交".to_string(),
                 error_code: Some("duplicate".into()),
+                comment_id: None,
+                avatar_url: None,
+                depth: None,
             });
         }
 
@@ -187,13 +223,13 @@ pub async fn create_comment(
             None
         };
 
-        client
+        let row = client
             .query_one(
                 "INSERT INTO comments \
                  (post_id, parent_id, depth, author_name, author_email, author_url, \
                   content_md, content_html, content_hash, status, ip_address, user_agent) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, $11) \
-                 RETURNING id",
+                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, $11) \
+                  RETURNING id",
                 &[
                     &post_id,
                     &parent_id,
@@ -211,6 +247,10 @@ pub async fn create_comment(
             .await
             .map_err(AppError::query)?;
 
+        let comment_id: i64 = row.get(0);
+
+        let avatar_url = crate::api::comments::helpers::gravatar_url(&author_email);
+
         cache::invalidate_comments_by_post(post_id).await;
         cache::invalidate_comment_count(post_id).await;
 
@@ -218,6 +258,9 @@ pub async fn create_comment(
             success: true,
             message: "评论已提交，等待审核".to_string(),
             error_code: None,
+            comment_id: Some(comment_id),
+            avatar_url: Some(avatar_url),
+            depth: Some(depth),
         })
     }
     #[cfg(not(feature = "server"))]
