@@ -77,6 +77,7 @@ pub struct AdminComment {
     pub author_name: String,
     pub author_email: String,
     pub author_url: Option<String>,
+    pub avatar_url: String,
     pub content_md: String,
     pub status: CommentStatus,
     pub created_at: DateTime<Utc>,

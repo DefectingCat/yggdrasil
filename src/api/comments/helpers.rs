@@ -39,6 +39,7 @@ pub fn row_to_public_comment(row: &tokio_postgres::Row) -> PublicComment {
 #[cfg(feature = "server")]
 pub fn row_to_admin_comment(row: &tokio_postgres::Row) -> AdminComment {
     let status_str: String = row.get("status");
+    let email: String = row.get("author_email");
 
     AdminComment {
         id: row.get("id"),
@@ -48,8 +49,9 @@ pub fn row_to_admin_comment(row: &tokio_postgres::Row) -> AdminComment {
         parent_id: row.get("parent_id"),
         depth: row.get("depth"),
         author_name: row.get("author_name"),
-        author_email: row.get("author_email"),
+        author_email: email.clone(),
         author_url: row.get("author_url"),
+        avatar_url: gravatar_url(&email),
         content_md: row.get("content_md"),
         status: CommentStatus::from_str(&status_str),
         created_at: row.get("created_at"),

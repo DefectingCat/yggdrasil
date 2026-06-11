@@ -167,7 +167,7 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                                                     th { class: "px-4 py-3 font-medium", "作者" }
                                                     th { class: "px-4 py-3 font-medium", "内容" }
                                                     th { class: "px-4 py-3 font-medium", "文章" }
-                                                    th { class: "px-4 py-3 font-medium w-20 text-center", "状态" }
+                                                    th { class: "px-4 py-3 font-medium text-center", "状态" }
                                                     th { class: "px-4 py-3 font-medium w-28", "日期" }
                                                     th { class: "px-4 py-3 font-medium w-32 text-right", "操作" }
                                                 }
@@ -187,26 +187,29 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                                                             }
                                                         },
                                                         on_approve: {
+                                                            let mut comments_res = comments_res;
                                                             let id = comment.id;
                                                             move |_| {
                                                                 spawn(async move {
                                                                     let _ = approve_comment(id).await;
+                                                                    comments_res.restart();
                                                                 });
-                                                                comments_res.restart();
                                                             }
                                                         },
                                                         on_spam: {
+                                                            let mut comments_res = comments_res;
                                                             let id = comment.id;
                                                             move |_| {
                                                                 spawn(async move {
                                                                     let _ = spam_comment(id).await;
+                                                                    comments_res.restart();
                                                                 });
-                                                                comments_res.restart();
                                                             }
                                                         },
                                                         on_trash: {
                                                             #[allow(unused_variables)]
-                                                            let id = comment.id;
+                                                            let mut comments_res = comments_res;
+                                                            let _id = comment.id;
                                                             move |_| {
                                                                 #[cfg(target_arch = "wasm32")]
                                                                 {
@@ -214,11 +217,11 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                                                                         .and_then(|w| w.confirm_with_message("确定要删除这条评论吗？").ok())
                                                                         .unwrap_or(false)
                                                                     {
-                                                                        let id = id;
+                                                                        let id = _id;
                                                                         spawn(async move {
                                                                             let _ = trash_comment(id).await;
+                                                                            comments_res.restart();
                                                                         });
-                                                                        comments_res.restart();
                                                                     }
                                                                 }
                                                             }
@@ -296,7 +299,11 @@ fn CommentRow(
             }
             td { class: "px-4 py-3",
                 div { class: "flex items-center gap-2",
-                    div { class: "w-8 h-8 rounded-full bg-gray-200 dark:bg-[#444] flex-shrink-0" }
+                    img {
+                        class: "w-8 h-8 rounded-full flex-shrink-0",
+                        src: "{comment.avatar_url}",
+                        alt: "{comment.author_name}",
+                    }
                     div { class: "min-w-0",
                         div { class: "text-sm font-medium text-gray-900 dark:text-[#dadadb] truncate",
                             "{comment.author_name}"
@@ -320,7 +327,7 @@ fn CommentRow(
                 }
             }
             td { class: "px-4 py-3 text-center",
-                span { class: "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {badge_class}",
+                span { class: "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap {badge_class}",
                     "{status_label}"
                 }
             }
@@ -329,20 +336,26 @@ fn CommentRow(
             }
             td { class: "px-4 py-3 text-right",
                 div { class: "flex justify-end gap-2",
-                    button {
-                        class: "text-xs text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 transition-colors",
-                        onclick: move |_| on_approve.call(()),
-                        "通过"
+                    if !matches!(comment.status, CommentStatus::Approved) {
+                        button {
+                            class: "text-xs text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 transition-colors cursor-pointer",
+                            onclick: move |_| on_approve.call(()),
+                            "通过"
+                        }
                     }
-                    button {
-                        class: "text-xs text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300 transition-colors",
-                        onclick: move |_| on_spam.call(()),
-                        "垃圾"
+                    if !matches!(comment.status, CommentStatus::Spam) {
+                        button {
+                            class: "text-xs text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300 transition-colors cursor-pointer",
+                            onclick: move |_| on_spam.call(()),
+                            "垃圾"
+                        }
                     }
-                    button {
-                        class: "text-xs text-red-500 hover:text-red-700 dark:hover:text-red-300 transition-colors",
-                        onclick: move |_| on_trash.call(()),
-                        "删除"
+                    if !matches!(comment.status, CommentStatus::Trash) {
+                        button {
+                            class: "text-xs text-red-500 hover:text-red-700 dark:hover:text-red-300 transition-colors cursor-pointer",
+                            onclick: move |_| on_trash.call(()),
+                            "删除"
+                        }
                     }
                 }
             }
