@@ -106,7 +106,7 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                                 #[cfg(target_arch = "wasm32")]
                                 {
                                     if web_sys::window()
-                                        .and_then(|w| w.confirm_with_message("确定要删除这些评论吗？"))
+                                        .and_then(|w| w.confirm_with_message("确定要删除这些评论吗？").ok())
                                         .unwrap_or(false)
                                     {
                                         let ids: Vec<i64> = selected_ids().iter().copied().collect();
@@ -211,7 +211,7 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                                                                 #[cfg(target_arch = "wasm32")]
                                                                 {
                                                                     if web_sys::window()
-                                                                        .and_then(|w| w.confirm_with_message("确定要删除这条评论吗？"))
+                                                                        .and_then(|w| w.confirm_with_message("确定要删除这条评论吗？").ok())
                                                                         .unwrap_or(false)
                                                                     {
                                                                         let id = id;
