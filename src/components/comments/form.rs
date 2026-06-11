@@ -14,7 +14,6 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
     let mut author_url = use_signal(String::new);
     let mut content_md = use_signal(String::new);
     let mut honeypot = use_signal(String::new);
-    let mut consented = use_signal(|| false);
     let mut submitting = use_signal(|| false);
     let mut message = use_signal(|| Option::<(String, &'static str)>::None);
 
@@ -103,22 +102,6 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
                     oninput: move |e| honeypot.set(e.value()),
                 }
 
-                div { class: "flex items-start gap-2",
-                    input {
-                        r#type: "checkbox",
-                        id: "consent-{post_id}-{parent_id.unwrap_or(0)}",
-                        checked: consented(),
-                        disabled: submitting(),
-                        class: "mt-1 rounded border-gray-300 text-paper-accent focus:ring-paper-accent/30",
-                        onchange: move |e| consented.set(e.checked()),
-                    }
-                    label {
-                        r#for: "consent-{post_id}-{parent_id.unwrap_or(0)}",
-                        class: "text-sm text-paper-secondary select-none cursor-pointer",
-                        "同意隐私政策"
-                    }
-                }
-
                 button {
                     class: BUTTON_PRIMARY_CLASS,
                     disabled: submitting(),
@@ -130,7 +113,6 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
                         let url_val = author_url();
                         let content = content_md();
                         let hp = honeypot();
-                        let consent = consented();
 
                         if !hp.is_empty() {
                             return;
@@ -138,11 +120,6 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
 
                         if name.trim().is_empty() || email.trim().is_empty() || content.trim().is_empty() {
                             message.set(Some(("请填写所有必填项".to_string(), "error")));
-                            return;
-                        }
-
-                        if !consent {
-                            message.set(Some(("请同意隐私政策".to_string(), "error")));
                             return;
                         }
 
@@ -157,7 +134,6 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
                                 email,
                                 if url_val.trim().is_empty() { None } else { Some(url_val) },
                                 content,
-                                consent,
                             ).await;
 
                             submitting.set(false);
@@ -166,7 +142,6 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
                                 Ok(resp) => {
                                     if resp.success {
                                         content_md.set(String::new());
-                                        consented.set(false);
                                         message.set(Some((resp.message, "success")));
                                         if parent_id.is_some() {
                                             active_reply.set(None);

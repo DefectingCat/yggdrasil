@@ -9,7 +9,6 @@ pub async fn create_comment(
     author_email: String,
     author_url: Option<String>,
     content_md: String,
-    consented: bool,
 ) -> Result<CommentResponse, ServerFnError> {
     #[cfg(feature = "server")]
     {
@@ -31,14 +30,6 @@ pub async fn create_comment(
                     error_code: Some("rate_limited".into()),
                 });
             }
-        }
-
-        if !consented {
-            return Ok(CommentResponse {
-                success: false,
-                message: "请同意隐私政策".to_string(),
-                error_code: Some("invalid_input".into()),
-            });
         }
 
         if let Err(e) = validate_comment_name(&author_name) {
@@ -200,8 +191,8 @@ pub async fn create_comment(
             .query_one(
                 "INSERT INTO comments \
                  (post_id, parent_id, depth, author_name, author_email, author_url, \
-                  content_md, content_html, content_hash, status, ip_address, user_agent, consented_at) \
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, $11, NOW()) \
+                  content_md, content_html, content_hash, status, ip_address, user_agent) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', $10, $11) \
                  RETURNING id",
                 &[
                     &post_id,
