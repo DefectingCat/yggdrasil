@@ -33,15 +33,20 @@ pub fn CommentSection(post_id: i32) -> Element {
             if ids.is_empty() {
                 return;
             }
-            if let Ok(statuses) = check_pending_status(ids).await {
-                let to_remove: Vec<i64> = statuses
-                    .into_iter()
-                    .filter(|s| s.status != "pending")
-                    .map(|s| s.id)
-                    .collect();
-                if !to_remove.is_empty() {
-                    comment_storage::remove_pending_ids(post_id, &to_remove);
-                    pending.write().retain(|c| !to_remove.contains(&c.id));
+            match check_pending_status(ids).await {
+                Ok(statuses) => {
+                    let to_remove: Vec<i64> = statuses
+                        .into_iter()
+                        .filter(|s| s.status != "pending")
+                        .map(|s| s.id)
+                        .collect();
+                    if !to_remove.is_empty() {
+                        comment_storage::remove_pending_ids(post_id, &to_remove);
+                        pending.write().retain(|c| !to_remove.contains(&c.id));
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("check_pending_status failed: {}", e);
                 }
             }
         }
