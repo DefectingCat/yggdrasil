@@ -135,7 +135,7 @@ pub fn ThemeToggle() -> Element {
 
     rsx! {
         button {
-            class: "theme-toggle p-2 rounded-full cursor-pointer hover:opacity-80 transition-opacity text-gray-600 dark:text-gray-300",
+            class: "theme-toggle p-2 rounded-full cursor-pointer hover:text-paper-accent transition-colors duration-200 text-paper-secondary",
             onclick: move |_| theme.set(theme().toggle()),
             if mounted() && theme() == Theme::Dark {
                 svg {

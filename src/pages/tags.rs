@@ -11,7 +11,7 @@ use crate::router::Route;
 pub fn Tags() -> Element {
     rsx! {
         header { class: "page-header mb-6",
-            h1 { class: "text-[34px] font-bold text-gray-900 dark:text-[#dadadb]",
+            h1 { class: "text-4xl font-bold text-paper-primary tracking-tight",
                 "标签"
             }
         }
@@ -32,21 +32,21 @@ fn TagsContent() -> Element {
         Some(Ok(tags)) => {
             let total = tags.iter().map(|t| t.post_count).sum::<i64>();
             rsx! {
-                div { class: "mt-2 text-base text-gray-500 dark:text-[#9b9c9d]",
+                div { class: "mt-2 text-base text-paper-secondary",
                     "共 "
-                    span { class: "font-medium text-gray-700 dark:text-[#dadadb]", "{tags.len()}" }
+                    span { class: "font-medium text-paper-primary", "{tags.len()}" }
                     " 个标签，"
-                    span { class: "font-medium text-gray-700 dark:text-[#dadadb]", "{total}" }
+                    span { class: "font-medium text-paper-primary", "{total}" }
                     " 篇文章"
                 }
                 ul { class: "flex flex-wrap gap-4 mt-6",
                     for tag in tags {
                         li {
                             Link {
-                                class: "inline-flex items-center px-3 py-1.5 text-base font-medium bg-gray-100 dark:bg-[#2e2e33] text-gray-700 dark:text-[#9b9c9d] rounded-lg hover:bg-gray-200 dark:hover:bg-[#333] transition-colors",
+                                class: "inline-flex items-center px-3 py-1.5 text-base font-medium bg-paper-accent-soft text-paper-accent rounded-lg hover:bg-paper-accent hover:text-white transition-all duration-200",
                                 to: Route::TagDetail { tag: tag.name.clone() },
                                 "{tag.name}"
-                                sup { class: "ml-1 text-sm text-gray-500 dark:text-[#9b9c9d]", "{tag.post_count}" }
+                                sup { class: "ml-1 text-sm text-paper-secondary", "{tag.post_count}" }
                             }
                         }
                     }
@@ -72,7 +72,7 @@ fn TagsContent() -> Element {
 pub fn TagDetail(tag: String) -> Element {
     rsx! {
         header { class: "page-header mb-6",
-            h1 { class: "text-[34px] font-bold text-gray-900 dark:text-[#dadadb]",
+            h1 { class: "text-4xl font-bold text-paper-primary tracking-tight",
                 "{tag}"
             }
         }
@@ -92,9 +92,9 @@ fn TagDetailContent(tag: String) -> Element {
     match posts_data {
         Some(Ok((posts, total))) => {
             rsx! {
-                div { class: "mt-2 text-base text-gray-500 dark:text-[#9b9c9d]",
+                div { class: "mt-2 text-base text-paper-secondary",
                     "共 "
-                    span { class: "font-medium text-gray-700 dark:text-[#dadadb]", "{total}" }
+                    span { class: "font-medium text-paper-primary", "{total}" }
                     " 篇文章"
                 }
                 for post in posts.iter() {

@@ -29,7 +29,7 @@ pub fn FrontendLayout() -> Element {
     let nav_items = use_nav_items(route.clone());
 
     rsx! {
-        div { class: "min-h-screen flex flex-col bg-white dark:bg-[#1d1e20]",
+        div { class: "min-h-screen flex flex-col bg-paper-theme",
             Header { nav_items, right_content: rsx! { ThemeToggle {} } }
             main { class: "flex-1 w-full max-w-3xl mx-auto px-6 py-6",
                 SuspenseBoundary {

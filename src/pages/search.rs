@@ -26,14 +26,14 @@ pub fn Search() -> Element {
 
     rsx! {
         header { class: "page-header mb-6",
-            h1 { class: "text-[34px] font-bold text-gray-900 dark:text-[#dadadb]",
+            h1 { class: "text-4xl font-bold text-paper-primary tracking-tight",
                 "搜索"
             }
         }
         div { class: "mb-8",
             div { class: "flex gap-2",
                 input {
-                    class: "flex-1 px-4 py-2 border border-gray-200 dark:border-[#333] rounded-lg bg-white dark:bg-[#2e2e33] text-gray-900 dark:text-[#dadadb] focus:outline-none focus:border-gray-400 dark:focus:border-gray-600",
+                    class: "flex-1 px-4 py-2 border border-paper-border rounded-lg bg-paper-entry text-paper-primary placeholder:text-paper-tertiary focus:outline-none focus:border-paper-accent focus:ring-1 focus:ring-paper-accent/30",
                     r#type: "text",
                     placeholder: "输入关键词搜索文章...",
                     value: query(),
@@ -41,7 +41,7 @@ pub fn Search() -> Element {
                     onkeydown: move |e| if e.key() == Key::Enter { on_search() },
                 }
                 button {
-                    class: "px-6 py-2 bg-gray-900 dark:bg-[#dadadb] text-white dark:text-gray-900 rounded-full font-medium hover:opacity-80 transition-opacity",
+                    class: "px-6 py-2 bg-paper-accent text-white rounded-full font-medium hover:brightness-110 active:scale-[0.98] transition-all duration-200",
                     onclick: move |_| on_search(),
                     "搜索"
                 }
@@ -51,7 +51,7 @@ pub fn Search() -> Element {
             DelayedSkeleton { SearchSkeleton {} }
         } else if let Some(Ok(PostListResponse { posts, total: _ })) = search_res() {
             if posts.is_empty() {
-                div { class: "text-center text-gray-500 dark:text-[#9b9c9d] py-20",
+                div { class: "text-center text-paper-secondary py-20",
                     "未找到相关文章"
                 }
             } else {

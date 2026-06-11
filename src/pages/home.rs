@@ -40,7 +40,7 @@ fn HomePosts(current_page: i32) -> Element {
                     PostCard { post: post.clone() }
                 }
                 if posts.is_empty() {
-                    div { class: "text-center text-gray-500 dark:text-[#9b9c9d] py-20",
+                    div { class: "text-center text-paper-secondary py-20",
                         "暂无文章"
                     }
                 }
@@ -66,10 +66,10 @@ fn HomePosts(current_page: i32) -> Element {
 fn HomeInfo() -> Element {
     rsx! {
         div { class: "mb-10 text-center",
-            h1 { class: "text-[34px] font-bold leading-tight text-gray-900 dark:text-[#dadadb]",
+            h1 { class: "text-4xl font-bold leading-tight text-paper-primary tracking-tight",
                 "Yggdrasil"
             }
-            p { class: "mt-3 text-base text-gray-500 dark:text-[#9b9c9d] leading-relaxed",
+            p { class: "mt-3 text-base text-paper-secondary leading-relaxed",
                 "以文字为主的简约博客系统"
             }
         }
@@ -92,7 +92,7 @@ fn Pagination(current_page: i32, total: i64) -> Element {
         nav { class: "flex mt-10 mb-6 justify-between",
             if has_prev {
                 Link {
-                    class: "inline-flex items-center px-4 py-2 text-sm text-white bg-gray-900 dark:bg-[#dadadb] dark:text-gray-900 rounded-full hover:opacity-80 transition-opacity cursor-pointer",
+                    class: "inline-flex items-center px-4 py-2 text-sm text-white bg-paper-accent rounded-full hover:brightness-110 active:scale-[0.98] transition-all duration-200 cursor-pointer",
                     to: prev_route,
                     span { class: "mr-1", "«" }
                     "上一页"
@@ -100,7 +100,7 @@ fn Pagination(current_page: i32, total: i64) -> Element {
             }
             if has_next {
                 Link {
-                    class: "ml-auto inline-flex items-center px-4 py-2 text-sm text-white bg-gray-900 dark:bg-[#dadadb] dark:text-gray-900 rounded-full hover:opacity-80 transition-opacity cursor-pointer",
+                    class: "ml-auto inline-flex items-center px-4 py-2 text-sm text-white bg-paper-accent rounded-full hover:brightness-110 active:scale-[0.98] transition-all duration-200 cursor-pointer",
                     to: Route::HomePage { page: current_page + 1 },
                     "下一页"
                     span { class: "ml-1", "»" }

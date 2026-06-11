@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 pub fn SkeletonBox(class: &'static str, style: Option<&'static str>) -> Element {
     rsx! {
         div {
-            class: "bg-gray-200 dark:bg-[#2a2a2a] animate-pulse {class}",
+            class: "bg-paper-tertiary/30 animate-pulse {class}",
             style: style.unwrap_or(""),
         }
     }

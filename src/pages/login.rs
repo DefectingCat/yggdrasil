@@ -51,9 +51,9 @@ pub fn Login() -> Element {
     });
 
     rsx! {
-        div { class: "min-h-screen flex items-center justify-center bg-white dark:bg-[#1d1e20]",
-            div { class: "w-full max-w-md p-8 bg-white dark:bg-[#2e2e33] rounded-2xl border border-gray-200 dark:border-[#333]",
-                h1 { class: "text-2xl font-bold text-center text-gray-900 dark:text-[#dadadb] mb-6",
+        div { class: "min-h-screen flex items-center justify-center bg-paper-theme",
+            div { class: "w-full max-w-md p-8 bg-paper-entry rounded-2xl border border-paper-border shadow-sm",
+                h1 { class: "text-2xl font-bold text-center text-paper-primary mb-6",
                     "登录"
                 }
 
@@ -88,7 +88,7 @@ pub fn Login() -> Element {
                         "登录"
                     }
                     Link {
-                        class: "block w-full py-2 px-4 text-center text-gray-500 dark:text-[#9b9c9d] hover:text-gray-700 dark:hover:text-[#dadadb] font-medium rounded-lg transition-colors cursor-pointer",
+                        class: "block w-full py-2 px-4 text-center text-paper-secondary hover:text-paper-accent font-medium rounded-lg transition-all duration-200 cursor-pointer",
                         to: Route::Register {},
                         "还没有账号？去注册"
                     }

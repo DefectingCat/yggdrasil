@@ -34,7 +34,7 @@ pub fn PostFooter(post: Post) -> Element {
             div { class: "back-to-home",
                 Link {
                     to: Route::Home {},
-                    "← Back to Home"
+                    "← 返回首页"
                 }
             }
         }

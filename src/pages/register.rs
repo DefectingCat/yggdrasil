@@ -51,19 +51,19 @@ pub fn Register() -> Element {
     };
 
     rsx! {
-        div { class: "min-h-screen flex items-center justify-center bg-white dark:bg-[#1d1e20]",
-            div { class: "w-full max-w-md p-8 bg-white dark:bg-[#2e2e33] rounded-2xl border border-gray-200 dark:border-[#333]",
-                h1 { class: "text-2xl font-bold text-center text-gray-900 dark:text-[#dadadb] mb-2",
+        div { class: "min-h-screen flex items-center justify-center bg-paper-theme",
+            div { class: "w-full max-w-md p-8 bg-paper-entry rounded-2xl border border-paper-border shadow-sm",
+                h1 { class: "text-2xl font-bold text-center text-paper-primary mb-2",
                     "注册"
                 }
-                p { class: "text-sm text-center text-gray-500 dark:text-[#9b9c9d] mb-6",
+                p { class: "text-sm text-center text-paper-secondary mb-6",
                     "首个注册账号将自动成为管理员"
                 }
 
                 if success() {
                     div { class: "mb-4 p-3 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg text-center",
                         "注册成功！"
-                        Link { class: "block mt-2 text-gray-700 dark:text-[#dadadb] hover:underline cursor-pointer",
+                        Link { class: "block mt-2 text-paper-accent hover:underline cursor-pointer",
                             to: Route::Login {},
                             "去登录"
                         }
@@ -121,9 +121,9 @@ pub fn Register() -> Element {
                         "注册"
                     }
                 }
-                p { class: "mt-4 text-center text-sm text-gray-500 dark:text-[#9b9c9d]",
+                p { class: "mt-4 text-center text-sm text-paper-secondary",
                     "已有账号？"
-                    Link { class: "text-gray-700 dark:text-[#dadadb] hover:underline cursor-pointer",
+                    Link { class: "text-paper-accent hover:underline cursor-pointer",
                         to: Route::Login {},
                         "去登录"
                     }

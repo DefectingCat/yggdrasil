@@ -67,7 +67,7 @@ pub fn Footer() -> Element {
     });
 
     let btn_class = use_memo(move || {
-        let base = "fixed bottom-16 right-8 z-50 w-10 h-10 rounded-full bg-gray-100 dark:bg-[#2d2e30] shadow-md flex items-center justify-center cursor-pointer transition-all duration-300 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white";
+        let base = "fixed bottom-16 right-8 z-50 w-10 h-10 rounded-full bg-paper-entry border border-paper-border shadow-sm flex items-center justify-center cursor-pointer transition-all duration-300 text-paper-secondary hover:text-paper-accent";
         if visible() {
             format!("{} opacity-100 translate-y-0", base)
         } else {
@@ -76,9 +76,9 @@ pub fn Footer() -> Element {
     });
 
     rsx! {
-        footer { class: "w-full border-t border-gray-200 dark:border-[#333] mt-auto",
-            div { class: "max-w-3xl mx-auto px-6 py-5 flex items-center justify-between text-sm text-gray-400 dark:text-[#9b9c9d]",
-                span { "© 2026 Yggdrasil Blog" }
+        footer { class: "w-full border-t border-paper-border mt-auto",
+            div { class: "max-w-3xl mx-auto px-6 py-5 flex items-center justify-between text-sm text-paper-secondary",
+                span { "© 2026 Yggdrasil" }
             }
         }
         a {

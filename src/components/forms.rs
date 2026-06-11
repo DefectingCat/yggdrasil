@@ -1,8 +1,8 @@
 use dioxus::prelude::*;
 
-pub const INPUT_CLASS: &str = "w-full px-4 py-2 border border-gray-200 dark:border-[#333] rounded-lg bg-white dark:bg-[#2e2e33] text-gray-900 dark:text-[#dadadb] focus:outline-none focus:border-gray-400 dark:focus:border-gray-600";
+pub const INPUT_CLASS: &str = "w-full px-4 py-2 border border-paper-border rounded-lg bg-paper-entry text-paper-primary placeholder:text-paper-tertiary focus:outline-none focus:border-paper-accent focus:ring-1 focus:ring-paper-accent/30 transition-colors duration-200";
 
-pub const BUTTON_PRIMARY_CLASS: &str = "w-full py-2 px-4 bg-gray-900 dark:bg-[#dadadb] text-white dark:text-gray-900 font-medium rounded-full hover:opacity-80 transition-opacity cursor-pointer";
+pub const BUTTON_PRIMARY_CLASS: &str = "w-full py-2.5 px-4 bg-paper-accent text-white font-medium rounded-full hover:brightness-110 active:scale-[0.98] transition-all duration-200 cursor-pointer";
 
 #[component]
 pub fn FormInput(
@@ -31,7 +31,7 @@ pub fn FormInput(
 #[component]
 pub fn FormLabel(label: &'static str) -> Element {
     rsx! {
-        label { class: "block text-sm font-medium text-gray-700 dark:text-[#9b9c9d] mb-1",
+        label { class: "block text-sm font-medium text-paper-secondary mb-1",
             "{label}"
         }
     }
@@ -42,7 +42,7 @@ pub fn AlertBox(message: String, variant: &'static str) -> Element {
     let (bg_class, text_class) = match variant {
         "error" => ("bg-red-100 dark:bg-red-900/30", "text-red-700 dark:text-red-300"),
         "success" => ("bg-green-100 dark:bg-green-900/30", "text-green-700 dark:text-green-300"),
-        _ => ("bg-gray-100 dark:bg-[#333]", "text-gray-700 dark:text-[#9b9c9d]"),
+        _ => ("bg-paper-code-bg", "text-paper-secondary"),
     };
     rsx! {
         div { class: "mb-4 p-3 {bg_class} {text_class} rounded-lg text-center",

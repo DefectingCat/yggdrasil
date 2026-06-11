@@ -81,7 +81,7 @@ fn group_posts(posts: &[Post]) -> Vec<YearGroup> {
 pub fn Archives() -> Element {
     rsx! {
         header { class: "page-header mb-6",
-            h1 { class: "text-[34px] font-bold text-gray-900 dark:text-[#dadadb]",
+            h1 { class: "text-4xl font-bold text-paper-primary tracking-tight",
                 "归档"
             }
         }
@@ -98,9 +98,9 @@ fn ArchivesContent() -> Element {
         Some(Ok(PostListResponse { posts, total })) => {
             let grouped = group_posts(posts);
             rsx! {
-                div { class: "mt-2 text-base text-gray-500 dark:text-[#9b9c9d]",
+                div { class: "mt-2 text-base text-paper-secondary",
                     "共 "
-                    span { class: "font-medium text-gray-700 dark:text-[#dadadb]", "{total}" }
+                    span { class: "font-medium text-paper-primary", "{total}" }
                     " 篇文章"
                 }
                 for year_group in grouped.iter() {
@@ -134,14 +134,14 @@ fn YearSection(year_group: YearGroup) -> Element {
     rsx! {
         div { class: "archive-year mt-10",
             h2 {
-                class: "archive-year-header text-2xl font-bold text-gray-900 dark:text-[#dadadb] mb-4",
+                class: "archive-year-header text-2xl font-bold text-paper-primary mb-4",
                 id: "{year_group.year}",
                 a {
                     class: "archive-header-link hover:opacity-80 transition-opacity",
                     href: "#{year_group.year}",
                     "{year_group.year}"
                 }
-                sup { class: "archive-count text-sm text-gray-400 dark:text-[#9b9c9d] ml-1", "{total}" }
+                sup { class: "archive-count text-sm text-paper-secondary ml-1", "{total}" }
             }
             for month_group in year_group.months.iter() {
                 MonthSection { month_group: month_group.clone(), year: year_group.year.clone() }
@@ -155,16 +155,16 @@ fn MonthSection(month_group: MonthGroup, year: String) -> Element {
     let count = month_group.posts.len();
 
     rsx! {
-        div { class: "archive-month flex flex-col md:flex-row md:items-start py-2.5 border-b border-gray-100 dark:border-[#333]/50",
+        div { class: "archive-month flex flex-col md:flex-row md:items-start py-2.5 border-b border-paper-border/50",
             h3 {
-                class: "archive-month-header text-lg font-medium text-gray-700 dark:text-[#9b9c9d] md:w-[200px] shrink-0 mt-0 mb-0 py-1.5",
+                class: "archive-month-header text-lg font-medium text-paper-secondary md:w-[200px] shrink-0 mt-0 mb-0 py-1.5",
                 id: "{year}-{month_group.month_en}",
                 a {
                     class: "archive-header-link hover:opacity-80 transition-opacity",
                     href: "#{year}-{month_group.month_en}",
                     "{month_group.month}"
                 }
-                sup { class: "archive-count text-sm text-gray-400 dark:text-[#9b9c9d] ml-1", "{count}" }
+                sup { class: "archive-count text-sm text-paper-secondary ml-1", "{count}" }
             }
             div { class: "archive-posts flex-1",
                 for post in month_group.posts.iter() {
@@ -181,10 +181,10 @@ fn ArchiveEntry(post: Post) -> Element {
 
     rsx! {
         div { class: "archive-entry relative py-1.5 my-2.5 group",
-            h3 { class: "archive-entry-title text-base font-normal text-gray-900 dark:text-[#dadadb] m-0",
+            h3 { class: "archive-entry-title text-base font-normal text-paper-primary m-0",
                 "{post.title}"
             }
-            div { class: "archive-meta text-sm text-gray-400 dark:text-[#9b9c9d] mt-1",
+            div { class: "archive-meta text-sm text-paper-secondary mt-1",
                 "{date_str}"
             }
             Link {
