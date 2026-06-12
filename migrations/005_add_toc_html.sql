@@ -1,0 +1,1 @@
+ALTER TABLE posts ADD COLUMN toc_html TEXT;
