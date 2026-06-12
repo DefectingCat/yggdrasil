@@ -17,3 +17,5 @@ docs/superpowers/
 uploads/*
 !uploads/.gitkeep
 uploads/.cache/
+
+profile.json.gz
