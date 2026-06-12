@@ -1,3 +1,10 @@
+//! 更新文章接口。
+//!
+//! 校验管理员权限与文章归属，重新生成唯一 slug、渲染 Markdown，
+//! 在事务中更新 posts 表并同步标签，最后失效相关缓存。
+//! Dioxus server function，注册在 `/api` 路径下。
+//! 仅在 `feature = "server"` 启用的服务端构建中写入数据库。
+
 #![allow(clippy::too_many_arguments)]
 
 use dioxus::prelude::*;
@@ -10,6 +17,10 @@ use crate::api::error::AppError;
 use crate::db::pool::get_conn;
 use crate::models::post::PostStatus;
 
+/// 更新指定文章。
+///
+/// 校验文章存在且属于当前 admin；处理 slug 变更、发布状态转换、标签同步，
+/// 并失效文章详情、列表、标签与统计缓存。
 #[server(UpdatePost, "/api")]
 pub async fn update_post(
     post_id: i32,
@@ -27,12 +38,14 @@ pub async fn update_post(
     {
         let mut client = get_conn().await.map_err(AppError::db_conn)?;
 
+        // 查询旧 slug，用于后续缓存失效。
         let old_slug: Option<String> = client
             .query_opt("SELECT slug FROM posts WHERE id = $1", &[&post_id])
             .await
             .map_err(AppError::query)?
             .map(|r| r.get(0));
 
+        // 校验文章存在、未删除且归属当前用户。
         let exists: bool = client
             .query_opt(
                 "SELECT 1 FROM posts WHERE id = $1 AND author_id = $2 AND deleted_at IS NULL",
@@ -51,6 +64,7 @@ pub async fn update_post(
             });
         }
 
+        // 确定基础 slug：用户传入时校验格式，否则由标题生成。
         let base_slug = match slug {
             Some(ref s) if !s.trim().is_empty() => {
                 let s = s.trim();
@@ -67,8 +81,10 @@ pub async fn update_post(
             _ => crate::api::slug::slugify(&title),
         };
 
+        // 保证 slug 全局唯一，排除当前文章自身。
         let final_slug =
             crate::api::slug::ensure_unique_slug(&client, &base_slug, Some(post_id)).await?;
+        // 重新渲染 Markdown 与目录。
         let rendered = crate::api::markdown::render_markdown_enhanced(&content_md);
         let content_html = rendered.html;
         let toc_html = if rendered.toc_html.is_empty() {
@@ -76,6 +92,7 @@ pub async fn update_post(
         } else {
             Some(rendered.toc_html)
         };
+        // 未填写摘要时自动从正文提取。
         let summary = summary
             .filter(|s| !s.trim().is_empty())
             .unwrap_or_else(|| crate::utils::text::auto_summary(&content_md));
@@ -84,6 +101,7 @@ pub async fn update_post(
 
         let tx = client.transaction().await.map_err(AppError::tx)?;
 
+        // 获取文章旧标签，用于后续失效标签缓存。
         let old_tags: Vec<String> = {
             let rows = tx
                 .query(
@@ -95,6 +113,7 @@ pub async fn update_post(
             rows.iter().map(|r| r.get(0)).collect()
         };
 
+        // 获取旧状态与旧发布时间，用于决定是否需要更新 published_at。
         let old_status_row = tx
             .query_opt(
                 "SELECT status, published_at FROM posts WHERE id = $1",
@@ -103,6 +122,8 @@ pub async fn update_post(
             .await
             .map_err(AppError::query)?;
 
+        // 发布时：若之前已发布则保留原时间，否则使用当前时间。
+        // 非发布时：保留原有 published_at（若为草稿可能为 None）。
         let published_at = if post_status == PostStatus::Published {
             let was_published = old_status_row
                 .as_ref()
@@ -123,6 +144,7 @@ pub async fn update_post(
             old_status_row.and_then(|r| r.get(1))
         };
 
+        // 更新文章主表。
         tx.execute(
             "UPDATE posts SET title = $1, slug = $2, summary = $3, content_md = $4, content_html = $5, toc_html = $6, status = $7, published_at = $8, cover_image = $9, updated_at = NOW()
              WHERE id = $10",
@@ -145,6 +167,7 @@ pub async fn update_post(
         let tags_cleaned = clean_tags(&tags);
         let tags_for_invalidation = tags_cleaned.clone();
 
+        // 先清除旧标签关联，再重新同步新标签。
         tx.execute("DELETE FROM post_tags WHERE post_id = $1", &[&post_id])
             .await
             .map_err(AppError::tx)?;
@@ -153,11 +176,13 @@ pub async fn update_post(
 
         tx.commit().await.map_err(AppError::tx)?;
 
+        // 失效文章列表、标签、当前 slug 与统计缓存。
         crate::cache::invalidate_post_lists();
         crate::cache::invalidate_all_tags();
         crate::cache::invalidate_post_by_slug(&final_slug).await;
         crate::cache::invalidate_post_stats();
 
+        // 合并旧标签与新标签，统一失效标签下的文章列表缓存。
         let all_tags_to_invalidate: std::collections::HashSet<String> = old_tags
             .into_iter()
             .chain(tags_for_invalidation.into_iter())
@@ -166,6 +191,7 @@ pub async fn update_post(
             crate::cache::invalidate_posts_by_tag(tag_name).await;
         }
 
+        // 若 slug 发生变更，额外失效旧 slug 缓存。
         if let Some(ref old) = old_slug {
             if old != &final_slug {
                 crate::cache::invalidate_post_by_slug(old).await;

@@ -1,3 +1,9 @@
+//! 标签列表接口。
+//!
+//! 返回所有标签及其关联的已发布文章数量，用于标签云与侧边栏。
+//! Dioxus server function，注册在 `/api` 路径下。
+//! 仅在 `feature = "server"` 启用的服务端构建中查询数据库。
+
 use dioxus::prelude::*;
 
 use super::types::TagListResponse;
@@ -6,6 +12,9 @@ use crate::api::error::AppError;
 use crate::db::pool::get_conn;
 use crate::models::post::Tag;
 
+/// 获取全部标签列表。
+///
+/// 优先命中缓存；未命中时聚合每个标签关联的已发布文章数量，并按标签名升序排列。
 #[server(ListTags, "/api")]
 pub async fn list_tags() -> Result<TagListResponse, ServerFnError> {
     #[cfg(feature = "server")]
@@ -16,6 +25,7 @@ pub async fn list_tags() -> Result<TagListResponse, ServerFnError> {
 
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
+        // 聚合标签对应的已发布、未删除文章数量。
         let rows = client
             .query(
                 "SELECT t.id, t.name, COUNT(pt.post_id) as post_count

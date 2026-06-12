@@ -1,3 +1,10 @@
+//! 文章详情查询接口。
+//!
+//! 提供按 id（管理员）与按 slug（公开）两种方式获取文章，
+//! 其中按 slug 查询包含上下篇导航并启用缓存。
+//! Dioxus server function，注册在 `/api` 路径下。
+//! 仅在 `feature = "server"` 启用的服务端构建中查询数据库。
+
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
@@ -7,6 +14,9 @@ use super::types::SinglePostResponse;
 use crate::api::error::AppError;
 use crate::db::pool::get_conn;
 
+/// 根据文章 id 获取详情。
+///
+/// 需要 admin 权限；不缓存，用于管理后台编辑等场景。
 #[server(GetPostById, "/api")]
 pub async fn get_post_by_id(post_id: i32) -> Result<SinglePostResponse, ServerFnError> {
     let _user = get_current_admin_user().await?;
@@ -45,6 +55,9 @@ pub async fn get_post_by_id(post_id: i32) -> Result<SinglePostResponse, ServerFn
     }
 }
 
+/// 根据 slug 获取公开文章详情。
+///
+/// 优先命中缓存；未命中时查询数据库，并附带基于 published_at 的上一篇/下一篇导航。
 #[server(GetPostBySlug, "/api")]
 pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, ServerFnError> {
     #[cfg(feature = "server")]
@@ -55,6 +68,7 @@ pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, Server
 
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
+        // 使用 LATERAL JOIN 查询按 published_at 排序的相邻文章。
         let row = client
             .query_opt(
                 "SELECT 

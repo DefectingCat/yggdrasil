@@ -1,3 +1,10 @@
+//! 文章列表查询接口。
+//!
+//! 提供已发布文章分页、管理员全量列表、以及按标签筛选三种查询能力，
+//! 均通过缓存层减少重复数据库访问。
+//! Dioxus server function，注册在 `/api` 路径下。
+//! 仅在 `feature = "server"` 启用的服务端构建中查询数据库。
+
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
@@ -7,6 +14,9 @@ use super::types::PostListResponse;
 use crate::api::error::AppError;
 use crate::db::pool::get_conn;
 
+/// 获取已发布文章分页列表。
+///
+/// 优先命中缓存；未命中时查询总数与分页记录，并按 published_at 降序排列。
 #[server(ListPublishedPosts, "/api")]
 pub async fn list_published_posts(
     page: i32,
@@ -24,7 +34,7 @@ pub async fn list_published_posts(
 
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
-        // Get total count from cache or query
+        // 优先读取缓存中的已发布文章总数，否则查询数据库并回填缓存。
         let total = if let Some(cached_total) = crate::cache::get_total_published_posts().await {
             cached_total
         } else {
@@ -78,6 +88,9 @@ pub async fn list_published_posts(
     }
 }
 
+/// 获取管理员视角的全部文章列表（含草稿与已发布）。
+///
+/// 需要 admin 权限；结果按创建时间降序，不走缓存。
 #[server(ListPosts, "/api")]
 pub async fn list_posts(page: i32, per_page: i32) -> Result<PostListResponse, ServerFnError> {
     let _user = get_current_admin_user().await?;
@@ -129,6 +142,9 @@ pub async fn list_posts(page: i32, per_page: i32) -> Result<PostListResponse, Se
     }
 }
 
+/// 获取指定标签下的已发布文章列表。
+///
+/// 优先命中缓存；当前实现返回全部匹配文章，因此 total 用 posts.len() 计算。
 #[server(GetPostsByTag, "/api")]
 pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, ServerFnError> {
     #[cfg(feature = "server")]
@@ -143,6 +159,7 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
 
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
+        // 通过 JOIN 筛选含目标标签的已发布文章，并聚合该文章的所有标签。
         let rows = client
             .query(
                 "SELECT 
@@ -167,9 +184,8 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
             posts.push(row_to_post_list(&client, row).await);
         }
 
-        // NOTE: total = posts.len() is correct because get_posts_by_tag
-        // currently fetches ALL matching posts (no LIMIT/OFFSET).
-        // If pagination is added later, switch to a proper COUNT(*) query.
+        // 当前查询未分页，返回全部匹配文章，因此 total 等于结果长度。
+        // 若后续增加分页，应改为 COUNT(*) 查询。
         let total = posts.len() as i64;
         crate::cache::set_posts_by_tag(&tag_name, posts.clone(), total).await;
         Ok(PostListResponse { posts, total })

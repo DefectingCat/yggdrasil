@@ -1,3 +1,10 @@
+//! 文章全文搜索接口。
+//!
+//! 基于 PostgreSQL 的 pg_trgm 扩展，通过 word_similarity 对 search_text 做模糊匹配，
+//! 按相似度与发布时间降序返回最多 50 篇已发布文章。
+//! Dioxus server function，注册在 `/api` 路径下。
+//! 仅在 `feature = "server"` 启用的服务端构建中查询数据库。
+
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
@@ -7,6 +14,10 @@ use super::types::PostListResponse;
 use crate::api::error::AppError;
 use crate::db::pool::get_conn;
 
+/// 搜索已发布文章。
+///
+/// 空查询直接返回空结果；非空查询使用 `word_similarity` 计算相关度，
+/// 并限制返回 50 条记录。当前未缓存，每次均查询数据库。
 #[server(SearchPosts, "/api")]
 pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnError> {
     #[cfg(feature = "server")]
@@ -21,6 +32,7 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
             });
         }
 
+        // 使用 ILIKE 做前缀模糊匹配，并按 word_similarity 降序、发布时间降序排序。
         let rows = client
             .query(
                 "SELECT 

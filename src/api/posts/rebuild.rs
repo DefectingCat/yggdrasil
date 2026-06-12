@@ -1,3 +1,10 @@
+//! 批量重建文章 HTML 与目录。
+//!
+//! 用于数据迁移或修复：遍历符合条件的文章，将 Markdown 重新渲染为 HTML，
+//! 并更新 content_html 与 toc_html 字段。
+//! Dioxus server function，注册在 `/api` 路径下。
+//! 仅在 `feature = "server"` 启用的服务端构建中执行数据库更新。
+
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
@@ -7,9 +14,15 @@ use crate::api::error::AppError;
 use crate::api::posts::RebuildResult;
 use crate::db::pool::get_conn;
 
+/// 单次重建批处理数量上限。
 const REBUILD_BATCH_LIMIT: i64 = 500;
+/// 返回给前端展示的最大错误条数。
 const MAX_DISPLAY_ERRORS: usize = 5;
 
+/// 批量重建文章 content_html 与 toc_html。
+///
+/// 当 `rebuild_all` 为 true 时重建所有未删除文章；否则仅重建 content_html 为空的文章。
+/// 单批最多处理 500 条，渲染异常或写入失败会被捕获并汇总。
 #[server(RebuildContentHtml, "/api")]
 pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, ServerFnError> {
     let _user = get_current_admin_user().await?;
@@ -18,6 +31,7 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
     {
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
+        // 根据参数构造 WHERE 条件，限制单次处理数量。
         let query = if rebuild_all {
             format!(
                 "SELECT id, content_md FROM posts WHERE deleted_at IS NULL ORDER BY id LIMIT {REBUILD_BATCH_LIMIT}"
@@ -38,6 +52,7 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
             let id: i32 = row.get(0);
             let content_md: String = row.get(1);
 
+            // 捕获 Markdown 渲染 panic，避免单条记录导致整批失败。
             let rendered = match std::panic::catch_unwind(|| {
                 crate::api::markdown::render_markdown_enhanced(&content_md)
             }) {
@@ -74,6 +89,7 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
             }
         }
 
+        // 只要有文章被更新，就清空所有文章缓存。
         if rebuilt > 0 || failed > 0 {
             crate::cache::invalidate_all_post_caches();
         }
