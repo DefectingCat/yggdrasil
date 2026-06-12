@@ -61,6 +61,11 @@ pub async fn create_post(
         let final_slug = crate::api::slug::ensure_unique_slug(&client, &base_slug, None).await?;
         let rendered = crate::api::markdown::render_markdown_enhanced(&content_md);
         let content_html = rendered.html;
+        let toc_html = if rendered.toc_html.is_empty() {
+            None::<String>
+        } else {
+            Some(rendered.toc_html)
+        };
         let summary = summary
             .filter(|s| !s.trim().is_empty())
             .unwrap_or_else(|| crate::utils::text::auto_summary(&content_md));
@@ -77,8 +82,8 @@ pub async fn create_post(
 
         let row = tx
             .query_one(
-                "INSERT INTO posts (author_id, title, slug, summary, content_md, content_html, status, published_at, cover_image)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                "INSERT INTO posts (author_id, title, slug, summary, content_md, content_html, toc_html, status, published_at, cover_image)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                  RETURNING id",
                 &[
                     &user.id,
@@ -87,6 +92,7 @@ pub async fn create_post(
                     &summary,
                     &content_md,
                     &content_html,
+                    &toc_html,
                     &post_status.as_str(),
                     &published_at,
                     &cover_image,

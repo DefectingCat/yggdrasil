@@ -68,6 +68,11 @@ pub async fn update_post(
         let final_slug = crate::api::slug::ensure_unique_slug(&client, &base_slug, Some(post_id)).await?;
         let rendered = crate::api::markdown::render_markdown_enhanced(&content_md);
         let content_html = rendered.html;
+        let toc_html = if rendered.toc_html.is_empty() {
+            None::<String>
+        } else {
+            Some(rendered.toc_html)
+        };
         let summary = summary
             .filter(|s| !s.trim().is_empty())
             .unwrap_or_else(|| crate::utils::text::auto_summary(&content_md));
@@ -116,14 +121,15 @@ pub async fn update_post(
         };
 
         tx.execute(
-            "UPDATE posts SET title = $1, slug = $2, summary = $3, content_md = $4, content_html = $5, status = $6, published_at = $7, cover_image = $8, updated_at = NOW()
-             WHERE id = $9",
+            "UPDATE posts SET title = $1, slug = $2, summary = $3, content_md = $4, content_html = $5, toc_html = $6, status = $7, published_at = $8, cover_image = $9, updated_at = NOW()
+             WHERE id = $10",
             &[
                 &title.trim(),
                 &final_slug,
                 &summary,
                 &content_md,
                 &content_html,
+                &toc_html,
                 &post_status.as_str(),
                 &published_at,
                 &cover_image,
