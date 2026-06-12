@@ -40,3 +40,10 @@ pub struct PostStatsResponse {
 pub struct SinglePostResponse {
     pub post: Option<Post>,
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RebuildResult {
+    pub rebuilt: u64,
+    pub failed: u64,
+    pub errors: Vec<String>,
+}

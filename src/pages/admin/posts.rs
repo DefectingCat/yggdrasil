@@ -5,7 +5,7 @@ use dioxus::router::components::Link;
 use crate::api::posts::list_posts;
 #[cfg(target_arch = "wasm32")]
 use crate::api::posts::PostListResponse;
-use crate::api::posts::{delete_post, rebuild_content_html, CreatePostResponse};
+use crate::api::posts::{delete_post, rebuild_content_html, CreatePostResponse, RebuildResult};
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::posts_skeleton::PostsSkeleton;
 use crate::models::post::Post;
@@ -74,8 +74,19 @@ pub fn PostsPage(page: i32) -> Element {
                                 rebuild_result.set(None);
                                 spawn(async move {
                                     match rebuild_content_html(false).await {
-                                        Ok(count) => {
-                                            rebuild_result.set(Some(format!("已重建 {count} 篇文章")));
+                                        Ok(RebuildResult { rebuilt, failed, errors }) => {
+                                            if failed > 0 {
+                                                let mut msg = format!(
+                                                    "已重建 {rebuilt} 篇，失败 {failed} 篇"
+                                                );
+                                                if let Some(first) = errors.first() {
+                                                    msg.push_str(&format!("\n{first}"));
+                                                }
+                                                rebuild_result.set(Some(msg));
+                                            } else {
+                                                rebuild_result
+                                                    .set(Some(format!("已重建 {rebuilt} 篇文章")));
+                                            }
                                         }
                                         Err(e) => {
                                             rebuild_result.set(Some(format!("失败: {e}")));

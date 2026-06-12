@@ -4,10 +4,14 @@ use dioxus::prelude::*;
 use super::helpers::get_current_admin_user;
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
+use crate::api::posts::RebuildResult;
 use crate::db::pool::get_conn;
 
+const REBUILD_BATCH_LIMIT: i64 = 500;
+const MAX_DISPLAY_ERRORS: usize = 5;
+
 #[server(RebuildContentHtml, "/api")]
-pub async fn rebuild_content_html(rebuild_all: bool) -> Result<u64, ServerFnError> {
+pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, ServerFnError> {
     let _user = get_current_admin_user().await?;
 
     #[cfg(feature = "server")]
@@ -15,47 +19,78 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<u64, ServerFnErro
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
         let query = if rebuild_all {
-            "SELECT id, content_md FROM posts WHERE deleted_at IS NULL ORDER BY id"
+            format!(
+                "SELECT id, content_md FROM posts WHERE deleted_at IS NULL ORDER BY id LIMIT {REBUILD_BATCH_LIMIT}"
+            )
         } else {
-            "SELECT id, content_md FROM posts WHERE deleted_at IS NULL AND content_html IS NULL ORDER BY id"
+            format!(
+                "SELECT id, content_md FROM posts WHERE deleted_at IS NULL AND content_html IS NULL ORDER BY id LIMIT {REBUILD_BATCH_LIMIT}"
+            )
         };
 
-        let rows = client.query(query, &[]).await.map_err(AppError::query)?;
+        let rows = client.query(&query, &[]).await.map_err(AppError::query)?;
 
-        let mut count: u64 = 0;
+        let mut rebuilt: u64 = 0;
+        let mut failed: u64 = 0;
+        let mut errors: Vec<String> = Vec::new();
 
         for row in &rows {
             let id: i32 = row.get(0);
             let content_md: String = row.get(1);
 
-            let rendered = crate::api::markdown::render_markdown_enhanced(&content_md);
+            let rendered = match std::panic::catch_unwind(|| {
+                crate::api::markdown::render_markdown_enhanced(&content_md)
+            }) {
+                Ok(r) => r,
+                Err(_) => {
+                    failed += 1;
+                    if errors.len() < MAX_DISPLAY_ERRORS {
+                        errors.push(format!("文章 #{id}: 渲染异常"));
+                    }
+                    continue;
+                }
+            };
+
             let toc_html = if rendered.toc_html.is_empty() {
                 None::<String>
             } else {
                 Some(rendered.toc_html)
             };
 
-            client
+            match client
                 .execute(
-                    "UPDATE posts SET content_html = $1, toc_html = $2, updated_at = NOW() WHERE id = $3",
+                    "UPDATE posts SET content_html = $1, toc_html = $2 WHERE id = $3",
                     &[&rendered.html, &toc_html, &id],
                 )
                 .await
-                .map_err(AppError::tx)?;
-
-            count += 1;
+            {
+                Ok(_) => rebuilt += 1,
+                Err(_) => {
+                    failed += 1;
+                    if errors.len() < MAX_DISPLAY_ERRORS {
+                        errors.push(format!("文章 #{id}: DB 写入失败"));
+                    }
+                }
+            }
         }
 
-        if count > 0 {
-            crate::cache::invalidate_post_lists();
-            crate::cache::invalidate_post_stats();
+        if rebuilt > 0 || failed > 0 {
+            crate::cache::invalidate_all_post_caches();
         }
 
-        Ok(count)
+        Ok(RebuildResult {
+            rebuilt,
+            failed,
+            errors,
+        })
     }
 
     #[cfg(not(feature = "server"))]
     {
-        Ok(0)
+        Ok(RebuildResult {
+            rebuilt: 0,
+            failed: 0,
+            errors: vec![],
+        })
     }
 }
