@@ -9,16 +9,19 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
-    container:
-      image: rust:bookworm
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install system dependencies
+      - name: Install Rust toolchain
         run: |
-          apt-get update
-          apt-get install -y nodejs npm
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
       - name: Install Rust target
         run: rustup target add wasm32-unknown-unknown
@@ -27,8 +30,7 @@ jobs:
         run: cargo install dioxus-cli --locked
 
       - name: Install Tailwind CSS CLI
-        run: |
-          npm install -g tailwindcss
+        run: npm install -g tailwindcss
 
       - name: Check formatting
         run: cargo fmt -- --check
@@ -44,17 +46,20 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    container:
-      image: rust:bookworm
     needs: check
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install system dependencies
+      - name: Install Rust toolchain
         run: |
-          apt-get update
-          apt-get install -y nodejs npm
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
       - name: Install Rust target
         run: rustup target add wasm32-unknown-unknown
