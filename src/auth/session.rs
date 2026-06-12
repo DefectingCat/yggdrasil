@@ -1,13 +1,21 @@
+//! 会话 token 生成、哈希与 Cookie 处理。
+//!
+//! token 使用 UUID，存储时使用 SHA-256 哈希，
+//! Cookie 包含 HttpOnly、SameSite=Lax 与可选 Secure 标志。
+//! 服务端上下文解析函数仅在 `feature = "server"` 时可用。
+
 use chrono::{DateTime, Duration, Utc};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 #[allow(dead_code)]
+/// 生成新的随机会话 token（UUID 格式）。
 pub fn generate_token() -> String {
     Uuid::new_v4().to_string()
 }
 
 #[allow(dead_code)]
+/// 使用 SHA-256 对 token 进行哈希，用于数据库存储。
 pub fn hash_token(token: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(token.as_bytes());
@@ -15,11 +23,13 @@ pub fn hash_token(token: &str) -> String {
 }
 
 #[allow(dead_code)]
+/// 返回默认会话过期时间（当前时间 + 30 天）。
 pub fn default_expiry() -> DateTime<Utc> {
     Utc::now() + Duration::days(30)
 }
 
 #[cfg(feature = "server")]
+/// 读取环境变量 `COOKIE_SECURE`，决定是否给 Cookie 添加 Secure 标志。
 pub fn cookie_secure() -> bool {
     std::env::var("COOKIE_SECURE")
         .ok()
@@ -28,6 +38,7 @@ pub fn cookie_secure() -> bool {
 }
 
 #[cfg(feature = "server")]
+/// 构造会话 Cookie 字符串，包含 HttpOnly、Path、Max-Age 与 SameSite。
 pub fn session_cookie(token: &str, max_age_seconds: i32, secure: bool) -> String {
     let secure_flag = if secure { "; Secure" } else { "" };
     format!(
@@ -36,6 +47,7 @@ pub fn session_cookie(token: &str, max_age_seconds: i32, secure: bool) -> String
 }
 
 #[cfg(feature = "server")]
+/// 从 `Cookie` 头中解析名为 `session` 的 token 值。
 pub fn parse_session_token(cookie_header: &str) -> Option<&str> {
     cookie_header.split(';').map(|s| s.trim()).find_map(|pair| {
         let mut parts = pair.splitn(2, '=');
@@ -50,6 +62,7 @@ pub fn parse_session_token(cookie_header: &str) -> Option<&str> {
 }
 
 #[cfg(feature = "server")]
+/// 从 Dioxus `FullstackContext` 中读取 Cookie 并返回会话 token。
 pub fn get_session_from_ctx() -> Option<String> {
     use dioxus::fullstack::FullstackContext;
 

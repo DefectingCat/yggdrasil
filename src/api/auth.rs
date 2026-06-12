@@ -1,3 +1,10 @@
+//! 认证相关的 Dioxus server function 与辅助函数。
+//!
+//! 提供注册、登录、登出、获取当前用户等接口，
+//! 通过 HttpOnly Cookie 维护会话，首个注册用户自动成为 admin。
+//! 所有 server function 均在 `#[server(Name, "/api")]` 下注册，供客户端与服务端调用。
+//! 仅在 `feature = "server"` 启用的服务端构建中执行数据库操作与 Cookie 写入。
+
 #![allow(clippy::unused_unit, deprecated)]
 
 use dioxus::prelude::*;
@@ -41,18 +48,28 @@ fn validate_password(password: &str) -> Result<(), String> {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+/// 认证接口统一响应结构。
 pub struct AuthResponse {
+    /// 操作是否成功。
     pub success: bool,
+    /// 提示信息。
     pub message: String,
+    /// 登录成功后的会话 token（已废弃，实际通过 Cookie 传递）。
     pub token: Option<String>,
 }
 
+/// 用户注册。
+///
+/// 校验用户名、邮箱、密码，首个注册用户自动设为 admin；
+/// 已有 admin 时返回 "Registration is closed"。
+/// Dioxus server function，注册在 `/api` 路径下。
 #[server(Register, "/api")]
 pub async fn register(
     username: String,
     email: String,
     password: String,
 ) -> Result<AuthResponse, ServerFnError> {
+    // 服务端构建时先进行严格限流检查。
     #[cfg(feature = "server")]
     {
         if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
@@ -92,6 +109,7 @@ pub async fn register(
 
     let client = get_conn().await.map_err(AppError::db_conn)?;
 
+    // 仅允许第一个注册用户注册为 admin，其余拒绝。
     let admin_count: i64 = client
         .query_one("SELECT COUNT(*) FROM users WHERE role = 'admin'", &[])
         .await
@@ -137,8 +155,14 @@ pub async fn register(
     }
 }
 
+/// 用户登录。
+///
+/// 验证用户名/邮箱与密码，生成会话并写入 HttpOnly Cookie；
+/// 同一用户活跃会话数超过 `MAX_SESSIONS_PER_USER` 时删除最早会话。
+/// Dioxus server function，注册在 `/api` 路径下。
 #[server(Login, "/api")]
 pub async fn login(username: String, password: String) -> Result<AuthResponse, ServerFnError> {
+    // 服务端构建时先进行严格限流检查。
     #[cfg(feature = "server")]
     {
         if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
@@ -199,6 +223,7 @@ pub async fn login(username: String, password: String) -> Result<AuthResponse, S
         .unwrap_or(5)
         .max(1);
 
+    // 查询当前活跃会话数，超出限制时删除最早的一条。
     let session_count: i64 = client
         .query_one(
             "SELECT COUNT(*) FROM sessions WHERE user_id = $1 AND expires_at > NOW()",
@@ -232,6 +257,7 @@ pub async fn login(username: String, password: String) -> Result<AuthResponse, S
         .map_err(AppError::query)?;
 
     let cookie = session::session_cookie(&token, 30 * 24 * 60 * 60, session::cookie_secure());
+    // 通过 Dioxus FullstackContext 设置 HttpOnly Cookie 响应头。
     if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
         if let Ok(value) = HeaderValue::try_from(cookie.as_str()) {
             ctx.add_response_header(SET_COOKIE, value);
@@ -245,12 +271,17 @@ pub async fn login(username: String, password: String) -> Result<AuthResponse, S
     })
 }
 
+/// 用户登出。
+///
+/// 清空客户端 session Cookie，并删除数据库中对应会话记录。
+/// Dioxus server function，注册在 `/api` 路径下。
 #[server(Logout, "/api")]
 pub async fn logout() -> Result<AuthResponse, ServerFnError> {
     let token = get_session_from_ctx();
 
     let client = get_conn().await.map_err(AppError::db_conn)?;
 
+    // 设置过期时间为 0 的 Cookie，通知浏览器清除会话。
     let cookie = session::session_cookie("", 0, session::cookie_secure());
     if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
         if let Ok(value) = HeaderValue::try_from(cookie.as_str()) {
@@ -274,11 +305,16 @@ pub async fn logout() -> Result<AuthResponse, ServerFnError> {
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+/// 当前用户查询响应。
 pub struct CurrentUserResponse {
+    /// 当前已登录用户的公开信息；未登录时为 `None`。
     pub user: Option<PublicUser>,
 }
 
 #[cfg(feature = "server")]
+/// 根据会话 token 查询对应用户（含密码哈希等完整信息）。
+///
+/// 仅服务端内部使用，不会暴露给前端。
 pub async fn get_user_by_token(token: &str) -> Result<Option<User>, ServerFnError> {
     let client = get_conn().await.map_err(AppError::db_conn)?;
 
@@ -313,6 +349,9 @@ pub async fn get_user_by_token(token: &str) -> Result<Option<User>, ServerFnErro
     Ok(user)
 }
 
+/// 获取当前登录用户的公开信息。
+///
+/// Dioxus server function，注册在 `/api` 路径下。
 #[server(GetCurrentUser, "/api")]
 pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
     let token = match get_session_from_ctx() {
@@ -326,6 +365,9 @@ pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
 }
 
 #[cfg(feature = "server")]
+/// 获取当前登录用户并要求其为 admin，否则返回 401/403。
+///
+/// 供其它服务端接口内部调用。
 pub async fn get_current_admin_user() -> Result<User, AppError> {
     let token = get_session_from_ctx().ok_or(AppError::Unauthorized("未登录"))?;
 

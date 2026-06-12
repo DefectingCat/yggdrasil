@@ -1,3 +1,9 @@
+//! HTML 消毒器。
+//!
+//! 基于 lol_html 清理不受信任的 HTML，限制允许的 tag/attribute/URL scheme，
+//! 分别提供文章正文（`clean_html`）与评论（`clean_comment_html`）两套白名单策略。
+//! 仅在 `feature = "server"` 时执行。
+
 #![allow(clippy::unused_unit, deprecated)]
 
 #[cfg(feature = "server")]
@@ -137,6 +143,7 @@ fn is_safe_url(url: &str, allowed_schemes: &HashSet<&str>, allow_data_uri: bool)
     if trimmed.is_empty() {
         return true;
     }
+    // 解析 scheme 并与白名单对比；data URI 与 javascript/vbscript 单独处理。
     if let Some(colon_pos) = trimmed.find(':') {
         let scheme = &trimmed[..colon_pos];
         let scheme_lower = scheme.to_lowercase();
@@ -160,6 +167,7 @@ fn is_safe_url(url: &str, allowed_schemes: &HashSet<&str>, allow_data_uri: bool)
 }
 
 #[cfg(feature = "server")]
+/// HTML 消毒配置：白名单 tag/attribute、允许 URL scheme 与链接 rel。
 struct SanitizerConfig {
     allowed_tags: HashSet<&'static str>,
     extra_generic_attrs: Vec<&'static str>,
@@ -251,6 +259,7 @@ fn sanitize(input: &str, config: &SanitizerConfig) -> String {
             .filter_map(|attr| {
                 let name = attr.name();
                 let name_lower = name.to_lowercase();
+                // 仅保留白名单属性；对 href/src/cite 额外校验 URL 安全性。
                 if allowed_for_tag.contains(name_lower.as_str()) {
                     if name_lower == "href" || name_lower == "src" || name_lower == "cite" {
                         let val = attr.value();
@@ -296,6 +305,7 @@ fn sanitize(input: &str, config: &SanitizerConfig) -> String {
 }
 
 #[cfg(feature = "server")]
+/// 文章正文 HTML 清理：允许较完整的标签与 data URI，外链添加 `noopener noreferrer`。
 pub fn clean_html(input: &str) -> String {
     let config = SanitizerConfig {
         allowed_tags: default_allowed_tags(),
@@ -327,6 +337,7 @@ pub fn clean_html(input: &str) -> String {
 }
 
 #[cfg(feature = "server")]
+/// 评论 HTML 清理：移除图片与折叠块，禁用 data URI，外链添加 `nofollow noopener`。
 pub fn clean_comment_html(input: &str) -> String {
     let mut tags = default_allowed_tags();
     tags.remove("img");

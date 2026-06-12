@@ -1,8 +1,18 @@
+//! 文章 slug 生成与唯一性校验。
+//!
+//! 将标题转换为小写、仅含字母数字与连字符/下划线的 URL 友好形式，
+//! 并检测数据库中是否已存在，必要时追加数字后缀。
+//! 仅在 `feature = "server"` 时访问数据库。
+
 #![allow(clippy::unused_unit, deprecated)]
 
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
+/// 将标题转换为 URL 友好的 slug。
+///
+/// 非字母数字字符替换为 `-` 并合并连续 `-`，结果截断至 100 字符；
+/// 若全部字符被过滤，则返回当前时间戳作为 slug。
 pub fn slugify(title: &str) -> String {
     let slug: String = title
         .to_lowercase()
@@ -16,6 +26,7 @@ pub fn slugify(title: &str) -> String {
         })
         .collect();
 
+    // 合并连续的连字符，并去除首尾空段。
     let parts: Vec<&str> = slug.split('-').filter(|s| !s.is_empty()).collect();
     let slug = parts.join("-");
 
@@ -27,6 +38,7 @@ pub fn slugify(title: &str) -> String {
 }
 
 #[cfg(feature = "server")]
+/// 校验 slug 是否为空且仅含合法字符、长度不超过 200。
 pub fn is_valid_slug(slug: &str) -> bool {
     if slug.is_empty() || slug.len() > 200 {
         return false;
@@ -36,6 +48,10 @@ pub fn is_valid_slug(slug: &str) -> bool {
 }
 
 #[cfg(feature = "server")]
+/// 确保生成的 slug 在数据库中唯一。
+///
+/// 若 `exclude_id` 不为空，则排除该文章自身；
+/// 当冲突时依次尝试 `base-2`、`base-3` …… 直到生成唯一值。
 pub async fn ensure_unique_slug(
     client: &tokio_postgres::Client,
     base: &str,
@@ -47,6 +63,7 @@ pub async fn ensure_unique_slug(
     let mut suffix = 2;
 
     loop {
+        // 查询当前候选 slug 是否已存在（排除指定文章 ID）。
         let exists = if let Some(exclude) = exclude_id {
             client
                 .query_opt(
@@ -74,6 +91,7 @@ pub async fn ensure_unique_slug(
         candidate = format!("{}-{}", base, suffix);
         suffix += 1;
 
+        // 防止无限循环：slug 总长度超过 200 时直接报错。
         if candidate.len() > 200 {
             return Err(AppError::Internal("无法生成唯一 slug").into());
         }

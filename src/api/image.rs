@@ -1,3 +1,10 @@
+//! 图片服务的 Axum 处理器与处理流水线。
+//!
+//! 支持按宽度/高度、缩略图、旋转角度、输出格式/质量动态处理图片，
+//! 使用内存（moka）+ 磁盘两级缓存加速响应。
+//! WebP 编解码走 `zenwebp`（`image` crate 未启用 WebP feature）。
+//! 本模块属于手动注册的 Axum 路由，仅在 `feature = "server"` 时可用。
+
 #[cfg(feature = "server")]
 use axum::{
     extract::{Path, Query},
@@ -16,10 +23,12 @@ const MAX_IMAGE_DIMENSION: u32 = 4096;
 #[cfg(feature = "server")]
 const DEFAULT_JPEG_QUALITY: u8 = 85;
 #[cfg(feature = "server")]
+/// 允许处理的最大图片像素数（约 10k x 10k）。
 pub const MAX_IMAGE_PIXELS: u32 = 100_000_000; // ~10k x 10k
 
 #[cfg(feature = "server")]
 #[derive(Debug, Clone)]
+/// 缓存条目，保存处理后的图片字节与 Content-Type。
 struct CachedImage {
     data: Vec<u8>,
     content_type: HeaderValue,
@@ -35,12 +44,19 @@ static IMAGE_CACHE: LazyLock<Cache<String, CachedImage>> = LazyLock::new(|| {
 
 #[cfg(feature = "server")]
 #[derive(Debug, Deserialize, Clone, Hash, Eq, PartialEq, Default)]
+/// 图片处理查询参数。
 pub struct ImageParams {
+    /// 限制最大宽度。
     pub w: Option<u32>,
+    /// 限制最大高度。
     pub h: Option<u32>,
+    /// 缩略图尺寸，格式 `WxH`。
     pub thumb: Option<String>,
+    /// 旋转角度，仅允许 0/90/180/270。
     pub rotate: Option<u16>,
+    /// 输出格式：`jpeg`/`jpg`、`png`、`webp`。
     pub format: Option<String>,
+    /// 输出质量，范围 1-100。
     pub quality: Option<u8>,
 }
 
@@ -78,6 +94,7 @@ impl ImageParams {
         parts.join("|")
     }
 
+    /// 校验参数合法性，返回 HTTP 400 状态码表示非法。
     fn validate(&self) -> Result<(), StatusCode> {
         if let Some(dim) = self.w {
             if dim == 0 || dim > MAX_IMAGE_DIMENSION {
@@ -279,6 +296,10 @@ async fn write_disk_cache(cache_key: &str, cached: &CachedImage) {
 }
 
 #[cfg(feature = "server")]
+/// 图片访问与动态处理的 Axum handler。
+///
+/// 依次执行：限流 → 路径安全校验 → 参数校验 → 无参数时直接返回原文件 →
+/// 查询内存缓存 → 查询磁盘缓存 → 读取并解码 → 处理 → 写入两级缓存 → 返回。
 pub async fn serve_image(
     Path(path): Path<String>,
     Query(params): Query<ImageParams>,
@@ -344,6 +365,7 @@ pub async fn serve_image(
         Err(_) => return StatusCode::NOT_FOUND.into_response(),
     };
 
+    // WebP 解码使用 zenwebp，其它格式使用 image crate。
     let original_format = detect_format(&path);
     let img = if original_format == image::ImageFormat::WebP {
         match crate::webp::decode(&data) {

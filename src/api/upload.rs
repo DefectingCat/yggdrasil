@@ -1,3 +1,10 @@
+//! 图片上传的 Axum 处理器。
+//!
+//! 处理 multipart 上传，校验 MIME 类型、文件大小与 admin 权限，
+//! JPEG/PNG 自动转 WebP（若体积更小则保留原格式），GIF/WebP 保持原样。
+//! 文件按日期分目录存放于 `uploads/`。
+//! 本模块属于手动注册的 Axum 路由，仅在 `feature = "server"` 时可用。
+
 #[cfg(feature = "server")]
 use axum::{
     extract::Multipart,
@@ -27,6 +34,10 @@ fn mime_to_ext(mime: &str) -> &'static str {
 }
 
 #[cfg(feature = "server")]
+/// 处理图片上传的 Axum handler。
+///
+/// 流程：限流 → 解析 session → 校验 admin → 读取 multipart → 校验类型/大小 →
+/// 转码（如适用）→ 按日期落盘 → 返回相对 URL。
 pub async fn upload_image(
     headers: HeaderMap,
     mut multipart: Multipart,
@@ -150,6 +161,7 @@ pub async fn upload_image(
     let is_gif = mime_type.as_str() == "image/gif";
     let is_webp = mime_type.as_str() == "image/webp";
 
+    // GIF 与 WebP 保持原格式；其余格式尝试转 WebP。
     let (final_data, final_ext) = if is_gif {
         (data.to_vec(), "gif".to_string())
     } else if is_webp {
@@ -158,6 +170,7 @@ pub async fn upload_image(
         let original_data = data.to_vec();
         let mime = mime_type.clone();
         let config = crate::webp::WEBP_CONFIG.clone();
+        // 在阻塞线程中执行图片解码与 WebP 编码，避免阻塞异步运行时。
         let result = tokio::task::spawn_blocking(move || -> (Vec<u8>, String, bool) {
             let total_start = std::time::Instant::now();
             match image::load_from_memory(&original_data) {
@@ -168,6 +181,7 @@ pub async fn upload_image(
                         Ok(webp_data) => {
                             let enc_time = enc_start.elapsed();
                             let total_time = total_start.elapsed();
+                            // WebP 更小才采用，否则回退原格式以节省带宽。
                             if webp_data.len() < original_data.len() {
                                 tracing::info!(
                                     "WebP conversion: decode={:?} encode={:?} total={:?} {}x{} {} bytes -> {} bytes",
@@ -210,6 +224,7 @@ pub async fn upload_image(
         }
     };
 
+    // 按上传时间组织目录：uploads/YYYY/MM/DD。
     let now = chrono::Utc::now();
     let year = now.format("%Y").to_string();
     let month = now.format("%m").to_string();

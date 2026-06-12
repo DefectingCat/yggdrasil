@@ -1,24 +1,36 @@
+//! Markdown 渲染与目录生成。
+//!
+//! 使用 pulldown-cmark 解析 Markdown，为标题生成锚点与目录（TOC），
+//! 代码块调用 `highlight` 模块进行语法高亮，最终通过 sanitizer 清理 HTML。
+//! 仅在 `feature = "server"` 时执行实际渲染。
+
 #![allow(clippy::unused_unit, deprecated)]
 
 #[cfg(feature = "server")]
+/// 对外暴露的 HTML 清理函数，委托给 sanitizer 模块。
 pub fn clean_html(input: &str) -> String {
     crate::api::sanitizer::clean_html(input)
 }
 
 #[derive(Debug, Clone)]
 #[cfg(feature = "server")]
+/// Markdown 渲染结果。
 pub struct RenderedContent {
+    /// 清理后的正文 HTML。
     pub html: String,
+    /// 目录 HTML（无标题时为空字符串）。
     pub toc_html: String,
 }
 
 #[cfg(feature = "server")]
+/// 增强版 Markdown 渲染：生成 TOC、标题锚点与语法高亮代码块。
 pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
     use pulldown_cmark::{Event, HeadingLevel, Options, Tag, TagEnd};
 
     // 1. Parse markdown and collect headings for TOC
     let parser = pulldown_cmark::Parser::new_ext(md, Options::all());
-    let mut headings: Vec<(u8, String, String)> = Vec::new(); // (level, text, id)
+    // (level, text, id)
+    let mut headings: Vec<(u8, String, String)> = Vec::new();
     let mut current_heading: Option<(u8, String)> = None;
 
     for event in parser {
@@ -70,6 +82,7 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
     for event in parser {
         match event {
             Event::Start(Tag::Heading { level, .. }) => {
+                // 先把累积的普通事件刷入 HTML，再开始新标题。
                 if !non_heading_events.is_empty() {
                     pulldown_cmark::html::push_html(&mut html, non_heading_events.into_iter());
                     non_heading_events = Vec::new();
@@ -108,6 +121,7 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
                 in_heading = false;
             }
             Event::Start(Tag::CodeBlock(kind)) => {
+                // 代码块开始前同样先刷入未处理的普通事件。
                 if !non_heading_events.is_empty() {
                     pulldown_cmark::html::push_html(&mut html, non_heading_events.into_iter());
                     non_heading_events = Vec::new();
@@ -129,6 +143,7 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
                 code_buffer.push_str(&text);
             }
             Event::End(TagEnd::CodeBlock) => {
+                // 使用 syntect 对代码块进行服务端语法高亮。
                 let highlighted =
                     crate::highlight::server::highlight_code(&code_buffer, code_lang.as_deref());
                 html.push_str("<pre><code");
@@ -142,6 +157,7 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
             }
             _ => {
                 if in_heading {
+                    // 标题内部只保留文本与行内代码，避免嵌套块级元素。
                     match event {
                         Event::Text(text) => html.push_str(&clean_html(&text)),
                         Event::Code(code) => {
@@ -170,6 +186,7 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
 }
 
 #[cfg(feature = "server")]
+/// 根据标题层级生成嵌套目录 HTML。
 fn generate_toc_html(headings: &[(u8, String, String)]) -> String {
     if headings.is_empty() {
         return String::new();
@@ -184,13 +201,13 @@ fn generate_toc_html(headings: &[(u8, String, String)]) -> String {
         if i > 0 {
             let prev_level = headings[i - 1].0;
             if level > prev_level {
-                // Open new nested lists
+                // 标题层级升高：打开新的嵌套列表。
                 for _ in prev_level..level {
                     html.push_str("<ul>");
                     stack.push(level);
                 }
             } else if level < prev_level {
-                // Close nested lists
+                // 标题层级降低：关闭多余的嵌套列表。
                 while let Some(top) = stack.last() {
                     if *top > level {
                         html.push_str("</li></ul>");
@@ -213,6 +230,7 @@ fn generate_toc_html(headings: &[(u8, String, String)]) -> String {
     }
 
     // Close remaining lists
+    // 闭合所有残留的嵌套列表。
     while stack.len() > 1 {
         html.push_str("</li></ul>");
         stack.pop();
@@ -223,6 +241,7 @@ fn generate_toc_html(headings: &[(u8, String, String)]) -> String {
 }
 
 #[cfg(feature = "server")]
+/// 将标题文本转换为可用于锚点的 slug。
 fn slugify_heading(text: &str) -> String {
     let mut slug = String::new();
     let mut prev_dash = true;

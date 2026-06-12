@@ -1,3 +1,10 @@
+//! 基于 governor 的多级限流。
+//!
+//! 提供 strict、upload、image、comment 四个限流器，
+//! 支持从 `X-Forwarded-For` / `X-Real-IP` 中提取客户端 IP，
+//! 并可通过 `TRUSTED_PROXY_COUNT` 配置信任代理层数。
+//! 仅在 `feature = "server"` 时生效。
+
 #[cfg(feature = "server")]
 use axum::http::StatusCode;
 #[cfg(feature = "server")]
@@ -49,6 +56,7 @@ static COMMENT_LIMITER: LazyLock<DefaultKeyedRateLimiter<String>> = LazyLock::ne
 });
 
 #[cfg(feature = "server")]
+/// 检查评论请求是否超出限流阈值。
 pub fn check_comment_limit(ip: &str) -> Result<(), String> {
     COMMENT_LIMITER
         .check_key(&ip.to_string())
@@ -57,6 +65,7 @@ pub fn check_comment_limit(ip: &str) -> Result<(), String> {
 }
 
 #[cfg(feature = "server")]
+/// 检查图片访问请求是否超出限流阈值，返回 HTTP 状态码。
 pub fn check_image_limit(ip: &str) -> Result<(), StatusCode> {
     IMAGE_LIMITER
         .check_key(&ip.to_string())
@@ -74,6 +83,7 @@ fn trusted_proxy_count() -> usize {
 
 #[cfg(feature = "server")]
 fn ip_from_x_forwarded_for(value: &str, trusted_proxy_count: usize) -> Option<String> {
+    // 按逗号拆分并过滤空项，列表末尾是离服务端最近的代理。
     let parts: Vec<&str> = value
         .split(',')
         .map(str::trim)
@@ -82,14 +92,17 @@ fn ip_from_x_forwarded_for(value: &str, trusted_proxy_count: usize) -> Option<St
     if parts.is_empty() || trusted_proxy_count == 0 {
         return None;
     }
+    // 可信任代理数量不足时无法确定真实客户端 IP。
     if parts.len() <= trusted_proxy_count {
         return None;
     }
+    // 从列表末尾倒数 `trusted_proxy_count + 1` 位即为真实客户端 IP。
     let idx = parts.len() - 1 - trusted_proxy_count;
     parts.get(idx).map(|s| s.to_string())
 }
 
 #[cfg(feature = "server")]
+/// 根据信任代理层数从请求头中提取客户端 IP。
 pub fn get_client_ip_with_trusted(headers: &http::HeaderMap, trusted_proxy_count: usize) -> String {
     if let Some(value) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
         if let Some(ip) = ip_from_x_forwarded_for(value, trusted_proxy_count) {
@@ -97,6 +110,7 @@ pub fn get_client_ip_with_trusted(headers: &http::HeaderMap, trusted_proxy_count
         }
     }
 
+    // 配置了信任代理时，回退到 X-Real-IP。
     if trusted_proxy_count > 0 {
         if let Some(ip) = headers.get("x-real-ip").and_then(|v| v.to_str().ok()) {
             return ip.trim().to_string();
@@ -107,11 +121,13 @@ pub fn get_client_ip_with_trusted(headers: &http::HeaderMap, trusted_proxy_count
 }
 
 #[cfg(feature = "server")]
+/// 使用环境变量配置的代理层数提取客户端 IP。
 pub fn get_client_ip(headers: &http::HeaderMap) -> String {
     get_client_ip_with_trusted(headers, trusted_proxy_count())
 }
 
 #[cfg(feature = "server")]
+/// 检查严格限流（注册、登录等敏感接口）。
 pub fn check_strict_limit(ip: &str) -> Result<(), String> {
     STRICT_LIMITER
         .check_key(&ip.to_string())
@@ -120,6 +136,7 @@ pub fn check_strict_limit(ip: &str) -> Result<(), String> {
 }
 
 #[cfg(feature = "server")]
+/// 检查上传请求是否超出限流阈值。
 pub fn check_upload_limit(ip: &str) -> Result<(), String> {
     UPLOAD_LIMITER
         .check_key(&ip.to_string())
