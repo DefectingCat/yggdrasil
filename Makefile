@@ -17,7 +17,7 @@ highlight-css:
 
 build-editor:
 	@echo "Building Tiptap editor..."
-	@cd libs/tiptap-editor && npm install && npx vite build
+	@cd libs/tiptap-editor && npm ci && npx vite build
 	@echo "Tiptap editor built."
 
 dev:
