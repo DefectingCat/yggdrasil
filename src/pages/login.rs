@@ -1,3 +1,8 @@
+//! 登录页面
+//!
+//! 提供用户名/密码表单，前端校验通过后调用 `login` server function，
+//! 登录成功时跳转到管理后台首页。
+
 use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
@@ -6,14 +11,19 @@ use crate::components::forms::{AlertBox, FormInput, FormLabel, BUTTON_PRIMARY_CL
 use crate::context::UserContext;
 use crate::router::Route;
 
+/// 登录页面组件
 #[component]
 pub fn Login() -> Element {
+    // 表单输入状态
     let mut username = use_signal(|| "".to_string());
     let mut password = use_signal(|| "".to_string());
+    // 错误提示与加载状态
     let mut error = use_signal(|| None::<String>);
     let mut loading = use_signal(|| false);
+    // 全局用户上下文，用于触发登录后的状态刷新
     let mut ctx: UserContext = use_context();
 
+    // 提交登录表单
     let on_submit = Callback::new(move |_| {
         if loading() {
             return;
@@ -24,6 +34,7 @@ pub fn Login() -> Element {
         let username_val = username();
         let password_val = password();
 
+        // 在异步任务中调用 server function 登录
         spawn(async move {
             match login(username_val, password_val).await {
                 Ok(AuthResponse {
@@ -31,6 +42,7 @@ pub fn Login() -> Element {
                     token: Some(_token),
                     ..
                 }) => {
+                    // 登录成功：重置上下文检查标记并跳转到后台
                     ctx.checked.set(false);
                     let _ = dioxus::router::navigator().push(Route::Admin {});
                 }
@@ -78,6 +90,7 @@ pub fn Login() -> Element {
                             value: username(),
                             disabled: is_loading,
                             oninput: move |v: String| username.set(v),
+                            // 回车键触发提交
                             onkeydown: Some(EventHandler::new(move |e: KeyboardEvent| if e.key() == Key::Enter { on_submit(()) })),
                         }
                     }

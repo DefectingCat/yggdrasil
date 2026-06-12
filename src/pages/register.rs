@@ -1,3 +1,8 @@
+//! 注册页面
+//!
+//! 提供新用户注册表单。首个注册成功的用户将自动成为管理员，
+//! 后续注册请求会被服务端拒绝。
+
 use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
@@ -5,16 +10,20 @@ use crate::api::auth::{register, AuthResponse};
 use crate::components::forms::{AlertBox, FormInput, FormLabel, BUTTON_PRIMARY_CLASS};
 use crate::router::Route;
 
+/// 注册页面组件
 #[component]
 pub fn Register() -> Element {
+    // 表单输入状态
     let mut username = use_signal(|| "".to_string());
     let mut email = use_signal(|| "".to_string());
     let mut password = use_signal(|| "".to_string());
     let mut confirm_password = use_signal(|| "".to_string());
+    // 错误提示、成功提示与加载状态
     let mut error = use_signal(|| None::<String>);
     let mut success = use_signal(|| false);
     let mut loading = use_signal(|| false);
 
+    // 提交注册表单
     let on_submit = Callback::new(move |_| {
         if loading() {
             return;
@@ -22,6 +31,7 @@ pub fn Register() -> Element {
         error.set(None);
         success.set(false);
 
+        // 前端基础校验：密码长度与一致性
         if password().len() < 8 {
             error.set(Some("密码长度至少 8 位".to_string()));
             return;
@@ -37,6 +47,7 @@ pub fn Register() -> Element {
 
         loading.set(true);
 
+        // 在异步任务中调用 server function 注册
         spawn(async move {
             match register(username_val, email_val, password_val).await {
                 Ok(AuthResponse { success: true, .. }) => {
