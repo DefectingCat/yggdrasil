@@ -1,8 +1,18 @@
+//! 404 页面模块。
+//!
+//! 对应路由 `/:..segments`。
+//!
+//! 当用户访问未匹配任何前端路由的 URL 时，Dioxus Router 会回退到该 404 页面。
+//! 该页面为静态展示页面，不发起任何 server function 调用。
+
 use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
 use crate::router::Route;
 
+/// 404 页面组件，对应兜底路由 `/:..segments`。
+///
+/// 展示大号的装饰性 404 数字、状态标签、错误说明以及返回首页的链接。
 #[component]
 pub fn NotFound(segments: Vec<String>) -> Element {
     let _ = segments;

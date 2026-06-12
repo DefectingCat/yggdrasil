@@ -1,3 +1,13 @@
+//! 搜索页面模块。
+//!
+//! 对应路由 `/search`。
+//!
+//! 数据获取：用户在输入框中键入关键词并触发搜索后，
+//! 通过 Dioxus 的 `spawn` 在本地启动异步任务，调用 `search_posts` server function。
+//! 与首页/归档不同，搜索是交互式客户端行为，不在服务端渲染阶段预取数据。
+//! 在 `wasm32` 目标下，该 server function 的函数体被替换为向服务端端点发起 HTTP POST 请求的客户端存根；
+//! 实际的数据库访问逻辑仅在 `feature = "server"` 启用时运行。
+
 use dioxus::prelude::*;
 
 use crate::api::posts::{search_posts, PostListResponse};
@@ -5,11 +15,19 @@ use crate::components::post_card::PostCard;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::search_skeleton::SearchSkeleton;
 
+/// 搜索页面组件，对应路由 `/search`。
+///
+/// 维护搜索关键词、搜索结果与加载状态，渲染搜索框与结果列表。
+/// 结果通过客户端异步请求获取，而非 `use_server_future` 预取。
 #[component]
 pub fn Search() -> Element {
+    // 当前输入框中的搜索关键词。
     let mut query = use_signal(|| "".to_string());
+    // 搜索结果：None 表示尚未执行搜索或已清空。
     let mut search_res = use_signal(|| None::<Result<PostListResponse, ServerFnError>>);
+    // 是否正在发起搜索请求。
     let mut is_searching = use_signal(|| false);
+    // 触发搜索的回调：校验空查询后启动异步请求。
     let mut on_search = move || {
         let q = query().trim().to_string();
         if q.is_empty() {
@@ -47,6 +65,7 @@ pub fn Search() -> Element {
                 }
             }
         }
+        // 根据搜索状态展示骨架屏、结果列表、空状态或错误提示。
         if is_searching() {
             DelayedSkeleton { SearchSkeleton {} }
         } else if let Some(Ok(PostListResponse { posts, total: _ })) = search_res() {

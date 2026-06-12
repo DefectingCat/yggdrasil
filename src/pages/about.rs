@@ -1,5 +1,15 @@
+//! 关于页面模块。
+//!
+//! 对应路由 `/about`。
+//!
+//! 该页面为静态展示页面，不发起任何 server function 调用，
+//! 直接渲染博客介绍、技术栈与主要特性。
+
 use dioxus::prelude::*;
 
+/// 关于页面组件，对应路由 `/about`。
+///
+/// 展示 Yggdrasil 博客的简介、技术栈与功能特性。
 #[component]
 pub fn About() -> Element {
     rsx! {

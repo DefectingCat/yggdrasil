@@ -1,3 +1,14 @@
+//! 文章详情页面模块。
+//!
+//! 对应路由 `/post/:slug`。
+//!
+//! 数据获取：通过 `use_server_future` 调用 `get_post_by_slug` server function，
+//! 根据 URL 中的 slug 获取单篇文章详情（含正文 HTML、目录、封面及上下篇导航）。
+//! 由于 Dioxus 组件参数在路由切换时可能复用同一组件实例，
+//! 这里使用 `use_signal` 保存当前 slug，并在参数变化时更新信号以触发重新取数。
+//! 在 `wasm32` 目标下，server function 的函数体被替换为向服务端端点发起 HTTP POST 请求的客户端存根；
+//! 实际的数据库访问逻辑仅在 `feature = "server"` 启用时运行。
+
 use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
@@ -11,18 +22,25 @@ use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::post_detail_skeleton::PostDetailSkeleton;
 use crate::router::Route;
 
+/// 文章详情页面组件，对应路由 `/post/:slug`。
+///
+/// 根据 slug 异步获取文章，渲染文章头部、封面、目录、正文、页脚及评论区；
+/// 若文章不存在或加载失败，则展示对应的提示页面。
 #[component]
 pub fn PostDetail(slug: String) -> Element {
+    // 使用信号保存当前 slug，以便在路由参数变化时重新触发 server future。
     let mut slug_signal = use_signal(|| slug.clone());
     if slug_signal() != slug {
         slug_signal.set(slug.clone());
     }
 
+    // 当 slug 信号变化时，自动重新调用 server function 获取文章详情。
     let post = use_server_future(move || {
         let s = slug_signal();
         get_post_by_slug(s)
     })?;
 
+    // 将结果映射为更直观的 Ok(post) / Err("not_found") / Err("error") 三种状态。
     let post_data = post.read().as_ref().map(|r| match r {
         Ok(SinglePostResponse { post: Some(post) }) => Ok(post.clone()),
         Ok(SinglePostResponse { post: None }) => Err("not_found"),
@@ -35,10 +53,12 @@ pub fn PostDetail(slug: String) -> Element {
                 article { class: "post-single",
                     PostHeader { post: post.clone() }
 
+                    // 如果文章设置了封面图，则渲染封面组件。
                     if let Some(cover) = &post.cover_image {
                         PostCover { src: cover.clone() }
                     }
 
+                    // 如果文章生成了目录 HTML，则渲染目录组件。
                     if let Some(toc) = &post.toc_html {
                         PostToc { toc_html: toc.clone() }
                     }
@@ -49,6 +69,7 @@ pub fn PostDetail(slug: String) -> Element {
 
                     PostFooter { post: post.clone() }
 
+                    // 仅对已发布文章展示评论区域，使用 SuspenseBoundary 处理加载状态。
                     if post.status == crate::models::post::PostStatus::Published {
                         div { class: "mt-12 border-t border-gray-200 dark:border-[#333] pt-8",
                             SuspenseBoundary {

@@ -1,3 +1,12 @@
+//! 归档页面模块。
+//!
+//! 对应路由 `/archives`。
+//!
+//! 数据获取：通过 `use_server_future` 调用 `list_published_posts(1, 10000)` server function，
+//! 一次性拉取全部已发布文章，然后在内存中按发布日期的年、月进行分组展示。
+//! 在 `wasm32` 目标下，server function 的函数体被替换为向服务端端点发起 HTTP POST 请求的客户端存根；
+//! 实际的数据库访问逻辑仅在 `feature = "server"` 启用时运行。
+
 use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
@@ -7,12 +16,14 @@ use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::models::post::Post;
 use crate::router::Route;
 
+/// 按年份分组的文章归档结构。
 #[derive(Clone, PartialEq)]
 struct YearGroup {
     year: String,
     months: Vec<MonthGroup>,
 }
 
+/// 按月份分组的文章归档结构。
 #[derive(Clone, PartialEq)]
 struct MonthGroup {
     month: String,
@@ -20,18 +31,23 @@ struct MonthGroup {
     posts: Vec<Post>,
 }
 
+/// 将文章列表按 `formatted_date()` 返回的 `YYYY-MM-DD` 格式进行年、月分组。
+///
+/// 返回的结果按原始文章顺序组织，调用前已按发布时间降序排列。
 fn group_posts(posts: &[Post]) -> Vec<YearGroup> {
     let mut years: Vec<YearGroup> = vec![];
 
     for post in posts {
         let date_str = post.formatted_date();
 
+        // 将日期字符串拆分为 [年, 月, 日] 三部分。
         let parts: Vec<&str> = date_str.split('-').collect();
         if parts.len() != 3 {
             continue;
         }
         let year = parts[0].to_string();
         let month_num = parts[1];
+        // 将数字月份转换为英文月份名称，用于展示与锚点 id。
         let month_en = match month_num {
             "01" => "January",
             "02" => "February",
@@ -48,6 +64,7 @@ fn group_posts(posts: &[Post]) -> Vec<YearGroup> {
             _ => month_num,
         };
 
+        // 尝试追加到当前年份与月份的组中；如果不匹配则新建分组。
         if let Some(yg) = years.last_mut() {
             if yg.year == year {
                 if let Some(mg) = yg.months.last_mut() {
@@ -77,6 +94,9 @@ fn group_posts(posts: &[Post]) -> Vec<YearGroup> {
     years
 }
 
+/// 归档页面组件，对应路由 `/archives`。
+///
+/// 渲染页面标题，并委托给 `ArchivesContent` 展示按年月分组的文章列表。
 #[component]
 pub fn Archives() -> Element {
     rsx! {
@@ -89,8 +109,13 @@ pub fn Archives() -> Element {
     }
 }
 
+/// 归档页面内容组件。
+///
+/// 通过 `use_server_future` 获取全部已发布文章，按年月分组后渲染；
+/// 加载中显示骨架屏，失败显示错误提示。
 #[component]
 fn ArchivesContent() -> Element {
+    // 一次性获取足够多的已发布文章，用于生成完整的年/月归档。
     let posts_res = use_server_future(move || list_published_posts(1, 10000))?;
 
     let posts_data = posts_res.read();
@@ -123,6 +148,7 @@ fn ArchivesContent() -> Element {
     }
 }
 
+/// 单一年份归档区块组件，展示该年份下的所有月份分组。
 #[component]
 fn YearSection(year_group: YearGroup) -> Element {
     let total = year_group
@@ -150,6 +176,7 @@ fn YearSection(year_group: YearGroup) -> Element {
     }
 }
 
+/// 单一月份归档区块组件，展示该月份下的文章条目。
 #[component]
 fn MonthSection(month_group: MonthGroup, year: String) -> Element {
     let count = month_group.posts.len();
@@ -175,6 +202,7 @@ fn MonthSection(month_group: MonthGroup, year: String) -> Element {
     }
 }
 
+/// 单条归档文章组件，展示标题与发布日期，并通过覆盖层链接到文章详情。
 #[component]
 fn ArchiveEntry(post: Post) -> Element {
     let date_str = post.formatted_date();
