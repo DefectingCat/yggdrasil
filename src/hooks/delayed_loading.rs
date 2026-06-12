@@ -1,3 +1,7 @@
+//! 骨架屏延迟加载状态 Hook。
+//!
+//! 通过延迟显示骨架屏，避免数据加载很快时出现闪烁。
+
 use crate::utils::time::sleep_ms;
 use dioxus::prelude::*;
 

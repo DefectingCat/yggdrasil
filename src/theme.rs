@@ -1,15 +1,27 @@
+//! 主题（浅色 / 深色）管理。
+//!
+//! 提供两条初始化路径：
+//! - **SSR**：从 HTTP 请求 Cookie 中的 `theme` 字段检测主题，避免首屏闪烁。
+//! - **WASM 客户端**：优先读取 `localStorage` 中的持久化主题；不存在时回退到
+//!   `prefers-color-scheme` 媒体查询；切换时同步更新 DOM class 与 localStorage。
+
 use dioxus::prelude::*;
 
+/// localStorage 中存储主题值的键名。
 #[allow(dead_code)]
 const THEME_KEY: &str = "yggdrasil-theme";
 
+/// 应用主题枚举。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Theme {
+    /// 浅色主题。
     Light,
+    /// 深色主题。
     Dark,
 }
 
 impl Theme {
+    /// 切换到相反主题。
     pub fn toggle(&self) -> Self {
         match self {
             Theme::Light => Theme::Dark,
@@ -18,6 +30,10 @@ impl Theme {
     }
 }
 
+/// 检测初始主题。
+///
+/// 在 WASM 客户端优先读取 localStorage，回退到系统颜色偏好；
+/// 在 SSR 阶段解析请求 Cookie；否则默认浅色主题。
 fn detect_initial_theme() -> Theme {
     #[cfg(target_arch = "wasm32")]
     {
@@ -26,6 +42,7 @@ fn detect_initial_theme() -> Theme {
             None => return Theme::Light,
         };
 
+        // 优先读取 localStorage 中持久化的主题值。
         if let Ok(Some(storage)) = window.local_storage() {
             if let Ok(Some(value)) = storage.get_item(THEME_KEY) {
                 return if value == "dark" {
@@ -36,6 +53,7 @@ fn detect_initial_theme() -> Theme {
             }
         }
 
+        // 没有持久化值时，根据系统颜色偏好决定。
         if let Ok(Some(media)) = window.match_media("(prefers-color-scheme: dark)") {
             if media.matches() {
                 return Theme::Dark;
@@ -45,10 +63,11 @@ fn detect_initial_theme() -> Theme {
 
     #[cfg(feature = "server")]
     {
+        // SSR 路径：从请求 Cookie 中解析 `theme` 字段。
         if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
             if let Some(cookie) = ctx.parts_mut().headers.get("cookie") {
                 if let Ok(cookie_str) = cookie.to_str() {
-                    // Parse cookies properly: split by ';' then by '='
+                    // 按 ';' 分割 Cookie 字符串，再按 '=' 分割键值对。
                     for cookie_pair in cookie_str.split(';') {
                         let mut parts = cookie_pair.trim().splitn(2, '=');
                         if let (Some(name), Some(value)) = (parts.next(), parts.next()) {
@@ -65,6 +84,10 @@ fn detect_initial_theme() -> Theme {
     Theme::Light
 }
 
+/// 提供主题上下文的 Hook。
+///
+/// 初始化时按 SSR Cookie → WASM localStorage → 系统偏好的顺序检测主题；
+/// 主题变化时同步更新 HTML 根元素的 `dark` class 与 localStorage。
 pub fn use_theme_provider() -> Signal<Theme> {
     let theme = use_signal(detect_initial_theme);
 
@@ -73,6 +96,7 @@ pub fn use_theme_provider() -> Signal<Theme> {
         {
             let current = theme();
             if let Some(window) = web_sys::window() {
+                // 同步 HTML 根元素的 dark class，用于 Tailwind dark mode。
                 if let Some(document) = window.document() {
                     if let Some(html) = document.document_element() {
                         match current {
@@ -85,6 +109,7 @@ pub fn use_theme_provider() -> Signal<Theme> {
                         }
                     }
                 }
+                // 将当前主题持久化到 localStorage。
                 if let Ok(Some(storage)) = window.local_storage() {
                     let theme_str = match current {
                         Theme::Dark => "dark",
@@ -100,6 +125,9 @@ pub fn use_theme_provider() -> Signal<Theme> {
     theme
 }
 
+/// 读取当前主题 Signal 的 Hook。
+///
+/// 需在 `use_theme_provider` 之后的组件树中使用。
 pub fn use_theme() -> Signal<Theme> {
     use_context::<Signal<Theme>>()
 }
@@ -115,6 +143,10 @@ const THEME_PRELOAD_SCRIPT: &str = r#"
 })();
 "#;
 
+/// 首屏主题预加载脚本组件。
+///
+/// 通过内联脚本在页面渲染前读取 localStorage / 系统偏好并设置 `dark` class，
+/// 防止主题切换时出现闪烁。
 #[component]
 pub fn ThemePreload() -> Element {
     rsx! {
@@ -124,6 +156,7 @@ pub fn ThemePreload() -> Element {
     }
 }
 
+/// 主题切换按钮组件。
 #[component]
 pub fn ThemeToggle() -> Element {
     let mut theme = use_theme();
