@@ -86,7 +86,7 @@ pub fn PostsPage(page: i32) -> Element {
                             },
                             if rebuilding() { "重建中..." } else { "重建内容" }
                         }
-                        div { class: "pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gray-900 dark:bg-[#dadadb] text-white dark:text-gray-900 shadow-lg",
+                        div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gray-900 dark:bg-[#dadadb] text-white dark:text-gray-900 shadow-lg z-50",
                             "重建 content_html 为空的文章渲染缓存"
                         }
                     }
