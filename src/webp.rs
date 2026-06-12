@@ -1,10 +1,27 @@
+//! WebP 编解码模块。
+//!
+//! 本模块仅在 `server` feature 启用时编译。
+//!
+//! ## `zenwebp` 与 `image` crate 的分工
+//!
+//! - `image` crate：负责通用图像格式（JPEG、PNG、GIF 等）的解码、缩放、旋转以及
+//!   像素格式转换（`DynamicImage`、`RgbaImage`、`RgbImage`）。本项目特意禁用了 `image`
+//!   的 `webp` feature，因为它不支持 WebP 编码，且解码能力有限。
+//! - `zenwebp`：专门负责 WebP 格式的有损编码与解码。所有需要输出 WebP 或读取 WebP
+//!   字节流的场景都通过 `zenwebp` 完成。
+//!
+//! 简言之：`image` 处理“除 WebP 外的图像操作”，`zenwebp` 处理“WebP 专有编解码”。
+
 #[cfg(feature = "server")]
 use std::sync::LazyLock;
 
+/// WebP 编解码过程中可能产生的错误。
 #[cfg(feature = "server")]
 #[derive(Debug)]
 pub enum WebpError {
+    /// 编码失败。
     Encode(String),
+    /// 解码失败。
     Decode(String),
 }
 
@@ -21,13 +38,20 @@ impl std::fmt::Display for WebpError {
 #[cfg(feature = "server")]
 impl std::error::Error for WebpError {}
 
+/// WebP 有损编码配置。
 #[cfg(feature = "server")]
 #[derive(Debug, Clone)]
 pub struct WebpConfig {
+    /// 质量系数，范围 0.0–100.0。
     pub quality: f32,
+    /// 编码方法，范围 0–6，数值越大压缩率越高但越慢。
     pub method: u8,
 }
 
+/// 从环境变量读取的 WebP 全局配置，未设置时使用默认值。
+///
+/// - `WEBP_QUALITY`：默认 85.0，越界时 clamp 到 0.0–100.0。
+/// - `WEBP_METHOD`：默认 2，越界时 clamp 到 0–6。
 #[cfg(feature = "server")]
 pub static WEBP_CONFIG: LazyLock<WebpConfig> = LazyLock::new(|| {
     let (quality, quality_clamped) = std::env::var("WEBP_QUALITY")
@@ -68,6 +92,9 @@ pub static WEBP_CONFIG: LazyLock<WebpConfig> = LazyLock::new(|| {
     WebpConfig { quality, method }
 });
 
+/// 将 `image::DynamicImage` 编码为 WebP 字节流。
+///
+/// 直接处理 `Rgba8` 与 `Rgb8` 两种像素布局，其他格式先转换为 `Rgba8` 再编码。
 #[cfg(feature = "server")]
 pub fn encode(img: &image::DynamicImage, quality: f32, method: u8) -> Result<Vec<u8>, WebpError> {
     use zenwebp::{EncodeRequest, LossyConfig, PixelLayout};
@@ -95,13 +122,17 @@ pub fn encode(img: &image::DynamicImage, quality: f32, method: u8) -> Result<Vec
             do_encode(&config, rgb.as_raw(), PixelLayout::Rgb8, width, height)
         }
         _ => {
-            // Convert other formats to RGBA8
+            // 其他像素格式统一转换为 RGBA8 后再交给 zenwebp 编码
             let rgba = img.to_rgba8();
             do_encode(&config, rgba.as_raw(), PixelLayout::Rgba8, width, height)
         }
     }
 }
 
+/// 将 WebP 字节流解码为 `image::DynamicImage`。
+///
+/// 根据 alpha 通道信息决定返回 `ImageRgba8` 还是 `ImageRgb8`。
+/// 解码前会校验像素总数，防止超大图片导致内存问题。
 #[cfg(feature = "server")]
 pub fn decode(data: &[u8]) -> Result<image::DynamicImage, WebpError> {
     use zenwebp::WebPDecoder;
@@ -116,6 +147,7 @@ pub fn decode(data: &[u8]) -> Result<image::DynamicImage, WebpError> {
 
     let pixel_count = (width as u64) * (height as u64);
 
+    // 超过最大允许像素数时提前拒绝
     if pixel_count > crate::api::image::MAX_IMAGE_PIXELS as u64 {
         return Err(WebpError::Decode(format!(
             "Image dimensions {}x{} exceed maximum allowed pixels",
@@ -137,7 +169,7 @@ pub fn decode(data: &[u8]) -> Result<image::DynamicImage, WebpError> {
             .map(image::DynamicImage::ImageRgba8)
             .ok_or_else(|| WebpError::Decode("Invalid RGBA dimensions".to_string()))
     } else {
-        // For RGB output, the buffer is width * height * 3
+        // 无 alpha 时，zenwebp 输出的是 width * height * 3 的 RGB 数据
         image::RgbImage::from_raw(width, height, output)
             .map(image::DynamicImage::ImageRgb8)
             .ok_or_else(|| WebpError::Decode("Invalid RGB dimensions".to_string()))

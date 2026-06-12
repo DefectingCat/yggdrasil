@@ -1,3 +1,8 @@
+//! 语法高亮模块。
+//!
+//! 仅在 `server` feature 启用时可用，使用 `syntect` 将代码块转换为带 CSS class 的 HTML，
+//! 配合 `public/highlight.css` 中生成的主题规则实现亮/暗主题高亮。
+
 #[cfg(feature = "server")]
 pub mod server {
     use std::sync::LazyLock;
@@ -6,6 +11,7 @@ pub mod server {
     use syntect::parsing::SyntaxSet;
     use syntect::util::LinesWithEndings;
 
+    /// 全局语法集合，懒加载时合并内置语法与 `syntaxes/` 目录下的自定义语法。
     static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(|| {
         let mut builder = SyntaxSet::load_defaults_newlines().into_builder();
         if let Err(e) = builder.add_from_folder("syntaxes/", true) {
@@ -14,16 +20,23 @@ pub mod server {
         builder.build()
     });
 
+    /// 根据语言标识查找对应的语法定义。
+    ///
+    /// 依次尝试：扩展名、语法名称、小写扩展名/名称、常用别名映射。
+    /// 如果全部失败，则回退到纯文本语法。
     fn find_syntax(lang: Option<&str>) -> &'static syntect::parsing::SyntaxReference {
         let ss = &*SYNTAX_SET;
         if let Some(lang) = lang {
             if !lang.is_empty() {
+                // 尝试按扩展名匹配
                 if let Some(s) = ss.find_syntax_by_extension(lang) {
                     return s;
                 }
+                // 尝试按语法名称匹配
                 if let Some(s) = ss.find_syntax_by_name(lang) {
                     return s;
                 }
+                // 小写后再匹配一次
                 let lower = lang.to_lowercase();
                 if lower != lang {
                     if let Some(s) = ss.find_syntax_by_extension(&lower) {
@@ -33,6 +46,7 @@ pub mod server {
                         return s;
                     }
                 }
+                // 常用语言别名映射表
                 let aliases: &[(&str, &str)] = &[
                     ("rust", "rs"),
                     ("js", "js"),
@@ -68,6 +82,9 @@ pub mod server {
             .expect("no plain text syntax")
     }
 
+    /// 对给定代码字符串按指定语言进行高亮，返回 HTML 字符串。
+    ///
+    /// 输出使用 spaced CSS class 风格，便于与 `highlight.css` 中的选择器匹配。
     pub fn highlight_code(code: &str, lang: Option<&str>) -> String {
         let trimmed = code.trim();
         let syntax = find_syntax(lang);
@@ -75,6 +92,7 @@ pub mod server {
         let mut generator =
             ClassedHTMLGenerator::new_with_class_style(syntax, ss, ClassStyle::Spaced);
 
+        // 逐行解析，出错时记录警告并继续
         for line in LinesWithEndings::from(trimmed) {
             if let Err(e) = generator.parse_html_for_line_which_includes_newline(line) {
                 tracing::warn!("syntect parse error: {:?}", e);
