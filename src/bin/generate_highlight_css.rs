@@ -1,30 +1,44 @@
-// Build-time script that generates public/highlight.css from Catppuccin .tmTheme files.
-// Run via `make highlight-css` (or `cargo run --bin generate_highlight_css`).
-//
-// Uses syntect to produce CSS class rules scoped under .md-content pre code,
-// with separate light/dark variants so Dioxus can toggle via the .dark class.
+//! 构建时工具：从 Catppuccin .tmTheme 主题文件生成 `public/highlight.css`。
+//!
+//! 该二进制文件在编译/构建阶段运行（通过 `make highlight-css` 或
+//! `cargo run --bin generate_highlight_css`），使用 syntect 解析 Sublime Text
+//! 的 `.tmTheme` XML 主题定义，并输出供博客正文代码块使用的 CSS 类规则。
+//!
+//! 主要流程：
+//! 1. 从 `themes/` 目录加载 Catppuccin Latte（浅色）与 Mocha（深色）两套 tmTheme；
+//! 2. 调用 syntect 的 `css_for_theme_with_class_style` 生成基于类名的 CSS；
+//! 3. 去掉 syntect 自带的注释以减小体积；
+//! 4. 将选择器重写为以 `.md-content pre code` 为作用域，深色模式再加 `.dark ` 前缀；
+//! 5. 写入 `public/highlight.css`，供运行时 Markdown 渲染引用。
+//!
+//! CSS 类前缀规则：
+//! - 浅色主题：`{base} { ... }` 与 `{base} .kw { ... }`；
+//! - 深色主题：`.dark {base} { ... }` 与 `.dark {base} .kw { ... }`；
+//! - 其中 `{base}` 为 `.md-content pre code`，保证只影响正文代码块；
+//! - `.code` 是 syntect 的根作用域特殊类，只映射到 base 容器本身。
 
 use syntect::highlighting::ThemeSet;
 use syntect::html::{css_for_theme_with_class_style, ClassStyle};
 
 fn main() {
-    // Load Catppuccin Latte (light) and Mocha (dark) Sublime Text themes
+    // 加载 Catppuccin Latte（浅色）与 Mocha（深色）Sublime Text tmTheme 文件
     let latte = ThemeSet::get_theme("themes/Catppuccin Latte.tmTheme")
         .expect("Failed to load Catppuccin Latte theme");
     let mocha = ThemeSet::get_theme("themes/Catppuccin Mocha.tmTheme")
         .expect("Failed to load Catppuccin Mocha theme");
 
-    // Generate CSS with spaced class style (e.g. "kw", "kw kw2")
+    // 使用 Spaced 类风格生成 CSS，例如 `.kw`、`.kw .kw2`
+    // 这样每个 token 作用域会生成独立的 class，便于精确控制高亮颜色
     let latte_css = css_for_theme_with_class_style(&latte, ClassStyle::Spaced)
         .expect("Failed to generate Latte CSS");
     let mocha_css = css_for_theme_with_class_style(&mocha, ClassStyle::Spaced)
         .expect("Failed to generate Mocha CSS");
 
-    // Strip upstream comments to reduce output size
+    // 移除 syntect 生成的 /* ... */ 注释，减小最终 CSS 体积
     let latte_clean = strip_comments(&latte_css);
     let mocha_clean = strip_comments(&mocha_css);
 
-    // Rewrite selectors to scope under the markdown code container
+    // 重写选择器：浅色主题无前缀，深色主题加 `.dark ` 前缀
     let latte_rewritten = rewrite_rules(&latte_clean, ".md-content pre code", "");
     let mocha_rewritten = rewrite_rules(&mocha_clean, ".md-content pre code", ".dark ");
 
@@ -35,20 +49,21 @@ fn main() {
     output.push_str("\n/* Catppuccin Mocha (dark) */\n");
     output.push_str(&mocha_rewritten);
 
+    // 确保 public/ 目录存在并写入生成的 CSS
     std::fs::create_dir_all("public").expect("Failed to create public/");
     std::fs::write("public/highlight.css", output).expect("Failed to write public/highlight.css");
 
     println!("Generated public/highlight.css");
 }
 
-/// Remove C-style /* ... */ comments from CSS text.
+/// 去除 CSS 文本中的 C 风格 /* ... */ 注释。
 fn strip_comments(css: &str) -> String {
     let mut result = String::with_capacity(css.len());
     let chars: Vec<char> = css.chars().collect();
     let mut i = 0;
     while i < chars.len() {
         if i + 1 < chars.len() && chars[i] == '/' && chars[i + 1] == '*' {
-            // Skip until closing */
+            // 遇到 /* 后跳过直到找到配对的 */
             while i + 1 < chars.len() && !(chars[i] == '*' && chars[i + 1] == '/') {
                 i += 1;
             }
@@ -61,17 +76,21 @@ fn strip_comments(css: &str) -> String {
     result
 }
 
-/// Rewrite syntect-generated CSS selectors by wrapping each with a base selector
-/// and optionally prefixing (e.g. with ".dark " for dark-mode specificity).
+/// 将 syntect 生成的 CSS 选择器包装到指定的 base 选择器下，并可附加前缀。
 ///
-/// Syntect outputs rules like:
+/// syntect 原始输出形如：
 ///   .code { ... }
 ///   .kw { color: #xxx; }
 ///   .kw, .kt { color: #yyy; }
 ///
-/// This transforms them to:
+/// 转换后变为：
 ///   .md-content pre code { ... }
 ///   .dark .md-content pre code .kw { ... }
+///
+/// 参数：
+/// - `css`: syntect 生成的原始 CSS；
+/// - `base`: 作用域基础选择器，这里固定为 `.md-content pre code`；
+/// - `prefix`: 主题前缀，浅色主题传空字符串，深色主题传 `.dark `。
 fn rewrite_rules(css: &str, base: &str, prefix: &str) -> String {
     let mut out = String::new();
     let mut pos = 0;
@@ -91,7 +110,7 @@ fn rewrite_rules(css: &str, base: &str, prefix: &str) -> String {
             continue;
         }
 
-        // Find matching closing brace, handling nested {}
+        // 查找配对的右大括号，处理可能的嵌套 {}
         let after_open = pos + open + 1;
         let mut depth = 1usize;
         let mut close = after_open;
@@ -111,11 +130,11 @@ fn rewrite_rules(css: &str, base: &str, prefix: &str) -> String {
             continue;
         }
 
-        // .code is a special syntect class for the root scope — apply to base only
+        // .code 是 syntect 用于根作用域的特殊类，直接映射到 base 容器
         if selector == ".code" {
             out.push_str(&format!("{}{} {{\n{}\n}}\n\n", prefix, base, body));
         } else {
-            // Prepend prefix + base to each comma-separated selector
+            // 对每个逗号分隔的选择器前加上 prefix + base，保持多选择器规则完整
             let rewritten = selector
                 .split(',')
                 .map(|s| format!("{}{} {}", prefix, base, s.trim()))
