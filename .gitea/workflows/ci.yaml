@@ -7,13 +7,12 @@ on:
     branches: [main, master]
 
 env:
-  CARGO_NET_OFFLINE: false
+  RUSTUP_UPDATE_ROOT: https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup
+  RUSTUP_DIST_SERVER: https://mirrors.tuna.tsinghua.edu.cn/rustup
 
 jobs:
   check:
     runs-on: ubuntu-latest
-    container:
-      image: registry.cn-hangzhou.aliyuncs.com/library/rust:bookworm
     steps:
       - name: Checkout
         run: |
@@ -26,6 +25,11 @@ jobs:
         run: |
           mkdir -p "$HOME/.cargo"
           printf '%s\n' '[source.crates-io]' "replace-with = 'ustc'" '' "[source.ustc]" 'registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"' > "$HOME/.cargo/config.toml"
+
+      - name: Install Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install Node.js
         run: |
@@ -55,11 +59,10 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    container:
-      image: registry.cn-hangzhou.aliyuncs.com/library/rust:bookworm
     needs: check
     env:
-      CARGO_NET_OFFLINE: false
+      RUSTUP_UPDATE_ROOT: https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup
+      RUSTUP_DIST_SERVER: https://mirrors.tuna.tsinghua.edu.cn/rustup
     steps:
       - name: Checkout
         run: |
@@ -72,6 +75,11 @@ jobs:
         run: |
           mkdir -p "$HOME/.cargo"
           printf '%s\n' '[source.crates-io]' "replace-with = 'ustc'" '' "[source.ustc]" 'registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"' > "$HOME/.cargo/config.toml"
+
+      - name: Install Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install Node.js
         run: |
