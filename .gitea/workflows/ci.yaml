@@ -28,7 +28,11 @@ jobs:
 
       - name: Install Rust toolchain
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          for i in 1 2 3; do
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable && break
+            echo "rustup install attempt $i failed, retrying..."
+            sleep 15
+          done
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install Node.js
@@ -78,7 +82,11 @@ jobs:
 
       - name: Install Rust toolchain
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          for i in 1 2 3; do
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable && break
+            echo "rustup install attempt $i failed, retrying..."
+            sleep 15
+          done
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install Node.js
