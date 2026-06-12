@@ -330,8 +330,10 @@ mod tests {
     use super::*;
     use crate::models::comment::PublicComment;
     use crate::models::post::PostStatus;
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     fn cache_key_equality() {
         let k1 = CacheKey::PublishedPosts {
             page: 1,
@@ -350,6 +352,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn post_list_cache_roundtrip() {
         let key = CacheKey::PublishedPosts {
             page: 999,
@@ -367,6 +370,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn tag_list_cache_roundtrip() {
         let tags = vec![Tag {
             id: 1,
@@ -382,6 +386,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn single_post_cache_roundtrip() {
         let post = Some(Post {
             id: 1,
@@ -412,6 +417,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn post_stats_cache_roundtrip() {
         let stats = PostStats {
             total: 10,
@@ -427,6 +433,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn cache_invalidation_works() {
         let post = Some(Post {
             id: 42,
@@ -460,6 +467,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn comment_cache_roundtrip() {
         let comments = vec![PublicComment {
             id: 1,
@@ -481,6 +489,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn comment_count_cache_roundtrip() {
         set_comment_count(42, 15).await;
         let cached = get_comment_count(42).await;
@@ -490,6 +499,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn pending_count_cache_roundtrip() {
         set_pending_count(7).await;
         let cached = get_pending_count().await;
@@ -499,6 +509,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn comment_cache_invalidation() {
         set_comments_by_post(99, vec![]).await;
         assert!(get_comments_by_post(99).await.is_some());
@@ -508,6 +519,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn comment_count_invalidation() {
         set_comment_count(99, 5).await;
         assert!(get_comment_count(99).await.is_some());
@@ -517,6 +529,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn pending_count_invalidation() {
         set_pending_count(3).await;
         assert!(get_pending_count().await.is_some());
@@ -526,6 +539,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn invalidate_all_comment_caches_clears_everything() {
         set_comments_by_post(1, vec![]).await;
         set_comment_count(1, 10).await;

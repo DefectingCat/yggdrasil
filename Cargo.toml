@@ -44,6 +44,7 @@ js-sys = "0.3"
 
 [dev-dependencies]
 tokio = { version = "1.52", features = ["rt-multi-thread", "macros", "fs", "time", "sync"] }
+serial_test = "3"
 
 [profile.release]
 debug = false
