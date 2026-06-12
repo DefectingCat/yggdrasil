@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, master]
 
+env:
+  RUSTUP_UPDATE_ROOT: https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup
+  RUSTUP_DIST_SERVER: https://mirrors.tuna.tsinghua.edu.cn/rustup
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -17,6 +21,17 @@ jobs:
           git fetch --depth 1 origin ${{ github.sha }}
           git checkout ${{ github.sha }}
 
+      - name: Configure Cargo mirror
+        run: |
+          mkdir -p "$HOME/.cargo"
+          cat > "$HOME/.cargo/config.toml" <>EOF
+          [source.crates-io]
+          replace-with = 'ustc'
+
+          [source.ustc]
+          registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"
+          EOF
+
       - name: Install Rust toolchain
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
@@ -24,8 +39,8 @@ jobs:
 
       - name: Install Node.js
         run: |
-          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-          apt-get install -y nodejs
+          apt-get update
+          apt-get install -y nodejs npm
 
       - name: Install Rust target
         run: rustup target add wasm32-unknown-unknown
@@ -51,6 +66,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     needs: check
+    env:
+      RUSTUP_UPDATE_ROOT: https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup
+      RUSTUP_DIST_SERVER: https://mirrors.tuna.tsinghua.edu.cn/rustup
     steps:
       - name: Checkout
         run: |
@@ -59,6 +77,17 @@ jobs:
           git fetch --depth 1 origin ${{ github.sha }}
           git checkout ${{ github.sha }}
 
+      - name: Configure Cargo mirror
+        run: |
+          mkdir -p "$HOME/.cargo"
+          cat > "$HOME/.cargo/config.toml" <>EOF
+          [source.crates-io]
+          replace-with = 'ustc'
+
+          [source.ustc]
+          registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"
+          EOF
+
       - name: Install Rust toolchain
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
@@ -66,8 +95,8 @@ jobs:
 
       - name: Install Node.js
         run: |
-          curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-          apt-get install -y nodejs
+          apt-get update
+          apt-get install -y nodejs npm
 
       - name: Install Rust target
         run: rustup target add wasm32-unknown-unknown
