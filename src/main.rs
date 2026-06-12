@@ -34,7 +34,6 @@ fn main() {
 
         dioxus::server::serve(|| async move {
             use dioxus::server::{axum, DioxusRouterExt, ServeConfig};
-            use tower_http::trace::TraceLayer;
 
             tokio::spawn(async {
                 tasks::ip_purge::run_purge().await;
@@ -46,7 +45,12 @@ fn main() {
 
             let config = ServeConfig::builder().incremental(
                 dioxus::server::IncrementalRendererConfig::default()
-                    .invalidate_after(std::time::Duration::from_secs(300)),
+                    .invalidate_after(std::time::Duration::from_secs(
+                        std::env::var("SSR_CACHE_SECS")
+                            .ok()
+                            .and_then(|s| s.parse().ok())
+                            .unwrap_or(3600),
+                    )),
             );
             let api_routes = axum::Router::new().route(
                 "/api/upload",
@@ -64,8 +68,7 @@ fn main() {
 
             let router = api_routes
                 .merge(static_routes)
-                .merge(dioxus_app)
-                .layer(TraceLayer::new_for_http());
+                .merge(dioxus_app);
 
             Ok(router)
         });

@@ -1,7 +1,7 @@
 #![allow(clippy::unused_unit, deprecated, unused_imports)]
 
 #[cfg(feature = "server")]
-pub fn clean_html(input: &str) -> String {
+static AMMONIA_BUILDER: std::sync::LazyLock<ammonia::Builder> = std::sync::LazyLock::new(|| {
     let mut builder = ammonia::Builder::default();
     builder
         .add_generic_attributes(&[
@@ -24,8 +24,12 @@ pub fn clean_html(input: &str) -> String {
         .add_tag_attributes("h4", &["id", "class"])
         .add_tag_attributes("h5", &["id", "class"])
         .add_tag_attributes("h6", &["id", "class"]);
+    builder
+});
 
-    builder.clean(input).to_string()
+#[cfg(feature = "server")]
+pub fn clean_html(input: &str) -> String {
+    AMMONIA_BUILDER.clean(input).to_string()
 }
 
 #[derive(Debug, Clone)]

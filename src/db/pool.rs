@@ -16,7 +16,10 @@ pub static DB_POOL: LazyLock<Pool> = LazyLock::new(|| {
     let mgr = Manager::from_config(pg_cfg, NoTls, mgr_cfg);
 
     Pool::builder(mgr)
-        .max_size(10)
+        .max_size(std::env::var("DB_POOL_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(20))
         .build()
         .expect("Failed to create database connection pool")
 });
