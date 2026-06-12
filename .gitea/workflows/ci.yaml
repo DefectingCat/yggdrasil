@@ -7,12 +7,13 @@ on:
     branches: [main, master]
 
 env:
-  RUSTUP_UPDATE_ROOT: https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup
-  RUSTUP_DIST_SERVER: https://mirrors.tuna.tsinghua.edu.cn/rustup
+  CARGO_NET_OFFLINE: false
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    container:
+      image: registry.cn-hangzhou.aliyuncs.com/library/rust:bookworm
     steps:
       - name: Checkout
         run: |
@@ -24,18 +25,13 @@ jobs:
       - name: Configure Cargo mirror
         run: |
           mkdir -p "$HOME/.cargo"
-          cat > "$HOME/.cargo/config.toml" <>EOF
+          cat > "$HOME/.cargo/config.toml" <<EOF
           [source.crates-io]
           replace-with = 'ustc'
 
           [source.ustc]
           registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"
           EOF
-
-      - name: Install Rust toolchain
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install Node.js
         run: |
@@ -65,10 +61,11 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    container:
+      image: registry.cn-hangzhou.aliyuncs.com/library/rust:bookworm
     needs: check
     env:
-      RUSTUP_UPDATE_ROOT: https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup
-      RUSTUP_DIST_SERVER: https://mirrors.tuna.tsinghua.edu.cn/rustup
+      CARGO_NET_OFFLINE: false
     steps:
       - name: Checkout
         run: |
@@ -80,18 +77,13 @@ jobs:
       - name: Configure Cargo mirror
         run: |
           mkdir -p "$HOME/.cargo"
-          cat > "$HOME/.cargo/config.toml" <>EOF
+          cat > "$HOME/.cargo/config.toml" <<EOF
           [source.crates-io]
           replace-with = 'ustc'
 
           [source.ustc]
           registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"
           EOF
-
-      - name: Install Rust toolchain
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install Node.js
         run: |
