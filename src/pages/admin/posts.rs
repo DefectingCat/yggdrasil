@@ -5,7 +5,7 @@ use dioxus::router::components::Link;
 use crate::api::posts::list_posts;
 #[cfg(target_arch = "wasm32")]
 use crate::api::posts::PostListResponse;
-use crate::api::posts::{delete_post, CreatePostResponse};
+use crate::api::posts::{delete_post, rebuild_content_html, CreatePostResponse};
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::posts_skeleton::PostsSkeleton;
 use crate::models::post::Post;
@@ -25,6 +25,8 @@ pub fn PostsPage(page: i32) -> Element {
     let mut total = use_signal(|| 0_i64);
     let mut loading = use_signal(|| true);
     let mut deleting = use_signal(|| None::<i32>);
+    let mut rebuilding = use_signal(|| false);
+    let mut rebuild_result = use_signal(|| Option::<String>::None);
 
     use_effect(move || {
         let _ = current_page;
@@ -58,10 +60,42 @@ pub fn PostsPage(page: i32) -> Element {
                 h1 { class: "text-2xl font-bold text-gray-900 dark:text-[#dadadb]",
                     "文章管理"
                 }
-                Link {
-                    class: "px-4 py-2 bg-gray-900 dark:bg-[#dadadb] text-white dark:text-gray-900 rounded-full text-sm font-medium hover:opacity-80 transition-opacity cursor-pointer",
-                    to: Route::Write {},
-                    "+ 写文章"
+                div { class: "flex items-center gap-3",
+                    button {
+                        class: if rebuilding() {
+                            "px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-gray-400 dark:text-[#666] border border-gray-300 dark:border-[#444]"
+                        } else {
+                            "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-gray-700 dark:text-[#b0b0b1] border border-gray-300 dark:border-[#444] hover:border-gray-900 dark:hover:border-[#dadadb] hover:text-gray-900 dark:hover:text-[#dadadb] transition-all"
+                        },
+                        disabled: rebuilding(),
+                        onclick: move |_| {
+                            rebuilding.set(true);
+                            rebuild_result.set(None);
+                            spawn(async move {
+                                match rebuild_content_html(false).await {
+                                    Ok(count) => {
+                                        rebuild_result.set(Some(format!("已重建 {count} 篇文章")));
+                                    }
+                                    Err(e) => {
+                                        rebuild_result.set(Some(format!("失败: {e}")));
+                                    }
+                                }
+                                rebuilding.set(false);
+                            });
+                        },
+                        if rebuilding() { "重建中..." } else { "重建内容" }
+                    }
+                    Link {
+                        class: "px-4 py-2 bg-gray-900 dark:bg-[#dadadb] text-white dark:text-gray-900 rounded-full text-sm font-medium hover:opacity-80 transition-opacity cursor-pointer",
+                        to: Route::Write {},
+                        "+ 写文章"
+                    }
+                }
+            }
+
+            if let Some(msg) = rebuild_result() {
+                div { class: "text-sm text-gray-600 dark:text-[#9b9c9d] px-1",
+                    "{msg}"
                 }
             }
 
