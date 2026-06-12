@@ -25,13 +25,7 @@ jobs:
       - name: Configure Cargo mirror
         run: |
           mkdir -p "$HOME/.cargo"
-          cat > "$HOME/.cargo/config.toml" <<EOF
-          [source.crates-io]
-          replace-with = 'ustc'
-
-          [source.ustc]
-          registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"
-          EOF
+          printf '%s\n' '[source.crates-io]' "replace-with = 'ustc'" '' "[source.ustc]" 'registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"' > "$HOME/.cargo/config.toml"
 
       - name: Install Node.js
         run: |
@@ -77,13 +71,7 @@ jobs:
       - name: Configure Cargo mirror
         run: |
           mkdir -p "$HOME/.cargo"
-          cat > "$HOME/.cargo/config.toml" <<EOF
-          [source.crates-io]
-          replace-with = 'ustc'
-
-          [source.ustc]
-          registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"
-          EOF
+          printf '%s\n' '[source.crates-io]' "replace-with = 'ustc'" '' "[source.ustc]" 'registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"' > "$HOME/.cargo/config.toml"
 
       - name: Install Node.js
         run: |
