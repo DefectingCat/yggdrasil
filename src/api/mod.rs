@@ -5,5 +5,6 @@ pub mod image;
 pub mod markdown;
 pub mod posts;
 pub mod rate_limit;
+pub mod sanitizer;
 pub mod slug;
 pub mod upload;

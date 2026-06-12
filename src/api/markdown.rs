@@ -1,35 +1,8 @@
 #![allow(clippy::unused_unit, deprecated, unused_imports)]
 
 #[cfg(feature = "server")]
-static AMMONIA_BUILDER: std::sync::LazyLock<ammonia::Builder> = std::sync::LazyLock::new(|| {
-    let mut builder = ammonia::Builder::default();
-    builder
-        .add_generic_attributes(&[
-            "class",
-            "aria-hidden",
-            "aria-label",
-            "id",
-            "role",
-            "accesskey",
-            "title",
-        ])
-        .add_tags(&["details", "summary"])
-        .url_relative(ammonia::UrlRelative::PassThrough)
-        .add_url_schemes(&["data"])
-        .add_tag_attributes("a", &["class", "aria-hidden", "aria-label"])
-        .add_tag_attributes("span", &["class"])
-        .add_tag_attributes("h1", &["id", "class"])
-        .add_tag_attributes("h2", &["id", "class"])
-        .add_tag_attributes("h3", &["id", "class"])
-        .add_tag_attributes("h4", &["id", "class"])
-        .add_tag_attributes("h5", &["id", "class"])
-        .add_tag_attributes("h6", &["id", "class"]);
-    builder
-});
-
-#[cfg(feature = "server")]
 pub fn clean_html(input: &str) -> String {
-    AMMONIA_BUILDER.clean(input).to_string()
+    crate::api::sanitizer::clean_html(input)
 }
 
 #[derive(Debug, Clone)]

@@ -9,28 +9,8 @@ fn html_escape(s: &str) -> String {
 }
 
 #[cfg(feature = "server")]
-static COMMENT_AMMONIA_BUILDER: std::sync::LazyLock<ammonia::Builder> = std::sync::LazyLock::new(|| {
-    let mut builder = ammonia::Builder::default();
-    builder
-        .rm_tags(["img", "details", "summary"])
-        .add_generic_attributes(&[
-            "class",
-            "title",
-            "aria-hidden",
-            "aria-label",
-            "role",
-            "accesskey",
-        ])
-        .url_relative(ammonia::UrlRelative::PassThrough)
-        .add_tag_attributes("a", &["class", "aria-hidden", "aria-label"])
-        .add_tag_attributes("span", &["class"])
-        .link_rel(Some("nofollow noopener"));
-    builder
-});
-
-#[cfg(feature = "server")]
 pub fn clean_comment_html(input: &str) -> String {
-    COMMENT_AMMONIA_BUILDER.clean(input).to_string()
+    crate::api::sanitizer::clean_comment_html(input)
 }
 
 #[cfg(feature = "server")]
