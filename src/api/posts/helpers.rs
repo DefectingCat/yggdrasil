@@ -91,9 +91,26 @@ pub(super) async fn row_to_post_full(
         None
     };
 
+    let content_html: Option<String> = row.get("content_html");
+    let toc_html_row: Option<String> = row.get("toc_html");
+
+    let (content_html, toc_html) = if let Some(html) = content_html {
+        (html, toc_html_row)
+    } else {
+        let content_md: String = row.get("content_md");
+        let rendered = crate::api::markdown::render_markdown_enhanced(&content_md);
+        (
+            rendered.html,
+            if rendered.toc_html.is_empty() {
+                None
+            } else {
+                Some(rendered.toc_html)
+            },
+        )
+    };
+
     let content_md: String = row.get("content_md");
     let word_count = count_words(&content_md);
-    let rendered = crate::api::markdown::render_markdown_enhanced(&content_md);
 
     Post {
         id,
@@ -102,7 +119,7 @@ pub(super) async fn row_to_post_full(
         slug: row.get("slug"),
         summary: row.get("summary"),
         content_md,
-        content_html: Some(rendered.html),
+        content_html: Some(content_html),
         status,
         published_at: row.get("published_at"),
         created_at: row.get("created_at"),
@@ -111,11 +128,7 @@ pub(super) async fn row_to_post_full(
         cover_image: row.get("cover_image"),
         reading_time: (word_count / 200).max(1),
         word_count,
-        toc_html: if rendered.toc_html.is_empty() {
-            None
-        } else {
-            Some(rendered.toc_html)
-        },
+        toc_html,
         prev_post,
         next_post,
     }
