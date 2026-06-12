@@ -1,6 +1,16 @@
+//! 前台导航项配置
+//!
+//! 根据当前路由生成前台 Header 所需的导航项列表。
+
 use crate::components::header::NavItemConfig;
 use crate::router::Route;
 
+/// 生成前台导航项列表，当前访问的路由会被标记为激活。
+///
+/// 参数：
+/// - `route`：当前路由
+///
+/// 返回：包含首页、归档、标签、搜索、关于的导航配置数组。
 pub fn use_nav_items(route: Route) -> Vec<NavItemConfig> {
     vec![
         NavItemConfig {

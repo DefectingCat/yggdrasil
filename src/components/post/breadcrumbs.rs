@@ -1,8 +1,18 @@
+//! 面包屑组件
+//!
+//! 在文章详情页展示从首页到当前文章标题的导航路径。
+
 use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
 use crate::router::Route;
 
+/// 面包屑导航组件。
+///
+/// Props：
+/// - `title`：当前文章标题
+///
+/// 渲染 `Home > 当前标题` 的面包屑路径。
 #[component]
 pub fn Breadcrumbs(title: String) -> Element {
     rsx! {

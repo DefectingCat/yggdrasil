@@ -1,7 +1,14 @@
+//! 后台文章管理列表骨架屏
+//!
+//! 模拟后台 Posts 页面的表格结构。
+
 use dioxus::prelude::*;
 
 use crate::components::skeletons::atoms::SkeletonBox;
 
+/// 后台文章管理列表骨架屏组件。
+///
+/// 渲染带表头的表格占位，包含 10 行数据行。
 #[component]
 pub fn PostsSkeleton() -> Element {
     rsx! {

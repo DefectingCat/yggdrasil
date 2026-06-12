@@ -1,6 +1,13 @@
+//! 评论列表骨架屏
+//!
+//! 在评论数据加载期间展示评论条目占位。
+
 use crate::components::skeletons::atoms::*;
 use dioxus::prelude::*;
 
+/// 评论列表骨架屏组件。
+///
+/// 渲染一个标题占位与若干条评论条目占位，包含头像、作者名与内容行。
 #[component]
 pub fn CommentListSkeleton() -> Element {
     rsx! {

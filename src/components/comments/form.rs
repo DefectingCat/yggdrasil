@@ -1,3 +1,7 @@
+//! 评论表单组件
+//!
+//! 提供发表评论与回复评论的表单，包含昵称、邮箱、网站、内容与反垃圾蜜罐字段。
+
 use dioxus::prelude::*;
 
 use crate::api::comments::create_comment;
@@ -5,6 +9,16 @@ use crate::components::comments::section::CommentContext;
 use crate::components::forms::{AlertBox, BUTTON_PRIMARY_CLASS, INPUT_CLASS};
 use crate::hooks::comment_storage::{self, PendingComment};
 
+/// 评论表单组件，用于顶层评论或回复评论。
+///
+/// Props：
+/// - `post_id`：所属文章 ID
+/// - `parent_id`：回复目标评论 ID，`None` 表示顶层评论
+///
+/// 关键事件：
+/// - 挂载时从本地存储恢复上次填写的作者信息
+/// - 提交时校验必填项与蜜罐字段
+/// - 提交成功后清空内容、保存作者信息、添加待审核评论并触发列表刷新
 #[component]
 pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
     let ctx: CommentContext = use_context();
@@ -21,6 +35,7 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
     let mut message = use_signal(|| Option::<(String, &'static str)>::None);
     let mut loaded = use_signal(|| false);
 
+    // 首次挂载时从本地存储加载作者信息
     use_effect(move || {
         if loaded() {
             return;
@@ -33,6 +48,7 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
         }
     });
 
+    // 回复表单：当前未激活回复时隐藏
     if let Some(pid) = parent_id {
         if active_reply() != Some(pid) {
             return rsx! {};
@@ -107,6 +123,7 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
                     "支持 Markdown 语法"
                 }
 
+                // 蜜罐字段：对普通用户隐藏，用于拦截简单机器人
                 textarea {
                     class: "hidden",
                     aria_hidden: "true",
@@ -131,6 +148,7 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
                         let content = content_md();
                         let hp = honeypot();
 
+                        // 蜜罐被填充则直接丢弃
                         if !hp.is_empty() {
                             return;
                         }

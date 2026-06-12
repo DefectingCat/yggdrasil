@@ -1,12 +1,25 @@
+//! 页脚组件
+//!
+//! 提供站点版权信息，并在用户向下滚动超过一屏后显示"回到顶部"悬浮按钮。
+//! 回到顶部的滚动监听与平滑滚动逻辑仅在 WASM 前端生效。
+
 use dioxus::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+/// 页脚与回到顶部按钮组件。
+///
+/// Props：无。
+/// 关键行为：
+/// - 监听窗口滚动，超过一屏时显示回到顶部按钮
+/// - 点击按钮平滑滚动到顶部，并清理 URL 中的 `#`
+/// - 滚动监听与平滑滚动仅在 `target_arch = "wasm32"` 下执行
 #[component]
 #[allow(unused_mut)]
 pub fn Footer() -> Element {
     let mut visible = use_signal(|| false);
 
+    // WASM 下保存 scroll 事件闭包与 window，用于后续清理
     #[cfg(target_arch = "wasm32")]
     let listener_state = use_hook(|| {
         Rc::new(RefCell::new(
@@ -14,12 +27,14 @@ pub fn Footer() -> Element {
         ))
     });
 
+    // 非 WASM 下保持类型一致，避免编译错误
     #[cfg(not(target_arch = "wasm32"))]
     let _listener_state = use_hook(|| Rc::new(RefCell::new(None::<()>)));
 
     #[cfg(target_arch = "wasm32")]
     let listener_state_for_effect = listener_state.clone();
 
+    // 挂载时注册 scroll 监听器，并根据当前滚动位置初始化按钮可见性
     use_effect(move || {
         #[cfg(target_arch = "wasm32")]
         {
@@ -56,6 +71,7 @@ pub fn Footer() -> Element {
         }
     });
 
+    // 卸载时移除 scroll 监听器，防止内存泄漏
     #[cfg(target_arch = "wasm32")]
     use_drop(move || {
         if let Some((closure, window)) = listener_state.borrow_mut().take() {
@@ -66,6 +82,7 @@ pub fn Footer() -> Element {
         }
     });
 
+    // 根据 visible 动态切换按钮显示/隐藏样式
     let btn_class = use_memo(move || {
         let base = "fixed bottom-16 right-8 z-50 w-10 h-10 rounded-full bg-paper-entry border border-paper-border shadow-sm flex items-center justify-center cursor-pointer transition-all duration-300 text-paper-secondary hover:text-paper-accent";
         if visible() {
@@ -105,6 +122,9 @@ pub fn Footer() -> Element {
     }
 }
 
+/// 平滑滚动到页面顶部，并清理 history 中的 `#` 哈希。
+///
+/// 仅在 `target_arch = "wasm32"` 下执行实际滚动，SSR 环境中为空操作。
 fn scroll_to_top() {
     #[cfg(target_arch = "wasm32")]
     {

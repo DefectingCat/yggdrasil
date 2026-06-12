@@ -1,3 +1,8 @@
+//! 前台布局组件
+//!
+//! 包裹所有前台路由，提供统一的 Header、Footer 与主内容区容器，
+//! 并为不同路由在 SuspenseBoundary 中展示对应的骨架屏。
+
 use dioxus::prelude::*;
 
 use crate::components::footer::Footer;
@@ -12,6 +17,7 @@ use crate::components::skeletons::tags_skeleton::TagsSkeleton;
 use crate::router::Route;
 use crate::theme::ThemeToggle;
 
+/// 根据当前前台路由选择对应的骨架屏组件。
 fn route_skeleton(route: &Route) -> Element {
     match route {
         Route::Archives {} => rsx! { DelayedSkeleton { ArchiveSkeleton {} } },
@@ -23,6 +29,10 @@ fn route_skeleton(route: &Route) -> Element {
     }
 }
 
+/// 前台整体布局组件。
+///
+/// 负责渲染 Header（含前台导航与主题切换）、主内容区与 Footer，
+/// 并在路由内容加载过程中显示与路由匹配的骨架屏。
 #[component]
 pub fn FrontendLayout() -> Element {
     let route = use_route::<Route>();

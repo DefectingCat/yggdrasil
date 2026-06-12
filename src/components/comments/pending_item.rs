@@ -1,10 +1,24 @@
+//! 待审核评论项组件
+//!
+//! 展示用户刚提交、尚未通过审核的评论占位项，
+//! 视觉上使用较低的透明度并标注"审核中"状态。
+
 use dioxus::prelude::*;
 
 use crate::hooks::comment_storage::{render_pending_content, PendingComment};
 
+/// 待审核评论项组件。
+///
+/// Props：
+/// - `comment`：待审核评论数据
+/// - `post_id`：所属文章 ID（当前未使用，保留用于未来扩展）
+///
+/// 展示内容包括：作者头像/链接、"刚刚"时间占位、审核中徽章、Markdown 渲染内容。
+/// 深度最大展示 6 层缩进，孤儿评论深度会被修正为 0。
 #[component]
 #[allow(unused_variables)]
 pub fn PendingCommentItem(comment: PendingComment, post_id: i32) -> Element {
+    // 孤儿评论（parent_id 为 None 但 depth > 0）按顶层展示
     let depth = if comment.parent_id.is_none() && comment.depth > 0 {
         0
     } else {
@@ -14,6 +28,7 @@ pub fn PendingCommentItem(comment: PendingComment, post_id: i32) -> Element {
     let indent = depth.min(6) * 24;
     let content_html = render_pending_content(&comment.content_md);
 
+    // 作者名展示为链接或普通文本
     let author_element = match &comment.author_url {
         Some(url) if !url.is_empty() => rsx! {
             a {

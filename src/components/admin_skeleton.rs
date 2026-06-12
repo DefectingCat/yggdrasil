@@ -1,8 +1,15 @@
+//! 后台仪表盘骨架屏
+//!
+//! 仅在 AdminLayout 的内容区展示，不包含 Header 与 Footer，
+//! 用于校验登录状态期间保持视觉稳定。
+
 use dioxus::prelude::*;
 
 use crate::components::skeletons::atoms::SkeletonBox;
 
-/// 仅仪表盘内容区骨架（不含 header/footer）
+/// 仪表盘内容区骨架屏组件（不含 header/footer）。
+///
+/// 包含统计卡片、快捷操作按钮与最近文章列表三组占位块。
 #[component]
 pub fn AdminDashboardSkeleton() -> Element {
     rsx! {

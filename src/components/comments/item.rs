@@ -1,15 +1,29 @@
+//! 单条评论项组件
+//!
+//! 展示已审核通过的评论，支持展开/收起回复表单。
+
 use dioxus::prelude::*;
 
 use crate::components::comments::form::CommentForm;
 use crate::components::comments::section::CommentContext;
 use crate::models::comment::PublicComment;
 
+/// 单条已审核评论组件。
+///
+/// Props：
+/// - `comment`：已审核评论数据
+/// - `post_id`：所属文章 ID
+///
+/// 关键行为：
+/// - 点击"回复"按钮切换该评论下方的回复表单
+/// - 最大递归深度限制为 20，超过后隐藏回复按钮
 #[component]
 pub fn CommentItem(comment: PublicComment, post_id: i32) -> Element {
     let ctx: CommentContext = use_context();
     let mut active_reply = ctx.active_reply;
     let refresh_trigger = ctx.refresh_trigger;
 
+    // 孤儿评论按顶层展示
     let depth = if comment.parent_id.is_none() && comment.depth > 0 {
         0
     } else {
@@ -23,6 +37,7 @@ pub fn CommentItem(comment: PublicComment, post_id: i32) -> Element {
 
     let _ = refresh_trigger;
 
+    // 作者名展示为链接或普通文本
     let author_element = match &comment.author_url {
         Some(url) if !url.is_empty() => rsx! {
             a {

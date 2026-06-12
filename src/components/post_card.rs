@@ -1,3 +1,7 @@
+//! 文章卡片组件
+//!
+//! 在首页、标签详情等列表中展示单篇文章的标题、摘要、封面、日期与标签。
+
 use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
@@ -5,6 +9,19 @@ use crate::components::image_viewer::ImageViewer;
 use crate::models::post::Post;
 use crate::router::Route;
 
+/// 文章卡片组件。
+///
+/// Props：
+/// - `post`：文章数据模型
+///
+/// 展示内容包括：
+/// - 封面图（如有，使用 400x300 缩略图）
+/// - 文章标题
+/// - 摘要（最多两行）
+/// - 发布日期与标签
+///
+/// 关键事件：
+/// - 点击标签时阻止事件冒泡，避免触发整卡跳转
 #[component]
 pub fn PostCard(post: Post) -> Element {
     let post_slug = post.slug.clone();

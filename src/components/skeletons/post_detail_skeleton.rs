@@ -1,8 +1,13 @@
+//! 文章详情页骨架屏
+//!
+//! 在文章详情数据加载期间展示面包屑、标题、摘要、元信息、封面与正文占位。
+
 use crate::components::skeletons::atoms::*;
 use dioxus::prelude::*;
 
-/// 文章详情页骨架屏
-/// 结构：面包屑 + 标题(h1) + 摘要 + 元信息 + 封面图 + 正文(多段) + Footer
+/// 文章详情页骨架屏组件。
+///
+/// 结构：面包屑 + 标题(h1) + 摘要 + 元信息 + 封面图 + 正文(多段) + 页脚占位。
 #[component]
 pub fn PostDetailSkeleton() -> Element {
     rsx! {

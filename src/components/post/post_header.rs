@@ -1,9 +1,23 @@
+//! 文章页眉组件
+//!
+//! 组合面包屑、标题、摘要与元信息，草稿状态会在标题旁显示草稿图标。
+
 use dioxus::prelude::*;
 
 use crate::components::post::breadcrumbs::Breadcrumbs;
 use crate::components::post::post_meta::PostMeta;
 use crate::models::post::{Post, PostStatus};
 
+/// 文章页眉组件。
+///
+/// Props：
+/// - `post`：文章数据模型
+///
+/// 展示内容包括：
+/// - 面包屑导航（Home → 文章标题）
+/// - 文章标题，草稿状态附加草稿图标
+/// - 文章摘要（如有）
+/// - 文章元信息
 #[component]
 pub fn PostHeader(post: Post) -> Element {
     rsx! {

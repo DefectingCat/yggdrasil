@@ -1,10 +1,15 @@
+//! 标签相关骨架屏
+//!
+//! 提供标签列表页与标签详情页的加载占位组件。
+
 use dioxus::prelude::*;
 
 use crate::components::skeletons::atoms::SkeletonBox;
 use crate::components::skeletons::post_card_skeleton::PostCardSkeleton;
 
-/// 标签列表页骨架屏
-/// 结构：统计行("共 N 个标签，M 篇文章") + 标签云（flex wrap 的 pill 列表）
+/// 标签列表页骨架屏组件。
+///
+/// 结构：统计行（"共 N 个标签，M 篇文章"）+ 标签云（flex wrap 的 pill 列表）。
 #[component]
 pub fn TagsSkeleton() -> Element {
     rsx! {
@@ -35,7 +40,9 @@ pub fn TagsSkeleton() -> Element {
     }
 }
 
-/// 标签详情页骨架屏 - 与首页文章列表结构相同
+/// 标签详情页骨架屏组件。
+///
+/// 结构与首页文章列表相同，包含统计行与文章卡片骨架。
 #[component]
 pub fn TagDetailSkeleton() -> Element {
     rsx! {

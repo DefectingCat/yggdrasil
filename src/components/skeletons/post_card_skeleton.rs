@@ -1,9 +1,14 @@
+//! 文章卡片骨架屏
+//!
+//! 模拟 PostCard 组件的视觉占位，用于列表页加载。
+
 use dioxus::prelude::*;
 
 use crate::components::skeletons::atoms::SkeletonBox;
 
-/// 文章卡片骨架屏 - 模拟 PostCard 的视觉结构
-/// 包含：标题行(24px bold) + 摘要2行 + 元信息行(日期+标签)
+/// 文章卡片骨架屏组件。
+///
+/// 包含：标题行(24px bold) + 摘要两行 + 元信息行(日期+标签)。
 #[component]
 pub fn PostCardSkeleton() -> Element {
     rsx! {

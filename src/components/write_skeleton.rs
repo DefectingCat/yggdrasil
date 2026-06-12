@@ -1,6 +1,13 @@
+//! 文章编辑器页骨架屏
+//!
+//! 在写文章/编辑文章页面加载时展示，模拟标题、元信息、编辑器工具栏与正文区域。
+
 use crate::components::skeletons::atoms::*;
 use dioxus::prelude::*;
 
+/// 文章编辑器页骨架屏组件。
+///
+/// 模拟 Write 页面的整体结构：顶部标题与元信息、中间编辑器区域、底部操作按钮。
 #[component]
 pub fn WriteSkeleton() -> Element {
     rsx! {
