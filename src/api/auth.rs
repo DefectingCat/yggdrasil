@@ -229,10 +229,7 @@ pub async fn login(username: String, password: String) -> Result<AuthResponse, S
         .await
         .map_err(AppError::query)?;
 
-    let cookie = format!(
-        "session={token}; HttpOnly; Path=/; Max-Age={}; SameSite=Lax",
-        30 * 24 * 60 * 60
-    );
+    let cookie = session::session_cookie(&token, 30 * 24 * 60 * 60, session::cookie_secure());
     if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
         if let Ok(value) = HeaderValue::try_from(cookie.as_str()) {
             ctx.add_response_header(SET_COOKIE, value);
@@ -252,11 +249,11 @@ pub async fn logout() -> Result<AuthResponse, ServerFnError> {
 
     let client = get_conn().await.map_err(AppError::db_conn)?;
 
+    let cookie = session::session_cookie("", 0, session::cookie_secure());
     if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
-        ctx.add_response_header(
-            SET_COOKIE,
-            HeaderValue::from_static("session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax"),
-        );
+        if let Ok(value) = HeaderValue::try_from(cookie.as_str()) {
+            ctx.add_response_header(SET_COOKIE, value);
+        }
     }
 
     if let Some(t) = token {

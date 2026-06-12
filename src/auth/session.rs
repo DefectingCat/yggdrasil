@@ -20,6 +20,22 @@ pub fn default_expiry() -> DateTime<Utc> {
 }
 
 #[cfg(feature = "server")]
+pub fn cookie_secure() -> bool {
+    std::env::var("COOKIE_SECURE")
+        .ok()
+        .map(|v| matches!(v.as_str(), "1" | "true" | "yes"))
+        .unwrap_or(false)
+}
+
+#[cfg(feature = "server")]
+pub fn session_cookie(token: &str, max_age_seconds: i32, secure: bool) -> String {
+    let secure_flag = if secure { "; Secure" } else { "" };
+    format!(
+        "session={token}; HttpOnly; Path=/; Max-Age={max_age_seconds}; SameSite=Lax{secure_flag}"
+    )
+}
+
+#[cfg(feature = "server")]
 pub fn parse_session_token(cookie_header: &str) -> Option<&str> {
     cookie_header.split(';').map(|s| s.trim()).find_map(|pair| {
         let mut parts = pair.splitn(2, '=');
@@ -131,5 +147,26 @@ mod tests {
         let hash = hash_token("hello");
         let expected = sha2::Sha256::digest(b"hello");
         assert_eq!(hash, hex::encode(expected));
+    }
+
+    #[test]
+    fn session_cookie_without_secure() {
+        let cookie = session_cookie("abc", 3600, false);
+        assert!(cookie.contains("session=abc"));
+        assert!(cookie.contains("HttpOnly"));
+        assert!(cookie.contains("SameSite=Lax"));
+        assert!(!cookie.contains("Secure"));
+    }
+
+    #[test]
+    fn session_cookie_with_secure() {
+        let cookie = session_cookie("abc", 3600, true);
+        assert!(cookie.contains("Secure"));
+    }
+
+    #[test]
+    fn session_cookie_logout_has_zero_max_age() {
+        let cookie = session_cookie("", 0, false);
+        assert!(cookie.contains("Max-Age=0"));
     }
 }
