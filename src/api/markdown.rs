@@ -228,11 +228,12 @@ fn generate_toc_html(headings: &[(u8, String, String)]) -> String {
             }
         }
 
+        let clean_text = clean_html(text);
         html.push_str(&format!(
             "<li><a href=\"#{}\" aria-label=\"{}\">{}</a>",
             id,
-            clean_html(text),
-            clean_html(text)
+            clean_text,
+            clean_text
         ));
     }
 
