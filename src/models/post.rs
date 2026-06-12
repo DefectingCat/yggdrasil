@@ -1,13 +1,22 @@
+//! 文章模型。
+//!
+//! 定义文章状态、文章结构体、标签、统计信息以及前后导航结构体。
+//! Post 结构体在服务端渲染、客户端展示以及缓存层之间共享。
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+/// 文章发布状态枚举。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum PostStatus {
+    /// 草稿，仅管理员可见。
     Draft,
+    /// 已发布，面向读者公开。
     Published,
 }
 
 impl PostStatus {
+    /// 将状态序列化为数据库或 API 使用的小写字符串。
     #[allow(dead_code)]
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -16,6 +25,7 @@ impl PostStatus {
         }
     }
 
+    /// 将字符串解析为 PostStatus，无法识别时返回 None。
     #[allow(dead_code)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
@@ -26,35 +36,56 @@ impl PostStatus {
     }
 }
 
+/// 文章领域模型。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Post {
+    /// 文章主键。
     pub id: i32,
+    /// 作者用户主键。
     pub author_id: i32,
+    /// 文章标题。
     pub title: String,
+    /// URL slug，用于生成文章链接。
     pub slug: String,
+    /// 摘要，可选。
     pub summary: Option<String>,
+    /// 原始 Markdown 内容。
     pub content_md: String,
+    /// 渲染后的 HTML 内容，可选。
     pub content_html: Option<String>,
+    /// 文章发布状态。
     pub status: PostStatus,
+    /// 正式发布时间，None 表示尚未发布。
     pub published_at: Option<DateTime<Utc>>,
+    /// 创建时间。
     pub created_at: DateTime<Utc>,
+    /// 最后更新时间。
     pub updated_at: DateTime<Utc>,
+    /// 关联标签列表。
     pub tags: Vec<String>,
+    /// 封面图片 URL。
     pub cover_image: Option<String>,
+    /// 预计阅读时间（分钟）。
     pub reading_time: u32,
+    /// 字数统计。
     pub word_count: u32,
+    /// 目录 HTML。
     pub toc_html: Option<String>,
+    /// 上一篇文章导航信息。
     pub prev_post: Option<PostNav>,
+    /// 下一篇文章导航信息。
     pub next_post: Option<PostNav>,
 }
 
 impl Post {
+    /// 返回用于展示的文章日期：优先使用发布时间，否则回退到创建时间。
     pub fn formatted_date(&self) -> String {
         self.published_at
             .map(|d| d.format("%Y-%m-%d").to_string())
             .unwrap_or_else(|| self.created_at.format("%Y-%m-%d").to_string())
     }
 
+    /// 返回中文状态标签。
     pub fn status_label(&self) -> &'static str {
         match self.status {
             PostStatus::Published => "已发布",
@@ -62,6 +93,7 @@ impl Post {
         }
     }
 
+    /// 返回状态文本在 light/dark 模式下的 Tailwind 颜色类。
     pub fn status_class(&self) -> &'static str {
         match self.status {
             PostStatus::Published => "text-green-600 dark:text-green-400",
@@ -69,6 +101,7 @@ impl Post {
         }
     }
 
+    /// 返回状态徽章在 light/dark 模式下的 Tailwind 背景与颜色类。
     pub fn status_badge_class(&self) -> &'static str {
         match self.status {
             PostStatus::Published => {
@@ -79,23 +112,34 @@ impl Post {
     }
 }
 
+/// 前后文章导航结构体。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PostNav {
+    /// 文章标题。
     pub title: String,
+    /// 文章 slug。
     pub slug: String,
 }
 
+/// 标签领域模型。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Tag {
+    /// 标签主键。
     pub id: i32,
+    /// 标签名称。
     pub name: String,
+    /// 关联文章数量。
     pub post_count: i64,
 }
 
+/// 文章统计信息。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PostStats {
+    /// 文章总数。
     pub total: i64,
+    /// 草稿数量。
     pub drafts: i64,
+    /// 已发布数量。
     pub published: i64,
 }
 

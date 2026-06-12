@@ -1,3 +1,9 @@
+//! 基于 moka 的内存缓存层。
+//!
+//! 仅在启用 `server` feature 时编译，为文章列表、标签、单篇文章、统计信息
+//! 以及评论相关数据提供按键缓存与失效能力。
+//! 缓存使用 `std::sync::LazyLock` 全局实例，按不同业务数据设置独立的 TTL。
+
 #[cfg(feature = "server")]
 use moka::future::Cache;
 #[cfg(feature = "server")]
@@ -11,60 +17,90 @@ use crate::models::comment::PublicComment;
 use crate::models::post::{Post, PostStats, Tag};
 
 // ============================================================================
-// Cache TTL Configuration
+// 缓存 TTL 配置
 // ============================================================================
 
+/// 文章列表缓存 TTL：60 秒。
 #[cfg(feature = "server")]
 const TTL_POST_LIST: Duration = Duration::from_secs(60);
+
+/// 标签列表缓存 TTL：300 秒。
 #[cfg(feature = "server")]
 const TTL_TAG_LIST: Duration = Duration::from_secs(300);
+
+/// 单篇文章缓存 TTL：600 秒。
 #[cfg(feature = "server")]
 const TTL_SINGLE_POST: Duration = Duration::from_secs(600);
+
+/// 文章统计缓存 TTL：60 秒。
 #[cfg(feature = "server")]
 const TTL_POST_STATS: Duration = Duration::from_secs(60);
+
+/// 标签下文章列表缓存 TTL：120 秒。
 #[cfg(feature = "server")]
 const TTL_TAG_POSTS: Duration = Duration::from_secs(120);
+
+/// 评论列表缓存 TTL：60 秒。
 #[cfg(feature = "server")]
 const TTL_COMMENTS: Duration = Duration::from_secs(60);
+
+/// 评论数量缓存 TTL：60 秒。
 #[cfg(feature = "server")]
 const TTL_COMMENT_COUNT: Duration = Duration::from_secs(60);
+
+/// 待审核评论数量缓存 TTL：10 秒，因管理后台需要较实时数据。
 #[cfg(feature = "server")]
 const TTL_PENDING_COUNT: Duration = Duration::from_secs(10);
 
 // ============================================================================
-// Cache Key Types
+// 缓存 Key 类型
 // ============================================================================
 
+/// 统一的缓存键枚举，每个变体对应一类可缓存数据。
 #[cfg(feature = "server")]
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum CacheKey {
+    /// 已发布文章分页列表。
     PublishedPosts { page: i32, per_page: i32 },
+    /// 已发布文章总数。
     TotalPublishedPosts,
+    /// 全部标签。
     AllTags,
+    /// 按 slug 查询的单篇文章。
     PostBySlug(String),
+    /// 按标签查询的文章列表。
     PostsByTag(String),
+    /// 文章统计信息。
     PostStats,
+    /// 某篇文章下的评论列表。
     CommentsByPost { post_id: i32 },
+    /// 某篇文章的评论数量。
     CommentCount { post_id: i32 },
+    /// 待审核评论总数。
     PendingCommentCount,
 }
 
 // ============================================================================
-// Cache Instances
+// 缓存实例
 // ============================================================================
 
+/// 文章列表缓存类型，值为（文章列表，总数）。
 #[cfg(feature = "server")]
 pub type PostListCache = Cache<CacheKey, (Vec<Post>, i64)>;
 
+/// 标签列表缓存类型。
 #[cfg(feature = "server")]
 pub type TagListCache = Cache<CacheKey, Vec<Tag>>;
 
+/// 单篇文章缓存类型。
 #[cfg(feature = "server")]
 pub type SinglePostCache = Cache<CacheKey, Option<Post>>;
 
+/// 文章统计缓存类型。
 #[cfg(feature = "server")]
 pub type PostStatsCache = Cache<CacheKey, PostStats>;
 
+/// 全局文章列表缓存实例，最大容量 100。
 #[cfg(feature = "server")]
 static POST_LIST_CACHE: LazyLock<PostListCache> = LazyLock::new(|| {
     Cache::builder()
@@ -73,6 +109,7 @@ static POST_LIST_CACHE: LazyLock<PostListCache> = LazyLock::new(|| {
         .build()
 });
 
+/// 全局标签列表缓存实例，最大容量 50。
 #[cfg(feature = "server")]
 static TAG_LIST_CACHE: LazyLock<TagListCache> = LazyLock::new(|| {
     Cache::builder()
@@ -81,6 +118,7 @@ static TAG_LIST_CACHE: LazyLock<TagListCache> = LazyLock::new(|| {
         .build()
 });
 
+/// 全局单篇文章缓存实例，最大容量 200。
 #[cfg(feature = "server")]
 static SINGLE_POST_CACHE: LazyLock<SinglePostCache> = LazyLock::new(|| {
     Cache::builder()
@@ -89,6 +127,7 @@ static SINGLE_POST_CACHE: LazyLock<SinglePostCache> = LazyLock::new(|| {
         .build()
 });
 
+/// 全局文章统计缓存实例，最大容量 10。
 #[cfg(feature = "server")]
 static POST_STATS_CACHE: LazyLock<PostStatsCache> = LazyLock::new(|| {
     Cache::builder()
@@ -97,6 +136,7 @@ static POST_STATS_CACHE: LazyLock<PostStatsCache> = LazyLock::new(|| {
         .build()
 });
 
+/// 全局标签文章列表缓存实例，最大容量 100。
 #[cfg(feature = "server")]
 static TAG_POSTS_CACHE: LazyLock<PostListCache> = LazyLock::new(|| {
     Cache::builder()
@@ -105,12 +145,15 @@ static TAG_POSTS_CACHE: LazyLock<PostListCache> = LazyLock::new(|| {
         .build()
 });
 
+/// 评论列表缓存类型。
 #[cfg(feature = "server")]
 pub type CommentListCache = Cache<CacheKey, Vec<PublicComment>>;
 
+/// 评论数量缓存类型。
 #[cfg(feature = "server")]
 pub type CommentCountCache = Cache<CacheKey, i64>;
 
+/// 全局评论列表缓存实例，最大容量 200。
 #[cfg(feature = "server")]
 static COMMENT_CACHE: LazyLock<CommentListCache> = LazyLock::new(|| {
     Cache::builder()
@@ -119,6 +162,7 @@ static COMMENT_CACHE: LazyLock<CommentListCache> = LazyLock::new(|| {
         .build()
 });
 
+/// 全局评论数量缓存实例，最大容量 200。
 #[cfg(feature = "server")]
 static COMMENT_COUNT_CACHE: LazyLock<CommentCountCache> = LazyLock::new(|| {
     Cache::builder()
@@ -127,6 +171,7 @@ static COMMENT_COUNT_CACHE: LazyLock<CommentCountCache> = LazyLock::new(|| {
         .build()
 });
 
+/// 全局待审核评论数量缓存实例，最大容量 10。
 #[cfg(feature = "server")]
 static PENDING_COUNT_CACHE: LazyLock<CommentCountCache> = LazyLock::new(|| {
     Cache::builder()
@@ -136,19 +181,22 @@ static PENDING_COUNT_CACHE: LazyLock<CommentCountCache> = LazyLock::new(|| {
 });
 
 // ============================================================================
-// Public Cache API
+// 公共缓存 API
 // ============================================================================
 
+/// 读取文章分页列表缓存。
 #[cfg(feature = "server")]
 pub async fn get_post_list(key: &CacheKey) -> Option<(Vec<Post>, i64)> {
     POST_LIST_CACHE.get(key).await
 }
 
+/// 写入文章分页列表缓存。
 #[cfg(feature = "server")]
 pub async fn set_post_list(key: &CacheKey, posts: Vec<Post>, total: i64) {
     let _ = POST_LIST_CACHE.insert(key.clone(), (posts, total)).await;
 }
 
+/// 读取已发布文章总数缓存。
 #[cfg(feature = "server")]
 pub async fn get_total_published_posts() -> Option<i64> {
     POST_LIST_CACHE
@@ -157,6 +205,7 @@ pub async fn get_total_published_posts() -> Option<i64> {
         .map(|(_, total)| total)
 }
 
+/// 写入已发布文章总数缓存，文章列表部分置空以节省内存。
 #[cfg(feature = "server")]
 pub async fn set_total_published_posts(total: i64) {
     let _ = POST_LIST_CACHE
@@ -164,16 +213,19 @@ pub async fn set_total_published_posts(total: i64) {
         .await;
 }
 
+/// 读取全部标签缓存。
 #[cfg(feature = "server")]
 pub async fn get_tag_list() -> Option<Vec<Tag>> {
     TAG_LIST_CACHE.get(&CacheKey::AllTags).await
 }
 
+/// 写入全部标签缓存。
 #[cfg(feature = "server")]
 pub async fn set_tag_list(tags: Vec<Tag>) {
     let _ = TAG_LIST_CACHE.insert(CacheKey::AllTags, tags).await;
 }
 
+/// 按 slug 读取单篇文章缓存。
 #[cfg(feature = "server")]
 pub async fn get_post_by_slug(slug: &str) -> Option<Option<Post>> {
     SINGLE_POST_CACHE
@@ -181,6 +233,7 @@ pub async fn get_post_by_slug(slug: &str) -> Option<Option<Post>> {
         .await
 }
 
+/// 按 slug 写入单篇文章缓存，None 表示文章不存在。
 #[cfg(feature = "server")]
 pub async fn set_post_by_slug(slug: &str, post: Option<Post>) {
     let _ = SINGLE_POST_CACHE
@@ -188,6 +241,7 @@ pub async fn set_post_by_slug(slug: &str, post: Option<Post>) {
         .await;
 }
 
+/// 按标签读取文章列表缓存。
 #[cfg(feature = "server")]
 pub async fn get_posts_by_tag(tag: &str) -> Option<(Vec<Post>, i64)> {
     TAG_POSTS_CACHE
@@ -195,6 +249,7 @@ pub async fn get_posts_by_tag(tag: &str) -> Option<(Vec<Post>, i64)> {
         .await
 }
 
+/// 按标签写入文章列表缓存。
 #[cfg(feature = "server")]
 pub async fn set_posts_by_tag(tag: &str, posts: Vec<Post>, total: i64) {
     let _ = TAG_POSTS_CACHE
@@ -202,30 +257,35 @@ pub async fn set_posts_by_tag(tag: &str, posts: Vec<Post>, total: i64) {
         .await;
 }
 
+/// 读取文章统计缓存。
 #[cfg(feature = "server")]
 pub async fn get_post_stats() -> Option<PostStats> {
     POST_STATS_CACHE.get(&CacheKey::PostStats).await
 }
 
+/// 写入文章统计缓存。
 #[cfg(feature = "server")]
 pub async fn set_post_stats(stats: PostStats) {
     let _ = POST_STATS_CACHE.insert(CacheKey::PostStats, stats).await;
 }
 
 // ============================================================================
-// Cache Invalidation
+// 缓存失效
 // ============================================================================
 
+/// 清空所有文章分页列表缓存。
 #[cfg(feature = "server")]
 pub fn invalidate_post_lists() {
     POST_LIST_CACHE.invalidate_all();
 }
 
+/// 清空所有标签缓存。
 #[cfg(feature = "server")]
 pub fn invalidate_all_tags() {
     TAG_LIST_CACHE.invalidate_all();
 }
 
+/// 按 slug 失效单篇文章缓存。
 #[cfg(feature = "server")]
 pub async fn invalidate_post_by_slug(slug: &str) {
     SINGLE_POST_CACHE
@@ -233,6 +293,7 @@ pub async fn invalidate_post_by_slug(slug: &str) {
         .await;
 }
 
+/// 按标签失效文章列表缓存。
 #[cfg(feature = "server")]
 pub async fn invalidate_posts_by_tag(tag: &str) {
     TAG_POSTS_CACHE
@@ -240,11 +301,13 @@ pub async fn invalidate_posts_by_tag(tag: &str) {
         .await;
 }
 
+/// 清空文章统计缓存。
 #[cfg(feature = "server")]
 pub fn invalidate_post_stats() {
     POST_STATS_CACHE.invalidate_all();
 }
 
+/// 清空所有文章相关缓存（列表、标签、单篇、统计、标签文章）。
 #[cfg(feature = "server")]
 pub fn invalidate_all_post_caches() {
     POST_LIST_CACHE.invalidate_all();
@@ -254,6 +317,7 @@ pub fn invalidate_all_post_caches() {
     TAG_POSTS_CACHE.invalidate_all();
 }
 
+/// 按文章主键读取评论列表缓存。
 #[cfg(feature = "server")]
 pub async fn get_comments_by_post(post_id: i32) -> Option<Vec<PublicComment>> {
     COMMENT_CACHE
@@ -261,6 +325,7 @@ pub async fn get_comments_by_post(post_id: i32) -> Option<Vec<PublicComment>> {
         .await
 }
 
+/// 按文章主键写入评论列表缓存。
 #[cfg(feature = "server")]
 pub async fn set_comments_by_post(post_id: i32, comments: Vec<PublicComment>) {
     let _ = COMMENT_CACHE
@@ -268,6 +333,7 @@ pub async fn set_comments_by_post(post_id: i32, comments: Vec<PublicComment>) {
         .await;
 }
 
+/// 按文章主键读取评论数量缓存。
 #[cfg(feature = "server")]
 pub async fn get_comment_count(post_id: i32) -> Option<i64> {
     COMMENT_COUNT_CACHE
@@ -275,6 +341,7 @@ pub async fn get_comment_count(post_id: i32) -> Option<i64> {
         .await
 }
 
+/// 按文章主键写入评论数量缓存。
 #[cfg(feature = "server")]
 pub async fn set_comment_count(post_id: i32, count: i64) {
     let _ = COMMENT_COUNT_CACHE
@@ -282,6 +349,7 @@ pub async fn set_comment_count(post_id: i32, count: i64) {
         .await;
 }
 
+/// 读取待审核评论总数缓存。
 #[cfg(feature = "server")]
 pub async fn get_pending_count() -> Option<i64> {
     PENDING_COUNT_CACHE
@@ -289,6 +357,7 @@ pub async fn get_pending_count() -> Option<i64> {
         .await
 }
 
+/// 写入待审核评论总数缓存。
 #[cfg(feature = "server")]
 pub async fn set_pending_count(count: i64) {
     let _ = PENDING_COUNT_CACHE
@@ -296,6 +365,7 @@ pub async fn set_pending_count(count: i64) {
         .await;
 }
 
+/// 按文章主键失效评论列表缓存。
 #[cfg(feature = "server")]
 pub async fn invalidate_comments_by_post(post_id: i32) {
     COMMENT_CACHE
@@ -303,6 +373,7 @@ pub async fn invalidate_comments_by_post(post_id: i32) {
         .await;
 }
 
+/// 按文章主键失效评论数量缓存。
 #[cfg(feature = "server")]
 pub async fn invalidate_comment_count(post_id: i32) {
     COMMENT_COUNT_CACHE
@@ -310,6 +381,7 @@ pub async fn invalidate_comment_count(post_id: i32) {
         .await;
 }
 
+/// 失效待审核评论总数缓存。
 #[cfg(feature = "server")]
 pub async fn invalidate_pending_count() {
     PENDING_COUNT_CACHE
@@ -317,6 +389,7 @@ pub async fn invalidate_pending_count() {
         .await;
 }
 
+/// 清空所有评论相关缓存。
 #[cfg(feature = "server")]
 #[allow(dead_code)]
 pub async fn invalidate_all_comment_caches() {
