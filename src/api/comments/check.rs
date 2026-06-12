@@ -1,18 +1,32 @@
+//! 评论审核状态批量查询。
+//!
+//! 用于前端轮询刚刚提交的评论是否已通过审核，支持传入多个 id。
+//! 仅在 `feature = "server"` 启用的服务端构建中查询数据库。
+
 use dioxus::prelude::*;
 
+/// 单个评论的待审核状态结果。
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PendingStatusItem {
+    /// 评论 id。
     pub id: i64,
+    /// 当前状态：approved / pending / rejected / spam / trash / gone。
     pub status: String,
 }
 
+/// 查询一组评论的当前审核状态。
+///
+/// 如果某 id 不存在，则返回状态 `"gone"`。
+/// Dioxus server function，注册在 `/api` 路径下。
 #[server(CheckPendingStatus, "/api")]
 pub async fn check_pending_status(ids: Vec<i64>) -> Result<Vec<PendingStatusItem>, ServerFnError> {
+    // 仅在服务端构建中执行 SQL 查询。
     #[cfg(feature = "server")]
     {
         use crate::api::error::AppError;
         use crate::db::pool::get_conn;
 
+        // 空列表直接返回空结果，避免无意义的数据库查询。
         if ids.is_empty() {
             return Ok(vec![]);
         }
@@ -27,6 +41,7 @@ pub async fn check_pending_status(ids: Vec<i64>) -> Result<Vec<PendingStatusItem
             .await
             .map_err(AppError::query)?;
 
+        // 将查询结果收集为 HashMap，便于后续按传入顺序补齐缺失项。
         let found: std::collections::HashMap<i64, String> = rows
             .iter()
             .map(|r| (r.get::<_, i64>(0), r.get::<_, String>(1)))

@@ -1,6 +1,18 @@
+//! 发表评论接口。
+//!
+//! 校验作者信息、父评论与目标文章，生成内容哈希防止重复提交，
+//! 新评论默认进入 pending 状态等待审核。
+//! Dioxus server function，注册在 `/api` 路径下。
+//! 仅在 `feature = "server"` 启用的服务端构建中写入数据库。
+
 use crate::api::comments::types::*;
 use dioxus::prelude::*;
 
+/// 创建一条新评论。
+///
+/// 对作者昵称、邮箱、网址与内容进行基础校验；
+/// 若目标文章未发布或父评论未通过审核，则拒绝提交；
+/// 成功后将评论置为 pending，并清空相关缓存。
 #[server(CreateComment, "/api")]
 pub async fn create_comment(
     post_id: i32,
@@ -20,6 +32,7 @@ pub async fn create_comment(
         use crate::cache;
         use crate::db::pool::get_conn;
 
+        // 从 FullstackContext 获取客户端 IP，并进行评论频率限流。
         if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
             let parts = ctx.parts_mut();
             let ip = crate::api::rate_limit::get_client_ip(&parts.headers);
@@ -35,6 +48,7 @@ pub async fn create_comment(
             }
         }
 
+        // 依次校验昵称、邮箱、网址与评论内容。
         if let Err(e) = validate_comment_name(&author_name) {
             return Ok(CommentResponse {
                 success: false,
@@ -80,6 +94,7 @@ pub async fn create_comment(
 
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
+        // 确认目标文章存在且处于已发布状态。
         let post_row = client
             .query_opt(
                 "SELECT status, deleted_at FROM posts WHERE id = $1",
@@ -115,6 +130,7 @@ pub async fn create_comment(
             }
         }
 
+        // 若存在父评论，校验其归属文章与审核状态，并计算当前评论的嵌套深度。
         let mut depth: i32 = 0;
         if let Some(pid) = parent_id {
             let parent_row = client
@@ -177,6 +193,7 @@ pub async fn create_comment(
             }
         }
 
+        // 基于文章、父评论、作者与内容计算哈希，防止短时间重复提交。
         let content_hash = compute_content_hash(post_id, parent_id, &author_name, &content_md);
 
         let dup: Option<i64> = client
@@ -199,8 +216,10 @@ pub async fn create_comment(
             });
         }
 
+        // 将 Markdown 渲染为 HTML，并通过 sanitizer 过滤危险标签。
         let content_html = crate::api::comments::markdown::render_comment_markdown(&content_md);
 
+        // 获取客户端 IP 与 User-Agent，用于反垃圾与审计。
         let ip_address = if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
             let parts = ctx.parts_mut();
             Some(crate::api::rate_limit::get_client_ip(&parts.headers))
@@ -219,6 +238,7 @@ pub async fn create_comment(
             None
         };
 
+        // 插入评论，默认状态为 pending，等待管理员审核。
         let row = client
             .query_one(
                 "INSERT INTO comments \
@@ -248,8 +268,10 @@ pub async fn create_comment(
 
         let comment_id: i64 = row.get(0);
 
+        // 根据邮箱生成 Gravatar 头像链接。
         let avatar_url = crate::api::comments::helpers::gravatar_url(&author_email);
 
+        // 新评论可能影响文章评论列表与计数，清空相关缓存。
         cache::invalidate_comments_by_post(post_id).await;
         cache::invalidate_comment_count(post_id).await;
 

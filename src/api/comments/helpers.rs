@@ -1,8 +1,14 @@
+//! 评论模块的辅助函数：数据转换、校验、哈希与头像生成。
+//!
+//! 大部分工具函数仅在 `feature = "server"` 启用的服务端构建中使用；
+//! 校验函数同时在前端构建中保留签名，避免编译器提示未使用。
+
 #![allow(clippy::unused_unit, deprecated)]
 
 #[cfg(feature = "server")]
 use crate::models::comment::{AdminComment, CommentStatus, PublicComment};
 
+/// 计算字符串的 MD5 哈希，用于 Gravatar。
 #[cfg(feature = "server")]
 pub fn md5_hash(input: &str) -> String {
     use md5::Digest;
@@ -10,12 +16,14 @@ pub fn md5_hash(input: &str) -> String {
     hex::encode(hash)
 }
 
+/// 根据邮箱生成 Cravatar（Gravatar 国内镜像）头像 URL。
 #[cfg(feature = "server")]
 pub fn gravatar_url(email: &str) -> String {
     let hash = md5_hash(&email.trim().to_lowercase());
     format!("https://cravatar.cn/avatar/{}?d=mp&s=80", hash)
 }
 
+/// 将数据库行转换为前端展示的公开评论结构。
 #[cfg(feature = "server")]
 pub fn row_to_public_comment(row: &tokio_postgres::Row) -> PublicComment {
     let email: String = row.get("author_email");
@@ -36,6 +44,7 @@ pub fn row_to_public_comment(row: &tokio_postgres::Row) -> PublicComment {
     }
 }
 
+/// 将数据库行转换为后台管理使用的评论结构。
 #[cfg(feature = "server")]
 pub fn row_to_admin_comment(row: &tokio_postgres::Row) -> AdminComment {
     let status_str: String = row.get("status");
@@ -58,6 +67,7 @@ pub fn row_to_admin_comment(row: &tokio_postgres::Row) -> AdminComment {
     }
 }
 
+/// 将 UTC 时间格式化为相对时间（刚刚 / N 分钟前 / N 小时前 / N 天前 / 日期）。
 pub fn format_relative_time(dt: chrono::DateTime<chrono::Utc>) -> String {
     let now = chrono::Utc::now();
     let diff = now.signed_duration_since(dt);
@@ -75,6 +85,7 @@ pub fn format_relative_time(dt: chrono::DateTime<chrono::Utc>) -> String {
     }
 }
 
+/// 校验评论作者昵称：非空且不超过 50 字符。
 #[allow(dead_code)]
 pub fn validate_comment_name(name: &str) -> Result<(), String> {
     let trimmed = name.trim();
@@ -87,6 +98,7 @@ pub fn validate_comment_name(name: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// 校验评论作者邮箱格式。
 #[allow(dead_code)]
 pub fn validate_comment_email(email: &str) -> Result<(), String> {
     let re = regex::Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap();
@@ -96,6 +108,7 @@ pub fn validate_comment_email(email: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// 校验评论作者网址：为空时允许，非空时必须以 http:// 或 https:// 开头且不超过 200 字符。
 #[allow(dead_code)]
 pub fn validate_comment_url(url: &str) -> Result<(), String> {
     let trimmed = url.trim();
@@ -112,6 +125,7 @@ pub fn validate_comment_url(url: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// 校验评论内容：非空且不超过 10000 字符。
 #[allow(dead_code)]
 pub fn validate_comment_content(content: &str) -> Result<(), String> {
     let trimmed = content.trim();
@@ -124,6 +138,7 @@ pub fn validate_comment_content(content: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// 计算评论内容哈希，用于检测短时间内的重复提交。
 pub fn compute_content_hash(
     post_id: i32,
     parent_id: Option<i64>,

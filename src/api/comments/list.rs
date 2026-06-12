@@ -1,6 +1,14 @@
+//! 评论列表查询接口：后台管理用的待审核列表、全部评论列表与待审核计数。
+//!
+//! 所有接口均需管理员身份，Dioxus server function 注册在 `/api` 路径下。
+//! 仅在 `feature = "server"` 启用的服务端构建中查询数据库。
+
 use crate::api::comments::types::*;
 use dioxus::prelude::*;
 
+/// 获取待审核评论分页列表。
+///
+/// 每页 20 条，按创建时间倒序排列，并返回总数用于分页。
 #[server(GetPendingComments, "/api")]
 pub async fn get_pending_comments(page: i32) -> Result<PendingCommentsResponse, ServerFnError> {
     #[cfg(feature = "server")]
@@ -48,6 +56,9 @@ pub async fn get_pending_comments(page: i32) -> Result<PendingCommentsResponse, 
     unreachable!()
 }
 
+/// 获取待审核评论总数。
+///
+/// 优先从缓存读取，未命中时查询数据库并写入缓存。
 #[server(GetPendingCount, "/api")]
 pub async fn get_pending_count() -> Result<PendingCountResponse, ServerFnError> {
     #[cfg(feature = "server")]
@@ -82,6 +93,9 @@ pub async fn get_pending_count() -> Result<PendingCountResponse, ServerFnError> 
     unreachable!()
 }
 
+/// 获取全部评论分页列表。
+///
+/// 支持按状态筛选；未指定状态时返回所有未删除评论。
 #[server(GetAllComments, "/api")]
 pub async fn get_all_comments(
     page: i32,
@@ -102,6 +116,7 @@ pub async fn get_all_comments(
 
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
+        // 根据是否传入状态参数，分别构造 SQL 与查询条件。
         let (total, rows) = match status.as_deref() {
             Some(s) if !s.is_empty() => {
                 let total: i64 = client

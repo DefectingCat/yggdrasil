@@ -1,5 +1,11 @@
+//! 评论 Markdown 渲染与 HTML 清洗。
+//!
+//! 对评论内容做轻量 Markdown 解析，限制标签白名单并转义危险字符。
+//! 仅在 `feature = "server"` 启用的服务端构建中实际执行渲染。
+
 #![allow(clippy::unused_unit, deprecated)]
 
+/// 转义 HTML 特殊字符，用于无语言信息的代码块。
 #[cfg(feature = "server")]
 fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;")
@@ -8,11 +14,19 @@ fn html_escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
+/// 清洗评论 HTML，移除危险标签与属性。
+///
+/// 实际委托给 `crate::api::sanitizer::clean_comment_html` 实现。
 #[cfg(feature = "server")]
 pub fn clean_comment_html(input: &str) -> String {
     crate::api::sanitizer::clean_comment_html(input)
 }
 
+/// 将评论 Markdown 渲染为安全的 HTML。
+///
+/// 支持表格与删除线；标题统一渲染为 `<strong>` 以避免层级混乱；
+/// 代码块若指定语言则调用服务端高亮，否则转义 HTML；
+/// 最终调用 `clean_comment_html` 过滤危险内容。
 #[cfg(feature = "server")]
 pub fn render_comment_markdown(md: &str) -> String {
     use pulldown_cmark::{CodeBlockKind, Event, Options, Tag, TagEnd};
@@ -25,9 +39,11 @@ pub fn render_comment_markdown(md: &str) -> String {
     let mut code_lang: Option<String> = None;
     let mut code_buffer = String::new();
 
+    // 逐事件处理 Markdown AST，转换标题并收集代码块内容。
     for event in parser {
         match event {
             Event::Start(Tag::Heading { .. }) => {
+                // 评论中不保留标题层级，统一加粗。
                 events.push(Event::Start(Tag::Strong));
             }
             Event::End(TagEnd::Heading(_)) => {
@@ -45,6 +61,7 @@ pub fn render_comment_markdown(md: &str) -> String {
                 code_buffer.push_str(&text);
             }
             Event::End(TagEnd::CodeBlock) => {
+                // 根据是否有语言信息决定高亮或转义。
                 let html = if let Some(ref lang) = code_lang {
                     let highlighted =
                         crate::highlight::server::highlight_code(&code_buffer, Some(lang));
