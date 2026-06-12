@@ -65,7 +65,8 @@ pub async fn update_post(
             _ => crate::api::slug::slugify(&title),
         };
 
-        let final_slug = crate::api::slug::ensure_unique_slug(&client, &base_slug, Some(post_id)).await?;
+        let final_slug =
+            crate::api::slug::ensure_unique_slug(&client, &base_slug, Some(post_id)).await?;
         let rendered = crate::api::markdown::render_markdown_enhanced(&content_md);
         let content_html = rendered.html;
         let toc_html = if rendered.toc_html.is_empty() {

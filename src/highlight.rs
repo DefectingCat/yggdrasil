@@ -2,7 +2,7 @@
 pub mod server {
     use std::sync::LazyLock;
 
-    use syntect::html::{ClassedHTMLGenerator, ClassStyle};
+    use syntect::html::{ClassStyle, ClassedHTMLGenerator};
     use syntect::parsing::SyntaxSet;
     use syntect::util::LinesWithEndings;
 

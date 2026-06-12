@@ -1,10 +1,10 @@
 use dioxus::prelude::*;
 
 use super::types::TagListResponse;
-use crate::db::pool::get_conn;
-use crate::models::post::Tag;
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
+use crate::db::pool::get_conn;
+use crate::models::post::Tag;
 
 #[server(ListTags, "/api")]
 pub async fn list_tags() -> Result<TagListResponse, ServerFnError> {

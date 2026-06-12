@@ -38,5 +38,3 @@ pub fn AdminDashboardSkeleton() -> Element {
         }
     }
 }
-
-

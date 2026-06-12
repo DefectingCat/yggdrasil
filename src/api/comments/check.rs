@@ -10,8 +10,8 @@ pub struct PendingStatusItem {
 pub async fn check_pending_status(ids: Vec<i64>) -> Result<Vec<PendingStatusItem>, ServerFnError> {
     #[cfg(feature = "server")]
     {
-        use crate::db::pool::get_conn;
         use crate::api::error::AppError;
+        use crate::db::pool::get_conn;
 
         if ids.is_empty() {
             return Ok(vec![]);
@@ -35,7 +35,10 @@ pub async fn check_pending_status(ids: Vec<i64>) -> Result<Vec<PendingStatusItem
         let result: Vec<PendingStatusItem> = ids
             .into_iter()
             .map(|id| {
-                let status = found.get(&id).cloned().unwrap_or_else(|| "gone".to_string());
+                let status = found
+                    .get(&id)
+                    .cloned()
+                    .unwrap_or_else(|| "gone".to_string());
                 PendingStatusItem { id, status }
             })
             .collect();

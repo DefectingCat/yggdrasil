@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use crate::components::skeletons::atoms::*;
+use dioxus::prelude::*;
 
 /// 文章详情页骨架屏
 /// 结构：面包屑 + 标题(h1) + 摘要 + 元信息 + 封面图 + 正文(多段) + Footer

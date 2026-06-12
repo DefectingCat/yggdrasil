@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use crate::components::skeletons::atoms::*;
+use dioxus::prelude::*;
 
 #[component]
 pub fn CommentListSkeleton() -> Element {

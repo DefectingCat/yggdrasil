@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use crate::utils::time::sleep_ms;
+use dioxus::prelude::*;
 
 /// 骨架屏 pulse 动画延迟（毫秒）
 /// 加载时间低于此值时骨架屏只显示静态灰色块，避免 pulse 动画一闪而过

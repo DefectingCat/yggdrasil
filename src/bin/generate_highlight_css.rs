@@ -36,8 +36,7 @@ fn main() {
     output.push_str(&mocha_rewritten);
 
     std::fs::create_dir_all("public").expect("Failed to create public/");
-    std::fs::write("public/highlight.css", output)
-        .expect("Failed to write public/highlight.css");
+    std::fs::write("public/highlight.css", output).expect("Failed to write public/highlight.css");
 
     println!("Generated public/highlight.css");
 }

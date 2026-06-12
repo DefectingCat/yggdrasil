@@ -1,16 +1,14 @@
-use dioxus::prelude::*;
 use crate::api::comments::types::*;
+use dioxus::prelude::*;
 
 #[server(GetPendingComments, "/api")]
-pub async fn get_pending_comments(
-    page: i32,
-) -> Result<PendingCommentsResponse, ServerFnError> {
+pub async fn get_pending_comments(page: i32) -> Result<PendingCommentsResponse, ServerFnError> {
     #[cfg(feature = "server")]
     {
-        use crate::db::pool::get_conn;
-        use crate::api::error::AppError;
-        use crate::api::comments::helpers::row_to_admin_comment;
         use crate::api::auth::get_current_admin_user;
+        use crate::api::comments::helpers::row_to_admin_comment;
+        use crate::api::error::AppError;
+        use crate::db::pool::get_conn;
 
         let _admin = get_current_admin_user().await?;
 
@@ -54,10 +52,10 @@ pub async fn get_pending_comments(
 pub async fn get_pending_count() -> Result<PendingCountResponse, ServerFnError> {
     #[cfg(feature = "server")]
     {
+        use crate::api::auth::get_current_admin_user;
+        use crate::api::error::AppError;
         use crate::cache;
         use crate::db::pool::get_conn;
-        use crate::api::error::AppError;
-        use crate::api::auth::get_current_admin_user;
 
         let _admin = get_current_admin_user().await?;
 
@@ -91,10 +89,10 @@ pub async fn get_all_comments(
 ) -> Result<AllCommentsResponse, ServerFnError> {
     #[cfg(feature = "server")]
     {
-        use crate::db::pool::get_conn;
-        use crate::api::error::AppError;
-        use crate::api::comments::helpers::row_to_admin_comment;
         use crate::api::auth::get_current_admin_user;
+        use crate::api::comments::helpers::row_to_admin_comment;
+        use crate::api::error::AppError;
+        use crate::db::pool::get_conn;
 
         let _admin = get_current_admin_user().await?;
 

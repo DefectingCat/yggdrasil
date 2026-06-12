@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use crate::utils::time::sleep_ms;
+use dioxus::prelude::*;
 
 /// 骨架屏最小显示延迟（毫秒）。加载时间低于此值时不会显示骨架屏，避免闪烁。
 pub const MIN_SKELETON_DELAY_MS: u32 = 200;

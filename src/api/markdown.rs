@@ -204,9 +204,7 @@ fn generate_toc_html(headings: &[(u8, String, String)]) -> String {
         let clean_text = clean_html(text);
         html.push_str(&format!(
             "<li><a href=\"#{}\" aria-label=\"{}\">{}</a>",
-            id,
-            clean_text,
-            clean_text
+            id, clean_text, clean_text
         ));
     }
 
@@ -367,7 +365,11 @@ mod tests {
     #[test]
     fn render_markdown_data_uri_image() {
         let result = render_markdown_enhanced("![alt](data:image/svg+xml,%3csvg%3e%3c/svg%3e)");
-        assert!(result.html.contains("data:image/svg+xml"), "data URI should be preserved in img src, got: {}", result.html);
+        assert!(
+            result.html.contains("data:image/svg+xml"),
+            "data URI should be preserved in img src, got: {}",
+            result.html
+        );
         assert!(result.html.contains("alt=\"alt\""));
     }
 }

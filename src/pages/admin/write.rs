@@ -4,7 +4,9 @@ use dioxus::prelude::*;
 use wasm_bindgen::JsCast;
 
 #[cfg(target_arch = "wasm32")]
-use crate::api::posts::{create_post, get_post_by_id, update_post, CreatePostResponse, SinglePostResponse};
+use crate::api::posts::{
+    create_post, get_post_by_id, update_post, CreatePostResponse, SinglePostResponse,
+};
 use crate::components::write_skeleton::WriteSkeleton;
 use crate::models::post::Post;
 use crate::router::Route;
@@ -63,21 +65,21 @@ fn write_editor(post_id: Option<i32>) -> Element {
         if is_edit {
             #[cfg(target_arch = "wasm32")]
             if let Some(id) = post_id {
-            spawn(async move {
-                match get_post_by_id(id).await {
-                    Ok(SinglePostResponse { post: Some(post) }) => {
-                        edit_post.set(Some(post));
+                spawn(async move {
+                    match get_post_by_id(id).await {
+                        Ok(SinglePostResponse { post: Some(post) }) => {
+                            edit_post.set(Some(post));
+                        }
+                        Ok(SinglePostResponse { post: None }) => {
+                            load_error.set(Some("文章不存在".to_string()));
+                        }
+                        Err(e) => {
+                            load_error.set(Some(format!("加载失败: {}", e)));
+                        }
                     }
-                    Ok(SinglePostResponse { post: None }) => {
-                        load_error.set(Some("文章不存在".to_string()));
-                    }
-                    Err(e) => {
-                        load_error.set(Some(format!("加载失败: {}", e)));
-                    }
-                }
-            });
+                });
+            }
         }
-    }
     });
 
     #[cfg(target_arch = "wasm32")]

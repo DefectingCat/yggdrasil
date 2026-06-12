@@ -63,7 +63,10 @@ mod tests {
             !msg.contains("5432"),
             "should not leak internal details: {msg}"
         );
-        assert!(msg.contains("服务暂时不可用"), "expected generic message: {msg}");
+        assert!(
+            msg.contains("服务暂时不可用"),
+            "expected generic message: {msg}"
+        );
     }
 
     #[test]

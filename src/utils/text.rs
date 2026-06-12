@@ -1,28 +1,21 @@
 use std::sync::LazyLock;
 
-static CODE_BLOCK_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"```[\s\S]*?```").unwrap()
-});
+static CODE_BLOCK_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"```[\s\S]*?```").unwrap());
 
-static INLINE_CODE_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"`[^`]*`").unwrap()
-});
+static INLINE_CODE_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"`[^`]*`").unwrap());
 
-static LINK_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"\[([^\]]*)\]\([^)]*\)").unwrap()
-});
+static LINK_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"\[([^\]]*)\]\([^)]*\)").unwrap());
 
-static HEADING_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"^#{1,6}\s*").unwrap()
-});
+static HEADING_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"^#{1,6}\s*").unwrap());
 
-static IMAGE_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"!\[([^\]]*)\]\([^)]*\)").unwrap()
-});
+static IMAGE_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"!\[([^\]]*)\]\([^)]*\)").unwrap());
 
-static WHITESPACE_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"\s+").unwrap()
-});
+static WHITESPACE_RE: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"\s+").unwrap());
 
 pub fn strip_markdown(md: &str) -> String {
     let mut plain = CODE_BLOCK_RE.replace_all(md, "").to_string();
@@ -88,7 +81,10 @@ mod tests {
 
     #[test]
     fn strip_markdown_keeps_link_text() {
-        assert_eq!(strip_markdown("[click me](https://example.com)"), "click me");
+        assert_eq!(
+            strip_markdown("[click me](https://example.com)"),
+            "click me"
+        );
     }
 
     #[test]
@@ -98,7 +94,10 @@ mod tests {
 
     #[test]
     fn strip_markdown_removes_bold_and_italic() {
-        assert_eq!(strip_markdown("**bold** *italic* __bold__ _italic_"), "bold italic bold italic");
+        assert_eq!(
+            strip_markdown("**bold** *italic* __bold__ _italic_"),
+            "bold italic bold italic"
+        );
     }
 
     #[test]

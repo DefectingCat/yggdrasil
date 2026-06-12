@@ -261,7 +261,11 @@ mod tests {
         let uuid = "abc-123";
         let ext = "jpg";
         let file_name = format!("{}.{}.{}", now_str, uuid, ext);
-        assert!(!file_name.contains(' '), "filename should not contain spaces: got '{}'", file_name);
+        assert!(
+            !file_name.contains(' '),
+            "filename should not contain spaces: got '{}'",
+            file_name
+        );
     }
 
     #[test]
@@ -297,5 +301,3 @@ mod tests {
         assert!(loaded.is_ok());
     }
 }
-
-

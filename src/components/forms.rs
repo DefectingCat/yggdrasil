@@ -13,7 +13,11 @@ pub fn FormInput(
     oninput: EventHandler<String>,
     onkeydown: Option<EventHandler<KeyboardEvent>>,
 ) -> Element {
-    let disabled_class = if disabled { "opacity-60 cursor-not-allowed" } else { "" };
+    let disabled_class = if disabled {
+        "opacity-60 cursor-not-allowed"
+    } else {
+        ""
+    };
     rsx! {
         input {
             class: "{INPUT_CLASS} {disabled_class}",
@@ -43,8 +47,14 @@ pub fn FormLabel(label: &'static str) -> Element {
 #[component]
 pub fn AlertBox(message: String, variant: &'static str) -> Element {
     let (bg_class, text_class) = match variant {
-        "error" => ("bg-red-100 dark:bg-red-900/30", "text-red-700 dark:text-red-300"),
-        "success" => ("bg-green-100 dark:bg-green-900/30", "text-green-700 dark:text-green-300"),
+        "error" => (
+            "bg-red-100 dark:bg-red-900/30",
+            "text-red-700 dark:text-red-300",
+        ),
+        "success" => (
+            "bg-green-100 dark:bg-green-900/30",
+            "text-green-700 dark:text-green-300",
+        ),
         _ => ("bg-paper-code-bg", "text-paper-secondary"),
     };
     rsx! {

@@ -2,8 +2,8 @@ use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
 use crate::api::posts::{list_published_posts, PostListResponse};
-use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::archive_skeleton::ArchiveSkeleton;
+use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::models::post::Post;
 use crate::router::Route;
 

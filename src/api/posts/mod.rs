@@ -1,27 +1,32 @@
-#![allow(clippy::unused_unit, deprecated, unused_imports, clippy::too_many_arguments)]
+#![allow(
+    clippy::unused_unit,
+    deprecated,
+    unused_imports,
+    clippy::too_many_arguments
+)]
 
-mod types;
-mod helpers;
 mod create;
-mod update;
 mod delete;
-mod read;
+mod helpers;
 mod list;
-mod search;
-mod tags;
-mod stats;
+mod read;
 mod rebuild;
+mod search;
+mod stats;
+mod tags;
+mod types;
+mod update;
 
-pub use types::*;
 pub use create::create_post;
-pub use update::update_post;
 pub use delete::delete_post;
+pub use list::{get_posts_by_tag, list_posts, list_published_posts};
 pub use read::{get_post_by_id, get_post_by_slug};
-pub use list::{list_published_posts, list_posts, get_posts_by_tag};
-pub use search::search_posts;
-pub use tags::list_tags;
-pub use stats::get_post_stats;
 pub use rebuild::rebuild_content_html;
+pub use search::search_posts;
+pub use stats::get_post_stats;
+pub use tags::list_tags;
+pub use types::*;
+pub use update::update_post;
 
 #[cfg(feature = "server")]
 pub use crate::api::markdown::render_markdown_enhanced;

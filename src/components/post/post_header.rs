@@ -9,7 +9,7 @@ pub fn PostHeader(post: Post) -> Element {
     rsx! {
         header { class: "post-header",
             Breadcrumbs { title: post.title.clone() }
-            
+
             h1 { class: "post-title",
                 "{post.title}"
                 if post.status == PostStatus::Draft {

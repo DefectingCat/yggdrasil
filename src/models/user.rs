@@ -95,6 +95,9 @@ mod tests {
     #[test]
     fn user_role_serde_roundtrip() {
         let json = serde_json::to_string(&UserRole::Admin).unwrap();
-        assert_eq!(serde_json::from_str::<UserRole>(&json).unwrap(), UserRole::Admin);
+        assert_eq!(
+            serde_json::from_str::<UserRole>(&json).unwrap(),
+            UserRole::Admin
+        );
     }
 }

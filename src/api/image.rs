@@ -266,7 +266,10 @@ async fn write_disk_cache(cache_key: &str, cached: &CachedImage) {
         tracing::warn!("Failed to create cache dir: {:?}", e);
         return;
     }
-    let ct_str = cached.content_type.to_str().unwrap_or("application/octet-stream");
+    let ct_str = cached
+        .content_type
+        .to_str()
+        .unwrap_or("application/octet-stream");
     if let Err(e) = tokio::fs::write(format!("{}.dat", base), &cached.data).await {
         tracing::warn!("Failed to write disk cache data: {:?}", e);
     }
@@ -319,10 +322,15 @@ pub async fn serve_image(
     }
 
     if let Some(cached) = read_disk_cache(&cache_key).await {
-        let _ = IMAGE_CACHE.insert(cache_key.clone(), CachedImage {
-            data: cached.data.clone(),
-            content_type: cached.content_type.clone(),
-        }).await;
+        let _ = IMAGE_CACHE
+            .insert(
+                cache_key.clone(),
+                CachedImage {
+                    data: cached.data.clone(),
+                    content_type: cached.content_type.clone(),
+                },
+            )
+            .await;
         return (
             StatusCode::OK,
             [(header::CONTENT_TYPE, cached.content_type)],
@@ -388,77 +396,113 @@ mod tests {
 
     #[test]
     fn image_params_validate_valid_width() {
-        let params = ImageParams { w: Some(100), ..Default::default() };
+        let params = ImageParams {
+            w: Some(100),
+            ..Default::default()
+        };
         assert!(params.validate().is_ok());
     }
 
     #[test]
     fn image_params_validate_zero_width_rejected() {
-        let params = ImageParams { w: Some(0), ..Default::default() };
+        let params = ImageParams {
+            w: Some(0),
+            ..Default::default()
+        };
         assert!(params.validate().is_err());
     }
 
     #[test]
     fn image_params_validate_oversized_width_rejected() {
-        let params = ImageParams { w: Some(5000), ..Default::default() };
+        let params = ImageParams {
+            w: Some(5000),
+            ..Default::default()
+        };
         assert!(params.validate().is_err());
     }
 
     #[test]
     fn image_params_validate_valid_rotation() {
         for angle in [0, 90, 180, 270] {
-            let params = ImageParams { rotate: Some(angle), ..Default::default() };
+            let params = ImageParams {
+                rotate: Some(angle),
+                ..Default::default()
+            };
             assert!(params.validate().is_ok(), "angle {} should be valid", angle);
         }
     }
 
     #[test]
     fn image_params_validate_invalid_rotation_rejected() {
-        let params = ImageParams { rotate: Some(45), ..Default::default() };
+        let params = ImageParams {
+            rotate: Some(45),
+            ..Default::default()
+        };
         assert!(params.validate().is_err());
     }
 
     #[test]
     fn image_params_validate_valid_format() {
         for fmt in &["jpeg", "jpg", "png", "webp", "JPEG", "PNG"] {
-            let params = ImageParams { format: Some(fmt.to_string()), ..Default::default() };
+            let params = ImageParams {
+                format: Some(fmt.to_string()),
+                ..Default::default()
+            };
             assert!(params.validate().is_ok(), "format {} should be valid", fmt);
         }
     }
 
     #[test]
     fn image_params_validate_invalid_format_rejected() {
-        let params = ImageParams { format: Some("gif".to_string()), ..Default::default() };
+        let params = ImageParams {
+            format: Some("gif".to_string()),
+            ..Default::default()
+        };
         assert!(params.validate().is_err());
     }
 
     #[test]
     fn image_params_validate_valid_thumbnail() {
-        let params = ImageParams { thumb: Some("200x150".to_string()), ..Default::default() };
+        let params = ImageParams {
+            thumb: Some("200x150".to_string()),
+            ..Default::default()
+        };
         assert!(params.validate().is_ok());
     }
 
     #[test]
     fn image_params_validate_invalid_thumbnail_rejected() {
-        let params = ImageParams { thumb: Some("200".to_string()), ..Default::default() };
+        let params = ImageParams {
+            thumb: Some("200".to_string()),
+            ..Default::default()
+        };
         assert!(params.validate().is_err());
     }
 
     #[test]
     fn image_params_validate_valid_quality() {
-        let params = ImageParams { quality: Some(85), ..Default::default() };
+        let params = ImageParams {
+            quality: Some(85),
+            ..Default::default()
+        };
         assert!(params.validate().is_ok());
     }
 
     #[test]
     fn image_params_validate_zero_quality_rejected() {
-        let params = ImageParams { quality: Some(0), ..Default::default() };
+        let params = ImageParams {
+            quality: Some(0),
+            ..Default::default()
+        };
         assert!(params.validate().is_err());
     }
 
     #[test]
     fn image_params_validate_over_100_quality_rejected() {
-        let params = ImageParams { quality: Some(101), ..Default::default() };
+        let params = ImageParams {
+            quality: Some(101),
+            ..Default::default()
+        };
         assert!(params.validate().is_err());
     }
 
@@ -486,9 +530,18 @@ mod tests {
 
     #[test]
     fn detect_format_jpeg() {
-        assert!(matches!(detect_format("photo.jpg"), image::ImageFormat::Jpeg));
-        assert!(matches!(detect_format("photo.jpeg"), image::ImageFormat::Jpeg));
-        assert!(matches!(detect_format("PHOTO.JPG"), image::ImageFormat::Jpeg));
+        assert!(matches!(
+            detect_format("photo.jpg"),
+            image::ImageFormat::Jpeg
+        ));
+        assert!(matches!(
+            detect_format("photo.jpeg"),
+            image::ImageFormat::Jpeg
+        ));
+        assert!(matches!(
+            detect_format("PHOTO.JPG"),
+            image::ImageFormat::Jpeg
+        ));
     }
 
     #[test]
@@ -498,18 +551,30 @@ mod tests {
 
     #[test]
     fn detect_format_webp() {
-        assert!(matches!(detect_format("anim.webp"), image::ImageFormat::WebP));
+        assert!(matches!(
+            detect_format("anim.webp"),
+            image::ImageFormat::WebP
+        ));
     }
 
     #[test]
     fn detect_format_defaults_to_jpeg() {
-        assert!(matches!(detect_format("file.xyz"), image::ImageFormat::Jpeg));
+        assert!(matches!(
+            detect_format("file.xyz"),
+            image::ImageFormat::Jpeg
+        ));
     }
 
     #[test]
     fn cache_key_differs_for_different_params() {
-        let p1 = ImageParams { w: Some(100), ..Default::default() };
-        let p2 = ImageParams { w: Some(200), ..Default::default() };
+        let p1 = ImageParams {
+            w: Some(100),
+            ..Default::default()
+        };
+        let p2 = ImageParams {
+            w: Some(200),
+            ..Default::default()
+        };
         assert_ne!(p1.cache_key("img.jpg"), p2.cache_key("img.jpg"));
     }
 
@@ -521,7 +586,10 @@ mod tests {
 
     #[test]
     fn is_empty_false_when_any_set() {
-        let params = ImageParams { w: Some(100), ..Default::default() };
+        let params = ImageParams {
+            w: Some(100),
+            ..Default::default()
+        };
         assert!(!params.is_empty());
     }
 

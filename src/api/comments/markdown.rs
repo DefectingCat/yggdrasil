@@ -36,9 +36,7 @@ pub fn render_comment_markdown(md: &str) -> String {
             Event::Start(Tag::CodeBlock(kind)) => {
                 in_codeblock = true;
                 code_lang = match kind {
-                    CodeBlockKind::Fenced(lang) if !lang.is_empty() => {
-                        Some(lang.to_string())
-                    }
+                    CodeBlockKind::Fenced(lang) if !lang.is_empty() => Some(lang.to_string()),
                     _ => None,
                 };
                 code_buffer.clear();
@@ -83,10 +81,19 @@ mod tests {
     #[test]
     fn render_comment_heading_all_levels() {
         for md in &[
-            "# H1", "## H2", "### H3", "#### H4", "##### H5", "###### H6",
+            "# H1",
+            "## H2",
+            "### H3",
+            "#### H4",
+            "##### H5",
+            "###### H6",
         ] {
             let result = render_comment_markdown(md);
-            assert!(result.contains("<strong>"), "heading not converted for: {}", md);
+            assert!(
+                result.contains("<strong>"),
+                "heading not converted for: {}",
+                md
+            );
         }
     }
 
@@ -162,7 +169,8 @@ mod tests {
 
     #[test]
     fn clean_comment_html_removes_details_summary() {
-        let result = clean_comment_html("<details><summary>Click</summary><p>Content</p></details>");
+        let result =
+            clean_comment_html("<details><summary>Click</summary><p>Content</p></details>");
         assert!(!result.contains("details"));
         assert!(!result.contains("summary"));
     }

@@ -15,7 +15,10 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
 
         let q = query.trim();
         if q.is_empty() {
-            return Ok(PostListResponse { posts: Vec::new(), total: 0 });
+            return Ok(PostListResponse {
+                posts: Vec::new(),
+                total: 0,
+            });
         }
 
         let rows = client
@@ -49,6 +52,9 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
 
     #[cfg(not(feature = "server"))]
     {
-        Ok(PostListResponse { posts: Vec::new(), total: 0 })
+        Ok(PostListResponse {
+            posts: Vec::new(),
+            total: 0,
+        })
     }
 }

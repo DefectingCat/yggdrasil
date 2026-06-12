@@ -1,16 +1,14 @@
-use dioxus::prelude::*;
 use crate::api::comments::types::*;
+use dioxus::prelude::*;
 
 #[server(GetComments, "/api")]
-pub async fn get_comments(
-    post_id: i32,
-) -> Result<CommentTreeResponse, ServerFnError> {
+pub async fn get_comments(post_id: i32) -> Result<CommentTreeResponse, ServerFnError> {
     #[cfg(feature = "server")]
     {
-        use crate::cache;
-        use crate::db::pool::get_conn;
         use crate::api::comments::helpers::row_to_public_comment;
         use crate::api::error::AppError;
+        use crate::cache;
+        use crate::db::pool::get_conn;
 
         if let Some(cached) = cache::get_comments_by_post(post_id).await {
             let count = cached.len() as i64;
@@ -45,14 +43,12 @@ pub async fn get_comments(
 }
 
 #[server(GetCommentCount, "/api")]
-pub async fn get_comment_count(
-    post_id: i32,
-) -> Result<CommentCountResponse, ServerFnError> {
+pub async fn get_comment_count(post_id: i32) -> Result<CommentCountResponse, ServerFnError> {
     #[cfg(feature = "server")]
     {
+        use crate::api::error::AppError;
         use crate::cache;
         use crate::db::pool::get_conn;
-        use crate::api::error::AppError;
 
         if let Some(cached) = cache::get_comment_count(post_id).await {
             return Ok(CommentCountResponse { count: cached });

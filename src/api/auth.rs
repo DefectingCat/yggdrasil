@@ -4,11 +4,11 @@ use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use http::header::{HeaderValue, SET_COOKIE};
 
-use crate::auth::{password, session};
-#[cfg(feature = "server")]
-use crate::auth::session::get_session_from_ctx;
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
+#[cfg(feature = "server")]
+use crate::auth::session::get_session_from_ctx;
+use crate::auth::{password, session};
 use crate::db::pool::get_conn;
 use crate::models::user::{PublicUser, User, UserRole};
 
@@ -106,7 +106,8 @@ pub async fn register(
         });
     }
 
-    let password_hash = password::hash_password(&password).map_err(|_| AppError::Internal("密码处理失败"))?;
+    let password_hash =
+        password::hash_password(&password).map_err(|_| AppError::Internal("密码处理失败"))?;
 
     let result = client
         .query_one(
@@ -176,7 +177,8 @@ pub async fn login(username: String, password: String) -> Result<AuthResponse, S
     };
 
     let password_hash: String = row.get("password_hash");
-    let valid = password::verify_password(&password, &password_hash).map_err(|_| AppError::Internal("密码处理失败"))?;
+    let valid = password::verify_password(&password, &password_hash)
+        .map_err(|_| AppError::Internal("密码处理失败"))?;
 
     if !valid {
         return Ok(AuthResponse {

@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use crate::api::comments::types::*;
+use dioxus::prelude::*;
 
 #[server(CreateComment, "/api")]
 pub async fn create_comment(
@@ -12,13 +12,13 @@ pub async fn create_comment(
 ) -> Result<CommentResponse, ServerFnError> {
     #[cfg(feature = "server")]
     {
+        use crate::api::comments::helpers::{
+            compute_content_hash, validate_comment_content, validate_comment_email,
+            validate_comment_name, validate_comment_url,
+        };
+        use crate::api::error::AppError;
         use crate::cache;
         use crate::db::pool::get_conn;
-        use crate::api::error::AppError;
-        use crate::api::comments::helpers::{
-            validate_comment_name, validate_comment_email, validate_comment_url,
-            validate_comment_content, compute_content_hash,
-        };
 
         if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
             let parts = ctx.parts_mut();
@@ -177,12 +177,7 @@ pub async fn create_comment(
             }
         }
 
-        let content_hash = compute_content_hash(
-            post_id,
-            parent_id,
-            &author_name,
-            &content_md,
-        );
+        let content_hash = compute_content_hash(post_id, parent_id, &author_name, &content_md);
 
         let dup: Option<i64> = client
             .query_opt(
@@ -215,7 +210,8 @@ pub async fn create_comment(
 
         let user_agent = if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
             let parts = ctx.parts_mut();
-            parts.headers
+            parts
+                .headers
                 .get("user-agent")
                 .and_then(|v| v.to_str().ok())
                 .map(|s| s.to_string())
@@ -236,7 +232,10 @@ pub async fn create_comment(
                     &depth,
                     &author_name.trim(),
                     &author_email.trim(),
-                    &author_url.as_ref().map(|u| u.trim()).filter(|u| !u.is_empty()),
+                    &author_url
+                        .as_ref()
+                        .map(|u| u.trim())
+                        .filter(|u| !u.is_empty()),
                     &content_md,
                     &content_html,
                     &content_hash,

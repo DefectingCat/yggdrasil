@@ -1,8 +1,8 @@
 use dioxus::prelude::*;
 
-use crate::models::comment::PublicComment;
-use crate::components::comments::section::CommentContext;
 use crate::components::comments::form::CommentForm;
+use crate::components::comments::section::CommentContext;
+use crate::models::comment::PublicComment;
 
 #[component]
 pub fn CommentItem(comment: PublicComment, post_id: i32) -> Element {

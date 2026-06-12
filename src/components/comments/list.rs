@@ -1,9 +1,9 @@
 use dioxus::prelude::*;
 
-use crate::models::comment::PublicComment;
-use crate::hooks::comment_storage::PendingComment;
 use crate::components::comments::item::CommentItem;
 use crate::components::comments::pending_item::PendingCommentItem;
+use crate::hooks::comment_storage::PendingComment;
+use crate::models::comment::PublicComment;
 
 #[derive(Clone)]
 enum MergedComment {
@@ -23,10 +23,13 @@ fn merge_and_treeify(
         .chain(pending.into_iter().map(MergedComment::Pending))
         .collect();
 
-    let all_ids: HashSet<i64> = all.iter().map(|c| match c {
-        MergedComment::Approved(c) => c.id,
-        MergedComment::Pending(c) => c.id,
-    }).collect();
+    let all_ids: HashSet<i64> = all
+        .iter()
+        .map(|c| match c {
+            MergedComment::Approved(c) => c.id,
+            MergedComment::Pending(c) => c.id,
+        })
+        .collect();
 
     let mut children_map: HashMap<Option<i64>, Vec<MergedComment>> = HashMap::new();
     for comment in all {
@@ -38,7 +41,10 @@ fn merge_and_treeify(
             Some(pid) if !all_ids.contains(&pid) => None,
             _ => parent_id,
         };
-        children_map.entry(effective_parent).or_default().push(comment);
+        children_map
+            .entry(effective_parent)
+            .or_default()
+            .push(comment);
     }
 
     for children in children_map.values_mut() {

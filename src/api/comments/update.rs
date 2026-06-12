@@ -1,14 +1,14 @@
-use dioxus::prelude::*;
 use crate::api::comments::types::*;
+use dioxus::prelude::*;
 
 #[server(ApproveComment, "/api")]
 pub async fn approve_comment(id: i64) -> Result<CommentResponse, ServerFnError> {
     #[cfg(feature = "server")]
     {
+        use crate::api::auth::get_current_admin_user;
+        use crate::api::error::AppError;
         use crate::cache;
         use crate::db::pool::get_conn;
-        use crate::api::error::AppError;
-        use crate::api::auth::get_current_admin_user;
 
         let _admin = get_current_admin_user().await?;
 
@@ -79,10 +79,10 @@ pub async fn approve_comment(id: i64) -> Result<CommentResponse, ServerFnError> 
 pub async fn spam_comment(id: i64) -> Result<CommentResponse, ServerFnError> {
     #[cfg(feature = "server")]
     {
+        use crate::api::auth::get_current_admin_user;
+        use crate::api::error::AppError;
         use crate::cache;
         use crate::db::pool::get_conn;
-        use crate::api::error::AppError;
-        use crate::api::auth::get_current_admin_user;
 
         let _admin = get_current_admin_user().await?;
 
@@ -132,10 +132,10 @@ pub async fn spam_comment(id: i64) -> Result<CommentResponse, ServerFnError> {
 pub async fn trash_comment(id: i64) -> Result<CommentResponse, ServerFnError> {
     #[cfg(feature = "server")]
     {
+        use crate::api::auth::get_current_admin_user;
+        use crate::api::error::AppError;
         use crate::cache;
         use crate::db::pool::get_conn;
-        use crate::api::error::AppError;
-        use crate::api::auth::get_current_admin_user;
 
         let _admin = get_current_admin_user().await?;
 
@@ -185,10 +185,10 @@ pub async fn batch_update_comment_status(
 ) -> Result<BatchStatusResponse, ServerFnError> {
     #[cfg(feature = "server")]
     {
+        use crate::api::auth::get_current_admin_user;
+        use crate::api::error::AppError;
         use crate::cache;
         use crate::db::pool::get_conn;
-        use crate::api::error::AppError;
-        use crate::api::auth::get_current_admin_user;
 
         let _admin = get_current_admin_user().await?;
 

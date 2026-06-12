@@ -3,17 +3,18 @@ use dioxus::prelude::*;
 #[component]
 pub fn ImageViewer(
     src: String,
-    #[props(default = "?w=800".to_string())]
-    thumb_params: String,
-    #[props(default = "图片".to_string())]
-    alt: String,
-    #[props(default = false)]
-    lazy_load: bool,
+    #[props(default = "?w=800".to_string())] thumb_params: String,
+    #[props(default = "图片".to_string())] alt: String,
+    #[props(default = false)] lazy_load: bool,
 ) -> Element {
     let mut is_open = use_signal(|| false);
 
     let thumb_src = if src.contains('?') {
-        format!("{}&{}", src.split('?').next().unwrap_or(&src), thumb_params.trim_start_matches('?'))
+        format!(
+            "{}&{}",
+            src.split('?').next().unwrap_or(&src),
+            thumb_params.trim_start_matches('?')
+        )
     } else {
         format!("{}{}", src, thumb_params)
     };

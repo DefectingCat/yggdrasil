@@ -16,7 +16,10 @@ pub async fn list_published_posts(
     {
         let cache_key = crate::cache::CacheKey::PublishedPosts { page, per_page };
         if let Some((cached_posts, cached_total)) = crate::cache::get_post_list(&cache_key).await {
-            return Ok(PostListResponse { posts: cached_posts, total: cached_total });
+            return Ok(PostListResponse {
+                posts: cached_posts,
+                total: cached_total,
+            });
         }
 
         let client = get_conn().await.map_err(AppError::db_conn)?;
@@ -68,15 +71,15 @@ pub async fn list_published_posts(
 
     #[cfg(not(feature = "server"))]
     {
-        Ok(PostListResponse { posts: Vec::new(), total: 0 })
+        Ok(PostListResponse {
+            posts: Vec::new(),
+            total: 0,
+        })
     }
 }
 
 #[server(ListPosts, "/api")]
-pub async fn list_posts(
-    page: i32,
-    per_page: i32,
-) -> Result<PostListResponse, ServerFnError> {
+pub async fn list_posts(page: i32, per_page: i32) -> Result<PostListResponse, ServerFnError> {
     let _user = get_current_admin_user().await?;
 
     #[cfg(feature = "server")]
@@ -84,10 +87,7 @@ pub async fn list_posts(
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
         let count_row = client
-            .query_one(
-                "SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL",
-                &[],
-            )
+            .query_one("SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL", &[])
             .await
             .map_err(AppError::query)?;
         let total: i64 = count_row.get(0);
@@ -122,7 +122,10 @@ pub async fn list_posts(
 
     #[cfg(not(feature = "server"))]
     {
-        Ok(PostListResponse { posts: Vec::new(), total: 0 })
+        Ok(PostListResponse {
+            posts: Vec::new(),
+            total: 0,
+        })
     }
 }
 
@@ -130,8 +133,12 @@ pub async fn list_posts(
 pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, ServerFnError> {
     #[cfg(feature = "server")]
     {
-        if let Some((cached_posts, cached_total)) = crate::cache::get_posts_by_tag(&tag_name).await {
-            return Ok(PostListResponse { posts: cached_posts, total: cached_total });
+        if let Some((cached_posts, cached_total)) = crate::cache::get_posts_by_tag(&tag_name).await
+        {
+            return Ok(PostListResponse {
+                posts: cached_posts,
+                total: cached_total,
+            });
         }
 
         let client = get_conn().await.map_err(AppError::db_conn)?;
@@ -170,6 +177,9 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
 
     #[cfg(not(feature = "server"))]
     {
-        Ok(PostListResponse { posts: Vec::new(), total: 0 })
+        Ok(PostListResponse {
+            posts: Vec::new(),
+            total: 0,
+        })
     }
 }

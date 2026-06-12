@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 use crate::api::comments::create_comment;
 use crate::components::comments::section::CommentContext;
-use crate::components::forms::{INPUT_CLASS, BUTTON_PRIMARY_CLASS, AlertBox};
+use crate::components::forms::{AlertBox, BUTTON_PRIMARY_CLASS, INPUT_CLASS};
 use crate::hooks::comment_storage::{self, PendingComment};
 
 #[component]

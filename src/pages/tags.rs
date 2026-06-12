@@ -4,7 +4,7 @@ use dioxus::router::components::Link;
 use crate::api::posts::{get_posts_by_tag, list_tags, PostListResponse, TagListResponse};
 use crate::components::post_card::PostCard;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
-use crate::components::skeletons::tags_skeleton::{TagsSkeleton, TagDetailSkeleton};
+use crate::components::skeletons::tags_skeleton::{TagDetailSkeleton, TagsSkeleton};
 use crate::router::Route;
 
 #[component]

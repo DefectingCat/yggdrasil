@@ -37,7 +37,10 @@ pub fn PostsPage(page: i32) -> Element {
             let p = current_page;
             spawn(async move {
                 match list_posts(p, POSTS_PER_PAGE).await {
-                    Ok(PostListResponse { posts: list, total: t }) => {
+                    Ok(PostListResponse {
+                        posts: list,
+                        total: t,
+                    }) => {
                         posts.set(list);
                         total.set(t);
                     }

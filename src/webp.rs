@@ -178,7 +178,10 @@ mod tests {
         // Note: LazyLock initializes once, so we can't easily test
         // different env values in the same process.
         // Test that the default config is reasonable
-        let config = WebpConfig { quality: 85.0, method: 2 };
+        let config = WebpConfig {
+            quality: 85.0,
+            method: 2,
+        };
         assert!(config.quality >= 0.0 && config.quality <= 100.0);
         assert!(config.method <= 6);
     }

@@ -3,13 +3,11 @@ use std::collections::HashSet;
 use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
-use crate::api::comments::{
-    approve_comment, batch_update_comment_status, spam_comment,
-};
-#[cfg(target_arch = "wasm32")]
-use crate::api::comments::{get_all_comments, AllCommentsResponse};
 #[cfg(target_arch = "wasm32")]
 use crate::api::comments::trash_comment;
+use crate::api::comments::{approve_comment, batch_update_comment_status, spam_comment};
+#[cfg(target_arch = "wasm32")]
+use crate::api::comments::{get_all_comments, AllCommentsResponse};
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::models::comment::{AdminComment, CommentStatus};
 use crate::router::Route;
@@ -54,7 +52,11 @@ pub fn AdminCommentsPage(page: i32) -> Element {
     #[allow(unused_variables)]
     let filter_status = move || {
         let f = active_filter();
-        if f.is_empty() { None } else { Some(f) }
+        if f.is_empty() {
+            None
+        } else {
+            Some(f)
+        }
     };
 
     // 客户端（CSR）加载数据
@@ -313,14 +315,29 @@ fn CommentRow(
     on_trash: EventHandler,
 ) -> Element {
     let (badge_class, status_label) = match &comment.status {
-        CommentStatus::Pending => ("bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400", "待审核"),
-        CommentStatus::Approved => ("bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", "已通过"),
-        CommentStatus::Spam => ("bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", "垃圾"),
-        CommentStatus::Trash => ("bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400", "已删除"),
+        CommentStatus::Pending => (
+            "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+            "待审核",
+        ),
+        CommentStatus::Approved => (
+            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+            "已通过",
+        ),
+        CommentStatus::Spam => (
+            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+            "垃圾",
+        ),
+        CommentStatus::Trash => (
+            "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400",
+            "已删除",
+        ),
     };
     let date_str = comment.created_at.format("%Y-%m-%d").to_string();
     let preview = if comment.content_md.len() > 100 {
-        format!("{}...", &comment.content_md[..comment.content_md.ceil_char_boundary(100)])
+        format!(
+            "{}...",
+            &comment.content_md[..comment.content_md.ceil_char_boundary(100)]
+        )
     } else {
         comment.content_md.clone()
     };
@@ -411,9 +428,13 @@ fn CommentsPagination(current_page: i32, total: i64) -> Element {
     let prev_route = if current_page - 1 <= 1 {
         Route::AdminComments {}
     } else {
-        Route::AdminCommentsPage { page: current_page - 1 }
+        Route::AdminCommentsPage {
+            page: current_page - 1,
+        }
     };
-    let next_route = Route::AdminCommentsPage { page: current_page + 1 };
+    let next_route = Route::AdminCommentsPage {
+        page: current_page + 1,
+    };
 
     rsx! {
         nav { class: "flex mt-6 justify-between",

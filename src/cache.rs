@@ -49,8 +49,6 @@ pub enum CacheKey {
     PendingCommentCount,
 }
 
-
-
 // ============================================================================
 // Cache Instances
 // ============================================================================
@@ -153,12 +151,17 @@ pub async fn set_post_list(key: &CacheKey, posts: Vec<Post>, total: i64) {
 
 #[cfg(feature = "server")]
 pub async fn get_total_published_posts() -> Option<i64> {
-    POST_LIST_CACHE.get(&CacheKey::TotalPublishedPosts).await.map(|(_, total)| total)
+    POST_LIST_CACHE
+        .get(&CacheKey::TotalPublishedPosts)
+        .await
+        .map(|(_, total)| total)
 }
 
 #[cfg(feature = "server")]
 pub async fn set_total_published_posts(total: i64) {
-    let _ = POST_LIST_CACHE.insert(CacheKey::TotalPublishedPosts, (vec![], total)).await;
+    let _ = POST_LIST_CACHE
+        .insert(CacheKey::TotalPublishedPosts, (vec![], total))
+        .await;
 }
 
 #[cfg(feature = "server")]
@@ -330,21 +333,33 @@ mod tests {
 
     #[test]
     fn cache_key_equality() {
-        let k1 = CacheKey::PublishedPosts { page: 1, per_page: 10 };
-        let k2 = CacheKey::PublishedPosts { page: 1, per_page: 10 };
-        let k3 = CacheKey::PublishedPosts { page: 2, per_page: 10 };
+        let k1 = CacheKey::PublishedPosts {
+            page: 1,
+            per_page: 10,
+        };
+        let k2 = CacheKey::PublishedPosts {
+            page: 1,
+            per_page: 10,
+        };
+        let k3 = CacheKey::PublishedPosts {
+            page: 2,
+            per_page: 10,
+        };
         assert_eq!(k1, k2);
         assert_ne!(k1, k3);
     }
 
     #[tokio::test]
     async fn post_list_cache_roundtrip() {
-        let key = CacheKey::PublishedPosts { page: 999, per_page: 99 };
+        let key = CacheKey::PublishedPosts {
+            page: 999,
+            per_page: 99,
+        };
         let posts = vec![];
-        
+
         set_post_list(&key, posts.clone(), 0).await;
         let cached = get_post_list(&key).await;
-        
+
         assert!(cached.is_some());
         let (cached_posts, cached_total) = cached.unwrap();
         assert_eq!(cached_posts.len(), 0);
@@ -353,11 +368,15 @@ mod tests {
 
     #[tokio::test]
     async fn tag_list_cache_roundtrip() {
-        let tags = vec![Tag { id: 1, name: "rust".to_string(), post_count: 5 }];
-        
+        let tags = vec![Tag {
+            id: 1,
+            name: "rust".to_string(),
+            post_count: 5,
+        }];
+
         set_tag_list(tags.clone()).await;
         let cached = get_tag_list().await;
-        
+
         assert!(cached.is_some());
         assert_eq!(cached.unwrap()[0].name, "rust");
     }
@@ -384,21 +403,25 @@ mod tests {
             prev_post: None,
             next_post: None,
         });
-        
+
         set_post_by_slug("test", post.clone()).await;
         let cached = get_post_by_slug("test").await;
-        
+
         assert!(cached.is_some());
         assert_eq!(cached.unwrap().unwrap().title, "Test");
     }
 
     #[tokio::test]
     async fn post_stats_cache_roundtrip() {
-        let stats = PostStats { total: 10, drafts: 3, published: 7 };
-        
+        let stats = PostStats {
+            total: 10,
+            drafts: 3,
+            published: 7,
+        };
+
         set_post_stats(stats.clone()).await;
         let cached = get_post_stats().await;
-        
+
         assert!(cached.is_some());
         assert_eq!(cached.unwrap().total, 10);
     }
@@ -425,13 +448,13 @@ mod tests {
             prev_post: None,
             next_post: None,
         });
-        
+
         set_post_by_slug("invalidation-test", post.clone()).await;
         let cached_before = get_post_by_slug("invalidation-test").await;
         assert!(cached_before.is_some());
-        
+
         invalidate_post_by_slug("invalidation-test").await;
-        
+
         let cached_after = get_post_by_slug("invalidation-test").await;
         assert!(cached_after.is_none());
     }

@@ -73,7 +73,8 @@ pub fn AdminLayout() -> Element {
         }
     };
 
-    let is_write_route = matches!(route, Route::Write {}) || matches!(route, Route::WriteEdit { .. });
+    let is_write_route =
+        matches!(route, Route::Write {}) || matches!(route, Route::WriteEdit { .. });
     let main_class = if is_write_route {
         "flex-1 w-full max-w-5xl mx-auto px-6 flex flex-col overflow-hidden"
     } else {

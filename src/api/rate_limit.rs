@@ -1,11 +1,11 @@
 #[cfg(feature = "server")]
-use std::sync::LazyLock;
-#[cfg(feature = "server")]
-use std::num::NonZeroU32;
+use axum::http::StatusCode;
 #[cfg(feature = "server")]
 use governor::{DefaultKeyedRateLimiter, Quota, RateLimiter};
 #[cfg(feature = "server")]
-use axum::http::StatusCode;
+use std::num::NonZeroU32;
+#[cfg(feature = "server")]
+use std::sync::LazyLock;
 
 #[cfg(feature = "server")]
 fn env_or(key: &str, default: u32) -> NonZeroU32 {
@@ -90,10 +90,7 @@ fn ip_from_x_forwarded_for(value: &str, trusted_proxy_count: usize) -> Option<St
 }
 
 #[cfg(feature = "server")]
-pub fn get_client_ip_with_trusted(
-    headers: &http::HeaderMap,
-    trusted_proxy_count: usize,
-) -> String {
+pub fn get_client_ip_with_trusted(headers: &http::HeaderMap, trusted_proxy_count: usize) -> String {
     if let Some(value) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
         if let Some(ip) = ip_from_x_forwarded_for(value, trusted_proxy_count) {
             return ip;
@@ -204,7 +201,10 @@ mod tests {
     #[test]
     fn get_client_ip_ignores_empty_x_forwarded_for_entries() {
         let mut headers = HeaderMap::new();
-        headers.insert("x-forwarded-for", " , 1.2.3.4 , 5.6.7.8 , ".parse().unwrap());
+        headers.insert(
+            "x-forwarded-for",
+            " , 1.2.3.4 , 5.6.7.8 , ".parse().unwrap(),
+        );
         assert_eq!(get_client_ip_with_trusted(&headers, 1), "1.2.3.4");
     }
 }

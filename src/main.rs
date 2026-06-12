@@ -1,6 +1,6 @@
 mod api;
-mod cache;
 mod auth;
+mod cache;
 mod components;
 mod context;
 mod db;
@@ -44,13 +44,14 @@ fn main() {
             });
 
             let config = ServeConfig::builder().incremental(
-                dioxus::server::IncrementalRendererConfig::default()
-                    .invalidate_after(std::time::Duration::from_secs(
+                dioxus::server::IncrementalRendererConfig::default().invalidate_after(
+                    std::time::Duration::from_secs(
                         std::env::var("SSR_CACHE_SECS")
                             .ok()
                             .and_then(|s| s.parse().ok())
                             .unwrap_or(3600),
-                    )),
+                    ),
+                ),
             );
             let api_routes = axum::Router::new().route(
                 "/api/upload",
@@ -66,9 +67,7 @@ fn main() {
             let dioxus_app =
                 axum::Router::new().serve_dioxus_application(config, router::AppRouter);
 
-            let router = api_routes
-                .merge(static_routes)
-                .merge(dioxus_app);
+            let router = api_routes.merge(static_routes).merge(dioxus_app);
 
             Ok(router)
         });

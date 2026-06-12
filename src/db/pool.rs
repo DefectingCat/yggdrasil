@@ -16,10 +16,12 @@ pub static DB_POOL: LazyLock<Pool> = LazyLock::new(|| {
     let mgr = Manager::from_config(pg_cfg, NoTls, mgr_cfg);
 
     Pool::builder(mgr)
-        .max_size(std::env::var("DB_POOL_SIZE")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(20))
+        .max_size(
+            std::env::var("DB_POOL_SIZE")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(20),
+        )
         .build()
         .expect("Failed to create database connection pool")
 });
@@ -34,7 +36,12 @@ pub async fn get_conn() -> Result<deadpool_postgres::Object, deadpool_postgres::
             Ok(conn) => return Ok(conn),
             Err(e) => {
                 if attempt < MAX_RETRIES {
-                    tracing::warn!("DB connection attempt {} failed, retrying in {:?}: {:?}", attempt + 1, RETRY_DELAY, e);
+                    tracing::warn!(
+                        "DB connection attempt {} failed, retrying in {:?}: {:?}",
+                        attempt + 1,
+                        RETRY_DELAY,
+                        e
+                    );
                     tokio::time::sleep(RETRY_DELAY).await;
                 }
                 last_err = Some(e);

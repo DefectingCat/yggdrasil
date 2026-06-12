@@ -71,7 +71,9 @@ impl Post {
 
     pub fn status_badge_class(&self) -> &'static str {
         match self.status {
-            PostStatus::Published => "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300",
+            PostStatus::Published => {
+                "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+            }
             PostStatus::Draft => "bg-gray-100 dark:bg-[#333] text-gray-600 dark:text-[#9b9c9d]",
         }
     }
@@ -128,7 +130,10 @@ mod tests {
     #[test]
     fn post_status_from_str() {
         assert_eq!(PostStatus::from_str("draft"), Some(PostStatus::Draft));
-        assert_eq!(PostStatus::from_str("published"), Some(PostStatus::Published));
+        assert_eq!(
+            PostStatus::from_str("published"),
+            Some(PostStatus::Published)
+        );
         assert_eq!(PostStatus::from_str("unknown"), None);
         assert_eq!(PostStatus::from_str(""), None);
     }
@@ -186,6 +191,9 @@ mod tests {
     #[test]
     fn post_status_serde_roundtrip() {
         let json = serde_json::to_string(&PostStatus::Draft).unwrap();
-        assert_eq!(serde_json::from_str::<PostStatus>(&json).unwrap(), PostStatus::Draft);
+        assert_eq!(
+            serde_json::from_str::<PostStatus>(&json).unwrap(),
+            PostStatus::Draft
+        );
     }
 }
