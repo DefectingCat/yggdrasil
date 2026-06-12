@@ -1,5 +1,12 @@
+//! 文章编辑器页面。
+//!
+//! 提供新建文章与编辑文章两种模式，使用基于 Tiptap 的富文本编辑器。
+//! 编辑器通过 `js_sys::eval` 在 WASM 前端初始化，并与 `window.TiptapEditor` 实例交互，
+//! 实现 Markdown 内容回填、图片上传与组件卸载时的清理。
+
 use dioxus::prelude::*;
 
+// 仅在 WASM 前端使用的类型转换与文章 API。
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
 
@@ -11,22 +18,37 @@ use crate::components::write_skeleton::WriteSkeleton;
 use crate::models::post::Post;
 use crate::router::Route;
 
+/// 新建文章页面组件。
+///
+/// 内部委托给 `write_editor`，以 `None` 表示新建模式。
 #[component]
 #[allow(unused_mut, unused_variables)]
 pub fn Write() -> Element {
     write_editor(None)
 }
 
+/// 编辑文章页面组件。
+///
+/// `id` 为要编辑的文章 ID，内部委托给 `write_editor` 加载现有数据。
 #[component]
 #[allow(unused_mut, unused_variables)]
 pub fn WriteEdit(id: i32) -> Element {
     write_editor(Some(id))
 }
 
+/// 文章编辑器核心组件，支持新建（`post_id == None`）与编辑模式。
+///
+/// 负责：
+/// - 编辑模式下通过 server function 拉取文章数据；
+/// - 在 WASM 前端初始化 Tiptap 富文本编辑器并轮询就绪状态；
+/// - 编辑模式下将 Markdown 内容回填到编辑器；
+/// - 提交时读取编辑器 Markdown、校验并调用 create_post / update_post；
+/// - 组件卸载时销毁 Tiptap 实例并清理全局状态。
 #[allow(unused_mut, unused_variables)]
 fn write_editor(post_id: Option<i32>) -> Element {
     let is_edit = post_id.is_some();
 
+    // 文章元信息表单字段。
     let mut title = use_signal(|| "".to_string());
     let mut summary = use_signal(|| "".to_string());
     let mut slug = use_signal(|| "".to_string());
@@ -34,6 +56,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
     let mut cover_image = use_signal(|| "".to_string());
     let mut status = use_signal(|| "draft".to_string());
     let mut content = use_signal(|| "".to_string());
+    // 页面与编辑器加载、保存、错误、成功等状态。
     let mut loading = use_signal(|| true);
     let mut saving = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
@@ -42,9 +65,10 @@ fn write_editor(post_id: Option<i32>) -> Element {
     let mut has_backfilled = use_signal(|| false);
     let mut load_error = use_signal(|| None::<String>);
 
-    // 编辑模式：加载文章数据（CSR）
+    // 编辑模式：用于暂存从服务端加载的文章数据。
     let mut edit_post = use_signal(|| None::<Post>);
 
+    // 编辑模式：文章数据加载完成后，将字段回填到表单信号。
     use_effect(move || {
         if !is_edit || has_backfilled() {
             return;
@@ -61,6 +85,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
         }
     });
 
+    // 编辑模式：仅在 WASM 前端通过 server function 加载文章详情。
     use_effect(move || {
         if is_edit {
             #[cfg(target_arch = "wasm32")]
@@ -82,6 +107,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
         }
     });
 
+    // 组件卸载时清理 Tiptap 实例：销毁编辑器、删除实例映射、重置全局就绪标志与内容缓存。
     #[cfg(target_arch = "wasm32")]
     use_drop(move || {
         let _ = js_sys::eval(
@@ -101,14 +127,17 @@ fn write_editor(post_id: Option<i32>) -> Element {
         );
     });
 
+    // Tiptap 编辑器初始化：在 WASM 前端通过 js_sys::eval 调用 public/tiptap/ 构建产物暴露的 window.TiptapEditor。
+    // 编辑模式需等待文章数据加载完成，避免空内容覆盖后续回填。
     use_effect(move || {
         #[cfg(target_arch = "wasm32")]
         {
-            // 编辑模式：等数据加载完再初始化
+            // 编辑模式：等数据加载完再初始化。
             if is_edit && edit_post().is_none() {
                 return;
             }
 
+            // 执行 JS 初始化脚本：查找 DOM 容器，调用 TiptapEditor.create，并注册 onUpdate / onImageUpload 回调。
             let _ = js_sys::eval(
                 r#"
                 (function initEditor() {
@@ -169,11 +198,11 @@ fn write_editor(post_id: Option<i32>) -> Element {
         }
     });
 
-    // 轮询编辑器就绪状态
+    // 轮询 Tiptap 编辑器就绪状态：最多等待约 10 秒，就绪后编辑模式回填 Markdown，最后结束加载。
     use_effect(move || {
         #[cfg(target_arch = "wasm32")]
         {
-            // 编辑模式：等数据加载完再开始轮询
+            // 编辑模式：等数据加载完再开始轮询。
             if is_edit && edit_post().is_none() {
                 return;
             }
@@ -187,7 +216,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     }
                     if let Ok(ready) = js_sys::eval("window.__tiptap_ready") {
                         if ready.as_bool().unwrap_or(false) {
-                            // 编辑模式：回填编辑器内容
+                            // 编辑模式：通过 window.TiptapEditor 实例的 setMarkdown 回填已有内容。
                             if is_edit && !editor_content_set() {
                                 let md = content();
                                 if !md.is_empty() {
@@ -214,6 +243,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
         }
     });
 
+    // 提交表单：校验标题与内容，读取 Tiptap 编辑器 Markdown，调用 create_post 或 update_post。
     let on_submit = move |_| {
         if title().trim().is_empty() {
             error.set(Some("标题不能为空".to_string()));
@@ -221,8 +251,10 @@ fn write_editor(post_id: Option<i32>) -> Element {
             return;
         }
 
+        // 仅在 WASM 前端读取编辑器内容并发起保存请求。
         #[cfg(target_arch = "wasm32")]
         {
+            // 优先通过 window.TiptapEditor 实例读取 Markdown，否则退回到全局缓存。
             let md = js_sys::eval(r#"
                 (function() {
                     var editor = window.TiptapEditor && window.TiptapEditor._instances && window.TiptapEditor._instances.get('tiptap-editor');
@@ -235,6 +267,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
                 return;
             }
 
+            // 将逗号分隔的标签字符串转换为列表。
             let tags_list: Vec<String> = tags()
                 .split(',')
                 .map(|t| t.trim().to_string())

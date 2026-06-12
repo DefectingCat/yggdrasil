@@ -1,8 +1,14 @@
+//! 评论管理页面。
+//!
+//! 提供评论列表、状态筛选（全部 / 待审核 / 已通过 / 垃圾箱）、批量操作与单条操作。
+//! 数据加载与状态变更仅在 WASM 前端通过 Dioxus server functions 交互。
+
 use std::collections::HashSet;
 
 use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
+// 仅在 WASM 前端使用的评论管理接口。
 #[cfg(target_arch = "wasm32")]
 use crate::api::comments::trash_comment;
 use crate::api::comments::{approve_comment, batch_update_comment_status, spam_comment};
@@ -12,16 +18,22 @@ use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::models::comment::{AdminComment, CommentStatus};
 use crate::router::Route;
 
+/// 每页展示的评论数量。
 const COMMENTS_PER_PAGE: i32 = 20;
 
+/// 评论管理入口组件，默认展示第 1 页。
 #[component]
 pub fn AdminComments() -> Element {
     rsx! { AdminCommentsPage { page: 1 } }
 }
 
+/// 评论管理分页组件。
+///
+/// 支持按状态筛选、全选 / 单选、批量审批 / 标记垃圾 / 删除，以及单条评论状态操作。
 #[component]
 pub fn AdminCommentsPage(page: i32) -> Element {
     let current_page = page.max(1);
+    // 当前筛选状态：优先从 URL 查询参数 `?status=` 读取（仅 WASM 前端）。
     let mut active_filter = use_signal(|| {
         #[cfg(target_arch = "wasm32")]
         {
@@ -41,6 +53,7 @@ pub fn AdminCommentsPage(page: i32) -> Element {
         #[cfg(not(target_arch = "wasm32"))]
         String::new()
     });
+    // 已选中的评论 ID 集合、评论列表、总数、加载与错误状态。
     let mut selected_ids: Signal<HashSet<i64>> = use_signal(HashSet::new);
     let mut comments: Signal<Vec<AdminComment>> = use_signal(Vec::new);
     let mut total: Signal<i64> = use_signal(|| 0);
@@ -49,6 +62,7 @@ pub fn AdminCommentsPage(page: i32) -> Element {
     #[allow(unused_mut)]
     let mut error: Signal<Option<String>> = use_signal(|| None);
 
+    // 将当前筛选字符串转换为接口所需的 status 参数。
     #[allow(unused_variables)]
     let filter_status = move || {
         let f = active_filter();
@@ -59,11 +73,12 @@ pub fn AdminCommentsPage(page: i32) -> Element {
         }
     };
 
-    // 客户端（CSR）加载数据
+    // 客户端（CSR）加载数据：筛选或页码变化时触发。
     use_effect(move || {
         let _ = active_filter();
         let _ = current_page;
 
+        // 仅在 WASM 前端发起评论列表请求。
         #[cfg(target_arch = "wasm32")]
         {
             let page = current_page;
@@ -305,6 +320,7 @@ pub fn AdminCommentsPage(page: i32) -> Element {
     }
 }
 
+/// 评论表格行组件，展示单条评论的作者、内容、所属文章、状态与操作按钮。
 #[component]
 fn CommentRow(
     comment: AdminComment,
@@ -418,6 +434,7 @@ fn CommentRow(
     }
 }
 
+/// 评论分页导航组件。
 #[component]
 fn CommentsPagination(current_page: i32, total: i64) -> Element {
     let has_prev = current_page > 1;

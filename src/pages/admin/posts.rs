@@ -1,6 +1,12 @@
+//! 文章管理列表页面。
+//!
+//! 提供文章分页列表、删除单篇文章、重建 content_html 缓存，以及跳转到编辑器的能力。
+//! 数据加载与写操作仅在 WASM 前端通过 Dioxus server functions 完成。
+
 use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
+// 仅在 WASM 前端使用的分页数据接口。
 #[cfg(target_arch = "wasm32")]
 use crate::api::posts::list_posts;
 #[cfg(target_arch = "wasm32")]
@@ -11,16 +17,22 @@ use crate::components::skeletons::posts_skeleton::PostsSkeleton;
 use crate::models::post::Post;
 use crate::router::Route;
 
+/// 每页展示的文章数量。
 const POSTS_PER_PAGE: i32 = 20;
 
+/// 文章管理入口组件，默认展示第 1 页。
 #[component]
 pub fn Posts() -> Element {
     rsx! { PostsPage { page: 1 } }
 }
 
+/// 文章管理分页组件。
+///
+/// 根据 `page` 参数加载对应页的文章列表，支持删除单篇文章与重建文章 HTML 缓存。
 #[component]
 pub fn PostsPage(page: i32) -> Element {
     let current_page = page.max(1);
+    // 文章列表、总数、加载状态、删除中 ID、重建缓存状态与结果。
     let mut posts = use_signal(Vec::new);
     let mut total = use_signal(|| 0_i64);
     let mut loading = use_signal(|| true);
@@ -28,10 +40,12 @@ pub fn PostsPage(page: i32) -> Element {
     let mut rebuilding = use_signal(|| false);
     let mut rebuild_result = use_signal(|| Option::<String>::None);
 
+    // 页码变化时加载分页数据：WASM 前端请求接口，SSR 直接结束加载。
     use_effect(move || {
         let _ = current_page;
 
         loading.set(true);
+        // 仅在 WASM 前端发起分页请求。
         #[cfg(target_arch = "wasm32")]
         {
             let p = current_page;
@@ -140,6 +154,7 @@ pub fn PostsPage(page: i32) -> Element {
                                     PostRow {
                                         post: post.clone(),
                                         deleting: deleting() == Some(post.id),
+                                        // 删除文章：先乐观更新本地列表，再调用 server function，失败时弹出浏览器提示。
                                         on_delete: move |id| {
                                             deleting.set(Some(id));
                                             let id_for_api = id;
@@ -171,6 +186,7 @@ pub fn PostsPage(page: i32) -> Element {
     }
 }
 
+/// 分页导航组件，根据当前页与总数量生成上一页 / 下一页链接。
 #[component]
 fn Pagination(current_page: i32, total: i64) -> Element {
     let has_prev = current_page > 1;
@@ -216,6 +232,7 @@ fn Pagination(current_page: i32, total: i64) -> Element {
     }
 }
 
+/// 文章表格行组件，展示单篇文章的标题、状态、日期与操作按钮。
 #[component]
 fn PostRow(post: Post, deleting: bool, on_delete: EventHandler<i32>) -> Element {
     let date_str = post.formatted_date();
