@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    container:
+      image: rust:bookworm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          apt-get update
+          apt-get install -y nodejs npm
+
+      - name: Install Rust target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Install Dioxus CLI
+        run: cargo install dioxus-cli --locked
+
+      - name: Install Tailwind CSS CLI
+        run: |
+          npm install -g tailwindcss
+
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        run: cargo test --all-features
+
+      - name: Dioxus check
+        run: dx check
+
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: rust:bookworm
+    needs: check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          apt-get update
+          apt-get install -y nodejs npm
+
+      - name: Install Rust target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Install Dioxus CLI
+        run: cargo install dioxus-cli --locked
+
+      - name: Install Tailwind CSS CLI
+        run: npm install -g tailwindcss
+
+      - name: Build release
+        run: make build
