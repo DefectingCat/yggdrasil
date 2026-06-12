@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]

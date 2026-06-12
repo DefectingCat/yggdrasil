@@ -1,4 +1,4 @@
-#![allow(clippy::unused_unit, deprecated, unused_imports)]
+#![allow(clippy::unused_unit, deprecated)]
 
 #[cfg(feature = "server")]
 fn html_escape(s: &str) -> String {

@@ -1,5 +1,3 @@
-#![allow(clippy::unused_unit)]
-
 #[cfg(feature = "server")]
 use axum::{
     extract::Multipart,
