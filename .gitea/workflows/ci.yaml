@@ -24,7 +24,7 @@ jobs:
       - name: Configure Cargo mirror
         run: |
           mkdir -p "$HOME/.cargo"
-          printf '%s\n' '[source.crates-io]' "replace-with = 'ustc'" '' "[source.ustc]" 'registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"' > "$HOME/.cargo/config.toml"
+          printf '%s\n' '[source.crates-io]' "replace-with = 'rsproxy'" '' "[source.rsproxy]" 'registry = "sparse+https://rsproxy.cn/index/"' > "$HOME/.cargo/config.toml"
 
       - name: Install Rust toolchain
         run: |
@@ -74,7 +74,7 @@ jobs:
       - name: Configure Cargo mirror
         run: |
           mkdir -p "$HOME/.cargo"
-          printf '%s\n' '[source.crates-io]' "replace-with = 'ustc'" '' "[source.ustc]" 'registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"' > "$HOME/.cargo/config.toml"
+          printf '%s\n' '[source.crates-io]' "replace-with = 'rsproxy'" '' "[source.rsproxy]" 'registry = "sparse+https://rsproxy.cn/index/"' > "$HOME/.cargo/config.toml"
 
       - name: Install Rust toolchain
         run: |
