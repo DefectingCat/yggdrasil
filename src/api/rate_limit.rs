@@ -207,4 +207,19 @@ mod tests {
         );
         assert_eq!(get_client_ip_with_trusted(&headers, 1), "1.2.3.4");
     }
+
+    #[test]
+    fn get_client_ip_with_env_trusted_proxy_count_zero() {
+        let original = std::env::var("TRUSTED_PROXY_COUNT").ok();
+        std::env::set_var("TRUSTED_PROXY_COUNT", "0");
+
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "1.2.3.4, 5.6.7.8".parse().unwrap());
+        assert_eq!(get_client_ip(&headers), "unknown");
+
+        match original {
+            Some(value) => std::env::set_var("TRUSTED_PROXY_COUNT", value),
+            None => std::env::remove_var("TRUSTED_PROXY_COUNT"),
+        }
+    }
 }

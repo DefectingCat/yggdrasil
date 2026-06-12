@@ -155,4 +155,36 @@ mod tests {
     fn is_valid_slug_accepts_chinese() {
         assert!(is_valid_slug("你好-world"));
     }
+
+    #[test]
+    fn slugify_all_special_characters_returns_timestamp() {
+        let slug = slugify("!@#$%^&*()+=[]{}|\\;:'\",.<>/?`~");
+        let _: i64 = slug.parse().expect("should be a valid timestamp");
+    }
+
+    #[test]
+    fn slugify_only_whitespace_returns_timestamp() {
+        let slug = slugify("   \t\n  ");
+        let _: i64 = slug.parse().expect("should be a valid timestamp");
+    }
+
+    #[test]
+    fn slugify_leading_and_trailing_dashes() {
+        assert_eq!(slugify("-hello-world-"), "hello-world");
+        assert_eq!(slugify("---hello---world---"), "hello-world");
+    }
+
+    #[test]
+    fn is_valid_slug_mixed_chinese_and_digits() {
+        assert!(is_valid_slug("你好123"));
+        assert!(is_valid_slug("123你好456"));
+    }
+
+    #[test]
+    fn is_valid_slug_exact_200_char_boundary() {
+        let slug = "a".repeat(200);
+        assert!(is_valid_slug(&slug));
+        let slug = "a".repeat(201);
+        assert!(!is_valid_slug(&slug));
+    }
 }

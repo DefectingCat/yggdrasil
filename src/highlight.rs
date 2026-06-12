@@ -92,33 +92,33 @@ mod tests {
     #[test]
     fn highlight_code_rust() {
         let result = highlight_code("fn main() {}", Some("rust"));
-        assert!(!result.is_empty());
-        assert!(result.contains("main"));
+        assert!(result.contains(r#"<span class="storage type function rust">fn</span>"#));
+        assert!(result.contains(r#"<span class="entity name function rust">main</span>"#));
     }
 
     #[test]
     fn highlight_code_javascript_alias() {
         let result = highlight_code("console.log('hi')", Some("js"));
-        assert!(!result.is_empty());
-        assert!(result.contains("console"));
+        assert!(result.contains(r#"<span class="support type object console js">console</span>"#));
+        assert!(result.contains(r#"<span class="support function console js">log</span>"#));
     }
 
     #[test]
     fn highlight_code_python_alias() {
         let result = highlight_code("print('hi')", Some("python"));
-        assert!(!result.is_empty());
+        assert!(result.contains(r#"<span class="support function builtin python">print</span>"#));
     }
 
     #[test]
     fn highlight_code_unknown_language() {
         let result = highlight_code("some text", Some("brainfuck"));
-        assert!(!result.is_empty());
+        assert!(result.contains(r#"<span class="text plain">some text</span>"#));
     }
 
     #[test]
     fn highlight_code_none_language() {
         let result = highlight_code("plain text", None);
-        assert!(!result.is_empty());
+        assert!(result.contains(r#"<span class="text plain">plain text</span>"#));
     }
 
     #[test]
@@ -130,6 +130,7 @@ mod tests {
     #[test]
     fn highlight_code_produces_span_tags() {
         let result = highlight_code("let x = 1;", Some("rust"));
-        assert!(result.contains('<'));
+        assert!(result.contains(r#"<span class="storage type rust">let</span>"#));
+        assert!(result.contains(r#"<span class="constant numeric integer decimal rust">1</span>"#));
     }
 }

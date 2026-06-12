@@ -354,3 +354,74 @@ pub fn clean_comment_html(input: &str) -> String {
     };
     sanitize(input, &config)
 }
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn safe_tags_preserved() {
+        assert_eq!(clean_html("<p>safe</p>"), "<p>safe</p>");
+        assert_eq!(
+            clean_html("<p><strong>bold</strong></p>"),
+            "<p><strong>bold</strong></p>"
+        );
+    }
+
+    #[test]
+    fn script_and_style_removed() {
+        assert_eq!(
+            clean_html("<script>alert(1)</script><style>.x{}</style><p>ok</p>"),
+            "<p>ok</p>"
+        );
+    }
+
+    #[test]
+    fn id_and_class_preserved() {
+        assert_eq!(
+            clean_html("<h1 id=\"toc\" class=\"title\">x</h1>"),
+            "<h1 id=\"toc\" class=\"title\">x</h1>"
+        );
+        assert_eq!(
+            clean_html("<p id=\"note\" class=\"hint\">x</p>"),
+            "<p id=\"note\" class=\"hint\">x</p>"
+        );
+    }
+
+    #[test]
+    fn javascript_url_stripped() {
+        assert_eq!(
+            clean_html("<a href=\"javascript:alert(1)\">x</a>"),
+            "<a rel=\"noopener noreferrer\">x</a>"
+        );
+    }
+
+    #[test]
+    fn vbscript_url_stripped() {
+        assert_eq!(
+            clean_html("<a href=\"vbscript:msgbox\">x</a>"),
+            "<a rel=\"noopener noreferrer\">x</a>"
+        );
+    }
+
+    #[test]
+    fn unknown_tags_removed_content_kept() {
+        assert_eq!(clean_html("<custom>keep me</custom>"), "keep me");
+    }
+
+    #[test]
+    fn comment_removes_img_details_summary() {
+        assert_eq!(
+            clean_comment_html("<img src=\"x\"><details><summary>sum</summary>body</details>"),
+            "sumbody"
+        );
+    }
+
+    #[test]
+    fn comment_removes_data_uris() {
+        assert_eq!(
+            clean_comment_html("<a href=\"data:text/html,hi\">x</a>"),
+            "<a rel=\"nofollow noopener\">x</a>"
+        );
+    }
+}

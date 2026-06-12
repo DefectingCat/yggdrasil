@@ -144,6 +144,34 @@ mod tests {
     }
 
     #[test]
+    fn render_comment_link_javascript_removed() {
+        let result = render_comment_markdown("[click](javascript:alert(1))");
+        assert!(result.contains("click"));
+        assert!(!result.contains("javascript:"));
+    }
+
+    #[test]
+    fn render_comment_onerror_attribute_removed() {
+        let result = render_comment_markdown("<div onerror=\"alert(1)\">text</div>");
+        assert!(result.contains("text"));
+        assert!(!result.contains("onerror"));
+    }
+
+    #[test]
+    fn render_comment_link_data_uri_removed() {
+        let result =
+            render_comment_markdown("[click](data:text/html,<script>alert(1)</script>)");
+        assert!(result.contains("click"));
+        assert!(!result.contains("data:"));
+    }
+
+    #[test]
+    fn render_comment_code_block_escapes_html_entities() {
+        let result = render_comment_markdown("```\n&amp;\n```");
+        assert!(result.contains("&amp;amp;"));
+    }
+
+    #[test]
     fn render_comment_no_id_attribute() {
         let result = render_comment_markdown("<div id=\"test\">text</div>");
         assert!(!result.contains("id="));

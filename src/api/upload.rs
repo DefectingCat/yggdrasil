@@ -298,4 +298,30 @@ mod tests {
         let loaded = crate::webp::decode(&webp_bytes);
         assert!(loaded.is_ok());
     }
+
+    #[test]
+    fn mime_to_ext_maps_jpeg() {
+        assert_eq!(super::mime_to_ext("image/jpeg"), "jpg");
+    }
+
+    #[test]
+    fn mime_to_ext_maps_png() {
+        assert_eq!(super::mime_to_ext("image/png"), "png");
+    }
+
+    #[test]
+    fn mime_to_ext_maps_gif() {
+        assert_eq!(super::mime_to_ext("image/gif"), "gif");
+    }
+
+    #[test]
+    fn mime_to_ext_maps_webp() {
+        assert_eq!(super::mime_to_ext("image/webp"), "webp");
+    }
+
+    #[test]
+    fn mime_to_ext_falls_back_for_unknown_mime() {
+        assert_eq!(super::mime_to_ext("image/avif"), "bin");
+        assert_eq!(super::mime_to_ext("application/octet-stream"), "bin");
+    }
 }

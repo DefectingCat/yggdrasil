@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 #[allow(dead_code)]
 const THEME_KEY: &str = "yggdrasil-theme";
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Theme {
     Light,
     Dark,
@@ -161,5 +161,20 @@ pub fn ThemeToggle() -> Element {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn toggle_switches_light_to_dark() {
+        assert_eq!(Theme::Light.toggle(), Theme::Dark);
+    }
+
+    #[test]
+    fn toggle_switches_dark_to_light() {
+        assert_eq!(Theme::Dark.toggle(), Theme::Light);
     }
 }

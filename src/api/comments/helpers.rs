@@ -98,13 +98,15 @@ pub fn validate_comment_email(email: &str) -> Result<(), String> {
 
 #[allow(dead_code)]
 pub fn validate_comment_url(url: &str) -> Result<(), String> {
-    if url.trim().is_empty() {
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
         return Ok(());
     }
-    if !url.starts_with("http://") && !url.starts_with("https://") {
+    let lower = trimmed.to_ascii_lowercase();
+    if !lower.starts_with("http://") && !lower.starts_with("https://") {
         return Err("网址必须以 http:// 或 https:// 开头".to_string());
     }
-    if url.len() > 200 {
+    if trimmed.len() > 200 {
         return Err("网址长度不能超过 200 个字符".to_string());
     }
     Ok(())
@@ -200,6 +202,24 @@ mod tests {
     }
 
     #[test]
+    fn format_relative_time_one_minute() {
+        let dt = chrono::Utc::now() - chrono::Duration::minutes(1);
+        assert_eq!(format_relative_time(dt), "1 分钟前");
+    }
+
+    #[test]
+    fn format_relative_time_one_hour() {
+        let dt = chrono::Utc::now() - chrono::Duration::hours(1);
+        assert_eq!(format_relative_time(dt), "1 小时前");
+    }
+
+    #[test]
+    fn format_relative_time_one_day() {
+        let dt = chrono::Utc::now() - chrono::Duration::days(1);
+        assert_eq!(format_relative_time(dt), "1 天前");
+    }
+
+    #[test]
     fn format_relative_time_old_date() {
         let dt = chrono::Utc::now() - chrono::Duration::days(60);
         let result = format_relative_time(dt);
@@ -258,6 +278,24 @@ mod tests {
     fn validate_comment_url_invalid_scheme() {
         assert!(validate_comment_url("ftp://example.com").is_err());
         assert!(validate_comment_url("javascript:alert(1)").is_err());
+    }
+
+    #[test]
+    fn validate_comment_url_uppercase_scheme() {
+        assert!(validate_comment_url("HTTP://example.com").is_ok());
+        assert!(validate_comment_url("HTTPS://example.com").is_ok());
+        assert!(validate_comment_url("Http://example.com").is_ok());
+    }
+
+    #[test]
+    fn validate_comment_url_fragment() {
+        assert!(validate_comment_url("https://example.com#section").is_ok());
+    }
+
+    #[test]
+    fn validate_comment_url_relative_path_rejected() {
+        assert!(validate_comment_url("/path/to/page").is_err());
+        assert!(validate_comment_url("path/to/page").is_err());
     }
 
     #[test]

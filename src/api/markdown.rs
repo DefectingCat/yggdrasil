@@ -131,7 +131,11 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
             Event::End(TagEnd::CodeBlock) => {
                 let highlighted =
                     crate::highlight::server::highlight_code(&code_buffer, code_lang.as_deref());
-                html.push_str("<pre><code>");
+                html.push_str("<pre><code");
+                if let Some(lang) = &code_lang {
+                    html.push_str(&format!(" class=\"language-{lang}\""));
+                }
+                html.push('>');
                 html.push_str(&highlighted);
                 html.push_str("</code></pre>");
                 in_codeblock = false;
@@ -358,8 +362,26 @@ mod tests {
     #[test]
     fn render_markdown_code_block() {
         let result = render_markdown_enhanced("```rust\nfn main() {}\n```");
+        assert!(result.html.contains(r#"<pre><code class="language-rust">"#));
+        assert!(result.html.contains(r#"<span class="entity name function rust">main</span>"#));
+        assert!(result.html.contains(r#"<span class="storage type function rust">fn</span>"#));
+    }
+
+    #[test]
+    fn render_markdown_code_block_without_language() {
+        let result = render_markdown_enhanced("```\nplain text\n```");
         assert!(result.html.contains("<pre><code>"));
-        assert!(result.html.contains("main"));
+        assert!(!result.html.contains("class=\"language-"));
+        assert!(result.html.contains("plain text"));
+    }
+
+    #[test]
+    fn render_markdown_code_block_preserves_html_content() {
+        let result = render_markdown_enhanced("```html\n<script>alert(1)</script>\n```");
+        assert!(result.html.contains("<pre><code class=\"language-html\">"));
+        assert!(!result.html.contains("<script>"));
+        assert!(result.html.contains(r#"<span class="variable function js">alert</span>"#));
+        assert!(result.html.contains(r#"<span class="constant numeric js">1</span>"#));
     }
 
     #[test]

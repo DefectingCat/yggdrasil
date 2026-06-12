@@ -177,15 +177,24 @@ mod tests {
     fn status_class_returns_non_empty() {
         let mut post = sample_post();
         post.status = PostStatus::Published;
-        assert!(!post.status_class().is_empty());
+        assert_eq!(post.status_class(), "text-green-600 dark:text-green-400");
         post.status = PostStatus::Draft;
-        assert!(!post.status_class().is_empty());
+        assert_eq!(post.status_class(), "text-gray-400 dark:text-[#9b9c9d]");
     }
 
     #[test]
     fn status_badge_class_returns_non_empty() {
-        let post = sample_post();
-        assert!(!post.status_badge_class().is_empty());
+        let mut post = sample_post();
+        post.status = PostStatus::Published;
+        assert_eq!(
+            post.status_badge_class(),
+            "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+        );
+        post.status = PostStatus::Draft;
+        assert_eq!(
+            post.status_badge_class(),
+            "bg-gray-100 dark:bg-[#333] text-gray-600 dark:text-[#9b9c9d]"
+        );
     }
 
     #[test]

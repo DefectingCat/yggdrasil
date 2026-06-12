@@ -109,12 +109,7 @@ mod tests {
     fn strip_markdown_mixed() {
         let md = "# Title\n\nSome **bold** and `code` [link](url)\n\n![img](img.png)";
         let result = strip_markdown(md);
-        assert!(result.contains("Title"));
-        assert!(result.contains("bold"));
-        assert!(result.contains("link"));
-        assert!(!result.contains("img"));
-        assert!(!result.contains("**"));
-        assert!(!result.contains("`"));
+        assert_eq!(result, "Title Some bold and link");
     }
 
     #[test]

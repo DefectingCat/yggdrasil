@@ -174,10 +174,7 @@ mod tests {
     }
 
     #[test]
-    fn config_parses_valid_env_vars() {
-        // Note: LazyLock initializes once, so we can't easily test
-        // different env values in the same process.
-        // Test that the default config is reasonable
+    fn config_default_values_are_reasonable() {
         let config = WebpConfig {
             quality: 85.0,
             method: 2,
@@ -188,7 +185,6 @@ mod tests {
 
     #[test]
     fn config_clamping_logic() {
-        // Test the clamping logic independently
         let quality = 150.0f32;
         let clamped = quality.clamp(0.0, 100.0);
         assert_eq!(clamped, 100.0);
@@ -200,5 +196,13 @@ mod tests {
         let method = 10u8;
         let clamped = method.clamp(0, 6);
         assert_eq!(clamped, 6);
+    }
+
+    #[test]
+    fn config_clamps_edge_cases() {
+        assert_eq!(0.0f32.clamp(0.0, 100.0), 0.0);
+        assert_eq!(100.0f32.clamp(0.0, 100.0), 100.0);
+        assert_eq!(0u8.clamp(0, 6), 0);
+        assert_eq!(6u8.clamp(0, 6), 6);
     }
 }
