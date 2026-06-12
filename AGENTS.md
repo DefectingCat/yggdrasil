@@ -45,6 +45,13 @@ DB_POOL_SIZE=20             # database connection pool size
 SSR_CACHE_SECS=3600         # incremental SSR cache TTL
 ```
 
+Session / security tuning:
+
+```
+COOKIE_SECURE=false         # set true/1/yes to add Secure flag to session cookie
+TRUSTED_PROXY_COUNT=0       # number of reverse proxies in front of the app; used to extract real client IP from X-Forwarded-For
+```
+
 Run migrations before first dev server start:
 
 ```bash
