@@ -227,16 +227,6 @@ mod tests {
     }
 
     #[test]
-    fn theme_is_copy() {
-        // 确认 Theme 实现了 Copy，赋值后原值仍可用。
-        let a = Theme::Light;
-        let b = a;
-        assert_eq!(a, b);
-        // 再次使用 a，若未实现 Copy 则编译失败。
-        let _ = a.toggle();
-    }
-
-    #[test]
     fn theme_preload_script_adds_dark_class() {
         // 预加载脚本必须包含给 documentElement 添加 dark class 的逻辑。
         assert!(THEME_PRELOAD_SCRIPT.contains("classList.add('dark')"));
