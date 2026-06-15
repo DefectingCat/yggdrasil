@@ -121,7 +121,10 @@ mod tests {
         let err: ServerFnError = AppError::tx("deadlock detected on UPDATE posts").into();
         let msg = err.to_string();
         assert!(!msg.contains("UPDATE"), "should not leak SQL: {msg}");
-        assert!(!msg.contains("deadlock"), "should not leak error detail: {msg}");
+        assert!(
+            !msg.contains("deadlock"),
+            "should not leak error detail: {msg}"
+        );
         assert!(msg.contains("操作失败"), "expected generic message: {msg}");
     }
 

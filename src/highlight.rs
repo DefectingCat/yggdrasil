@@ -215,7 +215,9 @@ mod tests {
         let result = highlight_code(code, Some("rust"));
         // 两处 fn 关键字都应出现
         assert_eq!(
-            result.matches(r#"<span class="storage type function rust">fn</span>"#).count(),
+            result
+                .matches(r#"<span class="storage type function rust">fn</span>"#)
+                .count(),
             2
         );
     }
