@@ -13,15 +13,13 @@ pub fn clean_html(input: &str) -> String {
 }
 
 #[cfg(feature = "server")]
-/// 将文本转义为可安全放入 HTML **属性值**（双引号包裹）的形式。
+/// 将标题纯文本转义，用于安全地拼进 TOC 的 `aria-label="..."` 与 `<a>` 正文。
 ///
-/// `clean_html` 用于消毒正文 HTML，但把文本拼进 `attr="..."` 时不会转义双引号，
-/// 形如标题 `" onmouseover="alert(1)` 会越出属性边界导致属性注入。此处补齐
-/// `&` / `"` / `<` 的属性上下文转义。
-fn escape_html_attr(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('"', "&quot;")
-        .replace('<', "&lt;")
+/// 复用 `hooks::comment_storage::escape_html`（转义 `& < > " '`），避免在仓库内
+/// 维护第二份转义实现。原先用 `clean_html` 处理属性上下文会漏掉 `"`，标题形如
+/// `" onmouseover="alert(1)` 会越出属性边界。
+fn escape_heading_text(s: &str) -> String {
+    crate::hooks::comment_storage::escape_html(s)
 }
 
 #[derive(Debug, Clone)]
@@ -235,9 +233,9 @@ fn generate_toc_html(headings: &[(u8, String, String)]) -> String {
         }
 
         // 标题 text 是 pulldown-cmark 收集的纯文本（Text/Code 字面字符），不是 HTML 片段，
-        // 因此正文与属性两处都用属性转义（& " <）。原先用 clean_html 处理正文会漏掉 `"`，
-        // 虽然文本节点中的 `"` 不会闭合属性，但统一转义更稳健、可读性更好。
-        let escaped_text = escape_html_attr(text);
+        // 因此正文与属性两处都走 escape_heading_text（转义 & < > " '）。原先用 clean_html
+        // 处理属性上下文会漏掉 `"`，标题中的双引号会越出 aria-label 边界。
+        let escaped_text = escape_heading_text(text);
         html.push_str(&format!(
             "<li><a href=\"#{}\" aria-label=\"{}\">{}</a>",
             id, escaped_text, escaped_text
@@ -406,6 +404,18 @@ mod tests {
             html.contains("aria-label=\"A &amp; B\""),
             "& 应在属性中转义，got: {html}"
         );
+    }
+
+    #[test]
+    fn generate_toc_html_escapes_less_than_in_attr() {
+        // `<` 在属性与正文中都应被转义，避免被误解析为标签起始。
+        let headings = vec![(2u8, "a < b".to_string(), "heading".to_string())];
+        let html = generate_toc_html(&headings);
+        assert!(
+            html.contains("aria-label=\"a &lt; b\""),
+            "< 应在属性中转义，got: {html}"
+        );
+        assert!(!html.contains("a < b"));
     }
 
     #[test]
