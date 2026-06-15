@@ -12,6 +12,18 @@ pub fn clean_html(input: &str) -> String {
     crate::api::sanitizer::clean_html(input)
 }
 
+#[cfg(feature = "server")]
+/// 将文本转义为可安全放入 HTML **属性值**（双引号包裹）的形式。
+///
+/// `clean_html` 用于消毒正文 HTML，但把文本拼进 `attr="..."` 时不会转义双引号，
+/// 形如标题 `" onmouseover="alert(1)` 会越出属性边界导致属性注入。此处补齐
+/// `&` / `"` / `<` 的属性上下文转义。
+fn escape_html_attr(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+}
+
 #[derive(Debug, Clone)]
 #[cfg(feature = "server")]
 /// Markdown 渲染结果。
@@ -222,10 +234,13 @@ fn generate_toc_html(headings: &[(u8, String, String)]) -> String {
             }
         }
 
-        let clean_text = clean_html(text);
+        // 标题 text 是 pulldown-cmark 收集的纯文本（Text/Code 字面字符），不是 HTML 片段，
+        // 因此正文与属性两处都用属性转义（& " <）。原先用 clean_html 处理正文会漏掉 `"`，
+        // 虽然文本节点中的 `"` 不会闭合属性，但统一转义更稳健、可读性更好。
+        let escaped_text = escape_html_attr(text);
         html.push_str(&format!(
             "<li><a href=\"#{}\" aria-label=\"{}\">{}</a>",
-            id, clean_text, clean_text
+            id, escaped_text, escaped_text
         ));
     }
 
@@ -355,6 +370,42 @@ mod tests {
         assert!(html.contains("href=\"#section\""));
         let ul_count = html.matches("<ul>").count();
         assert_eq!(ul_count, 2);
+    }
+
+    #[test]
+    fn generate_toc_html_escapes_quote_in_attr() {
+        // 标题中的双引号不得越出 aria-label 属性边界。
+        let headings = vec![(
+            2u8,
+            "\" onmouseover=\"alert(1)".to_string(),
+            "heading".to_string(),
+        )];
+        let html = generate_toc_html(&headings);
+        // aria-label 中的双引号被转义为 &quot;，无法越出属性边界注入新属性。
+        assert!(
+            html.contains("aria-label=\"&quot; onmouseover=&quot;alert(1)\""),
+            "aria-label 应转义内部双引号，got: {html}"
+        );
+        // 关键：不得出现「未被引号包裹、可被解析为真实属性」的 onmouseover= 片段。
+        // 正文中作为纯文本出现 "onmouseover" 字符串是安全的（无 < 或属性结构）。
+        let attr_injection = "\" onmouseover=\"";
+        let injected = html.matches(attr_injection).count();
+        // 原始输入里有 1 个裸双引号起头；转义后该模式不应再作为属性边界出现。
+        // 注意 aria-label 内部的双引号已变成 &quot;，因此裸的 `" onmouseover="` 不应存在。
+        assert_eq!(
+            injected, 0,
+            "不应存在未转义的属性边界 `\" onmouseover=\"`，got: {html}"
+        );
+    }
+
+    #[test]
+    fn generate_toc_html_escapes_ampersand_in_attr() {
+        let headings = vec![(2u8, "A & B".to_string(), "heading".to_string())];
+        let html = generate_toc_html(&headings);
+        assert!(
+            html.contains("aria-label=\"A &amp; B\""),
+            "& 应在属性中转义，got: {html}"
+        );
     }
 
     #[test]
