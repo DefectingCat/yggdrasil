@@ -14,7 +14,40 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: ./.gitea/actions/setup
+      - name: Checkout
+        run: |
+          git init
+          git remote add origin https://git.rua.plus/${{ github.repository }}.git
+          git fetch --depth 1 origin ${{ github.sha }}
+          git checkout ${{ github.sha }}
+
+      - name: Configure Cargo mirror
+        run: |
+          mkdir -p "$HOME/.cargo"
+          printf '%s\n' '[source.crates-io]' "replace-with = 'rsproxy'" '' "[source.rsproxy]" 'registry = "sparse+https://rsproxy.cn/index/"' > "$HOME/.cargo/config.toml"
+
+      - name: Install Rust toolchain
+        run: |
+          for i in 1 2 3; do
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable && break
+            echo "rustup install attempt $i failed, retrying..."
+            sleep 15
+          done
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install Node.js
+        run: |
+          apt-get update
+          apt-get install -y nodejs npm
+
+      - name: Install Rust target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Install Dioxus CLI
+        run: cargo install dioxus-cli --locked
+
+      - name: Install Tailwind CSS CLI
+        run: npm install -g @tailwindcss/cli
 
       - name: Check formatting
         run: cargo fmt -- --check
@@ -31,8 +64,44 @@ jobs:
   build:
     runs-on: ubuntu-latest
     needs: check
+    env:
+      RUSTUP_UPDATE_ROOT: https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup
+      RUSTUP_DIST_SERVER: https://mirrors.tuna.tsinghua.edu.cn/rustup
     steps:
-      - uses: ./.gitea/actions/setup
+      - name: Checkout
+        run: |
+          git init
+          git remote add origin https://git.rua.plus/${{ github.repository }}.git
+          git fetch --depth 1 origin ${{ github.sha }}
+          git checkout ${{ github.sha }}
+
+      - name: Configure Cargo mirror
+        run: |
+          mkdir -p "$HOME/.cargo"
+          printf '%s\n' '[source.crates-io]' "replace-with = 'rsproxy'" '' "[source.rsproxy]" 'registry = "sparse+https://rsproxy.cn/index/"' > "$HOME/.cargo/config.toml"
+
+      - name: Install Rust toolchain
+        run: |
+          for i in 1 2 3; do
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable && break
+            echo "rustup install attempt $i failed, retrying..."
+            sleep 15
+          done
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install Node.js
+        run: |
+          apt-get update
+          apt-get install -y nodejs npm
+
+      - name: Install Rust target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Install Dioxus CLI
+        run: cargo install dioxus-cli --locked
+
+      - name: Install Tailwind CSS CLI
+        run: npm install -g @tailwindcss/cli
 
       - name: Build release
         run: make build
