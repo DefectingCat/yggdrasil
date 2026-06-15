@@ -382,8 +382,12 @@ mod tests {
     fn render_markdown_code_block() {
         let result = render_markdown_enhanced("```rust\nfn main() {}\n```");
         assert!(result.html.contains(r#"<pre><code class="language-rust">"#));
-        assert!(result.html.contains(r#"<span class="entity name function rust">main</span>"#));
-        assert!(result.html.contains(r#"<span class="storage type function rust">fn</span>"#));
+        assert!(result
+            .html
+            .contains(r#"<span class="entity name function rust">main</span>"#));
+        assert!(result
+            .html
+            .contains(r#"<span class="storage type function rust">fn</span>"#));
     }
 
     #[test]
@@ -399,8 +403,12 @@ mod tests {
         let result = render_markdown_enhanced("```html\n<script>alert(1)</script>\n```");
         assert!(result.html.contains("<pre><code class=\"language-html\">"));
         assert!(!result.html.contains("<script>"));
-        assert!(result.html.contains(r#"<span class="variable function js">alert</span>"#));
-        assert!(result.html.contains(r#"<span class="constant numeric js">1</span>"#));
+        assert!(result
+            .html
+            .contains(r#"<span class="variable function js">alert</span>"#));
+        assert!(result
+            .html
+            .contains(r#"<span class="constant numeric js">1</span>"#));
     }
 
     #[test]

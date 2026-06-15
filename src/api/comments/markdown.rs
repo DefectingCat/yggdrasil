@@ -176,8 +176,7 @@ mod tests {
 
     #[test]
     fn render_comment_link_data_uri_removed() {
-        let result =
-            render_comment_markdown("[click](data:text/html,<script>alert(1)</script>)");
+        let result = render_comment_markdown("[click](data:text/html,<script>alert(1)</script>)");
         assert!(result.contains("click"));
         assert!(!result.contains("data:"));
     }

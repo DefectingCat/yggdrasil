@@ -217,18 +217,30 @@ mod tests {
     #[test]
     fn clean_tags_trims_whitespace() {
         let input = vec!["  rust ".to_string(), "\t\nwasm\t".to_string()];
-        assert_eq!(clean_tags(&input), vec!["rust".to_string(), "wasm".to_string()]);
+        assert_eq!(
+            clean_tags(&input),
+            vec!["rust".to_string(), "wasm".to_string()]
+        );
     }
 
     #[test]
     fn clean_tags_filters_empty_strings() {
-        let input = vec!["".to_string(), "  ".to_string(), "\t".to_string(), "valid".to_string()];
+        let input = vec![
+            "".to_string(),
+            "  ".to_string(),
+            "\t".to_string(),
+            "valid".to_string(),
+        ];
         assert_eq!(clean_tags(&input), vec!["valid".to_string()]);
     }
 
     #[test]
     fn clean_tags_preserves_duplicates() {
-        let input = vec!["rust".to_string(), "  rust  ".to_string(), "rust".to_string()];
+        let input = vec![
+            "rust".to_string(),
+            "  rust  ".to_string(),
+            "rust".to_string(),
+        ];
         assert_eq!(
             clean_tags(&input),
             vec!["rust".to_string(), "rust".to_string(), "rust".to_string()]
