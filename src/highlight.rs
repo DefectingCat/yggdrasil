@@ -69,7 +69,8 @@ pub mod server {
                     ("golang", "go"),
                 ];
                 for &(from, to) in aliases {
-                    if lang == from {
+                    // 别名比较同样不区分大小写，保证 "RUST" 与 "rust" 等价。
+                    if lang.eq_ignore_ascii_case(from) {
                         if let Some(s) = ss.find_syntax_by_extension(to) {
                             return s;
                         }
@@ -150,5 +151,74 @@ mod tests {
         let result = highlight_code("let x = 1;", Some("rust"));
         assert!(result.contains(r#"<span class="storage type rust">let</span>"#));
         assert!(result.contains(r#"<span class="constant numeric integer decimal rust">1</span>"#));
+    }
+
+    #[test]
+    fn highlight_code_uppercase_language_falls_back_via_lowercase() {
+        // 大写语言标识应通过小写回退路径匹配到对应语法。
+        let lower = highlight_code("fn main() {}", Some("rust"));
+        let upper = highlight_code("fn main() {}", Some("RUST"));
+        // 大写标识的输出必须与小写标识完全一致，证明回退路径生效。
+        assert_eq!(lower, upper);
+        assert!(lower.contains(r#"<span class="storage type function rust">fn</span>"#));
+    }
+
+    #[test]
+    fn highlight_code_resolves_golang_alias() {
+        // 别名表中 "golang" 映射到 "go" 扩展名，输出应与直接用 "go" 一致。
+        let by_alias = highlight_code("package main", Some("golang"));
+        let by_ext = highlight_code("package main", Some("go"));
+        assert_eq!(by_alias, by_ext);
+        // 别名解析必须产出带 span 的高亮输出，而非纯文本。
+        assert!(by_alias.contains("span"));
+    }
+
+    #[test]
+    fn highlight_code_resolves_bash_alias() {
+        // 别名表中 "bash" 映射到 "sh" 扩展名。
+        let result = highlight_code("echo hello", Some("bash"));
+        assert!(result.contains("span"));
+    }
+
+    #[test]
+    fn highlight_code_resolves_yml_alias() {
+        // 别名表中 "yml" 映射到 "yaml" 扩展名。
+        let result = highlight_code("key: value", Some("yml"));
+        assert!(!result.is_empty());
+    }
+
+    #[test]
+    fn highlight_code_unknown_language_falls_back_to_plain_text() {
+        // 无法识别的语言应回退到纯文本语法，仍能输出内容。
+        let result = highlight_code("hello world", Some("totally-not-a-language-xyz"));
+        assert!(result.contains("hello world"));
+    }
+
+    #[test]
+    fn highlight_code_empty_language_string_falls_back_to_plain_text() {
+        // 空字符串语言标识应走纯文本回退路径。
+        let result = highlight_code("just text", Some(""));
+        assert!(result.contains("just text"));
+    }
+
+    #[test]
+    fn highlight_code_trims_surrounding_whitespace() {
+        // 代码首尾的空白会被 trim 掉再高亮。
+        let result = highlight_code("  \nfn main() {}\n  ", Some("rust"));
+        assert!(result.contains(r#"<span class="storage type function rust">fn</span>"#));
+    }
+
+    #[test]
+    fn highlight_code_multiline_output_spans_all_lines() {
+        // 多行代码每一行都应被解析为带 span 的输出。
+        let code = "fn a() {}\nfn b() {}";
+        let result = highlight_code(code, Some("rust"));
+        // 两处 fn 关键字都应出现
+        assert_eq!(
+            result
+                .matches(r#"<span class="storage type function rust">fn</span>"#)
+                .count(),
+            2
+        );
     }
 }

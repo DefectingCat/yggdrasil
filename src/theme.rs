@@ -210,4 +210,45 @@ mod tests {
     fn toggle_switches_dark_to_light() {
         assert_eq!(Theme::Dark.toggle(), Theme::Light);
     }
+
+    #[test]
+    fn toggle_is_an_involution() {
+        // 连续切换两次应当回到原始主题。
+        assert_eq!(Theme::Light.toggle().toggle(), Theme::Light);
+        assert_eq!(Theme::Dark.toggle().toggle(), Theme::Dark);
+    }
+
+    #[test]
+    fn theme_derives_equality() {
+        // Theme 派生了 PartialEq，相同变体必须相等。
+        assert_eq!(Theme::Light, Theme::Light);
+        assert_eq!(Theme::Dark, Theme::Dark);
+        assert_ne!(Theme::Light, Theme::Dark);
+    }
+
+    #[test]
+    fn theme_preload_script_adds_dark_class() {
+        // 预加载脚本必须包含给 documentElement 添加 dark class 的逻辑。
+        assert!(THEME_PRELOAD_SCRIPT.contains("classList.add('dark')"));
+    }
+
+    #[test]
+    fn theme_preload_script_reads_local_storage() {
+        // 预加载脚本必须读取 yggdrasil-theme 键，与 THEME_KEY 保持一致。
+        assert!(THEME_PRELOAD_SCRIPT.contains("localStorage.getItem('yggdrasil-theme')"));
+        assert_eq!(THEME_KEY, "yggdrasil-theme");
+    }
+
+    #[test]
+    fn theme_preload_script_falls_back_to_prefers_color_scheme() {
+        // 当 localStorage 中无主题时，脚本应回退到系统颜色偏好。
+        assert!(THEME_PRELOAD_SCRIPT.contains("prefers-color-scheme: dark"));
+    }
+
+    #[test]
+    fn theme_preload_script_swallows_errors() {
+        // 预加载脚本必须包裹在 try/catch 中，避免禁用 localStorage 时抛错。
+        assert!(THEME_PRELOAD_SCRIPT.contains("try"));
+        assert!(THEME_PRELOAD_SCRIPT.contains("catch"));
+    }
 }

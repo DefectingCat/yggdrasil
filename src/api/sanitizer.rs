@@ -435,4 +435,76 @@ mod tests {
             "<a rel=\"nofollow noopener\">x</a>"
         );
     }
+
+    // ---- is_safe_url 直接分支测试 ----
+    // is_safe_url 是安全敏感的内部函数，以下测试锁定其各分支的行为契约。
+
+    #[test]
+    fn is_safe_url_allows_https() {
+        let schemes = default_allowed_schemes();
+        assert!(is_safe_url("https://example.com", &schemes, false));
+        assert!(is_safe_url("http://example.com", &schemes, false));
+    }
+
+    #[test]
+    fn is_safe_url_rejects_javascript() {
+        let schemes = default_allowed_schemes();
+        assert!(!is_safe_url("javascript:alert(1)", &schemes, false));
+    }
+
+    #[test]
+    fn is_safe_url_rejects_vbscript() {
+        let schemes = default_allowed_schemes();
+        assert!(!is_safe_url("vbscript:msgbox", &schemes, false));
+    }
+
+    #[test]
+    fn is_safe_url_data_uri_respects_flag() {
+        let schemes = default_allowed_schemes();
+        // 文章正文允许 data URI
+        assert!(is_safe_url("data:image/png;base64,iVBOR", &schemes, true));
+        // 评论禁用 data URI
+        assert!(!is_safe_url("data:image/png;base64,iVBOR", &schemes, false));
+    }
+
+    #[test]
+    fn is_safe_url_allows_relative_and_fragment() {
+        let schemes = default_allowed_schemes();
+        // 绝对路径
+        assert!(is_safe_url("/path/to/page", &schemes, false));
+        // 锚点
+        assert!(is_safe_url("#section", &schemes, false));
+    }
+
+    #[test]
+    fn is_safe_url_empty_is_safe() {
+        let schemes = default_allowed_schemes();
+        // 空 URL（如 img 无 src）视为安全。
+        assert!(is_safe_url("", &schemes, false));
+        assert!(is_safe_url("   ", &schemes, false));
+    }
+
+    #[test]
+    fn is_safe_url_allows_other_whitelisted_schemes() {
+        let schemes = default_allowed_schemes();
+        // mailto / tel / ftp 等均在默认白名单中。
+        assert!(is_safe_url("mailto:user@example.com", &schemes, false));
+        assert!(is_safe_url("tel:+8613800138000", &schemes, false));
+        assert!(is_safe_url("ftp://example.com/file", &schemes, false));
+    }
+
+    #[test]
+    fn is_safe_url_rejects_scheme_with_whitespace() {
+        let schemes = default_allowed_schemes();
+        // 含空格的 scheme 名是已知的混淆手法，应被拒绝。
+        assert!(!is_safe_url("java\tscript:alert(1)", &schemes, false));
+    }
+
+    #[test]
+    fn is_safe_url_scheme_matching_is_case_insensitive() {
+        let schemes = default_allowed_schemes();
+        // scheme 大小写不敏感：HTTPS 与 https 等价。
+        assert!(is_safe_url("HTTPS://example.com", &schemes, false));
+        assert!(!is_safe_url("JAVASCRIPT:alert(1)", &schemes, false));
+    }
 }

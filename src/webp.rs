@@ -237,4 +237,88 @@ mod tests {
         assert_eq!(0u8.clamp(0, 6), 0);
         assert_eq!(6u8.clamp(0, 6), 6);
     }
+
+    #[test]
+    fn webp_error_encode_display() {
+        let err = WebpError::Encode("boom".to_string());
+        assert_eq!(err.to_string(), "WebP encode error: boom");
+    }
+
+    #[test]
+    fn webp_error_decode_display() {
+        let err = WebpError::Decode("busted".to_string());
+        assert_eq!(err.to_string(), "WebP decode error: busted");
+    }
+
+    #[test]
+    fn webp_error_implements_std_error() {
+        // WebpError 必须实现 std::error::Error，才能在 ? 传播链中使用。
+        fn assert_error<T: std::error::Error>() {}
+        assert_error::<WebpError>();
+    }
+
+    #[test]
+    fn encode_converts_luma8_to_rgba() {
+        // Luma8（灰度）图像不在 encode 的快速路径中，应被转换为 RGBA8 后编码。
+        let img = image::DynamicImage::new_luma8(4, 4);
+        let result = encode(&img, 80.0, 2);
+        assert!(result.is_ok());
+        assert!(!result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn encode_converts_luma_a8_to_rgba() {
+        // LumaA8（带 alpha 的灰度）同样走转换路径。
+        let img = image::DynamicImage::new_luma_a8(4, 4);
+        let result = encode(&img, 80.0, 2);
+        assert!(result.is_ok());
+        assert!(!result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn encode_lower_quality_does_not_explode_on_solid_color() {
+        // 纯色图是 WebP 的极端情况（信息熵接近 0），确保高低质量都能编码成功
+        // 而非 panic，且产物是合法非空字节流。不假设低质量体积一定更小，
+        // 因为这依赖底层 libwebp 的量化策略，非确定性不变量。
+        let img = image::DynamicImage::new_rgb8(64, 64);
+        let high = encode(&img, 95.0, 4).unwrap();
+        let low = encode(&img, 10.0, 4).unwrap();
+        assert!(!high.is_empty());
+        assert!(!low.is_empty());
+        // 两者都应是合法的 WebP（能被本模块解码回来）。
+        assert!(decode(&high).is_ok());
+        assert!(decode(&low).is_ok());
+    }
+
+    #[test]
+    fn decode_invalid_bytes_returns_error() {
+        // 非 WebP 字节流应返回解码错误而非 panic。
+        let junk = b"this is definitely not a webp image";
+        let result = decode(junk);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn decode_empty_bytes_returns_error() {
+        // 空字节流应返回解码错误而非 panic。
+        let result = decode(&[]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn decode_error_message_is_descriptive() {
+        // 解码错误的 Display 应包含 'WebP decode error' 前缀，便于日志排查。
+        let err = decode(b"not webp").unwrap_err();
+        assert!(err.to_string().starts_with("WebP decode error"));
+    }
+
+    #[test]
+    fn encode_decode_preserves_dimensions() {
+        // 编码再解码后，图像宽高应保持一致。
+        let original = image::DynamicImage::new_rgb8(16, 9);
+        let encoded = encode(&original, 85.0, 4).unwrap();
+        let decoded = decode(&encoded).unwrap();
+        assert_eq!(decoded.width(), 16);
+        assert_eq!(decoded.height(), 9);
+    }
 }

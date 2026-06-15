@@ -106,4 +106,37 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("文章不存在"), "expected passthrough: {msg}");
     }
+
+    #[test]
+    fn internal_message_passthrough() {
+        // Internal 错误的消息原样透传，便于向用户展示可读的内部错误描述。
+        let err: ServerFnError = AppError::Internal("内部错误").into();
+        let msg = err.to_string();
+        assert!(msg.contains("内部错误"), "expected passthrough: {msg}");
+    }
+
+    #[test]
+    fn transaction_hides_sql_details() {
+        // 事务错误同样返回通用提示，不泄露 SQL 细节。
+        let err: ServerFnError = AppError::tx("deadlock detected on UPDATE posts").into();
+        let msg = err.to_string();
+        assert!(!msg.contains("UPDATE"), "should not leak SQL: {msg}");
+        assert!(
+            !msg.contains("deadlock"),
+            "should not leak error detail: {msg}"
+        );
+        assert!(msg.contains("操作失败"), "expected generic message: {msg}");
+    }
+
+    #[test]
+    fn db_conn_query_transaction_all_return_generic_message() {
+        // 三类数据库错误对外均返回固定中文提示，避免泄露实现细节。
+        let db_conn: ServerFnError = AppError::DbConn("x".into()).into();
+        let query: ServerFnError = AppError::Query("x".into()).into();
+        let tx: ServerFnError = AppError::Transaction("x".into()).into();
+
+        assert!(db_conn.to_string().contains("服务暂时不可用"));
+        assert!(query.to_string().contains("操作失败"));
+        assert!(tx.to_string().contains("操作失败"));
+    }
 }
