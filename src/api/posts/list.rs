@@ -31,10 +31,7 @@ const MAX_PAGE: i32 = 10_000;
 ///
 /// 注意：返回值必须同时用于缓存键与 SQL 查询，避免同一逻辑页落入不同缓存条目。
 fn clamp_pagination(page: i32, per_page: i32) -> (i32, i32) {
-    (
-        page.clamp(1, MAX_PAGE),
-        per_page.clamp(1, MAX_PER_PAGE),
-    )
+    (page.clamp(1, MAX_PAGE), per_page.clamp(1, MAX_PER_PAGE))
 }
 
 /// 获取已发布文章分页列表。
@@ -269,9 +266,6 @@ mod tests {
     #[test]
     fn clamp_pagination_max_per_page_boundary() {
         assert_eq!(clamp_pagination(1, MAX_PER_PAGE), (1, MAX_PER_PAGE));
-        assert_eq!(
-            clamp_pagination(1, MAX_PER_PAGE - 1),
-            (1, MAX_PER_PAGE - 1)
-        );
+        assert_eq!(clamp_pagination(1, MAX_PER_PAGE - 1), (1, MAX_PER_PAGE - 1));
     }
 }
