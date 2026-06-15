@@ -14,6 +14,19 @@ use super::types::PostListResponse;
 use crate::api::error::AppError;
 use crate::db::pool::get_conn;
 
+/// 单页允许的最大文章数。
+///
+/// 公开的 `list_published_posts` 接口无需认证，若不对 `per_page` 设上限，
+/// 攻击者可传入巨大值迫使数据库扫描并实例化超大 Vec，造成内存放大与拒绝服务。
+const MAX_PER_PAGE: i32 = 50;
+
+/// 将分页参数钳制到安全范围：页码至少为 1，每页 1–`MAX_PER_PAGE`。
+///
+/// 注意：返回值必须同时用于缓存键与 SQL 查询，避免同一逻辑页落入不同缓存条目。
+fn clamp_pagination(page: i32, per_page: i32) -> (i32, i32) {
+    (page.max(1), per_page.clamp(1, MAX_PER_PAGE))
+}
+
 /// 获取已发布文章分页列表。
 ///
 /// 优先命中缓存；未命中时查询总数与分页记录，并按 published_at 降序排列。
@@ -22,6 +35,9 @@ pub async fn list_published_posts(
     page: i32,
     per_page: i32,
 ) -> Result<PostListResponse, ServerFnError> {
+    // 钳制分页参数，防止无认证调用方请求超大每页数量导致内存放大 / DoS。
+    let (page, per_page) = clamp_pagination(page, per_page);
+
     #[cfg(feature = "server")]
     {
         let cache_key = crate::cache::CacheKey::PublishedPosts { page, per_page };
@@ -93,6 +109,8 @@ pub async fn list_published_posts(
 /// 需要 admin 权限；结果按创建时间降序，不走缓存。
 #[server(ListPosts, "/api")]
 pub async fn list_posts(page: i32, per_page: i32) -> Result<PostListResponse, ServerFnError> {
+    // 与公开接口保持一致的分页钳制，避免单次请求拉取过多记录。
+    let (page, per_page) = clamp_pagination(page, per_page);
     let _user = get_current_admin_user().await?;
 
     #[cfg(feature = "server")]
@@ -197,5 +215,40 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
             posts: Vec::new(),
             total: 0,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clamp_pagination_keeps_valid_values() {
+        assert_eq!(clamp_pagination(1, 10), (1, 10));
+        assert_eq!(clamp_pagination(3, 20), (3, 20));
+    }
+
+    #[test]
+    fn clamp_pagination_clamps_oversized_per_page() {
+        // 攻击者传入超大 per_page 必须被压回上限，避免内存放大 / DoS。
+        assert_eq!(clamp_pagination(1, 1_000_000_000), (1, MAX_PER_PAGE));
+        assert_eq!(clamp_pagination(2, 51), (2, MAX_PER_PAGE));
+    }
+
+    #[test]
+    fn clamp_pagination_clamps_non_positive() {
+        assert_eq!(clamp_pagination(0, 10), (1, 10));
+        assert_eq!(clamp_pagination(-5, 10), (1, 10));
+        assert_eq!(clamp_pagination(1, 0), (1, 1));
+        assert_eq!(clamp_pagination(1, -100), (1, 1));
+    }
+
+    #[test]
+    fn clamp_pagination_max_per_page_boundary() {
+        assert_eq!(clamp_pagination(1, MAX_PER_PAGE), (1, MAX_PER_PAGE));
+        assert_eq!(
+            clamp_pagination(1, MAX_PER_PAGE - 1),
+            (1, MAX_PER_PAGE - 1)
+        );
     }
 }
