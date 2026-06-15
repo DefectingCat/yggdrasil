@@ -18,7 +18,7 @@ make clean         # cargo clean + rm public/style.css
 
 - Rust 1.95+ with `wasm32-unknown-unknown` target
 - `dx` CLI (`cargo install dioxus-cli`)
-- `tailwindcss` CLI v4 (standalone binary)
+- `tailwindcss` CLI v4 — install via `npm install -g @tailwindcss/cli` (v4 splits the CLI into its own package; the `tailwindcss` core package has no `bin`), or use the standalone binary
 - PostgreSQL running locally
 
 ## Environment
