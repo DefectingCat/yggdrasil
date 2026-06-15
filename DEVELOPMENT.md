@@ -41,26 +41,30 @@ hey -c 100 -n 100000 http://localhost:8080/
 
 ### Key Metrics to Watch
 
-| Metric | Description |
-|--------|-------------|
-| Requests/sec | Throughput |
-| Average latency | Mean response time |
-| P99 latency | Tail latency |
-| Status codes | Error rate (should be 0) |
+| Metric               | Description                  |
+| -------------------- | ---------------------------- |
+| Requests/sec         | Throughput                   |
+| Average latency      | Mean response time           |
+| P99 latency          | Tail latency                 |
+| Status codes         | Error rate (should be 0)     |
 | Latency distribution | Consistency (tight = stable) |
 
 ### Flame Graph Hotspots
 
-| Expected Hotspot | Code Location | Cause |
-|------------------|---------------|-------|
-| SSR rendering | Dioxus framework | Virtual DOM diff + render per request |
-| `deadpool` connection acquisition | `src/db/mod.rs` | Connection pool contention under concurrency |
-| `moka` cache lookup | `src/cache.rs` | Cache hit/miss overhead |
-| `tokio` scheduling | tokio runtime | Async task dispatch |
-| `serde` serialization | Models | Post/User serialization |
+| Expected Hotspot                  | Code Location    | Cause                                        |
+| --------------------------------- | ---------------- | -------------------------------------------- |
+| SSR rendering                     | Dioxus framework | Virtual DOM diff + render per request        |
+| `deadpool` connection acquisition | `src/db/mod.rs`  | Connection pool contention under concurrency |
+| `moka` cache lookup               | `src/cache.rs`   | Cache hit/miss overhead                      |
+| `tokio` scheduling                | tokio runtime    | Async task dispatch                          |
+| `serde` serialization             | Models           | Post/User serialization                      |
 
 ### Tuning
 
 - `DB_POOL_SIZE` — increase if `deadpool` / `Semaphore` shows high in flame graph
 - `SSR_CACHE_SECS` — increase to cache SSR output longer
 - `TOKIO_WORKER_THREADS` — explicitly set worker thread count
+
+## CI
+
+https://git.rua.plus/api/v1/repos/xfy/yggdrasil/actions/tasks
