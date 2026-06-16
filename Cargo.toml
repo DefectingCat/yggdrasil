@@ -22,8 +22,8 @@ rand = { version = "0.8", features = ["getrandom"], optional = true }
 http = { version = "1", optional = true }
 axum = { version = "0.8", optional = true, features = ["multipart"] }
 serde_json = "1.0"
-sha2 = "0.10"
-hex = "0.4"
+sha2 = { version = "0.10", optional = true }
+hex = { version = "0.4", optional = true }
 lol_html = { version = "2", optional = true }
 syntect = { version = "5", default-features = false, features = ["default-syntaxes", "default-themes", "default-fancy", "html", "parsing", "dump-load", "yaml-load"], optional = true }
 # NOTE: WebP decoder is intentionally excluded from the image crate.
@@ -65,6 +65,8 @@ server = [
     "dep:pulldown-cmark",
     "dep:rand",
     "dep:http",
+    "dep:sha2",
+    "dep:hex",
     "dep:dotenvy",
     "dep:tracing",
     "dep:tracing-subscriber",
