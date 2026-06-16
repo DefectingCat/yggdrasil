@@ -10,7 +10,7 @@ tokio = { version = "1.52", features = ["rt-multi-thread", "macros", "fs", "time
 tokio-postgres = { version = "0.7", features = ["with-chrono-0_4"], optional = true }
 deadpool-postgres = { version = "0.14", optional = true }
 argon2 = { version = "0.5", optional = true }
-uuid = { version = "1", features = ["v4", "js"], optional = true }
+uuid = { version = "1", features = ["v4"], optional = true }
 chrono = { version = "0.4", features = ["serde"] }
 regex = { version = "1.12", optional = true }
 pulldown-cmark = { version = "0.13", optional = true }
