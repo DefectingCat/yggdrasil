@@ -23,6 +23,10 @@ class TiptapEditorInstance {
   private editor: Editor | null = null
   private container: HTMLElement
   private options: EditorOptions
+  // 源码模式相关状态
+  private isSourceMode = false
+  private sourceTextarea: HTMLTextAreaElement | null = null
+  private toggleButton: HTMLButtonElement | null = null
 
   constructor(container: HTMLElement, options: EditorOptions = {}) {
     this.container = container
@@ -34,6 +38,30 @@ class TiptapEditorInstance {
     const el = document.createElement('div')
     el.className = 'tiptap-editor'
     this.container.appendChild(el)
+
+    // 源码模式切换按钮：悬浮于编辑器右上角
+    this.toggleButton = document.createElement('button')
+    this.toggleButton.className = 'tiptap-toggle-btn'
+    this.toggleButton.type = 'button'
+    this.toggleButton.title = '切换 Markdown 源码'
+    this.toggleButton.textContent = '</>'
+    this.toggleButton.addEventListener('click', () => this.toggleSource())
+    el.appendChild(this.toggleButton)
+
+    // 源码模式 textarea：初始隐藏，与 ProseMirror 共用同一区域
+    this.sourceTextarea = document.createElement('textarea')
+    this.sourceTextarea.className = 'tiptap-source-textarea'
+    this.sourceTextarea.hidden = true
+    this.sourceTextarea.placeholder = '在此输入 Markdown 源码...'
+    this.sourceTextarea.spellcheck = false
+    this.sourceTextarea.addEventListener('input', () => {
+      // 保持全局缓存与 onUpdate 回调一致
+      window.__tiptap_content = this.sourceTextarea!.value
+      if (this.options.onUpdate) {
+        this.options.onUpdate(this.sourceTextarea!.value)
+      }
+    })
+    el.appendChild(this.sourceTextarea)
 
     this.editor = new Editor({
       element: el,
@@ -114,7 +142,42 @@ class TiptapEditorInstance {
   }
 
   getMarkdown(): string {
+    // 源码模式下直接返回 textarea 内容，确保提交逻辑无需感知视图模式
+    if (this.isSourceMode && this.sourceTextarea) {
+      return this.sourceTextarea.value
+    }
     return this.editor?.getMarkdown() || ''
+  }
+
+  /**
+   * 在富文本模式与 Markdown 源码模式之间切换。
+   * 切换时同步内容：富文本 → 源码用 getMarkdown 导出；源码 → 富文本用 setMarkdown 回填。
+   */
+  toggleSource(): void {
+    if (!this.editor || !this.sourceTextarea || !this.toggleButton) return
+
+    // ProseMirror 的实际 DOM 节点（.ProseMirror），用于切换显隐。
+    const proseMirrorDom = this.editor.view.dom
+    if (!this.isSourceMode) {
+      // 富文本 → 源码：导出当前 Markdown 到 textarea
+      this.sourceTextarea.value = this.editor.getMarkdown()
+      proseMirrorDom.style.display = 'none'
+      this.sourceTextarea.hidden = false
+      this.sourceTextarea.focus()
+      this.toggleButton.textContent = '✎'
+      this.toggleButton.title = '切换富文本'
+      this.isSourceMode = true
+    } else {
+      // 源码 → 富文本：把 textarea 内容回填到编辑器
+      const md = this.sourceTextarea.value
+      this.setMarkdown(md)
+      this.sourceTextarea.hidden = true
+      proseMirrorDom.style.display = ''
+      this.toggleButton.textContent = '</>'
+      this.toggleButton.title = '切换 Markdown 源码'
+      this.isSourceMode = false
+      this.editor.commands.focus()
+    }
   }
 
   setMarkdown(content: string): void {
@@ -140,6 +203,10 @@ class TiptapEditorInstance {
   destroy(): void {
     this.editor?.destroy()
     this.editor = null
+    // 清理源码模式相关引用（容器 innerHTML 已清空，DOM 会随之移除）
+    this.sourceTextarea = null
+    this.toggleButton = null
+    this.isSourceMode = false
     this.container.innerHTML = ''
   }
 }
