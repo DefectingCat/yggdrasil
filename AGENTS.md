@@ -165,6 +165,6 @@ Most tests use `#[cfg(all(test, feature = "server"))]` — they only run when th
 
 ## Notes
 
-- `rand` + `getrandom` with `js` feature are required for Argon2 salt generation in WASM builds.
+- `rand` is optional and only enabled by the `server` feature; it is not compiled into the WASM frontend.
 - `#[allow(unused_mut, unused_variables)]` on `Write` component is intentional — `mut` signals are used in `#[cfg(target_arch = "wasm32")]` blocks stripped in server builds.
 - Server uses incremental rendering with 300s cache (`IncrementalRendererConfig` in `src/main.rs`).
