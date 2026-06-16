@@ -16,6 +16,7 @@ mod stats;
 mod tags;
 mod types;
 mod update;
+mod trash;
 
 /// 创建新文章。
 #[allow(unused_imports)]
@@ -25,6 +26,9 @@ pub use delete::delete_post;
 /// 获取管理员视角的全部文章分页列表。
 #[allow(unused_imports)]
 pub use list::list_posts;
+/// 获取回收站中已软删除的文章列表。
+#[allow(unused_imports)]
+pub use list::list_deleted_posts;
 /// 获取已发布文章分页列表。
 pub use list::{get_posts_by_tag, list_published_posts};
 /// 根据 id 获取文章详情。
@@ -44,6 +48,9 @@ pub use types::*;
 /// 更新指定文章。
 #[allow(unused_imports)]
 pub use update::update_post;
+/// 恢复已删除文章。
+#[allow(unused_imports)]
+pub use trash::{batch_purge_posts, batch_restore_posts, empty_trash, purge_post, restore_post};
 
 /// 将 Markdown 渲染为增强 HTML（含目录）。
 #[cfg(feature = "server")]

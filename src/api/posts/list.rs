@@ -171,6 +171,65 @@ pub async fn list_posts(page: i32, per_page: i32) -> Result<PostListResponse, Se
     }
 }
 
+/// 获取回收站中已软删除的文章列表。
+///
+/// 需要 admin 权限；按删除时间降序，不走缓存。
+#[server(ListDeletedPosts, "/api")]
+pub async fn list_deleted_posts(
+    page: i32,
+    per_page: i32,
+) -> Result<PostListResponse, ServerFnError> {
+    // 与 list_posts 一致的分页钳制。
+    let (page, per_page) = clamp_pagination(page, per_page);
+    let _user = get_current_admin_user().await?;
+
+    #[cfg(feature = "server")]
+    {
+        let client = get_conn().await.map_err(AppError::db_conn)?;
+
+        let count_row = client
+            .query_one("SELECT COUNT(*) FROM posts WHERE deleted_at IS NOT NULL", &[])
+            .await
+            .map_err(AppError::query)?;
+        let total: i64 = count_row.get(0);
+
+        let offset = ((page - 1).max(0) as i64) * (per_page as i64);
+        let limit = per_page as i64;
+        let rows = client
+            .query(
+                "SELECT 
+                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, 
+                    p.status, p.published_at, p.created_at, p.updated_at, p.cover_image, p.deleted_at,
+                    COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags
+                 FROM posts p
+                 LEFT JOIN post_tags pt ON p.id = pt.post_id
+                 LEFT JOIN tags t ON pt.tag_id = t.id
+                 WHERE p.deleted_at IS NOT NULL
+                 GROUP BY p.id
+                 ORDER BY p.deleted_at DESC
+                 LIMIT $1 OFFSET $2",
+                &[&limit, &offset],
+            )
+            .await
+            .map_err(AppError::query)?;
+
+        let mut posts = Vec::new();
+        for row in &rows {
+            posts.push(row_to_post_list(&client, row).await);
+        }
+
+        Ok(PostListResponse { posts, total })
+    }
+
+    #[cfg(not(feature = "server"))]
+    {
+        Ok(PostListResponse {
+            posts: Vec::new(),
+            total: 0,
+        })
+    }
+}
+
 /// 获取指定标签下的已发布文章列表。
 ///
 /// 优先命中缓存；当前实现返回全部匹配文章，因此 total 用 posts.len() 计算。

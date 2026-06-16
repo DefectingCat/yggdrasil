@@ -61,6 +61,8 @@ pub struct Post {
     pub created_at: DateTime<Utc>,
     /// 最后更新时间。
     pub updated_at: DateTime<Utc>,
+    /// 软删除时间，None 表示未删除。仅回收站查询填充。
+    pub deleted_at: Option<DateTime<Utc>>,
     /// 关联标签列表。
     pub tags: Vec<String>,
     /// 封面图片 URL。
@@ -161,6 +163,7 @@ mod tests {
             published_at: None,
             created_at: Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap(),
             updated_at: Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap(),
+            deleted_at: None,
             tags: vec![],
             cover_image: None,
             reading_time: 1,

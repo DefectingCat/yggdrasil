@@ -8,3 +8,6 @@ pub mod ip_purge;
 /// 定时删除已过期会话，避免 `sessions` 表无限增长。
 #[cfg(feature = "server")]
 pub mod session_cleanup;
+/// 定时清理回收站中超过保留期的已删除文章。
+#[cfg(feature = "server")]
+pub mod post_purge;

@@ -64,6 +64,11 @@ fn main() {
                 tasks::session_cleanup::run_cleanup().await;
             });
 
+            // 启动后台定时任务：回收站自动清理
+            tokio::spawn(async {
+                tasks::post_purge::run_purge().await;
+            });
+
             // 配置增量渲染缓存，默认缓存 3600 秒，可通过 SSR_CACHE_SECS 覆盖
             let config = ServeConfig::builder().incremental(
                 dioxus::server::IncrementalRendererConfig::default().invalidate_after(

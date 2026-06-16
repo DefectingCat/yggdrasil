@@ -12,7 +12,7 @@ use crate::components::frontend_layout::FrontendLayout;
 use crate::context::UserContext;
 use crate::pages::about::About;
 use crate::pages::admin::{
-    Admin, AdminComments, AdminCommentsPage, Posts, PostsPage, Write, WriteEdit,
+    Admin, AdminComments, AdminCommentsPage, Posts, PostsPage, Trash, TrashPage, Write, WriteEdit,
 };
 use crate::pages::archives::Archives;
 use crate::pages::home::{Home, HomePage};
@@ -84,6 +84,12 @@ pub enum Route {
         /// 评论管理分页
         #[route("/comments/:page")]
         AdminCommentsPage { page: i32 },
+        /// 回收站
+        #[route("/trash")]
+        Trash {},
+        /// 回收站分页
+        #[route("/trash/:page")]
+        TrashPage { page: i32 },
     #[end_layout]
     #[end_nest]
 
