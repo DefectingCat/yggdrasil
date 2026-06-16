@@ -640,28 +640,6 @@
     color: var(--color-paper-primary);
   }
 
-  .btn-primary {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1.25rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: white;
-    background: var(--color-paper-accent);
-    border-radius: 9999px;
-    border: none;
-    cursor: pointer;
-    transition: all 0.2s ease-out;
-  }
-  .btn-primary:hover {
-    filter: brightness(1.1);
-    transform: translateY(-1px);
-  }
-  .btn-primary:active {
-    transform: translateY(0) scale(0.98);
-  }
-
   .post-card-accent {
     position: relative;
   }

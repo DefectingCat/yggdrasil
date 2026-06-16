@@ -12,6 +12,7 @@ use crate::api::comments::get_pending_count;
 use crate::api::posts::{get_post_stats, list_posts};
 #[cfg(target_arch = "wasm32")]
 use crate::api::posts::{PostListResponse, PostStatsResponse};
+use crate::components::ui::ADMIN_CARD_CLASS;
 use crate::models::post::{Post, PostStats};
 use crate::router::Route;
 
@@ -151,7 +152,7 @@ pub fn Admin() -> Element {
 #[component]
 fn StatCard(value: String, label: String) -> Element {
     rsx! {
-        div { class: "rounded-xl bg-white dark:bg-[#2e2e33] border border-gray-200 dark:border-[#333] p-6 text-center",
+        div { class: "{ADMIN_CARD_CLASS} p-6 text-center",
             div { class: "text-3xl font-bold text-gray-900 dark:text-[#dadadb]",
                 "{value}"
             }

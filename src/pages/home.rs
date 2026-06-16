@@ -10,12 +10,12 @@
 //! 实际的数据库访问逻辑仅在 `feature = "server"` 启用时运行。
 
 use dioxus::prelude::*;
-use dioxus::router::components::Link;
 
 use crate::api::posts::{list_published_posts, PostListResponse};
 use crate::components::post_card::PostCard;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::home_skeleton::HomeSkeleton;
+use crate::components::ui::Pagination;
 use crate::router::Route;
 
 // 每页展示的已发布文章数量，用于分页计算。
@@ -70,7 +70,20 @@ fn HomePosts(current_page: i32) -> Element {
                     }
                 }
                 // 在列表底部渲染分页导航。
-                Pagination { current_page, total }
+                // frontend variant 不渲染页码计数，unit 不显示（仅满足必填 prop）。
+                Pagination {
+                    variant: "frontend",
+                    current_page,
+                    total,
+                    per_page: POSTS_PER_PAGE,
+                    prev_route: if current_page - 1 <= 1 {
+                        Route::Home {}
+                    } else {
+                        Route::HomePage { page: current_page - 1 }
+                    },
+                    next_route: Route::HomePage { page: current_page + 1 },
+                    unit: "篇",
+                }
             }
         }
         Some(Err(e)) => {
@@ -103,42 +116,3 @@ fn HomeInfo() -> Element {
     }
 }
 
-/// 分页导航组件。
-///
-/// 根据当前页码与文章总数计算总页数，并渲染上一页/下一页链接。
-/// 第一页的上一页链接固定指向 `Route::Home`，避免生成 `/page/1`。
-#[component]
-fn Pagination(current_page: i32, total: i64) -> Element {
-    let has_prev = current_page > 1;
-    // 向上取整计算总页数，至少为 1 页。
-    let total_pages = ((total + POSTS_PER_PAGE as i64 - 1) / POSTS_PER_PAGE as i64).max(1) as i32;
-    let has_next = current_page < total_pages;
-    let prev = current_page - 1;
-    // 当上一页为第 1 页时，使用 `/` 路由而非 `/page/1`。
-    let prev_route = if prev <= 1 {
-        Route::Home {}
-    } else {
-        Route::HomePage { page: prev }
-    };
-
-    rsx! {
-        nav { class: "flex mt-10 mb-6 justify-between",
-            if has_prev {
-                Link {
-                    class: "inline-flex items-center px-4 py-2 text-sm text-white bg-paper-accent rounded-full hover:brightness-110 active:scale-[0.98] transition-all duration-200 cursor-pointer",
-                    to: prev_route,
-                    span { class: "mr-1", "«" }
-                    "上一页"
-                }
-            }
-            if has_next {
-                Link {
-                    class: "ml-auto inline-flex items-center px-4 py-2 text-sm text-white bg-paper-accent rounded-full hover:brightness-110 active:scale-[0.98] transition-all duration-200 cursor-pointer",
-                    to: Route::HomePage { page: current_page + 1 },
-                    "下一页"
-                    span { class: "ml-1", "»" }
-                }
-            }
-        }
-    }
-}

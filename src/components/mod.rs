@@ -29,5 +29,7 @@ pub mod post;
 pub mod post_card;
 /// 骨架屏组件集合。
 pub mod skeletons;
+/// 通用 UI 原子组件与类名常量（卡片、按钮、分页、徽章、空状态）。
+pub mod ui;
 /// 编辑器页面骨架屏组件。
 pub mod write_skeleton;

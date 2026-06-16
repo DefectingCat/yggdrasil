@@ -14,6 +14,7 @@ use crate::api::posts::PostListResponse;
 use crate::api::posts::{delete_post, rebuild_content_html, CreatePostResponse, RebuildResult};
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::posts_skeleton::PostsSkeleton;
+use crate::components::ui::{EmptyState, Pagination, StatusBadge, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_TEXT_RED};
 use crate::models::post::Post;
 use crate::router::Route;
 
@@ -135,11 +136,9 @@ pub fn PostsPage(page: i32) -> Element {
             if loading() && posts().is_empty() {
                 DelayedSkeleton { PostsSkeleton {} }
             } else if posts().is_empty() {
-                div { class: "text-center py-20 text-gray-500 dark:text-[#9b9c9d]",
-                    "暂无文章"
-                }
+                EmptyState { message: "暂无文章", variant: "default" }
             } else {
-                div { class: "bg-white dark:bg-[#2e2e33] rounded-xl border border-gray-200 dark:border-[#333] overflow-hidden",
+                div { class: "{ADMIN_TABLE_CLASS}",
                         table { class: "w-full text-sm",
                             thead {
                                 tr { class: "border-b border-gray-200 dark:border-[#333] text-left text-gray-500 dark:text-[#9b9c9d]",
@@ -180,53 +179,19 @@ pub fn PostsPage(page: i32) -> Element {
                             }
                         }
                     }
-                    Pagination { current_page, total: total() }
-            }
-        }
-    }
-}
-
-/// 分页导航组件，根据当前页与总数量生成上一页 / 下一页链接。
-#[component]
-fn Pagination(current_page: i32, total: i64) -> Element {
-    let has_prev = current_page > 1;
-    let total_pages = ((total + POSTS_PER_PAGE as i64 - 1) / POSTS_PER_PAGE as i64).max(1) as i32;
-    let has_next = current_page < total_pages;
-
-    rsx! {
-        nav { class: "flex mt-6 justify-between",
-            if has_prev {
-                Link {
-                    class: "inline-flex items-center px-4 py-2 text-sm text-white bg-gray-900 dark:bg-[#dadadb] dark:text-gray-900 rounded-full hover:opacity-80 transition-opacity cursor-pointer",
-                    to: if current_page - 1 <= 1 {
-                        Route::Posts {}
-                    } else {
-                        Route::PostsPage { page: current_page - 1 }
-                    },
-                    span { class: "mr-1", "«" }
-                    "上一页"
-                }
-            } else {
-                span { class: "inline-flex items-center px-4 py-2 text-sm text-gray-400 bg-gray-100 dark:bg-[#2a2a2a] rounded-full cursor-not-allowed",
-                    span { class: "mr-1", "«" }
-                    "上一页"
-                }
-            }
-            span { class: "text-sm text-gray-500 dark:text-[#9b9c9d] self-center",
-                "{current_page} / {total_pages} 页 (共 {total} 篇)"
-            }
-            if has_next {
-                Link {
-                    class: "inline-flex items-center px-4 py-2 text-sm text-white bg-gray-900 dark:bg-[#dadadb] dark:text-gray-900 rounded-full hover:opacity-80 transition-opacity cursor-pointer",
-                    to: Route::PostsPage { page: current_page + 1 },
-                    "下一页"
-                    span { class: "ml-1", "»" }
-                }
-            } else {
-                span { class: "inline-flex items-center px-4 py-2 text-sm text-gray-400 bg-gray-100 dark:bg-[#2a2a2a] rounded-full cursor-not-allowed",
-                    "下一页"
-                    span { class: "ml-1", "»" }
-                }
+                    Pagination {
+                        variant: "admin",
+                        current_page,
+                        total: total(),
+                        per_page: POSTS_PER_PAGE,
+                        prev_route: if current_page - 1 <= 1 {
+                            Route::Posts {}
+                        } else {
+                            Route::PostsPage { page: current_page - 1 }
+                        },
+                        next_route: Route::PostsPage { page: current_page + 1 },
+                        unit: "篇",
+                    }
             }
         }
     }
@@ -236,11 +201,9 @@ fn Pagination(current_page: i32, total: i64) -> Element {
 #[component]
 fn PostRow(post: Post, deleting: bool, on_delete: EventHandler<i32>) -> Element {
     let date_str = post.formatted_date();
-    let status_label = post.status_label();
-    let status_badge_class = post.status_badge_class();
 
     rsx! {
-        tr { class: "border-b border-gray-100 dark:border-[#333] last:border-0 hover:bg-gray-50 dark:hover:bg-[#2a2a2a] transition-colors",
+        tr { class: "{ADMIN_ROW_HOVER}",
             td { class: "px-4 py-3",
                 Link {
                     class: "text-gray-900 dark:text-[#dadadb] hover:opacity-80 transition-opacity",
@@ -249,8 +212,9 @@ fn PostRow(post: Post, deleting: bool, on_delete: EventHandler<i32>) -> Element 
                 }
             }
             td { class: "px-4 py-3 text-center",
-                span { class: "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {status_badge_class}",
-                    "{status_label}"
+                StatusBadge {
+                    color_class: post.status_badge_class(),
+                    label: post.status_label().to_string(),
                 }
             }
             td { class: "px-4 py-3 text-gray-500 dark:text-[#9b9c9d]",
@@ -267,7 +231,7 @@ fn PostRow(post: Post, deleting: bool, on_delete: EventHandler<i32>) -> Element 
                         class: if deleting {
                             "text-xs text-gray-400 cursor-not-allowed"
                         } else {
-                            "text-xs text-red-500 hover:text-red-700 dark:hover:text-red-300 transition-colors cursor-pointer"
+                            BTN_TEXT_RED
                         },
                         disabled: deleting,
                         onclick: move |_| on_delete.call(post.id),

@@ -15,6 +15,10 @@ use crate::api::comments::{approve_comment, batch_update_comment_status, spam_co
 #[cfg(target_arch = "wasm32")]
 use crate::api::comments::{get_all_comments, AllCommentsResponse};
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
+use crate::components::ui::{
+    EmptyState, Pagination, StatusBadge, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_TEXT_AMBER,
+    BTN_TEXT_GREEN, BTN_TEXT_RED, BTN_SOLID_AMBER, BTN_SOLID_GREEN, BTN_SOLID_RED, CHECKBOX_CLASS,
+};
 use crate::models::comment::{AdminComment, CommentStatus};
 use crate::router::Route;
 
@@ -143,7 +147,7 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                             "已选择 {selected_ids().len()} 条"
                         }
                         button {
-                            class: "px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded hover:bg-green-700 transition-colors",
+                            class: "{BTN_SOLID_GREEN}",
                             onclick: move |_| {
                                 let ids: Vec<i64> = selected_ids().iter().copied().collect();
                                 let ids_for_api = ids.clone();
@@ -156,7 +160,7 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                             "批量通过"
                         }
                         button {
-                            class: "px-3 py-1.5 text-xs font-medium bg-amber-600 text-white rounded hover:bg-amber-700 transition-colors",
+                            class: "{BTN_SOLID_AMBER}",
                             onclick: move |_| {
                                 let ids: Vec<i64> = selected_ids().iter().copied().collect();
                                 let ids_for_api = ids.clone();
@@ -169,7 +173,7 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                             "批量垃圾"
                         }
                         button {
-                            class: "px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded hover:bg-red-700 transition-colors",
+                            class: "{BTN_SOLID_RED}",
                             onclick: move |_| {
                                 #[cfg(target_arch = "wasm32")]
                                 {
@@ -195,11 +199,7 @@ pub fn AdminCommentsPage(page: i32) -> Element {
 
             {
                 if error().is_some() {
-                    rsx! {
-                        div { class: "text-center text-red-500 dark:text-red-400 py-20",
-                            "加载失败"
-                        }
-                    }
+                    rsx! { EmptyState { message: "加载失败", variant: "error" } }
                 } else if loading() && comments().is_empty() {
                     rsx! {
                         DelayedSkeleton {
@@ -216,17 +216,13 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                         }
                     }
                 } else if comments().is_empty() {
-                    rsx! {
-                        div { class: "text-center py-20 text-gray-500 dark:text-[#9b9c9d]",
-                            "暂无评论"
-                        }
-                    }
+                    rsx! { EmptyState { message: "暂无评论", variant: "default" } }
                 } else {
                     let list = comments();
                     let all_selected = list.iter().all(|c| selected_ids().contains(&c.id));
                     let all_ids: Vec<i64> = list.iter().map(|c| c.id).collect();
                     rsx! {
-                        div { class: "bg-white dark:bg-[#2e2e33] rounded-xl border border-gray-200 dark:border-[#333] overflow-hidden",
+                        div { class: "{ADMIN_TABLE_CLASS}",
                             div { class: "overflow-x-auto",
                                 table { class: "w-full text-sm",
                                     thead {
@@ -234,7 +230,7 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                                             th { class: "px-4 py-3 font-medium w-10",
                                                 input {
                                                     r#type: "checkbox",
-                                                    class: "rounded border-gray-300 dark:border-[#555]",
+                                                    class: "{CHECKBOX_CLASS}",
                                                     checked: all_selected,
                                                     onchange: {
                                                         move |_| {
@@ -312,7 +308,19 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                                 }
                             }
                         }
-                        CommentsPagination { current_page, total: total() }
+                        Pagination {
+                            variant: "admin",
+                            current_page,
+                            total: total(),
+                            per_page: COMMENTS_PER_PAGE,
+                            prev_route: if current_page - 1 <= 1 {
+                                Route::AdminComments {}
+                            } else {
+                                Route::AdminCommentsPage { page: current_page - 1 }
+                            },
+                            next_route: Route::AdminCommentsPage { page: current_page + 1 },
+                            unit: "条",
+                        }
                     }
                 }
             }
@@ -330,23 +338,11 @@ fn CommentRow(
     on_spam: EventHandler,
     on_trash: EventHandler,
 ) -> Element {
-    let (badge_class, status_label) = match &comment.status {
-        CommentStatus::Pending => (
-            "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-            "待审核",
-        ),
-        CommentStatus::Approved => (
-            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-            "已通过",
-        ),
-        CommentStatus::Spam => (
-            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-            "垃圾",
-        ),
-        CommentStatus::Trash => (
-            "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400",
-            "已删除",
-        ),
+    let status_label = match &comment.status {
+        CommentStatus::Pending => "待审核".to_string(),
+        CommentStatus::Approved => "已通过".to_string(),
+        CommentStatus::Spam => "垃圾".to_string(),
+        CommentStatus::Trash => "已删除".to_string(),
     };
     let date_str = comment.created_at.format("%Y-%m-%d").to_string();
     let preview = if comment.content_md.len() > 100 {
@@ -359,11 +355,11 @@ fn CommentRow(
     };
 
     rsx! {
-        tr { class: "border-b border-gray-100 dark:border-[#333] last:border-0 hover:bg-gray-50 dark:hover:bg-[#2a2a2a] transition-colors",
+        tr { class: "{ADMIN_ROW_HOVER}",
             td { class: "px-4 py-3",
                 input {
                     r#type: "checkbox",
-                    class: "rounded border-gray-300 dark:border-[#555]",
+                    class: "{CHECKBOX_CLASS}",
                     checked: selected,
                     onchange: move |e| on_select.call(e.checked()),
                 }
@@ -398,8 +394,15 @@ fn CommentRow(
                 }
             }
             td { class: "px-4 py-3 text-center",
-                span { class: "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap {badge_class}",
-                    "{status_label}"
+                StatusBadge {
+                    // badge_class 是 &'static str 字面量匹配，转为静态生命周期。
+                    color_class: match &comment.status {
+                        CommentStatus::Pending => "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+                        CommentStatus::Approved => "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+                        CommentStatus::Spam => "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+                        CommentStatus::Trash => "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400",
+                    },
+                    label: status_label,
                 }
             }
             td { class: "px-4 py-3 text-sm text-gray-500 dark:text-[#9b9c9d]",
@@ -409,21 +412,21 @@ fn CommentRow(
                 div { class: "flex justify-end gap-2",
                     if !matches!(comment.status, CommentStatus::Approved) {
                         button {
-                            class: "text-xs text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 transition-colors cursor-pointer",
+                            class: "{BTN_TEXT_GREEN}",
                             onclick: move |_| on_approve.call(()),
                             "通过"
                         }
                     }
                     if !matches!(comment.status, CommentStatus::Spam) {
                         button {
-                            class: "text-xs text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300 transition-colors cursor-pointer",
+                            class: "{BTN_TEXT_AMBER}",
                             onclick: move |_| on_spam.call(()),
                             "垃圾"
                         }
                     }
                     if !matches!(comment.status, CommentStatus::Trash) {
                         button {
-                            class: "text-xs text-red-500 hover:text-red-700 dark:hover:text-red-300 transition-colors cursor-pointer",
+                            class: "{BTN_TEXT_RED}",
                             onclick: move |_| on_trash.call(()),
                             "删除"
                         }
@@ -434,56 +437,3 @@ fn CommentRow(
     }
 }
 
-/// 评论分页导航组件。
-#[component]
-fn CommentsPagination(current_page: i32, total: i64) -> Element {
-    let has_prev = current_page > 1;
-    let total_pages =
-        ((total + COMMENTS_PER_PAGE as i64 - 1) / COMMENTS_PER_PAGE as i64).max(1) as i32;
-    let has_next = current_page < total_pages;
-
-    let prev_route = if current_page - 1 <= 1 {
-        Route::AdminComments {}
-    } else {
-        Route::AdminCommentsPage {
-            page: current_page - 1,
-        }
-    };
-    let next_route = Route::AdminCommentsPage {
-        page: current_page + 1,
-    };
-
-    rsx! {
-        nav { class: "flex mt-6 justify-between",
-            if has_prev {
-                Link {
-                    class: "inline-flex items-center px-4 py-2 text-sm text-white bg-gray-900 dark:bg-[#dadadb] dark:text-gray-900 rounded-full hover:opacity-80 transition-opacity cursor-pointer",
-                    to: prev_route,
-                    span { class: "mr-1", "«" }
-                    "上一页"
-                }
-            } else {
-                span { class: "inline-flex items-center px-4 py-2 text-sm text-gray-400 bg-gray-100 dark:bg-[#2a2a2a] rounded-full cursor-not-allowed",
-                    span { class: "mr-1", "«" }
-                    "上一页"
-                }
-            }
-            span { class: "text-sm text-gray-500 dark:text-[#9b9c9d] self-center",
-                "{current_page} / {total_pages} 页 (共 {total} 条)"
-            }
-            if has_next {
-                Link {
-                    class: "inline-flex items-center px-4 py-2 text-sm text-white bg-gray-900 dark:bg-[#dadadb] dark:text-gray-900 rounded-full hover:opacity-80 transition-opacity cursor-pointer",
-                    to: next_route,
-                    "下一页"
-                    span { class: "ml-1", "»" }
-                }
-            } else {
-                span { class: "inline-flex items-center px-4 py-2 text-sm text-gray-400 bg-gray-100 dark:bg-[#2a2a2a] rounded-full cursor-not-allowed",
-                    "下一页"
-                    span { class: "ml-1", "»" }
-                }
-            }
-        }
-    }
-}

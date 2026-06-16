@@ -7,7 +7,6 @@
 use std::collections::HashSet;
 
 use dioxus::prelude::*;
-use dioxus::router::components::Link;
 
 // 操作类 server function 在 SSR 与 WASM 均需可见（spawn 闭包需类型检查），
 // 但部分仅用于 WASM 代码路径，SSR 下触发 unused imports，按项目惯例放行。
@@ -20,6 +19,10 @@ use crate::api::posts::{list_deleted_posts, PostListResponse};
 #[allow(unused_imports)]
 use crate::api::settings::{get_trash_settings, update_trash_settings};
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
+use crate::components::ui::{
+    EmptyState, Pagination, StatusBadge, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_SOLID_GREEN,
+    BTN_SOLID_RED, BTN_TEXT_ACCENT, BTN_TEXT_RED, CHECKBOX_CLASS,
+};
 use crate::models::post::Post;
 use crate::models::settings::TrashSettings;
 use crate::router::Route;
@@ -319,7 +322,7 @@ pub fn TrashPage(page: i32) -> Element {
                         "已选择 {selected_ids().len()} 条"
                     }
                     button {
-                        class: "px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded hover:bg-green-700 transition-colors",
+                        class: "{BTN_SOLID_GREEN}",
                         onclick: move |_| {
                             let ids: Vec<i32> = selected_ids().iter().copied().collect();
                             spawn(async move {
@@ -331,7 +334,7 @@ pub fn TrashPage(page: i32) -> Element {
                         "批量恢复"
                     }
                     button {
-                        class: "px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded hover:bg-red-700 transition-colors",
+                        class: "{BTN_SOLID_RED}",
                         onclick: move |_| {
                             #[cfg(target_arch = "wasm32")]
                             {
@@ -356,9 +359,7 @@ pub fn TrashPage(page: i32) -> Element {
             // 主内容：错误 / 加载骨架 / 空态 / 列表
             {
                 if error().is_some() {
-                    rsx! {
-                        div { class: "text-center text-red-500 dark:text-red-400 py-20", "加载失败" }
-                    }
+                    rsx! { EmptyState { message: "加载失败", variant: "error" } }
                 } else if loading() && posts().is_empty() {
                     rsx! {
                         DelayedSkeleton {
@@ -370,17 +371,13 @@ pub fn TrashPage(page: i32) -> Element {
                         }
                     }
                 } else if posts().is_empty() {
-                    rsx! {
-                        div { class: "text-center py-20 text-gray-500 dark:text-[#9b9c9d]",
-                            "回收站为空"
-                        }
-                    }
+                    rsx! { EmptyState { message: "回收站为空", variant: "default" } }
                 } else {
                     let list = posts();
                     let all_selected = list.iter().all(|p| selected_ids().contains(&p.id));
                     let all_ids: Vec<i32> = list.iter().map(|p| p.id).collect();
                     rsx! {
-                        div { class: "bg-white dark:bg-[#2e2e33] rounded-xl border border-gray-200 dark:border-[#333] overflow-hidden",
+                        div { class: "{ADMIN_TABLE_CLASS}",
                             div { class: "overflow-x-auto",
                                 table { class: "w-full text-sm",
                                     thead {
@@ -388,7 +385,7 @@ pub fn TrashPage(page: i32) -> Element {
                                             th { class: "px-4 py-3 font-medium w-10",
                                                 input {
                                                     r#type: "checkbox",
-                                                    class: "rounded border-gray-300 dark:border-[#555]",
+                                                    class: "{CHECKBOX_CLASS}",
                                                     checked: all_selected,
                                                     onchange: {
                                                         move |_| {
@@ -480,7 +477,19 @@ pub fn TrashPage(page: i32) -> Element {
                                 "清空回收站"
                             }
                         }
-                        TrashPagination { current_page, total: total() }
+                        Pagination {
+                            variant: "admin",
+                            current_page,
+                            total: total(),
+                            per_page: TRASH_PER_PAGE,
+                            prev_route: if current_page - 1 <= 1 {
+                                Route::Trash {}
+                            } else {
+                                Route::TrashPage { page: current_page - 1 }
+                            },
+                            next_route: Route::TrashPage { page: current_page + 1 },
+                            unit: "篇",
+                        }
                     }
                 }
             }
@@ -537,11 +546,11 @@ fn TrashRow(
         .unwrap_or_else(|| "—".to_string());
 
     rsx! {
-        tr { class: "border-b border-gray-100 dark:border-[#333] last:border-0 hover:bg-gray-50 dark:hover:bg-[#2a2a2a] transition-colors",
+        tr { class: "{ADMIN_ROW_HOVER}",
             td { class: "px-4 py-3",
                 input {
                     r#type: "checkbox",
-                    class: "rounded border-gray-300 dark:border-[#555]",
+                    class: "{CHECKBOX_CLASS}",
                     checked: selected,
                     onchange: move |e| on_select.call(e.checked()),
                 }
@@ -552,27 +561,29 @@ fn TrashRow(
                 }
             }
             td { class: "px-4 py-3",
-                span { class: "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap {post.status_badge_class()}",
-                    "{post.status_label()}"
+                StatusBadge {
+                    color_class: post.status_badge_class(),
+                    label: post.status_label().to_string(),
                 }
             }
             td { class: "px-4 py-3 text-sm text-gray-500 dark:text-[#9b9c9d]",
                 "{deleted_str}"
             }
             td { class: "px-4 py-3 text-center",
-                span { class: "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap {badge_class}",
-                    "{badge_text}"
+                StatusBadge {
+                    color_class: badge_class,
+                    label: badge_text,
                 }
             }
             td { class: "px-4 py-3 text-right",
                 div { class: "flex justify-end gap-2",
                     button {
-                        class: "text-xs text-[#5c7a5e] hover:text-[#3d5a3f] dark:text-[#7da97f] dark:hover:text-[#9dc79f] transition-colors cursor-pointer",
+                        class: "{BTN_TEXT_ACCENT}",
                         onclick: move |_| on_restore.call(()),
                         "恢复"
                     }
                     button {
-                        class: "text-xs text-red-500 hover:text-red-700 dark:hover:text-red-300 transition-colors cursor-pointer",
+                        class: "{BTN_TEXT_RED}",
                         onclick: move |_| on_purge.call(()),
                         "彻底删除"
                     }
@@ -582,52 +593,3 @@ fn TrashRow(
     }
 }
 
-/// 回收站分页导航组件。
-#[component]
-fn TrashPagination(current_page: i32, total: i64) -> Element {
-    let has_prev = current_page > 1;
-    let total_pages =
-        ((total + TRASH_PER_PAGE as i64 - 1) / TRASH_PER_PAGE as i64).max(1) as i32;
-    let has_next = current_page < total_pages;
-
-    let prev_route = if current_page - 1 <= 1 {
-        Route::Trash {}
-    } else {
-        Route::TrashPage { page: current_page - 1 }
-    };
-    let next_route = Route::TrashPage { page: current_page + 1 };
-
-    rsx! {
-        nav { class: "flex mt-6 justify-between",
-            if has_prev {
-                Link {
-                    class: "inline-flex items-center px-4 py-2 text-sm text-white bg-gray-900 dark:bg-[#dadadb] dark:text-gray-900 rounded-full hover:opacity-80 transition-opacity cursor-pointer",
-                    to: prev_route,
-                    span { class: "mr-1", "«" }
-                    "上一页"
-                }
-            } else {
-                span { class: "inline-flex items-center px-4 py-2 text-sm text-gray-400 bg-gray-100 dark:bg-[#2a2a2a] rounded-full cursor-not-allowed",
-                    span { class: "mr-1", "«" }
-                    "上一页"
-                }
-            }
-            span { class: "text-sm text-gray-500 dark:text-[#9b9c9d] self-center",
-                "{current_page} / {total_pages} 页 (共 {total} 条)"
-            }
-            if has_next {
-                Link {
-                    class: "inline-flex items-center px-4 py-2 text-sm text-white bg-gray-900 dark:bg-[#dadadb] dark:text-gray-900 rounded-full hover:opacity-80 transition-opacity cursor-pointer",
-                    to: next_route,
-                    "下一页"
-                    span { class: "ml-1", "»" }
-                }
-            } else {
-                span { class: "inline-flex items-center px-4 py-2 text-sm text-gray-400 bg-gray-100 dark:bg-[#2a2a2a] rounded-full cursor-not-allowed",
-                    "下一页"
-                    span { class: "ml-1", "»" }
-                }
-            }
-        }
-    }
-}
