@@ -14,10 +14,22 @@ pub mod server {
     /// 全局语法集合，懒加载时合并内置语法与 `syntaxes/` 目录下的自定义语法。
     static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(|| {
         let mut builder = SyntaxSet::load_defaults_newlines().into_builder();
-        if let Err(e) = builder.add_from_folder("syntaxes/", true) {
-            tracing::warn!("Failed to load custom syntaxes: {:?}", e);
+        // 使用 CARGO_MANIFEST_DIR 派生的绝对路径，避免运行时工作目录不确定导致加载失败
+        let syntaxes_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/syntaxes");
+        tracing::info!("Loading custom syntaxes from: {}", syntaxes_dir);
+        match builder.add_from_folder(syntaxes_dir, true) {
+            Ok(()) => tracing::info!("Custom syntaxes loaded successfully"),
+            Err(e) => tracing::warn!("Failed to load custom syntaxes: {:?}", e),
         }
-        builder.build()
+        let built = builder.build();
+        tracing::info!(
+            "SyntaxSet built: {} syntaxes, swift={:?}",
+            built.syntaxes().len(),
+            built
+                .find_syntax_by_extension("swift")
+                .map(|s| &s.name)
+        );
+        built
     });
 
     /// 根据语言标识查找对应的语法定义。
