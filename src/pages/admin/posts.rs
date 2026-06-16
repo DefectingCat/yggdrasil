@@ -41,6 +41,32 @@ pub fn PostsPage(page: i32) -> Element {
     let mut rebuilding = use_signal(|| false);
     let mut rebuild_result = use_signal(|| Option::<String>::None);
 
+    // 重建文章渲染缓存：rebuild_all 为 false 时仅重建 content_html 为空的文章，
+    // 为 true 时重建所有文章（用于语法/渲染逻辑升级后批量刷新已有内容）。
+    let mut do_rebuild = move |rebuild_all: bool| {
+        rebuilding.set(true);
+        rebuild_result.set(None);
+        spawn(async move {
+            match rebuild_content_html(rebuild_all).await {
+                Ok(RebuildResult { rebuilt, failed, errors }) => {
+                    if failed > 0 {
+                        let mut msg = format!("已重建 {rebuilt} 篇，失败 {failed} 篇");
+                        if let Some(first) = errors.first() {
+                            msg.push_str(&format!("\n{first}"));
+                        }
+                        rebuild_result.set(Some(msg));
+                    } else {
+                        rebuild_result.set(Some(format!("已重建 {rebuilt} 篇文章")));
+                    }
+                }
+                Err(e) => {
+                    rebuild_result.set(Some(format!("失败: {e}")));
+                }
+            }
+            rebuilding.set(false);
+        });
+    };
+
     // 页码变化时加载分页数据：WASM 前端请求接口，SSR 直接结束加载。
     use_effect(move || {
         let _ = current_page;
@@ -87,36 +113,26 @@ pub fn PostsPage(page: i32) -> Element {
                                 "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-gray-700 dark:text-[#b0b0b1] border border-gray-300 dark:border-[#444] hover:border-gray-900 dark:hover:border-[#dadadb] hover:text-gray-900 dark:hover:text-[#dadadb] transition-all"
                             },
                             disabled: rebuilding(),
-                            onclick: move |_| {
-                                rebuilding.set(true);
-                                rebuild_result.set(None);
-                                spawn(async move {
-                                    match rebuild_content_html(false).await {
-                                        Ok(RebuildResult { rebuilt, failed, errors }) => {
-                                            if failed > 0 {
-                                                let mut msg = format!(
-                                                    "已重建 {rebuilt} 篇，失败 {failed} 篇"
-                                                );
-                                                if let Some(first) = errors.first() {
-                                                    msg.push_str(&format!("\n{first}"));
-                                                }
-                                                rebuild_result.set(Some(msg));
-                                            } else {
-                                                rebuild_result
-                                                    .set(Some(format!("已重建 {rebuilt} 篇文章")));
-                                            }
-                                        }
-                                        Err(e) => {
-                                            rebuild_result.set(Some(format!("失败: {e}")));
-                                        }
-                                    }
-                                    rebuilding.set(false);
-                                });
-                            },
+                            onclick: move |_| do_rebuild(false),
                             if rebuilding() { "重建中..." } else { "重建内容" }
                         }
                         div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gray-900 dark:bg-[#dadadb] text-white dark:text-[#1a1a1a] shadow-lg z-50",
                             "重建 content_html 为空的文章渲染缓存"
+                        }
+                    }
+                    div { class: "group relative",
+                        button {
+                            class: if rebuilding() {
+                                "px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-gray-400 dark:text-[#666] border border-gray-300 dark:border-[#444]"
+                            } else {
+                                "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-gray-700 dark:text-[#b0b0b1] border border-gray-300 dark:border-[#444] hover:border-gray-900 dark:hover:border-[#dadadb] hover:text-gray-900 dark:hover:text-[#dadadb] transition-all"
+                            },
+                            disabled: rebuilding(),
+                            onclick: move |_| do_rebuild(true),
+                            if rebuilding() { "重建中..." } else { "重建全部" }
+                        }
+                        div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gray-900 dark:bg-[#dadadb] text-white dark:text-[#1a1a1a] shadow-lg z-50",
+                            "重建所有文章的渲染缓存（含已有内容）"
                         }
                     }
                     Link {
