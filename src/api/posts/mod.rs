@@ -16,6 +16,7 @@ mod stats;
 mod tags;
 mod types;
 mod update;
+mod trash;
 
 /// 创建新文章。
 #[allow(unused_imports)]
@@ -44,6 +45,9 @@ pub use types::*;
 /// 更新指定文章。
 #[allow(unused_imports)]
 pub use update::update_post;
+/// 恢复已删除文章。
+#[allow(unused_imports)]
+pub use trash::{batch_purge_posts, batch_restore_posts, empty_trash, purge_post, restore_post};
 
 /// 将 Markdown 渲染为增强 HTML（含目录）。
 #[cfg(feature = "server")]
