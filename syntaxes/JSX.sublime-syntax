@@ -1,0 +1,227 @@
+%YAML 1.2
+---
+# https://react.dev/learn/writing-markup-with-jsx
+# JavaScript + JSX. Pure JS (no TypeScript types) with JSX tag support.
+
+name: JSX
+scope: source.jsx
+
+file_extensions:
+  - jsx
+
+variables:
+  identifier: '[A-Za-z_$][A-Za-z0-9_$]*'
+  line_break: '(?:\x0D\x0A?|\x0A)'
+
+contexts:
+  main:
+    - include: whitespace
+    - include: comments
+    - include: decorator
+    - include: jsx
+    - include: strings
+    - include: numbers
+    - include: declaration-keywords
+    - include: control-keywords
+    - include: constants
+    - include: function-calls
+    - include: property-access
+    - include: punctuation
+    - include: identifiers
+
+  whitespace:
+    - match: '[\t ]+'
+
+  comments:
+    - match: '/\*'
+      scope: punctuation.definition.comment.jsx
+      push:
+        - meta_scope: comment.block.jsx
+        - match: '\*/'
+          scope: punctuation.definition.comment.jsx
+          pop: 1
+    - match: '//'
+      scope: punctuation.definition.comment.jsx
+      push:
+        - meta_scope: comment.line.double-slash.jsx
+        - match: '{{line_break}}'
+          pop: 1
+
+  decorator:
+    - match: '@{{identifier}}(?:\.{{identifier}})*'
+      scope: entity.other.attribute-name.jsx
+
+  strings:
+    - match: '`'
+      scope: punctuation.definition.string.begin.jsx
+      push:
+        - meta_scope: string.quoted.other.jsx
+        - match: '\$\{'
+          scope: punctuation.section.interpolation.begin.jsx
+          push:
+            - clear_scopes: 1
+            - meta_scope: meta.interpolation.jsx
+            - include: main
+            - match: '\}'
+              scope: punctuation.section.interpolation.end.jsx
+              pop: 1
+        - match: '\\[nrt`\\$]'
+          scope: constant.character.escape.jsx
+        - match: '`'
+          scope: punctuation.definition.string.end.jsx
+          pop: 1
+    - match: '"'
+      scope: punctuation.definition.string.begin.jsx
+      push:
+        - meta_scope: string.quoted.double.jsx
+        - match: '\\[nrt"\\]'
+          scope: constant.character.escape.jsx
+        - match: '"'
+          scope: punctuation.definition.string.end.jsx
+          pop: 1
+        - match: '{{line_break}}'
+          scope: invalid.illegal.unclosed-string.jsx
+          pop: 1
+    - match: "'"
+      scope: punctuation.definition.string.begin.jsx
+      push:
+        - meta_scope: string.quoted.single.jsx
+        - match: "\\\\[nrt'\\\\]"
+          scope: constant.character.escape.jsx
+        - match: "'"
+          scope: punctuation.definition.string.end.jsx
+          pop: 1
+
+  numbers:
+    - match: '\b0[xX][0-9A-Fa-f_]+'
+      scope: constant.numeric.integer.hexadecimal.jsx
+    - match: '\b0[bB][01_]+'
+      scope: constant.numeric.integer.binary.jsx
+    - match: '\b0[oO][0-7_]+'
+      scope: constant.numeric.integer.octal.jsx
+    - match: '\b[0-9][0-9_]*(?:\.[0-9][0-9_]*)?(?:[eE][-+]?[0-9]+)?\b'
+      scope: constant.numeric.decimal.jsx
+
+  declaration-keywords:
+    - match: '\b(?:var|let|const|function|class|import|export|from|as|default|extends|implements)\b'
+      scope: keyword.declaration.jsx
+
+  control-keywords:
+    - match: '\b(?:if|else|for|while|do|switch|case|break|continue|return|throw|try|catch|finally|await|yield|new|delete|typeof|instanceof|in|of)\b'
+      scope: keyword.control.jsx
+    - match: '\b(?:async|await)\b'
+      scope: keyword.control.async.jsx
+    - match: '\b(?:true|false|null|undefined|this|super)\b'
+      scope: constant.language.jsx
+
+  constants:
+    - match: '\b(?:console|Math|JSON|Object|Number|String|Boolean|Symbol|window|document|globalThis|process|React)\b'
+      scope: support.class.jsx
+    - match: '\b[A-Z][A-Z0-9_]+\b'
+      scope: variable.other.constant.jsx
+
+  function-calls:
+    - match: '\b({{identifier}})\s*(?=\()'
+      captures:
+        1: variable.function.jsx
+
+  property-access:
+    - match: '\.({{identifier}})\s*(?=\()'
+      captures:
+        1: variable.function.jsx
+    - match: '\.({{identifier}})\b'
+      captures:
+        1: variable.other.property.jsx
+
+  punctuation:
+    - match: '[\(\)\{\}\[\];,]'
+      scope: punctuation.jsx
+    - match: '=>'
+      scope: storage.type.function.arrow.jsx
+    - match: '[-+*/%=<>!&|?~^]+'
+      scope: keyword.operator.jsx
+
+  identifiers:
+    - match: '\b[A-Z][A-Za-z0-9_$]*\b'
+      scope: entity.name.type.jsx
+    - match: '{{identifier}}'
+      scope: variable.jsx
+
+  # ============ JSX 规则 ============
+  jsx:
+    - match: '(<)((?:[A-Z][A-Za-z0-9_$]*|[a-z][A-Za-z0-9-]*))'
+      captures:
+        1: punctuation.definition.tag.begin.jsx
+        2: entity.name.tag.jsx
+      push:
+        - meta_scope: meta.tag.jsx
+        - include: jsx-attributes
+        - match: '/>'
+          scope: punctuation.definition.tag.end.jsx
+          pop: 1
+        - match: '>'
+          scope: punctuation.definition.tag.end.jsx
+          pop: jsx-body
+    - match: '(</)((?:[A-Z][A-Za-z0-9_$]*|[a-z][A-Za-z0-9-]*))\s*(>)'
+      scope: meta.tag.jsx
+      captures:
+        1: punctuation.definition.tag.begin.jsx
+        2: entity.name.tag.jsx
+        3: punctuation.definition.tag.end.jsx
+    - match: '(<)(>)'
+      captures:
+        1: punctuation.definition.tag.begin.jsx
+        2: punctuation.definition.tag.end.jsx
+      push: jsx-body
+
+  jsx-attributes:
+    - match: '\b([A-Za-z_][A-Za-z0-9_-]*)\s*(=)'
+      captures:
+        1: entity.other.attribute-name.jsx
+        2: keyword.operator.assignment.jsx
+      push:
+        - match: '"'
+          scope: punctuation.definition.string.begin.jsx
+          push:
+            - meta_scope: string.quoted.double.jsx
+            - match: '"'
+              scope: punctuation.definition.string.end.jsx
+              pop: 1
+        - match: "'"
+          scope: punctuation.definition.string.begin.jsx
+          push:
+            - meta_scope: string.quoted.single.jsx
+            - match: "'"
+              scope: punctuation.definition.string.end.jsx
+              pop: 1
+        - match: '\{'
+          scope: punctuation.section.embedded.begin.jsx
+          push:
+            - clear_scopes: 1
+            - meta_scope: meta.embedded.expression.jsx
+            - include: main
+            - match: '\}'
+              scope: punctuation.section.embedded.end.jsx
+              pop: 1
+        - match: '(?=\S)'
+          pop: 1
+    - include: whitespace
+    - match: '\b[A-Za-z_][A-Za-z0-9_-]*\b'
+      scope: entity.other.attribute-name.jsx
+
+  jsx-body:
+    - meta_include_prototype: false
+    - match: '(?=</)'
+      pop: 1
+    - include: jsx-text-interpolation
+    - include: jsx
+
+  jsx-text-interpolation:
+    - match: '\{'
+      scope: punctuation.section.embedded.begin.jsx
+      push:
+        - meta_scope: meta.embedded.expression.jsx
+        - include: main
+        - match: '\}'
+          scope: punctuation.section.embedded.end.jsx
+          pop: 1

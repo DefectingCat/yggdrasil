@@ -285,6 +285,23 @@ mod tests {
     }
 
     #[test]
+    fn highlight_code_jsx_tags_and_attributes() {
+        // JSX 标签名与属性名都应被识别。
+        let code = "const el = <Button title=\"save\" onClick={fn}>OK</Button>;";
+        for lang in &["jsx", "tsx"] {
+            let result = highlight_code(code, Some(lang));
+            assert!(
+                result.contains("entity name tag"),
+                "{lang} JSX 标签名未识别: {result}"
+            );
+            assert!(
+                result.contains("attribute"),
+                "{lang} JSX 属性名未识别: {result}"
+            );
+        }
+    }
+
+    #[test]
     fn highlight_code_typescript_resolves_ts_alias() {
         // 别名 "ts" 与 "typescript" 输出应一致。
         let code = "const x: number = 1;";

@@ -1,0 +1,270 @@
+%YAML 1.2
+---
+# https://www.typescriptlang.org/docs/handbook/jsx.html
+# TypeScript + JSX (TSX). Based on TypeScript syntax but with JSX tag support.
+
+name: TSX
+scope: source.tsx
+
+file_extensions:
+  - tsx
+
+variables:
+  identifier: '[A-Za-z_$][A-Za-z0-9_$]*'
+  line_break: '(?:\x0D\x0A?|\x0A)'
+
+contexts:
+  main:
+    - include: whitespace
+    - include: comments
+    - include: decorator
+    - include: jsx
+    - include: strings
+    - include: numbers
+    - include: declaration-keywords
+    - include: control-keywords
+    - include: modifiers
+    - include: type-declaration
+    - include: function-declaration
+    - include: types
+    - include: constants
+    - include: function-calls
+    - include: property-access
+    - include: punctuation
+    - include: identifiers
+
+  whitespace:
+    - match: '[\t ]+'
+
+  comments:
+    - match: '/\*'
+      scope: punctuation.definition.comment.tsx
+      push:
+        - meta_scope: comment.block.tsx
+        - match: '\*/'
+          scope: punctuation.definition.comment.tsx
+          pop: 1
+    - match: '//'
+      scope: punctuation.definition.comment.tsx
+      push:
+        - meta_scope: comment.line.double-slash.tsx
+        - match: '{{line_break}}'
+          pop: 1
+
+  decorator:
+    - match: '@{{identifier}}(?:\.{{identifier}})*'
+      scope: entity.other.attribute-name.tsx
+
+  strings:
+    - match: '`'
+      scope: punctuation.definition.string.begin.tsx
+      push:
+        - meta_scope: string.quoted.other.tsx
+        - match: '\$\{'
+          scope: punctuation.section.interpolation.begin.tsx
+          push:
+            - clear_scopes: 1
+            - meta_scope: meta.interpolation.tsx
+            - include: main
+            - match: '\}'
+              scope: punctuation.section.interpolation.end.tsx
+              pop: 1
+        - match: '\\[nrt`\\$]'
+          scope: constant.character.escape.tsx
+        - match: '`'
+          scope: punctuation.definition.string.end.tsx
+          pop: 1
+    - match: '"'
+      scope: punctuation.definition.string.begin.tsx
+      push:
+        - meta_scope: string.quoted.double.tsx
+        - match: '\\[nrt"\\]'
+          scope: constant.character.escape.tsx
+        - match: '"'
+          scope: punctuation.definition.string.end.tsx
+          pop: 1
+        - match: '{{line_break}}'
+          scope: invalid.illegal.unclosed-string.tsx
+          pop: 1
+    - match: "'"
+      scope: punctuation.definition.string.begin.tsx
+      push:
+        - meta_scope: string.quoted.single.tsx
+        - match: "\\\\[nrt'\\\\]"
+          scope: constant.character.escape.tsx
+        - match: "'"
+          scope: punctuation.definition.string.end.tsx
+          pop: 1
+
+  numbers:
+    - match: '\b0[xX][0-9A-Fa-f_]+'
+      scope: constant.numeric.integer.hexadecimal.tsx
+    - match: '\b0[bB][01_]+'
+      scope: constant.numeric.integer.binary.tsx
+    - match: '\b0[oO][0-7_]+'
+      scope: constant.numeric.integer.octal.tsx
+    - match: '\b[0-9][0-9_]*(?:\.[0-9][0-9_]*)?(?:[eE][-+]?[0-9]+)?\b'
+      scope: constant.numeric.decimal.tsx
+
+  declaration-keywords:
+    - match: '\b(?:var|let|const|function|class|interface|type|enum|namespace|module|import|export|from|as|default)\b'
+      scope: keyword.declaration.tsx
+    - match: '\b(?:new|delete|typeof|instanceof|in|of|keyof|infer|is|readonly|asserts)\b'
+      scope: keyword.operator.type.tsx
+
+  control-keywords:
+    - match: '\b(?:if|else|for|while|do|switch|case|break|continue|return|throw|try|catch|finally|await|yield)\b'
+      scope: keyword.control.tsx
+    - match: '\b(?:async|await)\b'
+      scope: keyword.control.async.tsx
+    - match: '\b(?:true|false|null|undefined|this|super)\b'
+      scope: constant.language.tsx
+
+  modifiers:
+    - match: '\b(?:public|private|protected|static|abstract|readonly|override|declare|get|set)\b'
+      scope: storage.modifier.tsx
+
+  type-declaration:
+    - match: '\b(type)\s+({{identifier}})'
+      captures:
+        1: keyword.declaration.tsx
+        2: entity.name.type.tsx
+    - match: '\b(interface)\s+({{identifier}})'
+      captures:
+        1: keyword.declaration.tsx
+        2: entity.name.type.tsx
+    - match: '\b(enum)\s+({{identifier}})'
+      captures:
+        1: keyword.declaration.tsx
+        2: entity.name.type.tsx
+
+  function-declaration:
+    - match: '\b(function)\s+\*?\s*({{identifier}})'
+      captures:
+        1: keyword.declaration.tsx
+        2: entity.name.function.tsx
+
+  types:
+    - match: '\b(?:string|number|boolean|void|object|symbol|bigint|never|unknown|any)\b'
+      scope: support.type.primitive.tsx
+    - match: '\b(?:Array|Promise|Map|Set|Date|RegExp|Error|Record|Partial|Required|Readonly|Pick|Omit|ReturnType|Parameters|InstanceType|ReadonlyArray)\b'
+      scope: support.type.tsx
+
+  constants:
+    - match: '\b(?:console|Math|JSON|Object|Number|String|Boolean|Symbol|window|document|globalThis|process)\b'
+      scope: support.class.tsx
+    - match: '\b[A-Z][A-Z0-9_]+\b'
+      scope: variable.other.constant.tsx
+
+  function-calls:
+    - match: '\b({{identifier}})\s*(?=\()'
+      captures:
+        1: variable.function.tsx
+
+  property-access:
+    - match: '\.({{identifier}})\s*(?=\()'
+      captures:
+        1: variable.function.tsx
+    - match: '\.({{identifier}})\b'
+      captures:
+        1: variable.other.property.tsx
+
+  punctuation:
+    - match: '[\(\)\{\}\[\];,]'
+      scope: punctuation.tsx
+    - match: '=>'
+      scope: storage.type.function.arrow.tsx
+    - match: '[-+*/%=<>!&|?~^]+'
+      scope: keyword.operator.tsx
+
+  identifiers:
+    - match: '\b[A-Z][A-Za-z0-9_$]*\b'
+      scope: entity.name.type.tsx
+    - match: '{{identifier}}'
+      scope: variable.tsx
+
+  # ============ JSX 规则 ============
+  jsx:
+    # 自闭合标签 <Component ... /> 或 <div ... />
+    - match: '(<)((?:[A-Z][A-Za-z0-9_$]*|[a-z][A-Za-z0-9-]*))'
+      captures:
+        1: punctuation.definition.tag.begin.tsx
+        2: entity.name.tag.tsx
+      push:
+        - meta_scope: meta.tag.tsx
+        - include: jsx-attributes
+        - match: '/>'
+          scope: punctuation.definition.tag.end.tsx
+          pop: 1
+        - match: '>'
+          scope: punctuation.definition.tag.end.tsx
+          pop: jsx-body
+    # 结束标签 </Component>
+    - match: '(</)((?:[A-Z][A-Za-z0-9_$]*|[a-z][A-Za-z0-9-]*))\s*(>)'
+      scope: meta.tag.tsx
+      captures:
+        1: punctuation.definition.tag.begin.tsx
+        2: entity.name.tag.tsx
+        3: punctuation.definition.tag.end.tsx
+    # JSX 片段开始 <></>
+    - match: '(<)(>)'
+      captures:
+        1: punctuation.definition.tag.begin.tsx
+        2: punctuation.definition.tag.end.tsx
+      push: jsx-body
+
+  # JSX 标签属性
+  jsx-attributes:
+    - match: '\b([A-Za-z_][A-Za-z0-9_-]*)\s*(=)'
+      captures:
+        1: entity.other.attribute-name.tsx
+        2: keyword.operator.assignment.tsx
+      push:
+        - match: '"'
+          scope: punctuation.definition.string.begin.tsx
+          push:
+            - meta_scope: string.quoted.double.tsx
+            - match: '"'
+              scope: punctuation.definition.string.end.tsx
+              pop: 1
+        - match: "'"
+          scope: punctuation.definition.string.begin.tsx
+          push:
+            - meta_scope: string.quoted.single.tsx
+            - match: "'"
+              scope: punctuation.definition.string.end.tsx
+              pop: 1
+        # 属性值里的表达式 {expr}
+        - match: '\{'
+          scope: punctuation.section.embedded.begin.tsx
+          push:
+            - clear_scopes: 1
+            - meta_scope: meta.embedded.expression.tsx
+            - include: main
+            - match: '\}'
+              scope: punctuation.section.embedded.end.tsx
+              pop: 1
+        - match: '(?=\S)'
+          pop: 1
+    - include: whitespace
+    - match: '\b[A-Za-z_][A-Za-z0-9_-]*\b'
+      scope: entity.other.attribute-name.tsx
+
+  # JSX 元素体：标签之间的内容，可嵌套子标签或表达式
+  jsx-body:
+    - meta_include_prototype: false
+    - match: '(?=</)'
+      pop: 1
+    - include: jsx-text-interpolation
+    - include: jsx
+
+  # JSX 体内的文本与 {expr} 表达式
+  jsx-text-interpolation:
+    - match: '\{'
+      scope: punctuation.section.embedded.begin.tsx
+      push:
+        - meta_scope: meta.embedded.expression.tsx
+        - include: main
+        - match: '\}'
+          scope: punctuation.section.embedded.end.tsx
+          pop: 1
