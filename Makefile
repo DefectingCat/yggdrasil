@@ -10,7 +10,8 @@ build-linux:
 	@$(MAKE) build-editor
 	@$(MAKE) highlight-css
 	@tailwindcss -i input.css -o public/style.css --minify
-	@dx build --release --debug-symbols=false --target x86_64-unknown-linux-musl
+	@dx build @client --release --debug-symbols=false --wasm-js-cfg false
+	@dx build @server --release --debug-symbols=false --target x86_64-unknown-linux-musl --wasm-js-cfg false --features server
 
 highlight-css:
 	@cargo run --bin generate_highlight_css
