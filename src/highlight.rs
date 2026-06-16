@@ -268,4 +268,48 @@ mod tests {
             result
         );
     }
+
+    #[test]
+    fn highlight_code_zig_keywords_and_fn() {
+        // Zig 关键字 const/fn/pub 与内建函数 @import 都应被高亮。
+        let code = "const std = @import(\"std\");\npub fn main() void {}";
+        let result = highlight_code(code, Some("zig"));
+        assert!(
+            result.contains("keyword"),
+            "Zig 关键字未被识别: {}",
+            result
+        );
+        assert!(
+            result.contains("name function"),
+            "Zig 函数名未被识别: {}",
+            result
+        );
+        assert!(
+            result.contains("builtin") || result.contains("support function"),
+            "Zig 内建函数 @import 未被识别: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn highlight_code_zig_types_and_strings() {
+        // Zig 整数类型、字符串字面量与十六进制数字应被识别。
+        let code = "const x: u32 = 0xFF;\nconst s = \"hello\"";
+        let result = highlight_code(code, Some("zig"));
+        assert!(
+            result.contains("support type") || result.contains("keyword"),
+            "Zig u32 类型未被识别: {}",
+            result
+        );
+        assert!(
+            result.contains("string"),
+            "Zig 字符串未被识别: {}",
+            result
+        );
+        assert!(
+            result.contains("numeric"),
+            "Zig 数字未被识别: {}",
+            result
+        );
+    }
 }

@@ -1,0 +1,191 @@
+%YAML 1.2
+---
+# https://ziglang.org/documentation/master/
+# Sublime Text syntax definition for the Zig programming language.
+
+name: Zig
+scope: source.zig
+
+file_extensions:
+  - zig
+  - zon
+
+variables:
+  identifier: '[A-Za-z_][A-Za-z0-9_]*'
+  line_break: '(?:\x0D\x0A?|\x0A)'
+
+contexts:
+  main:
+    - include: whitespace
+    - include: comments
+    - include: strings
+    - include: numbers
+    - include: builtin-functions
+    - include: function-declaration
+    - include: keywords
+    - include: types
+    - include: constants
+    - include: labels
+    - include: operators
+    - include: punctuation
+    - include: identifiers
+
+  whitespace:
+    - match: '[\t ]+'
+
+  comments:
+    # Zig 只有行注释 //，支持文档注释 ///
+    - match: '//[!/]'
+      scope: punctuation.definition.comment.zig
+      push:
+        - meta_scope: comment.line.documentation.zig
+        - match: '{{line_break}}'
+          pop: 1
+    - match: '//'
+      scope: punctuation.definition.comment.zig
+      push:
+        - meta_scope: comment.line.double-slash.zig
+        - match: '{{line_break}}'
+          pop: 1
+
+  strings:
+    # 多行字符串：每行以 \ 开头，行内容（去掉 \）原样拼接
+    - match: '\\$'
+      scope: punctuation.definition.string.begin.zig
+      push: multiline-string-body
+    # 字符串字面量 "..."，支持转义和内联 {name} 格式化
+    - match: '"'
+      scope: punctuation.definition.string.begin.zig
+      push:
+        - meta_scope: string.quoted.double.zig
+        - match: "\\\\[nrt\"'\\\\]"
+          scope: constant.character.escape.zig
+        - match: "\\\\x[0-9A-Fa-f]{2}"
+          scope: constant.character.escape.hex.zig
+        - match: "\\\\u\\{[0-9A-Fa-f]{1,6}\\}"
+          scope: constant.character.escape.unicode.zig
+        - match: '\{[^\}"]*\}'
+          scope: meta.interpolation.zig
+        - match: '"'
+          scope: punctuation.definition.string.end.zig
+          pop: 1
+        - match: '{{line_break}}'
+          scope: invalid.illegal.unclosed-string.zig
+          pop: 1
+    # 单引号字符字面量
+    - match: "'"
+      scope: punctuation.definition.string.begin.zig
+      push:
+        - meta_scope: string.quoted.single.zig
+        - match: "\\\\[nrt\"'\\\\]"
+          scope: constant.character.escape.zig
+        - match: "'"
+          scope: punctuation.definition.string.end.zig
+          pop: 1
+
+  multiline-string-body:
+    - meta_scope: string.unquoted.zig
+    - match: '[^\s\\][^\n]*'
+    - match: '\\$'
+    - match: '{{line_break}}'
+    - match: '(?=\S)'
+      pop: 1
+
+  numbers:
+    # 浮点：必须含小数点和指数，如 1.0e10
+    - match: '\b(0x[0-9A-Fa-f_]+\.[0-9A-Fa-f_]+(?:[pP][-+]?[0-9]+))'
+      scope: constant.numeric.float.hexadecimal.zig
+    - match: '\b(0b[01_]+\.[01_]+(?:[pP][-+]?[0-9]+))'
+      scope: constant.numeric.float.binary.zig
+    - match: '\b([0-9][0-9_]*\.[0-9][0-9_]*(?:[eE][-+]?[0-9]+))'
+      scope: constant.numeric.float.decimal.zig
+    # 整数：十六进制/八进制/二进制/十进制，可带类型后缀
+    - match: '\b0x[0-9A-Fa-f_]+'
+      scope: constant.numeric.integer.hexadecimal.zig
+    - match: '\b0o[0-7_]+'
+      scope: constant.numeric.integer.octal.zig
+    - match: '\b0b[01_]+'
+      scope: constant.numeric.integer.binary.zig
+    - match: '\b[0-9][0-9_]*'
+      scope: constant.numeric.integer.decimal.zig
+
+  # 内建函数：以 @ 开头，如 @import @as @intCast
+  builtin-functions:
+    - match: '@{{identifier}}'
+      scope: support.function.builtin.zig
+
+  # 函数声明：pub fn name(...) 块的识别
+  function-declaration:
+    - match: '\b(fn)\s+({{identifier}})'
+      captures:
+        1: keyword.declaration.function.zig
+        2: entity.name.function.zig
+
+  keywords:
+    # 声明类关键字
+    - match: '\b(?:const|var|fn|pub|test|comptime|inline|noinline|extern|export|packed|align|linksection|threadlocal|addrspace)\b'
+      scope: keyword.declaration.zig
+    # 控制流
+    - match: '\b(?:if|else|while|for|switch|break|continue|return|defer|errdefer|try|catch|orelse|unreachable|resume|suspend|nosuspend|await|async|const)\b'
+      scope: keyword.control.zig
+    # 布尔与 null
+    - match: '\b(?:true|false|null|undefined)\b'
+      scope: constant.language.zig
+    # 类型相关关键字
+    - match: '\b(?:struct|enum|union|opaque|error|anyerror|anytype|anyframe|anyopaque|void|noreturn|type|bool)\b'
+      scope: keyword.other.type.zig
+    # 操作符关键字
+    - match: '\b(?:and|or|not)\b'
+      scope: keyword.operator.logical.zig
+    # 特殊关键字
+    - match: '\b(?:usingnamespace|callconv|volatile|allowzero|unreachable)\b'
+      scope: keyword.other.zig
+
+  types:
+    # 整数类型：i32 u8 isize usize 以及任意位宽 i0..i65535
+    - match: '\b[iu](?:sz|[0-9]{1,5})\b'
+      scope: support.type.primitive.zig
+    # 浮点类型
+    - match: '\bf(?:16|32|64|80|128)\b'
+      scope: support.type.primitive.zig
+    # 常用标准库类型
+    - match: '\b(?:std|mem|fmt|io|fs|os|debug|builtin|testing|hash|math|sort|meta|Thread|Allocator|ArrayList|StringHashMap|AutoHashMap|File|Dir|Reader|Writer|Buffer)\b'
+      scope: support.type.zig
+
+  constants:
+    # 编译期常量与枚举值风格的大写标识符
+    - match: '\b[A-Z][A-Z0-9_]+\b'
+      scope: variable.other.constant.zig
+
+  # 标签：用于 break :label / continue :label
+  labels:
+    - match: '(?:break|continue)\s+(:{{identifier}})'
+      captures:
+        1: entity.name.label.zig
+    - match: '(:{{identifier}})\s*(?=\{)'
+      captures:
+        1: entity.name.label.zig
+
+  operators:
+    - match: '<<=|>>=|<<|>>'
+      scope: keyword.operator.bitwise.zig
+    - match: '==|!=|<=|>=|<|>'
+      scope: keyword.operator.comparison.zig
+    - match: '&&|\|\||!'
+      scope: keyword.operator.logical.zig
+    - match: '\+\+|\*\*|[-+*/%]'
+      scope: keyword.operator.arithmetic.zig
+    - match: '&=|\|=|\^=|<<=|>>=|[-+*/%&|^]='
+      scope: keyword.operator.assignment.zig
+    - match: '[-=]>|\.|\?|%'
+      scope: keyword.operator.zig
+
+  punctuation:
+    - match: '[\(\)\{\}\[\];,]'
+      scope: punctuation.zig
+
+  identifiers:
+    - match: '\b[A-Z][A-Za-z0-9_]*\b'
+      scope: entity.name.type.zig
+    - match: '{{identifier}}'
+      scope: variable.zig
