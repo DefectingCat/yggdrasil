@@ -67,6 +67,11 @@ pub fn AdminLayout() -> Element {
             label: "管理文章",
             is_active: matches!(route, Route::Posts {}),
         },
+        NavItemConfig {
+            route: Route::Trash {},
+            label: "回收站",
+            is_active: matches!(route, Route::Trash {}) || matches!(route, Route::TrashPage { .. }),
+        },
     ];
 
     // 右侧操作区：主题切换 + 登出按钮
