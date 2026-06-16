@@ -4,17 +4,20 @@
 //! Cookie 包含 HttpOnly、SameSite=Lax 与可选 Secure 标志。
 //! 服务端上下文解析函数仅在 `feature = "server"` 时可用。
 
+#[cfg(feature = "server")]
 use chrono::{DateTime, Duration, Utc};
+#[cfg(feature = "server")]
 use sha2::{Digest, Sha256};
+#[cfg(feature = "server")]
 use uuid::Uuid;
 
-#[allow(dead_code)]
+#[cfg(feature = "server")]
 /// 生成新的随机会话 token（UUID 格式）。
 pub fn generate_token() -> String {
     Uuid::new_v4().to_string()
 }
 
-#[allow(dead_code)]
+#[cfg(feature = "server")]
 /// 使用 SHA-256 对 token 进行哈希，用于数据库存储。
 pub fn hash_token(token: &str) -> String {
     let mut hasher = Sha256::new();
@@ -22,7 +25,7 @@ pub fn hash_token(token: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
-#[allow(dead_code)]
+#[cfg(feature = "server")]
 /// 返回默认会话过期时间（当前时间 + 30 天）。
 pub fn default_expiry() -> DateTime<Utc> {
     Utc::now() + Duration::days(30)

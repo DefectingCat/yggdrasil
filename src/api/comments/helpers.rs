@@ -1,7 +1,6 @@
 //! 评论模块的辅助函数：数据转换、校验、哈希与头像生成。
 //!
-//! 大部分工具函数仅在 `feature = "server"` 启用的服务端构建中使用；
-//! 校验函数同时在前端构建中保留签名，避免编译器提示未使用。
+//! 所有工具函数仅在 `feature = "server"` 启用的服务端构建中使用。
 
 #![allow(clippy::unused_unit, deprecated)]
 
@@ -87,7 +86,7 @@ pub fn format_relative_time(dt: chrono::DateTime<chrono::Utc>) -> String {
 }
 
 /// 校验评论作者昵称：非空且不超过 50 字符。
-#[allow(dead_code)]
+#[cfg(feature = "server")]
 pub fn validate_comment_name(name: &str) -> Result<(), String> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
@@ -100,7 +99,7 @@ pub fn validate_comment_name(name: &str) -> Result<(), String> {
 }
 
 /// 校验评论作者邮箱格式。
-#[allow(dead_code)]
+#[cfg(feature = "server")]
 pub fn validate_comment_email(email: &str) -> Result<(), String> {
     let re = regex::Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap();
     if !re.is_match(email.trim()) {
@@ -110,7 +109,7 @@ pub fn validate_comment_email(email: &str) -> Result<(), String> {
 }
 
 /// 校验评论作者网址：为空时允许，非空时必须以 http:// 或 https:// 开头且不超过 200 字符。
-#[allow(dead_code)]
+#[cfg(feature = "server")]
 pub fn validate_comment_url(url: &str) -> Result<(), String> {
     let trimmed = url.trim();
     if trimmed.is_empty() {
@@ -127,7 +126,7 @@ pub fn validate_comment_url(url: &str) -> Result<(), String> {
 }
 
 /// 校验评论内容：非空且不超过 10000 字符。
-#[allow(dead_code)]
+#[cfg(feature = "server")]
 pub fn validate_comment_content(content: &str) -> Result<(), String> {
     let trimmed = content.trim();
     if trimmed.is_empty() {

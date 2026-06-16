@@ -71,7 +71,7 @@ Dioxus 0.7 fullstack project with **two independent gates** — the most common 
 
 **Stub pattern**: `src/db/mod.rs` provides a `DummyPool` when `server` feature is disabled — do not remove.
 
-**Dead code allowances**: `src/auth/password.rs` and `src/auth/session.rs` carry `#[allow(dead_code)]` because the compiler sees them as unused in WASM builds where server function bodies are stripped.
+**Server-only helpers**: `src/auth/password.rs`, `src/auth/session.rs`, `src/api/auth.rs`, `src/api/comments/helpers.rs`, and several model helper methods are gated with `#[cfg(feature = "server")]` because they are only called from server function bodies, which are stripped in WASM builds.
 
 ## Dual API Architecture
 

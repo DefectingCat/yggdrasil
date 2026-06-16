@@ -17,7 +17,7 @@ pub enum UserRole {
 
 impl UserRole {
     /// 将数据库中的角色字符串解析为 UserRole，无法识别时返回 None。
-    #[allow(dead_code)]
+    #[cfg(feature = "server")]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "admin" => Some(UserRole::Admin),
@@ -89,6 +89,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "server")]
     fn user_role_from_str() {
         assert_eq!(UserRole::from_str("admin"), Some(UserRole::Admin));
         assert_eq!(UserRole::from_str("blocked"), Some(UserRole::Blocked));

@@ -1,15 +1,17 @@
 //! 密码哈希与校验（Argon2）。
 //!
 //! 使用随机 salt 生成 PHC 字符串格式哈希，并通过 Argon2 验证。
-//! `#[allow(dead_code)]` 用于避免 WASM 构建中服务端函数体被剥离后的未使用警告。
+//! 仅在 `feature = "server"` 启用的服务端构建中使用。
 
+#[cfg(feature = "server")]
 use argon2::{
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
+#[cfg(feature = "server")]
 use rand::rngs::OsRng;
 
-#[allow(dead_code)]
+#[cfg(feature = "server")]
 /// 使用 Argon2 对明文密码进行哈希。
 pub fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
     let salt = SaltString::generate(&mut OsRng);
@@ -18,7 +20,7 @@ pub fn hash_password(password: &str) -> Result<String, argon2::password_hash::Er
     Ok(password_hash.to_string())
 }
 
-#[allow(dead_code)]
+#[cfg(feature = "server")]
 /// 校验明文密码是否与已存储的哈希匹配。
 pub fn verify_password(password: &str, hash: &str) -> Result<bool, argon2::password_hash::Error> {
     let parsed_hash = PasswordHash::new(hash)?;
@@ -30,7 +32,7 @@ pub fn verify_password(password: &str, hash: &str) -> Result<bool, argon2::passw
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "server"))]
 mod tests {
     use super::*;
 

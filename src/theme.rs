@@ -8,7 +8,7 @@
 use dioxus::prelude::*;
 
 /// localStorage 中存储主题值的键名。
-#[allow(dead_code)]
+#[cfg(any(target_arch = "wasm32", test))]
 const THEME_KEY: &str = "yggdrasil-theme";
 
 /// 应用主题枚举。

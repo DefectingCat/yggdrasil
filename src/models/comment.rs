@@ -33,7 +33,7 @@ impl CommentStatus {
     }
 
     /// 将 CommentStatus 序列化为小写字符串。
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Pending => "pending",
@@ -145,6 +145,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(feature = "server")]
     fn comment_status_from_str() {
         assert_eq!(CommentStatus::from_str("pending"), CommentStatus::Pending);
         assert_eq!(CommentStatus::from_str("approved"), CommentStatus::Approved);
@@ -153,6 +154,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "server")]
     fn comment_status_from_str_unknown_defaults_to_pending() {
         assert_eq!(CommentStatus::from_str("unknown"), CommentStatus::Pending);
         assert_eq!(CommentStatus::from_str(""), CommentStatus::Pending);

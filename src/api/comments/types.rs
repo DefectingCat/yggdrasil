@@ -3,24 +3,6 @@
 use crate::models::comment::{AdminComment, PublicComment};
 use serde::{Deserialize, Serialize};
 
-/// 创建评论请求体（客户端使用）。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)]
-pub struct CreateCommentRequest {
-    /// 目标文章 id。
-    pub post_id: i32,
-    /// 父评论 id，顶层评论为 None。
-    pub parent_id: Option<i64>,
-    /// 评论者昵称。
-    pub author_name: String,
-    /// 评论者邮箱。
-    pub author_email: String,
-    /// 评论者个人网址。
-    pub author_url: Option<String>,
-    /// 评论 Markdown 原文。
-    pub content_md: String,
-}
-
 /// 创建/审核/删除评论的统一响应结构。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommentResponse {
@@ -52,13 +34,15 @@ pub struct CommentTreeResponse {
 
 /// 评论计数响应。
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)]
 pub struct CommentCountResponse {
     /// 评论数量。
     pub count: i64,
 }
 
 /// 待审核评论列表响应。
+///
+/// 当前前端未直接调用 `get_pending_comments`，此类型仅在服务端函数体中构造；
+/// 保留 `#[allow(dead_code)]` 以避免 WASM 构建中因函数体被剥离而产生的未使用警告。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(dead_code)]
 pub struct PendingCommentsResponse {

@@ -17,7 +17,6 @@ pub enum PostStatus {
 
 impl PostStatus {
     /// 将状态序列化为数据库或 API 使用的小写字符串。
-    #[allow(dead_code)]
     pub fn as_str(&self) -> &'static str {
         match self {
             PostStatus::Draft => "draft",
@@ -26,7 +25,7 @@ impl PostStatus {
     }
 
     /// 将字符串解析为 PostStatus，无法识别时返回 None。
-    #[allow(dead_code)]
+    #[cfg(feature = "server")]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "draft" => Some(PostStatus::Draft),
@@ -175,6 +174,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "server")]
     fn post_status_from_str() {
         assert_eq!(PostStatus::from_str("draft"), Some(PostStatus::Draft));
         assert_eq!(
@@ -192,6 +192,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "server")]
     fn post_status_roundtrip() {
         for status in [PostStatus::Draft, PostStatus::Published] {
             assert_eq!(PostStatus::from_str(status.as_str()), Some(status.clone()));

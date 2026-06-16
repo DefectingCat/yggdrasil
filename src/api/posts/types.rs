@@ -2,26 +2,6 @@
 
 use crate::models::post::{Post, PostStats, Tag};
 
-/// 创建/更新文章请求体（客户端使用）。
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[allow(dead_code)]
-pub struct CreatePostRequest {
-    /// 文章标题。
-    pub title: String,
-    /// 自定义 slug，为空时由标题自动生成。
-    pub slug: Option<String>,
-    /// 文章摘要，为空时自动从正文提取。
-    pub summary: Option<String>,
-    /// Markdown 格式正文。
-    pub content_md: String,
-    /// 文章状态（如 draft / published）。
-    pub status: String,
-    /// 标签列表。
-    pub tags: Vec<String>,
-    /// 封面图 URL。
-    pub cover_image: Option<String>,
-}
-
 /// 创建/更新/删除文章的统一响应结构。
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CreatePostResponse {
