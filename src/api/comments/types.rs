@@ -33,7 +33,11 @@ pub struct CommentTreeResponse {
 }
 
 /// 评论计数响应。
+///
+/// 此类型仅在服务端函数体中构造；保留 `#[allow(dead_code)]` 以避免 WASM 构建中
+/// 因函数体被剥离而产生的未使用警告。
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct CommentCountResponse {
     /// 评论数量。
     pub count: i64,
