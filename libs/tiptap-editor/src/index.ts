@@ -166,7 +166,11 @@ class TiptapEditorInstance {
       proseMirrorDom.style.display = 'none'
       this.sourceTextarea.hidden = false
       this.applyScrollRatio(this.sourceTextarea, pmRatio)
+      // focus() 会触发浏览器把光标所在行滚动进可视区域，光标默认在内容末尾，
+      // 会把 textarea 拉到底部覆盖上面设好的滚动位置。因此先记录、focus 后再恢复。
+      const scrollTopBeforeFocus = this.sourceTextarea.scrollTop
       this.sourceTextarea.focus()
+      this.sourceTextarea.scrollTop = scrollTopBeforeFocus
       this.toggleButton.textContent = '✎'
       this.toggleButton.title = '切换富文本'
       this.isSourceMode = true
