@@ -22,6 +22,7 @@ pub enum CommentStatus {
 
 impl CommentStatus {
     /// 将数据库或 API 中的状态字符串解析为 CommentStatus，未知值默认回退到 Pending。
+    #[cfg(feature = "server")]
     pub fn from_str(s: &str) -> Self {
         match s {
             "approved" => Self::Approved,

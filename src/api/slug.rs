@@ -6,6 +6,7 @@
 
 #![allow(clippy::unused_unit, deprecated)]
 
+#[cfg(feature = "server")]
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]

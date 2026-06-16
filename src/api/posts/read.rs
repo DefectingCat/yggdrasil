@@ -12,6 +12,7 @@ use super::helpers::{get_current_admin_user, row_to_post_full, row_to_post_list}
 use super::types::SinglePostResponse;
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
+#[cfg(feature = "server")]
 use crate::db::pool::get_conn;
 
 /// 根据文章 id 获取详情。

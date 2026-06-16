@@ -12,11 +12,14 @@ use super::helpers::get_current_admin_user;
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
 use crate::api::posts::RebuildResult;
+#[cfg(feature = "server")]
 use crate::db::pool::get_conn;
 
 /// 单次重建批处理数量上限。
+#[cfg(feature = "server")]
 const REBUILD_BATCH_LIMIT: i64 = 500;
 /// 返回给前端展示的最大错误条数。
+#[cfg(feature = "server")]
 const MAX_DISPLAY_ERRORS: usize = 5;
 
 /// 批量重建文章 content_html 与 toc_html。

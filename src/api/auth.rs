@@ -15,9 +15,13 @@ use http::header::{HeaderValue, SET_COOKIE};
 use crate::api::error::AppError;
 #[cfg(feature = "server")]
 use crate::auth::session::get_session_from_ctx;
+#[cfg(feature = "server")]
 use crate::auth::{password, session};
+#[cfg(feature = "server")]
 use crate::db::pool::get_conn;
-use crate::models::user::{PublicUser, User, UserRole};
+#[cfg(feature = "server")]
+use crate::models::user::{User, UserRole};
+use crate::models::user::PublicUser;
 
 #[allow(dead_code)]
 fn validate_username(username: &str) -> Result<(), String> {

@@ -12,12 +12,14 @@ use super::helpers::{get_current_admin_user, row_to_post_list};
 use super::types::PostListResponse;
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
+#[cfg(feature = "server")]
 use crate::db::pool::get_conn;
 
 /// 单页允许的最大文章数。
 ///
 /// 公开的 `list_published_posts` 接口无需认证，若不对 `per_page` 设上限，
 /// 攻击者可传入巨大值迫使数据库扫描并实例化超大 Vec，造成内存放大与拒绝服务。
+#[cfg(feature = "server")]
 const MAX_PER_PAGE: i32 = 50;
 
 /// 允许的最大页码。
@@ -25,11 +27,13 @@ const MAX_PER_PAGE: i32 = 50;
 /// `page` 无上限时，攻击者可用海量不同 `page` 值撑大缓存键空间（缓存污染），
 /// 并触发无意义的超大 `OFFSET` 扫描。10_000 对任何实际博客都足够宽裕
 /// （配合 `MAX_PER_PAGE` 最多覆盖 50 万篇文章），同时把缓存键空间限制在有限范围。
+#[cfg(feature = "server")]
 const MAX_PAGE: i32 = 10_000;
 
 /// 将分页参数钳制到安全范围：页码 1–`MAX_PAGE`，每页 1–`MAX_PER_PAGE`。
 ///
 /// 注意：返回值必须同时用于缓存键与 SQL 查询，避免同一逻辑页落入不同缓存条目。
+#[cfg(feature = "server")]
 fn clamp_pagination(page: i32, per_page: i32) -> (i32, i32) {
     (page.clamp(1, MAX_PAGE), per_page.clamp(1, MAX_PER_PAGE))
 }

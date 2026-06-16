@@ -68,6 +68,7 @@ pub fn row_to_admin_comment(row: &tokio_postgres::Row) -> AdminComment {
 }
 
 /// 将 UTC 时间格式化为相对时间（刚刚 / N 分钟前 / N 小时前 / N 天前 / 日期）。
+#[cfg(feature = "server")]
 pub fn format_relative_time(dt: chrono::DateTime<chrono::Utc>) -> String {
     let now = chrono::Utc::now();
     let diff = now.signed_duration_since(dt);
@@ -139,6 +140,7 @@ pub fn validate_comment_content(content: &str) -> Result<(), String> {
 }
 
 /// 计算评论内容哈希，用于检测短时间内的重复提交。
+#[cfg(feature = "server")]
 pub fn compute_content_hash(
     post_id: i32,
     parent_id: Option<i64>,

@@ -52,6 +52,7 @@ pub struct CommentTreeResponse {
 
 /// 评论计数响应。
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct CommentCountResponse {
     /// 评论数量。
     pub count: i64,
@@ -59,6 +60,7 @@ pub struct CommentCountResponse {
 
 /// 待审核评论列表响应。
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct PendingCommentsResponse {
     /// 待审核评论列表。
     pub comments: Vec<AdminComment>,

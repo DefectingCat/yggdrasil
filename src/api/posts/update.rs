@@ -14,7 +14,9 @@ use super::helpers::{clean_tags, get_current_admin_user, sync_tags};
 use super::types::CreatePostResponse;
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
+#[cfg(feature = "server")]
 use crate::db::pool::get_conn;
+#[cfg(feature = "server")]
 use crate::models::post::PostStatus;
 
 /// 更新指定文章。

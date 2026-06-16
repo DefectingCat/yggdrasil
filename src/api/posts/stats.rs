@@ -11,7 +11,9 @@ use super::helpers::get_current_admin_user;
 use super::types::PostStatsResponse;
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
+#[cfg(feature = "server")]
 use crate::db::pool::get_conn;
+#[cfg(feature = "server")]
 use crate::models::post::PostStats;
 
 /// 获取文章统计信息。

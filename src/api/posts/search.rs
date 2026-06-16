@@ -12,6 +12,7 @@ use super::helpers::row_to_post_list;
 use super::types::PostListResponse;
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
+#[cfg(feature = "server")]
 use crate::db::pool::get_conn;
 
 /// 搜索已发布文章。
