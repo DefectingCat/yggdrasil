@@ -12,7 +12,7 @@ deadpool-postgres = { version = "0.14", optional = true }
 argon2 = { version = "0.5", optional = true }
 uuid = { version = "1", features = ["v4", "js"], optional = true }
 chrono = { version = "0.4", features = ["serde"] }
-regex = "1.12"
+regex = { version = "1.12", optional = true }
 pulldown-cmark = "0.13"
 dotenvy = { version = "0.15", optional = true }
 tracing = { version = "0.1", optional = true, features = ["release_max_level_info"] }
@@ -62,6 +62,7 @@ server = [
     "dep:deadpool-postgres",
     "dep:argon2",
     "dep:uuid",
+    "dep:regex",
     "dep:dotenvy",
     "dep:tracing",
     "dep:tracing-subscriber",

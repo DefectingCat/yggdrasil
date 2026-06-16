@@ -78,7 +78,7 @@ pub fn auto_summary(md: &str) -> String {
     plain.chars().take(200).collect()
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "server"))]
 mod tests {
     use super::*;
 
