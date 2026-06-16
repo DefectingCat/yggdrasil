@@ -26,6 +26,9 @@ pub use delete::delete_post;
 /// 获取管理员视角的全部文章分页列表。
 #[allow(unused_imports)]
 pub use list::list_posts;
+/// 获取回收站中已软删除的文章列表。
+#[allow(unused_imports)]
+pub use list::list_deleted_posts;
 /// 获取已发布文章分页列表。
 pub use list::{get_posts_by_tag, list_published_posts};
 /// 根据 id 获取文章详情。
