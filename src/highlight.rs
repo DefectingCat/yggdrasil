@@ -63,9 +63,7 @@ pub mod server {
                     ("rust", "rs"),
                     ("js", "js"),
                     ("javascript", "js"),
-                    ("ts", "js"),
-                    ("typescript", "js"),
-                    ("tsx", "js"),
+                    ("typescript", "ts"),
                     ("py", "py"),
                     ("python", "py"),
                     ("rb", "rb"),
@@ -267,6 +265,33 @@ mod tests {
             "Swift 字符串未被识别: {}",
             result
         );
+    }
+
+    #[test]
+    fn highlight_code_typescript_keywords_and_types() {
+        // TS 关键字 interface/const/=> 与类型 string/number 应被识别。
+        let code = "interface User { name: string; }\nconst x: number = 42;";
+        let result = highlight_code(code, Some("typescript"));
+        assert!(
+            result.contains("keyword"),
+            "TypeScript 关键字未被识别: {}",
+            result
+        );
+        assert!(
+            result.contains("support type") || result.contains("entity name type"),
+            "TypeScript 类型未被识别: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn highlight_code_typescript_resolves_ts_alias() {
+        // 别名 "ts" 与 "typescript" 输出应一致。
+        let code = "const x: number = 1;";
+        let by_ext = highlight_code(code, Some("ts"));
+        let by_name = highlight_code(code, Some("typescript"));
+        assert_eq!(by_ext, by_name);
+        assert!(by_ext.contains("keyword"));
     }
 
     #[test]

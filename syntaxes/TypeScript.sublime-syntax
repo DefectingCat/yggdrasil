@@ -1,0 +1,222 @@
+%YAML 1.2
+---
+# https://www.typescriptlang.org/docs/handbook/intro.html
+# Sublime Text syntax definition for TypeScript / TSX.
+
+name: TypeScript
+scope: source.ts
+
+file_extensions:
+  - ts
+  - tsx
+  - mts
+  - cts
+
+variables:
+  identifier: '[A-Za-z_$][A-Za-z0-9_$]*'
+  line_break: '(?:\x0D\x0A?|\x0A)'
+
+contexts:
+  main:
+    - include: whitespace
+    - include: comments
+    - include: decorator
+    - include: strings
+    - include: numbers
+    - include: declaration-keywords
+    - include: control-keywords
+    - include: modifiers
+    - include: type-declaration
+    - include: function-declaration
+    - include: types
+    - include: constants
+    - include: function-calls
+    - include: property-access
+    - include: punctuation
+    - include: identifiers
+
+  whitespace:
+    - match: '[\t ]+'
+
+  comments:
+    - match: '/\*'
+      scope: punctuation.definition.comment.ts
+      push:
+        - meta_scope: comment.block.ts
+        - match: '\*/'
+          scope: punctuation.definition.comment.ts
+          pop: 1
+    - match: '//'
+      scope: punctuation.definition.comment.ts
+      push:
+        - meta_scope: comment.line.double-slash.ts
+        - match: '{{line_break}}'
+          pop: 1
+
+  # 装饰器：@Component、@Injectable
+  decorator:
+    - match: '@{{identifier}}(?:\.{{identifier}})*'
+      scope: entity.other.attribute-name.ts
+      push:
+        - match: '\('
+          scope: punctuation.section.arguments.begin.ts
+          push:
+            - match: '\)'
+              scope: punctuation.section.arguments.end.ts
+              pop: 1
+            - include: main
+        - match: '(?=\S)'
+          pop: 1
+
+  strings:
+    # 模板字符串 `...${expr}...`
+    - match: '`'
+      scope: punctuation.definition.string.begin.ts
+      push:
+        - meta_scope: string.quoted.other.ts
+        - match: '\$\{'
+          scope: punctuation.section.interpolation.begin.ts
+          push:
+            - clear_scopes: 1
+            - meta_scope: meta.interpolation.ts
+            - include: main
+            - match: '\}'
+              scope: punctuation.section.interpolation.end.ts
+              pop: 1
+        - match: '\\[nrt`\\$]'
+          scope: constant.character.escape.ts
+        - match: '`'
+          scope: punctuation.definition.string.end.ts
+          pop: 1
+    # 双引号字符串
+    - match: '"'
+      scope: punctuation.definition.string.begin.ts
+      push:
+        - meta_scope: string.quoted.double.ts
+        - match: '\\[nrt"\\]'
+          scope: constant.character.escape.ts
+        - match: '"'
+          scope: punctuation.definition.string.end.ts
+          pop: 1
+        - match: '{{line_break}}'
+          scope: invalid.illegal.unclosed-string.ts
+          pop: 1
+    # 单引号字符串
+    - match: "'"
+      scope: punctuation.definition.string.begin.ts
+      push:
+        - meta_scope: string.quoted.single.ts
+        - match: "\\\\[nrt'\\\\]"
+          scope: constant.character.escape.ts
+        - match: "'"
+          scope: punctuation.definition.string.end.ts
+          pop: 1
+
+  numbers:
+    # 十六进制
+    - match: '\b0[xX][0-9A-Fa-f_]+'
+      scope: constant.numeric.integer.hexadecimal.ts
+    # 二进制
+    - match: '\b0[bB][01_]+'
+      scope: constant.numeric.integer.binary.ts
+    # 八进制
+    - match: '\b0[oO][0-7_]+'
+      scope: constant.numeric.integer.octal.ts
+    # 浮点（含科学计数法）
+    - match: '\b[0-9][0-9_]*(?:\.[0-9][0-9_]*)?(?:[eE][-+]?[0-9]+)?\b'
+      scope: constant.numeric.decimal.ts
+    # BigInt 后缀
+    - match: '\b[0-9][0-9_]*n\b'
+      scope: constant.numeric.integer.decimal.ts
+
+  # 声明类关键字
+  declaration-keywords:
+    - match: '\b(?:var|let|const|function|class|interface|type|enum|namespace|module|import|export|from|as|default)\b'
+      scope: keyword.declaration.ts
+    - match: '\b(?:new|delete|typeof|instanceof|in|of|keyof|infer|is|readonly|asserts)\b'
+      scope: keyword.operator.type.ts
+
+  # 控制流关键字
+  control-keywords:
+    - match: '\b(?:if|else|for|while|do|switch|case|break|continue|return|throw|try|catch|finally|await|yield)\b'
+      scope: keyword.control.ts
+    - match: '\b(?:async|await)\b'
+      scope: keyword.control.async.ts
+    - match: '\b(?:true|false|null|undefined|this|super)\b'
+      scope: constant.language.ts
+
+  # 访问修饰符
+  modifiers:
+    - match: '\b(?:public|private|protected|static|abstract|readonly|override|declare|get|set)\b'
+      scope: storage.modifier.ts
+
+  # type 别名与 interface 的名字识别
+  type-declaration:
+    - match: '\b(type)\s+({{identifier}})'
+      captures:
+        1: keyword.declaration.ts
+        2: entity.name.type.ts
+    - match: '\b(interface)\s+({{identifier}})'
+      captures:
+        1: keyword.declaration.ts
+        2: entity.name.type.ts
+    - match: '\b(enum)\s+({{identifier}})'
+      captures:
+        1: keyword.declaration.ts
+        2: entity.name.type.ts
+
+  # 函数声明：function name( / 方法名(
+  function-declaration:
+    - match: '\b(function)\s+\*?\s*({{identifier}})'
+      captures:
+        1: keyword.declaration.ts
+        2: entity.name.function.ts
+    - match: '\b({{identifier}})\s*(?=\(|\<)'
+      captures:
+        1: entity.name.function.ts
+
+  # 内置/常用类型
+  types:
+    - match: '\b(?:string|number|boolean|void|object|symbol|bigint|never|unknown|any)\b'
+      scope: support.type.primitive.ts
+    - match: '\b(?:Array|Promise|Map|Set|Date|RegExp|Error|Record|Partial|Required|Readonly|Pick|Omit|ReturnType|Parameters|InstanceType|ReadonlyArray)\b'
+      scope: support.type.ts
+
+  # 常量
+  constants:
+    - match: '\b(?:console|Math|JSON|Object|Number|String|Boolean|Symbol|window|document|globalThis|process)\b'
+      scope: support.class.ts
+    - match: '\b[A-Z][A-Z0-9_]+\b'
+      scope: variable.other.constant.ts
+
+  # 函数调用
+  function-calls:
+    - match: '\b({{identifier}})\s*(?=\()'
+      captures:
+        1: variable.function.ts
+
+  # 属性访问：.method(
+  property-access:
+    - match: '\.({{identifier}})\s*(?=\()'
+      captures:
+        1: variable.function.ts
+    - match: '\.({{identifier}})\b'
+      captures:
+        1: variable.other.property.ts
+
+  punctuation:
+    - match: '[\(\)\{\}\[\];,]'
+      scope: punctuation.ts
+    - match: '=>'
+      scope: storage.type.function.arrow.ts
+    - match: '<(?=[A-Za-z_$])'
+      scope: punctuation.definition.typeparameters.begin.ts
+    - match: '=>|[-+*/%=<>!&|?~^]+'
+      scope: keyword.operator.ts
+
+  # 大写开头的标识符视为类型/类名
+  identifiers:
+    - match: '\b[A-Z][A-Za-z0-9_$]*\b'
+      scope: entity.name.type.ts
+    - match: '{{identifier}}'
+      scope: variable.ts
