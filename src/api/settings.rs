@@ -3,6 +3,9 @@
 //! 所有接口需要 admin 权限。配置持久化到 settings 键值表。
 //! Dioxus server function，注册在 `/api` 路径下。
 
+// 与 posts 模块一致：Dioxus `#[server]` 宏触发 deprecated/unit 提示，按项目惯例放行。
+#![allow(clippy::unused_unit, deprecated)]
+
 use dioxus::prelude::*;
 
 use crate::models::settings::TrashSettings;
@@ -32,7 +35,7 @@ pub async fn get_trash_settings() -> Result<TrashSettings, ServerFnError> {
             .await
             .map_err(AppError::query)?
             .and_then(|r| r.get::<_, String>("value").parse().ok())
-            .unwrap_or_else(|| crate::models::settings::DEFAULT_AUTO_PURGE_ENABLED);
+            .unwrap_or(crate::models::settings::DEFAULT_AUTO_PURGE_ENABLED);
 
         let days: i32 = client
             .query_opt(
@@ -42,7 +45,7 @@ pub async fn get_trash_settings() -> Result<TrashSettings, ServerFnError> {
             .await
             .map_err(AppError::query)?
             .and_then(|r| r.get::<_, String>("value").parse().ok())
-            .unwrap_or_else(|| crate::models::settings::DEFAULT_RETENTION_DAYS);
+            .unwrap_or(crate::models::settings::DEFAULT_RETENTION_DAYS);
 
         Ok(TrashSettings {
             auto_purge_enabled: enabled,
