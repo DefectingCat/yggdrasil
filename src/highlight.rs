@@ -48,15 +48,20 @@ pub mod server {
                 if let Some(s) = ss.find_syntax_by_name(lang) {
                     return s;
                 }
-                // 小写后再匹配一次
+                // 小写扩展名再匹配一次（部分语言的扩展名习惯小写）
                 let lower = lang.to_lowercase();
                 if lower != lang {
                     if let Some(s) = ss.find_syntax_by_extension(&lower) {
                         return s;
                     }
-                    if let Some(s) = ss.find_syntax_by_name(&lower) {
-                        return s;
-                    }
+                }
+                // 大小写不敏感的语法名称匹配（syntect 的语法名通常首字母大写，如 Haskell）
+                if let Some(s) = ss
+                    .syntaxes()
+                    .iter()
+                    .find(|s| s.name.eq_ignore_ascii_case(lang))
+                {
+                    return s;
                 }
                 // 常用语言别名映射表
                 let aliases: &[(&str, &str)] = &[
@@ -161,6 +166,23 @@ mod tests {
         let result = highlight_code("let x = 1;", Some("rust"));
         assert!(result.contains(r#"<span class="storage type rust">let</span>"#));
         assert!(result.contains(r#"<span class="constant numeric integer decimal rust">1</span>"#));
+    }
+
+    #[test]
+    fn highlight_code_haskell_by_full_name() {
+        // Haskell 语法名首字母大写，扩展名为 hs；直接写 "haskell" 应能匹配。
+        let code = "factorial :: Integer -> Integer\nfactorial 0 = 1";
+        let result = highlight_code(code, Some("haskell"));
+        assert!(
+            !result.contains(r#"<span class="text plain">"#),
+            "Haskell 不应回退到纯文本: {}",
+            result
+        );
+        assert!(
+            result.contains("source haskell"),
+            "Haskell 应输出 source haskell: {}",
+            result
+        );
     }
 
     #[test]
