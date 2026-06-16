@@ -20,6 +20,8 @@ pub mod posts;
 pub mod rate_limit;
 /// HTML 消毒器。
 pub mod sanitizer;
+/// 回收站与站点配置接口。
+pub mod settings;
 /// URL slug 生成与校验。
 pub mod slug;
 /// 图片上传的 Axum 处理器。
