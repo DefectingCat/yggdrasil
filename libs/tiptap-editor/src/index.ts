@@ -161,10 +161,11 @@ class TiptapEditorInstance {
     if (!this.isSourceMode) {
       // 富文本 → 源码：导出当前 Markdown 到 textarea
       this.sourceTextarea.value = this.editor.getMarkdown()
+      // 必须在 display:'none' 之前读取滚动比例——隐藏后 scrollTop 会被浏览器归零
+      const pmRatio = this.getScrollRatio(proseMirrorDom)
       proseMirrorDom.style.display = 'none'
       this.sourceTextarea.hidden = false
-      // 按滚动比例同步到源码视图，保持视觉位置一致
-      this.syncScrollRatio(proseMirrorDom, this.sourceTextarea)
+      this.applyScrollRatio(this.sourceTextarea, pmRatio)
       this.sourceTextarea.focus()
       this.toggleButton.textContent = '✎'
       this.toggleButton.title = '切换富文本'
@@ -205,13 +206,6 @@ class TiptapEditorInstance {
     const max = el.scrollHeight - el.clientHeight
     if (max <= 0) return
     el.scrollTop = max * ratio
-  }
-
-  /**
-   * 便捷封装：从源容器读取比例并应用到目标容器。
-   */
-  private syncScrollRatio(from: HTMLElement, to: HTMLElement): void {
-    this.applyScrollRatio(to, this.getScrollRatio(from))
   }
 
   setMarkdown(content: string): void {
