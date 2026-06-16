@@ -221,4 +221,39 @@ mod tests {
             2
         );
     }
+
+    #[test]
+    fn highlight_code_swift_keyword_and_func() {
+        // Swift 关键字 func/import/let 应生成 declaration/keyword span，而不是纯文本。
+        let code = "import Foundation\nfunc greet(person: String) -> String {\n    return \"Hi\"\n}";
+        let result = highlight_code(code, Some("swift"));
+        assert!(
+            result.contains("keyword"),
+            "Swift 输出缺少关键字高亮: {}",
+            result
+        );
+        // 函数名应被识别为函数（声明名 entity name function 或调用 variable function）。
+        assert!(
+            result.contains("name function") || result.contains("variable function"),
+            "Swift func 名缺少函数高亮: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn highlight_code_swift_types_and_strings() {
+        // Swift 标准库类型与字符串字面量都应被识别。
+        let code = "let count: Int = 42\nlet name = \"hello\"";
+        let result = highlight_code(code, Some("swift"));
+        assert!(
+            result.contains("support type") || result.contains("entity name type"),
+            "Swift Int 类型未被识别为类型: {}",
+            result
+        );
+        assert!(
+            result.contains("string"),
+            "Swift 字符串未被识别: {}",
+            result
+        );
+    }
 }

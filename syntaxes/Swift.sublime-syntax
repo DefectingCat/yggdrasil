@@ -194,6 +194,84 @@ contexts:
 
   expression:
     - include: whitespace
+    - include: comments
+    - include: attribute
     - include: string-literal
     - include: floating-point-literal
     - include: integer-literal
+    - include: function-declaration
+    - include: declaration-keywords
+    - include: control-keywords
+    - include: modifiers
+    - include: types
+    - include: constants
+    - include: function-calls
+    - include: types-and-identifiers
+
+  comments:
+    - include: comment
+    - include: multiline-comment
+
+  # 属性：@MainActor、@objc、@available(iOS 14, *)
+  attribute:
+    - match: '@\b{{identifier_head}}{{identifier_character}}*'
+      scope: meta.attribute.swift entity.other.attribute-name.swift
+
+  # 声明类关键字
+  declaration-keywords:
+    - match: '\b(?:import|func|class|struct|enum|protocol|extension|let|var|typealias|init|deinit|subscript|operator|precedencegroup|actor|macro)\b'
+      scope: keyword.declaration.swift
+    - match: '\b(?:associatedtype|fileprivate|internal|private|public|open|static|final|lazy|weak|unowned|dynamic|inout|mutating|nonmutating|convenience|required|optional|override|indirect|borrowing|consuming|distributed|nonisolated|isolated)\b'
+      scope: storage.modifier.swift
+
+  # 控制流关键字
+  control-keywords:
+    - match: '\b(?:if|else|guard|switch|case|default|for|in|while|repeat|do|where|fallthrough|break|continue|return|throw|throws|rethrows|try|catch|defer|as|is|async|await|yield|some|any|each)\b'
+      scope: keyword.control.swift
+    - match: '\b(?:true|false|nil|self|Self|super)\b'
+      scope: constant.language.swift
+    # try?/try!/as?/as!
+    - match: '\b(?:try|as)([?!])'
+      captures:
+        1: keyword.control.swift
+
+  # 单独列出的修饰符（已在 declaration-keywords 内，此处保留占位以便扩展）
+  modifiers: []
+
+  # 内置/标准库常用类型
+  types:
+    - match: '\b(?:Int|UInt|Int8|Int16|Int32|Int64|UInt8|UInt16|UInt32|UInt64|Float|Double|Bool|String|Character|Void|Optional|Array|Dictionary|Set|Range|ClosedRange|Any|Never|Result)\b'
+      scope: support.type.swift
+
+  # 常量与全局函数
+  constants:
+    - match: '\b(?:print|println|debugPrint|fatalError|assert|assertionFailure|precondition|preconditionFailure|min|max|abs|count|append|contains|map|filter|reduce|compactMap|flatMap|sorted|first|last|isEmpty)\b'
+      scope: support.function.swift
+
+  # 函数声明：func name(...) 与 init/subscript
+  function-declaration:
+    - match: '\b(func)\s+({{identifier_head}}{{identifier_character}}*|`[^`]+`|operator)'
+      captures:
+        1: keyword.declaration.swift
+        2: entity.name.function.swift
+    - match: '\b(init)\b'
+      scope: keyword.declaration.swift entity.name.function.swift
+    - match: '\b(deinit)\b'
+      scope: keyword.declaration.swift
+    - match: '\b(subscript)\b'
+      scope: keyword.declaration.swift
+
+  # 函数调用：name( 或 name <Generic>(
+  function-calls:
+    - match: '\b{{identifier_head}}{{identifier_character}}*(?=\s*(?:<[^(){}\n]*>)?\s*\()'
+      scope: variable.function.swift
+    - match: '\b{{identifier_head}}{{identifier_character}}*(?=\s*\{)'
+      scope: variable.function.swift
+
+  # 普通标识符（大写识别为类型风格，小写为变量）
+  types-and-identifiers:
+    - match: '\b[A-Z]{{identifier_character}}*\b'
+      scope: entity.name.type.swift
+    - match: '\b{{identifier_head}}{{identifier_character}}*\b'
+      scope: variable.swift
+
