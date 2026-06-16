@@ -389,15 +389,6 @@ pub async fn invalidate_pending_count() {
         .await;
 }
 
-/// 清空所有评论相关缓存。
-#[cfg(feature = "server")]
-#[allow(dead_code)]
-pub async fn invalidate_all_comment_caches() {
-    COMMENT_CACHE.invalidate_all();
-    COMMENT_COUNT_CACHE.invalidate_all();
-    PENDING_COUNT_CACHE.invalidate_all();
-}
-
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use super::*;
@@ -613,17 +604,4 @@ mod tests {
         assert!(get_pending_count().await.is_none());
     }
 
-    #[tokio::test]
-    #[serial]
-    async fn invalidate_all_comment_caches_clears_everything() {
-        set_comments_by_post(1, vec![]).await;
-        set_comment_count(1, 10).await;
-        set_pending_count(5).await;
-
-        invalidate_all_comment_caches().await;
-
-        assert!(get_comments_by_post(1).await.is_none());
-        assert!(get_comment_count(1).await.is_none());
-        assert!(get_pending_count().await.is_none());
-    }
 }

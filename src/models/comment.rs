@@ -44,48 +44,6 @@ impl CommentStatus {
     }
 }
 
-/// 服务端内部使用的完整评论结构体，仅在启用 server feature 时编译。
-///
-/// 包含作者邮箱、IP、User-Agent 等敏感或管理字段，不直接返回给前端。
-#[cfg(feature = "server")]
-#[allow(dead_code)]
-pub struct Comment {
-    /// 评论主键。
-    pub id: i64,
-    /// 所属文章主键。
-    pub post_id: i32,
-    /// 父评论主键，用于实现嵌套回复。
-    pub parent_id: Option<i64>,
-    /// 嵌套深度，0 表示顶层评论。
-    pub depth: i32,
-    /// 评论者名称。
-    pub author_name: String,
-    /// 评论者邮箱，用于 Gravatar 与后台联系。
-    pub author_email: String,
-    /// 评论者个人主页 URL。
-    pub author_url: Option<String>,
-    /// 原始 Markdown 内容。
-    pub content_md: String,
-    /// 渲染后的 HTML 内容。
-    pub content_html: Option<String>,
-    /// 内容哈希，用于检测重复或垃圾评论。
-    pub content_hash: Option<String>,
-    /// 当前审核状态。
-    pub status: CommentStatus,
-    /// 评论者 IP 地址。
-    pub ip_address: Option<String>,
-    /// 评论者浏览器 User-Agent。
-    pub user_agent: Option<String>,
-    /// 审核通过时间。
-    pub approved_at: Option<DateTime<Utc>>,
-    /// 评论创建时间。
-    pub created_at: DateTime<Utc>,
-    /// 评论最后更新时间。
-    pub updated_at: DateTime<Utc>,
-    /// 软删除时间。
-    pub deleted_at: Option<DateTime<Utc>>,
-}
-
 /// 面向前端展示的评论结构体，已脱敏。
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PublicComment {
