@@ -73,7 +73,7 @@ pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, Server
         let row = client
             .query_opt(
                 "SELECT 
-                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, 
+                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, p.toc_html,
                     p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
                     COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags,
                     prev.title as prev_title, prev.slug as prev_slug,
