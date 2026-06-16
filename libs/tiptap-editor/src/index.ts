@@ -163,6 +163,8 @@ class TiptapEditorInstance {
       this.sourceTextarea.value = this.editor.getMarkdown()
       proseMirrorDom.style.display = 'none'
       this.sourceTextarea.hidden = false
+      // 按滚动比例同步到源码视图，保持视觉位置一致
+      this.syncScrollRatio(proseMirrorDom, this.sourceTextarea)
       this.sourceTextarea.focus()
       this.toggleButton.textContent = '✎'
       this.toggleButton.title = '切换富文本'
@@ -170,14 +172,46 @@ class TiptapEditorInstance {
     } else {
       // 源码 → 富文本：把 textarea 内容回填到编辑器
       const md = this.sourceTextarea.value
+      // 先记录源码视图的滚动比例（setContent 会重建文档，必须在替换前拿到比例）
+      const sourceRatio = this.getScrollRatio(this.sourceTextarea)
       this.setMarkdown(md)
       this.sourceTextarea.hidden = true
       proseMirrorDom.style.display = ''
+      // 等待 DOM 布局更新后，按比例同步富文本视图滚动位置
+      requestAnimationFrame(() => {
+        this.applyScrollRatio(proseMirrorDom, sourceRatio)
+      })
       this.toggleButton.textContent = '</>'
       this.toggleButton.title = '切换 Markdown 源码'
       this.isSourceMode = false
-      this.editor.commands.focus()
+      // 注意：不调用 editor.commands.focus()，它会强制滚动到光标位置（默认文档末尾），破坏比例同步
     }
+  }
+
+  /**
+   * 读取可滚动容器的滚动比例（0~1）。
+   * 比例 = scrollTop / 可滚动总距离，避免两种模式内容高度不同导致像素无法直接对应。
+   */
+  private getScrollRatio(el: HTMLElement): number {
+    const max = el.scrollHeight - el.clientHeight
+    if (max <= 0) return 0
+    return el.scrollTop / max
+  }
+
+  /**
+   * 按比例设置目标容器的滚动位置。
+   */
+  private applyScrollRatio(el: HTMLElement, ratio: number): void {
+    const max = el.scrollHeight - el.clientHeight
+    if (max <= 0) return
+    el.scrollTop = max * ratio
+  }
+
+  /**
+   * 便捷封装：从源容器读取比例并应用到目标容器。
+   */
+  private syncScrollRatio(from: HTMLElement, to: HTMLElement): void {
+    this.applyScrollRatio(to, this.getScrollRatio(from))
   }
 
   setMarkdown(content: string): void {
