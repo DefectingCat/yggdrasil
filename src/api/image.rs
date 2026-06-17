@@ -268,6 +268,43 @@ fn process_image(
 }
 
 #[cfg(feature = "server")]
+fn process_image_blocking(
+    data: Vec<u8>,
+    params: ImageParams,
+    path: String,
+) -> Result<(Vec<u8>, HeaderValue), StatusCode> {
+    let original_format = detect_format(&path);
+
+    let img = if original_format == image::ImageFormat::WebP {
+        match crate::webp::decode(&data) {
+            Ok(img) => {
+                check_image_dimensions(img.width(), img.height())?;
+                img
+            }
+            Err(e) => {
+                tracing::warn!("WebP decode failed ({}), returning raw bytes", e);
+                let ct = content_type(original_format);
+                return Ok((data, ct));
+            }
+        }
+    } else {
+        let cursor = std::io::Cursor::new(&data);
+        let mut reader = image::ImageReader::with_format(cursor, original_format);
+        reader.limits(image_reader_limits());
+        match reader.decode() {
+            Ok(img) => img,
+            Err(e) => {
+                tracing::warn!("Image decode failed ({}), returning raw bytes", e);
+                let ct = content_type(original_format);
+                return Ok((data, ct));
+            }
+        }
+    };
+
+    process_image(img, &params, original_format)
+}
+
+#[cfg(feature = "server")]
 fn is_path_safe(path: &str) -> bool {
     // Reject paths with parent directory references or null bytes
     if path.contains("..") || path.contains('\0') {
@@ -399,40 +436,24 @@ pub async fn serve_image(
         Err(_) => return StatusCode::NOT_FOUND.into_response(),
     };
 
-    // WebP 解码使用 zenwebp，其它格式使用 image crate。
-    let original_format = detect_format(&path);
-    let img = if original_format == image::ImageFormat::WebP {
-        match crate::webp::decode(&data) {
-            Ok(img) => {
-                if let Err(status) = check_image_dimensions(img.width(), img.height()) {
-                    return status.into_response();
-                }
-                img
+    // Offload decode + resize + encode to the blocking pool so the async
+    // runtime stays responsive to other requests.
+    let data_for_blocking = data.clone();
+    let path_for_blocking = path.clone();
+    let params_for_blocking = params.clone();
+    let (processed, content_type) =
+        match tokio::task::spawn_blocking(move || {
+            process_image_blocking(data_for_blocking, params_for_blocking, path_for_blocking)
+        })
+        .await
+        {
+            Ok(Ok(r)) => r,
+            Ok(Err(status)) => return status.into_response(),
+            Err(_) => {
+                tracing::error!("Image processing task panicked");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
             }
-            Err(e) => {
-                tracing::warn!("WebP decode failed ({}), returning raw bytes", e);
-                let ct = content_type(original_format);
-                return (StatusCode::OK, [(header::CONTENT_TYPE, ct)], data).into_response();
-            }
-        }
-    } else {
-        let cursor = std::io::Cursor::new(&data);
-        let mut reader = image::ImageReader::with_format(cursor, original_format);
-        reader.limits(image_reader_limits());
-        match reader.decode() {
-            Ok(img) => img,
-            Err(e) => {
-                tracing::warn!("Image decode failed ({}), returning raw bytes", e);
-                let ct = content_type(original_format);
-                return (StatusCode::OK, [(header::CONTENT_TYPE, ct)], data).into_response();
-            }
-        }
-    };
-
-    let (processed, content_type) = match process_image(img, &params, original_format) {
-        Ok(r) => r,
-        Err(status) => return status.into_response(),
-    };
+        };
 
     let cached = CachedImage {
         data: processed.clone(),
@@ -672,5 +693,23 @@ mod tests {
         let base1 = disk_cache_base("path|w=800");
         let base2 = disk_cache_base("path|w=1200");
         assert_ne!(base1, base2);
+    }
+
+    #[test]
+    fn process_image_blocking_resizes_png() {
+        let img = image::DynamicImage::new_rgb8(100, 100);
+        let mut buf = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut buf, image::ImageFormat::Png).unwrap();
+        let data = buf.into_inner();
+
+        let params = ImageParams {
+            w: Some(50),
+            format: Some("webp".to_string()),
+            ..Default::default()
+        };
+
+        let (out, ct) = process_image_blocking(data, params, "test.png".to_string()).unwrap();
+        assert!(!out.is_empty());
+        assert_eq!(ct, HeaderValue::from_static("image/webp"));
     }
 }
