@@ -21,7 +21,6 @@ CREATE TABLE IF NOT EXISTS posts (
 );
 
 CREATE INDEX idx_posts_status_published ON posts(status, published_at DESC) WHERE deleted_at IS NULL;
-CREATE INDEX idx_posts_slug ON posts(slug) WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX idx_posts_slug_unique ON posts(slug) WHERE deleted_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS tags (
