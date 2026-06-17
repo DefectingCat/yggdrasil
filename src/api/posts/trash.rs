@@ -218,6 +218,9 @@ pub async fn batch_restore_posts(post_ids: Vec<i32>) -> Result<CreatePostRespons
         let mut client = get_conn().await.map_err(AppError::db_conn)?;
         let tx = client.transaction().await.map_err(AppError::tx)?;
 
+        // 记录数较少时使用精准失效；否则回退到全量失效。
+        let use_precise = post_ids.len() <= PRECISE_INVALIDATION_LIMIT;
+
         // 逐条恢复，slug 冲突时自动加后缀；同时收集受影响的 slug 与标签。
         let mut restored = 0u64;
         let mut affected_slugs: Vec<String> = Vec::with_capacity(post_ids.len() * 2);
@@ -227,7 +230,7 @@ pub async fn batch_restore_posts(post_ids: Vec<i32>) -> Result<CreatePostRespons
         for id in &post_ids {
             let row = tx
                 .query_opt(
-                    "SELECT slug FROM posts WHERE id = $1 AND deleted_at IS NOT NULL",
+                    "SELECT slug FROM posts WHERE id = $1 AND deleted_at IS NOT NULL FOR UPDATE",
                     &[&id],
                 )
                 .await
@@ -236,15 +239,17 @@ pub async fn batch_restore_posts(post_ids: Vec<i32>) -> Result<CreatePostRespons
                 let current_slug: String = row.get("slug");
                 let new_slug = ensure_unique_slug(&tx, &current_slug, Some(*id)).await?;
 
-                let tag_rows = tx
-                    .query(
-                        "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
-                        &[&id],
-                    )
-                    .await
-                    .map_err(AppError::query)?;
-                for tag_row in &tag_rows {
-                    affected_tags.insert(tag_row.get(0));
+                if use_precise {
+                    let tag_rows = tx
+                        .query(
+                            "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
+                            &[&id],
+                        )
+                        .await
+                        .map_err(AppError::query)?;
+                    for tag_row in &tag_rows {
+                        affected_tags.insert(tag_row.get(0));
+                    }
                 }
 
                 let n = tx
@@ -256,23 +261,30 @@ pub async fn batch_restore_posts(post_ids: Vec<i32>) -> Result<CreatePostRespons
                     .map_err(AppError::tx)?;
                 restored += n;
 
-                affected_slugs.push(current_slug);
-                affected_slugs.push(new_slug);
+                if use_precise {
+                    affected_slugs.push(current_slug);
+                    affected_slugs.push(new_slug);
+                }
             }
         }
 
         tx.commit().await.map_err(AppError::tx)?;
 
-        // 精准失效：先去重 slug，再统一失效列表/标签云/统计/标签文章。
-        let unique_slugs: std::collections::HashSet<String> =
-            affected_slugs.into_iter().collect();
-        crate::cache::invalidate_post_lists();
-        crate::cache::invalidate_all_tags();
-        crate::cache::invalidate_post_stats();
-        for slug in &unique_slugs {
-            crate::cache::invalidate_post_by_slug(slug).await;
+        if use_precise {
+            // 精准失效：先去重 slug，再统一失效列表/标签云/统计/标签文章。
+            let unique_slugs: std::collections::HashSet<String> =
+                affected_slugs.into_iter().collect();
+            crate::cache::invalidate_post_lists();
+            crate::cache::invalidate_all_tags();
+            crate::cache::invalidate_post_stats();
+            for slug in &unique_slugs {
+                crate::cache::invalidate_post_by_slug(slug).await;
+            }
+            crate::cache::invalidate_tag_posts_for(&affected_tags.into_iter().collect::<Vec<_>>()).await;
+        } else {
+            // 影响集过大时回退到全量失效，避免大量串行缓存操作。
+            crate::cache::invalidate_all_post_caches();
         }
-        crate::cache::invalidate_tag_posts_for(&affected_tags.into_iter().collect::<Vec<_>>()).await;
 
         Ok(CreatePostResponse {
             success: true,
