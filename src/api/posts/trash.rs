@@ -1,6 +1,7 @@
 //! 回收站操作接口：恢复、彻底删除、批量操作与一键清空。
 //!
-//! 所有接口需要 admin 权限，操作后清空全部文章相关缓存。
+//! 所有接口需要 admin 权限，操作后按影响范围精准失效缓存；
+//! 仅在影响集很大（如批量清空）时才回退到全量缓存失效。
 //! Dioxus server function，注册在 `/api` 路径下。
 //! 仅在 `feature = "server"` 启用的服务端构建中执行数据库操作。
 
@@ -16,6 +17,11 @@ use crate::api::slug::ensure_unique_slug;
 #[cfg(feature = "server")]
 use crate::db::pool::get_conn;
 
+/// 批量/清空操作使用精准失效的最大记录数阈值。
+/// 超过该阈值时回退到 `invalidate_all_post_caches()`，避免大量串行缓存操作。
+#[cfg(feature = "server")]
+const PRECISE_INVALIDATION_LIMIT: usize = 50;
+
 /// 恢复一篇已删除的文章（将 deleted_at 置空）。
 ///
 /// 若该文章原始 slug 已被其他未删除文章占用，自动追加数字后缀。
@@ -28,7 +34,7 @@ pub async fn restore_post(post_id: i32) -> Result<CreatePostResponse, ServerFnEr
         let mut client = get_conn().await.map_err(AppError::db_conn)?;
         let tx = client.transaction().await.map_err(AppError::tx)?;
 
-        // 读取待恢复文章的当前 slug 与是否确已删除。
+        // 读取待恢复文章的当前 slug、标签与是否确已删除。
         let row = tx
             .query_opt(
                 "SELECT slug FROM posts WHERE id = $1 AND deleted_at IS NOT NULL",
@@ -51,6 +57,15 @@ pub async fn restore_post(post_id: i32) -> Result<CreatePostResponse, ServerFnEr
         // 恢复时确保 slug 在未删除文章中唯一（自动加后缀）；在事务内检查避免并发竞态。
         let new_slug = ensure_unique_slug(&tx, &current_slug, Some(post_id)).await?;
 
+        let tag_rows = tx
+            .query(
+                "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
+                &[&post_id],
+            )
+            .await
+            .map_err(AppError::query)?;
+        let tags: Vec<String> = tag_rows.iter().map(|r| r.get(0)).collect();
+
         // 置空 deleted_at，并更新 slug（可能已加后缀）。
         let result = tx
             .execute(
@@ -71,7 +86,13 @@ pub async fn restore_post(post_id: i32) -> Result<CreatePostResponse, ServerFnEr
 
         tx.commit().await.map_err(AppError::tx)?;
 
-        crate::cache::invalidate_all_post_caches();
+        // 精准失效：列表、标签云、统计、旧 slug 与新 slug、相关标签文章。
+        crate::cache::invalidate_post_lists();
+        crate::cache::invalidate_all_tags();
+        crate::cache::invalidate_post_stats();
+        crate::cache::invalidate_post_by_slug(&current_slug).await;
+        crate::cache::invalidate_post_by_slug(&new_slug).await;
+        crate::cache::invalidate_tag_posts_for(&tags).await;
 
         Ok(CreatePostResponse {
             success: true,
@@ -104,6 +125,34 @@ pub async fn purge_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErro
     {
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
+        // 物理删除前查询 slug 与标签，用于精准失效缓存。
+        let slug_row = client
+            .query_opt(
+                "SELECT slug FROM posts WHERE id = $1 AND deleted_at IS NOT NULL",
+                &[&post_id],
+            )
+            .await
+            .map_err(AppError::query)?;
+
+        let Some(slug_row) = slug_row else {
+            return Ok(CreatePostResponse {
+                success: false,
+                message: "文章不在回收站".to_string(),
+                post_id: None,
+                slug: None,
+            });
+        };
+        let slug: String = slug_row.get(0);
+
+        let tag_rows = client
+            .query(
+                "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
+                &[&post_id],
+            )
+            .await
+            .map_err(AppError::query)?;
+        let tags: Vec<String> = tag_rows.iter().map(|r| r.get(0)).collect();
+
         let result = client
             .execute(
                 "DELETE FROM posts WHERE id = $1 AND deleted_at IS NOT NULL",
@@ -121,13 +170,18 @@ pub async fn purge_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErro
             });
         }
 
-        crate::cache::invalidate_all_post_caches();
+        // 精准失效相关缓存。
+        crate::cache::invalidate_post_lists();
+        crate::cache::invalidate_all_tags();
+        crate::cache::invalidate_post_stats();
+        crate::cache::invalidate_post_by_slug(&slug).await;
+        crate::cache::invalidate_tag_posts_for(&tags).await;
 
         Ok(CreatePostResponse {
             success: true,
             message: "彻底删除成功".to_string(),
             post_id: Some(post_id),
-            slug: None,
+            slug: Some(slug),
         })
     }
 
@@ -161,8 +215,12 @@ pub async fn batch_restore_posts(post_ids: Vec<i32>) -> Result<CreatePostRespons
         let mut client = get_conn().await.map_err(AppError::db_conn)?;
         let tx = client.transaction().await.map_err(AppError::tx)?;
 
-        // 逐条恢复，slug 冲突时自动加后缀。
+        // 逐条恢复，slug 冲突时自动加后缀；同时收集受影响的 slug 与标签。
         let mut restored = 0u64;
+        let mut affected_slugs: Vec<String> = Vec::with_capacity(post_ids.len() * 2);
+        let mut affected_tags: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+
         for id in &post_ids {
             let row = tx
                 .query_opt(
@@ -174,6 +232,18 @@ pub async fn batch_restore_posts(post_ids: Vec<i32>) -> Result<CreatePostRespons
             if let Some(row) = row {
                 let current_slug: String = row.get("slug");
                 let new_slug = ensure_unique_slug(&tx, &current_slug, Some(*id)).await?;
+
+                let tag_rows = tx
+                    .query(
+                        "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
+                        &[&id],
+                    )
+                    .await
+                    .map_err(AppError::query)?;
+                for tag_row in &tag_rows {
+                    affected_tags.insert(tag_row.get(0));
+                }
+
                 let n = tx
                     .execute(
                         "UPDATE posts SET deleted_at = NULL, slug = $1 WHERE id = $2 AND deleted_at IS NOT NULL",
@@ -182,12 +252,24 @@ pub async fn batch_restore_posts(post_ids: Vec<i32>) -> Result<CreatePostRespons
                     .await
                     .map_err(AppError::tx)?;
                 restored += n;
+
+                affected_slugs.push(current_slug);
+                affected_slugs.push(new_slug);
             }
         }
 
         tx.commit().await.map_err(AppError::tx)?;
 
-        crate::cache::invalidate_all_post_caches();
+        // 精准失效：先去重 slug，再统一失效列表/标签云/统计/标签文章。
+        let unique_slugs: std::collections::HashSet<String> =
+            affected_slugs.into_iter().collect();
+        crate::cache::invalidate_post_lists();
+        crate::cache::invalidate_all_tags();
+        crate::cache::invalidate_post_stats();
+        for slug in &unique_slugs {
+            crate::cache::invalidate_post_by_slug(slug).await;
+        }
+        crate::cache::invalidate_tag_posts_for(&affected_tags.into_iter().collect::<Vec<_>>()).await;
 
         Ok(CreatePostResponse {
             success: true,
@@ -225,8 +307,34 @@ pub async fn batch_purge_posts(post_ids: Vec<i32>) -> Result<CreatePostResponse,
         }
 
         let client = get_conn().await.map_err(AppError::db_conn)?;
-
         let total = post_ids.len() as i64;
+
+        // 记录数较少时查询 slug 与标签，使用精准失效；否则回退到全量失效。
+        let use_precise = post_ids.len() <= PRECISE_INVALIDATION_LIMIT;
+        let (slugs, tags) = if use_precise {
+            let slug_rows = client
+                .query(
+                    "SELECT slug FROM posts WHERE id = ANY($1) AND deleted_at IS NOT NULL",
+                    &[&post_ids],
+                )
+                .await
+                .map_err(AppError::query)?;
+            let slugs: Vec<String> = slug_rows.iter().map(|r| r.get(0)).collect();
+
+            let tag_rows = client
+                .query(
+                    "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = ANY($1)",
+                    &[&post_ids],
+                )
+                .await
+                .map_err(AppError::query)?;
+            let tags: Vec<String> = tag_rows.iter().map(|r| r.get(0)).collect();
+
+            (slugs, tags)
+        } else {
+            (Vec::new(), Vec::new())
+        };
+
         let result = client
             .execute(
                 "DELETE FROM posts WHERE id = ANY($1) AND deleted_at IS NOT NULL",
@@ -235,7 +343,18 @@ pub async fn batch_purge_posts(post_ids: Vec<i32>) -> Result<CreatePostResponse,
             .await
             .map_err(AppError::query)?;
 
-        crate::cache::invalidate_all_post_caches();
+        crate::cache::invalidate_post_lists();
+        crate::cache::invalidate_all_tags();
+        crate::cache::invalidate_post_stats();
+        if use_precise {
+            for slug in &slugs {
+                crate::cache::invalidate_post_by_slug(slug).await;
+            }
+            crate::cache::invalidate_tag_posts_for(&tags).await;
+        } else {
+            // 影响集过大时回退到全量失效，避免大量串行缓存操作。
+            crate::cache::invalidate_all_post_caches();
+        }
 
         Ok(CreatePostResponse {
             success: true,
@@ -265,12 +384,58 @@ pub async fn empty_trash() -> Result<CreatePostResponse, ServerFnError> {
     {
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
+        // 记录数较少时查询 slug 与标签，使用精准失效；否则回退到全量失效。
+        let count_row = client
+            .query_one(
+                "SELECT COUNT(*) FROM posts WHERE deleted_at IS NOT NULL",
+                &[],
+            )
+            .await
+            .map_err(AppError::query)?;
+        let count: i64 = count_row.get(0);
+        let use_precise = count > 0 && (count as usize) <= PRECISE_INVALIDATION_LIMIT;
+
+        let (slugs, tags) = if use_precise {
+            let slug_rows = client
+                .query(
+                    "SELECT slug FROM posts WHERE deleted_at IS NOT NULL",
+                    &[],
+                )
+                .await
+                .map_err(AppError::query)?;
+            let slugs: Vec<String> = slug_rows.iter().map(|r| r.get(0)).collect();
+
+            let tag_rows = client
+                .query(
+                    "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id JOIN posts p ON p.id = pt.post_id WHERE p.deleted_at IS NOT NULL",
+                    &[],
+                )
+                .await
+                .map_err(AppError::query)?;
+            let tags: Vec<String> = tag_rows.iter().map(|r| r.get(0)).collect();
+
+            (slugs, tags)
+        } else {
+            (Vec::new(), Vec::new())
+        };
+
         let result = client
             .execute("DELETE FROM posts WHERE deleted_at IS NOT NULL", &[])
             .await
             .map_err(AppError::query)?;
 
-        crate::cache::invalidate_all_post_caches();
+        crate::cache::invalidate_post_lists();
+        crate::cache::invalidate_all_tags();
+        crate::cache::invalidate_post_stats();
+        if use_precise {
+            for slug in &slugs {
+                crate::cache::invalidate_post_by_slug(slug).await;
+            }
+            crate::cache::invalidate_tag_posts_for(&tags).await;
+        } else {
+            // 影响集过大时回退到全量失效，避免大量串行缓存操作。
+            crate::cache::invalidate_all_post_caches();
+        }
 
         Ok(CreatePostResponse {
             success: true,
