@@ -85,32 +85,6 @@ impl Post {
             .map(|d| d.format("%Y-%m-%d").to_string())
             .unwrap_or_else(|| self.created_at.format("%Y-%m-%d").to_string())
     }
-
-    /// 返回中文状态标签。
-    pub fn status_label(&self) -> &'static str {
-        match self.status {
-            PostStatus::Published => "已发布",
-            PostStatus::Draft => "草稿",
-        }
-    }
-
-    /// 返回状态文本在 light/dark 模式下的 Tailwind 颜色类。
-    pub fn status_class(&self) -> &'static str {
-        match self.status {
-            PostStatus::Published => "text-green-600 dark:text-green-400",
-            PostStatus::Draft => "text-gray-400 dark:text-[#9b9c9d]",
-        }
-    }
-
-    /// 返回状态徽章在 light/dark 模式下的 Tailwind 背景与颜色类。
-    pub fn status_badge_class(&self) -> &'static str {
-        match self.status {
-            PostStatus::Published => {
-                "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
-            }
-            PostStatus::Draft => "bg-gray-100 dark:bg-[#333] text-gray-600 dark:text-[#9b9c9d]",
-        }
-    }
 }
 
 /// 文章列表项 DTO。
@@ -244,6 +218,25 @@ mod tests {
         }
     }
 
+    fn sample_post_list_item() -> PostListItem {
+        PostListItem {
+            id: 1,
+            author_id: 1,
+            title: "Test".to_string(),
+            slug: "test".to_string(),
+            summary: None,
+            status: PostStatus::Draft,
+            published_at: None,
+            created_at: Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap(),
+            updated_at: Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap(),
+            deleted_at: None,
+            tags: vec![],
+            cover_image: None,
+            reading_time: 1,
+            word_count: 10,
+        }
+    }
+
     #[test]
     #[cfg(feature = "server")]
     fn post_status_from_str() {
@@ -284,8 +277,21 @@ mod tests {
     }
 
     #[test]
-    fn status_label() {
-        let mut post = sample_post();
+    fn post_list_item_formatted_date_uses_published_at_when_available() {
+        let mut post = sample_post_list_item();
+        post.published_at = Some(Utc.with_ymd_and_hms(2024, 6, 1, 12, 0, 0).unwrap());
+        assert_eq!(post.formatted_date(), "2024-06-01");
+    }
+
+    #[test]
+    fn post_list_item_formatted_date_falls_back_to_created_at() {
+        let post = sample_post_list_item();
+        assert_eq!(post.formatted_date(), "2024-01-15");
+    }
+
+    #[test]
+    fn post_list_item_status_label() {
+        let mut post = sample_post_list_item();
         post.status = PostStatus::Published;
         assert_eq!(post.status_label(), "已发布");
         post.status = PostStatus::Draft;
@@ -293,8 +299,8 @@ mod tests {
     }
 
     #[test]
-    fn status_class_returns_non_empty() {
-        let mut post = sample_post();
+    fn post_list_item_status_class_returns_non_empty() {
+        let mut post = sample_post_list_item();
         post.status = PostStatus::Published;
         assert_eq!(post.status_class(), "text-green-600 dark:text-green-400");
         post.status = PostStatus::Draft;
@@ -302,8 +308,8 @@ mod tests {
     }
 
     #[test]
-    fn status_badge_class_returns_non_empty() {
-        let mut post = sample_post();
+    fn post_list_item_status_badge_class_returns_non_empty() {
+        let mut post = sample_post_list_item();
         post.status = PostStatus::Published;
         assert_eq!(
             post.status_badge_class(),
