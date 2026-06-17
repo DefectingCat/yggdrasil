@@ -109,7 +109,11 @@ fn main() {
                     Duration::from_secs(30),
                 ));
 
-            // 静态资源路由：图片文件服务（不加压缩/超时）
+            // 静态资源路由：图片文件服务。
+            // 注意：axum 0.8 没有 ConnectInfoLayer，且 dioxus::server::serve 不会把
+            // ConnectInfo 扩展传播到手动 merge 的路由，所以 serve_image 使用
+            // Option<Extension<ConnectInfo<SocketAddr>>> 优雅降级。生产环境应在反向代理后
+            // 部署并配置 TRUSTED_PROXY_COUNT，使限流能拿到真实客户端 IP。
             let static_routes = axum::Router::new()
                 .route(
                     "/uploads/{*path}",
