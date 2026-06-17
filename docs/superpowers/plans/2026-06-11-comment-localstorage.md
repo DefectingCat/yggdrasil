@@ -73,7 +73,6 @@ Replace `create.rs:190-221` with:
         let avatar_url = crate::api::comments::helpers::gravatar_url(&author_email);
 
         cache::invalidate_comments_by_post(post_id).await;
-        cache::invalidate_comment_count(post_id).await;
 
         Ok(CommentResponse {
             success: true,
