@@ -31,6 +31,8 @@ pub fn ImageViewer(
     // 打开灯箱时聚焦关闭按钮，并监听 Escape 键关闭。
     #[cfg(target_arch = "wasm32")]
     {
+        use wasm_bindgen::{closure::Closure, JsCast};
+
         use_effect(move || {
             if !is_open() {
                 return;
@@ -43,6 +45,7 @@ pub fn ImageViewer(
                     .and_then(|w| w.document())
                     .and_then(|d| d.query_selector(".image-viewer-close").ok())
                     .flatten()
+                    .and_then(|e| e.dyn_into::<web_sys::HtmlElement>().ok())
                 {
                     let _ = btn.focus();
                 }

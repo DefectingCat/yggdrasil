@@ -20,7 +20,6 @@ mod db;
 #[cfg(feature = "server")]
 mod highlight;
 mod hooks;
-#[cfg(feature = "server")]
 mod models;
 mod pages;
 mod router;
