@@ -55,6 +55,10 @@ pub async fn update_post(
         let post_status = PostStatus::from_str(&status).unwrap_or(PostStatus::Draft);
         let cover_image = cover_image.filter(|s| !s.trim().is_empty());
 
+        // 重新计算字数与阅读时长，保持与正文同步。
+        let word_count = crate::utils::text::count_words(&content_md);
+        let reading_time = (word_count / 200).max(1);
+
         let tx = client.transaction().await.map_err(AppError::tx)?;
 
         // 查询旧 slug，用于后续缓存失效。
@@ -150,8 +154,8 @@ pub async fn update_post(
         // 更新文章主表。
         let updated = tx
             .execute(
-                "UPDATE posts SET title = $1, slug = $2, summary = $3, content_md = $4, content_html = $5, toc_html = $6, status = $7, published_at = $8, cover_image = $9, updated_at = NOW()
-                 WHERE id = $10",
+                "UPDATE posts SET title = $1, slug = $2, summary = $3, content_md = $4, content_html = $5, toc_html = $6, status = $7, published_at = $8, cover_image = $9, word_count = $10, reading_time = $11, updated_at = NOW()
+                 WHERE id = $12",
                 &[
                     &title.trim(),
                     &final_slug,
@@ -162,6 +166,8 @@ pub async fn update_post(
                     &post_status.as_str(),
                     &published_at,
                     &cover_image,
+                    &(word_count as i32),
+                    &(reading_time as i32),
                     &post_id,
                 ],
             )
