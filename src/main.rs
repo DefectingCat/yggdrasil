@@ -70,6 +70,69 @@ fn compression_layer_from_env() -> Option<tower_http::compression::CompressionLa
     Some(layer)
 }
 
+/// 根据请求路径和方法决定公开页面的 Cache-Control 头。
+/// 返回 None 表示不添加缓存头（保留现有行为或避免覆盖）。
+#[cfg(feature = "server")]
+fn cache_control_for_path(
+    path: &str,
+    method: &axum::http::Method,
+) -> Option<axum::http::HeaderValue> {
+    use axum::http::{HeaderValue, Method};
+
+    // 只对 GET/HEAD 请求添加缓存头
+    if *method != Method::GET && *method != Method::HEAD {
+        return None;
+    }
+
+    // API 接口：不缓存（可能涉及认证、写操作）
+    if path.starts_with("/api") {
+        return None;
+    }
+
+    // 管理后台和认证页面：不缓存
+    if path.starts_with("/admin") || path == "/login" || path == "/register" {
+        return None;
+    }
+
+    // 静态资源：长期缓存（Dioxus/WASM 资源通常带内容哈希）
+    if path.starts_with("/_dioxus/")
+        || path.starts_with("/wasm/")
+        || path.ends_with(".wasm")
+        || path.ends_with(".js")
+        || path == "/style.css"
+        || path == "/highlight.css"
+    {
+        return Some(HeaderValue::from_static("public, max-age=31536000, immutable"));
+    }
+
+    // 公开页面：5 分钟新鲜期，过期后 1 小时内可提供过期内容并后台重新验证
+    Some(HeaderValue::from_static(
+        "public, max-age=300, stale-while-revalidate=3600",
+    ))
+}
+
+/// Axum 中间件：为公开页面和静态资源附加 Cache-Control 头。
+#[cfg(feature = "server")]
+async fn add_cache_control(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::http::header;
+
+    let path = req.uri().path().to_string();
+    let method = req.method().clone();
+    let cache_value = cache_control_for_path(&path, &method);
+
+    let mut response = next.run(req).await;
+
+    if let Some(value) = cache_value {
+        // 仅当响应尚未设置 Cache-Control 时才添加，避免覆盖已有策略
+        response.headers_mut().entry(header::CACHE_CONTROL).or_insert(value);
+    }
+
+    response
+}
+
 /// 程序入口
 fn main() {
     // server feature：启动服务端
@@ -142,13 +205,12 @@ fn main() {
             let dioxus_app =
                 axum::Router::new().serve_dioxus_application(config, router::AppRouter);
 
-            // 合并 Dioxus + 可选压缩/30s 超时中间件
-            let app_routes = if let Some(layer) = compression_layer_from_env() {
-                dioxus_app.layer(layer)
-            } else {
-                dioxus_app
+            // 合并 Dioxus + 缓存头/可选压缩/30s 超时中间件
+            let mut app_routes = dioxus_app.layer(axum::middleware::from_fn(add_cache_control));
+            if let Some(layer) = compression_layer_from_env() {
+                app_routes = app_routes.layer(layer);
             }
-            .layer(TimeoutLayer::with_status_code(
+            let app_routes = app_routes.layer(TimeoutLayer::with_status_code(
                 StatusCode::REQUEST_TIMEOUT,
                 Duration::from_secs(30),
             ));
@@ -180,5 +242,76 @@ fn main() {
     {
         use router::AppRouter;
         dioxus::launch(AppRouter);
+    }
+}
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::cache_control_for_path;
+    use axum::http::Method;
+
+    fn cache_value(path: &str, method: Method) -> Option<String> {
+        cache_control_for_path(path, &method)
+            .map(|v| v.to_str().unwrap().to_string())
+    }
+
+    #[test]
+    fn public_page_is_cached() {
+        assert_eq!(
+            cache_value("/", Method::GET),
+            Some("public, max-age=300, stale-while-revalidate=3600".to_string())
+        );
+        assert_eq!(
+            cache_value("/post/hello-world", Method::GET),
+            Some("public, max-age=300, stale-while-revalidate=3600".to_string())
+        );
+        assert_eq!(
+            cache_value("/tags/rust", Method::GET),
+            Some("public, max-age=300, stale-while-revalidate=3600".to_string())
+        );
+    }
+
+    #[test]
+    fn static_assets_are_cached_long_term() {
+        assert_eq!(
+            cache_value("/style.css", Method::GET),
+            Some("public, max-age=31536000, immutable".to_string())
+        );
+        assert_eq!(
+            cache_value("/highlight.css", Method::GET),
+            Some("public, max-age=31536000, immutable".to_string())
+        );
+        assert_eq!(
+            cache_value("/wasm/app.wasm", Method::GET),
+            Some("public, max-age=31536000, immutable".to_string())
+        );
+        assert_eq!(
+            cache_value("/_dioxus/assets/main.js", Method::GET),
+            Some("public, max-age=31536000, immutable".to_string())
+        );
+    }
+
+    #[test]
+    fn api_and_admin_and_auth_are_not_cached() {
+        assert_eq!(cache_value("/api/posts", Method::GET), None);
+        assert_eq!(cache_value("/admin", Method::GET), None);
+        assert_eq!(cache_value("/admin/posts", Method::GET), None);
+        assert_eq!(cache_value("/login", Method::GET), None);
+        assert_eq!(cache_value("/register", Method::GET), None);
+    }
+
+    #[test]
+    fn non_get_requests_are_not_cached() {
+        assert_eq!(cache_value("/", Method::POST), None);
+        assert_eq!(cache_value("/post/hello-world", Method::POST), None);
+        assert_eq!(cache_value("/style.css", Method::POST), None);
+    }
+
+    #[test]
+    fn head_requests_are_cached_like_get() {
+        assert_eq!(
+            cache_value("/", Method::HEAD),
+            Some("public, max-age=300, stale-while-revalidate=3600".to_string())
+        );
     }
 }
