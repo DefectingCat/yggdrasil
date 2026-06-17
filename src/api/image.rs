@@ -21,9 +21,19 @@ use serde::Deserialize;
 use std::sync::LazyLock;
 
 #[cfg(feature = "server")]
+fn etag_for(data: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let hash = Sha256::digest(data);
+    format!("\"{}\"", hex::encode(&hash[..8]))
+}
+
+#[cfg(feature = "server")]
 pub const MAX_IMAGE_DIMENSION: u32 = 4096;
 #[cfg(feature = "server")]
 const DEFAULT_JPEG_QUALITY: u8 = 85;
+#[cfg(feature = "server")]
+#[allow(dead_code)]
+const IMAGE_CACHE_MAX_AGE: u64 = 31_536_000; // 1 year
 #[cfg(feature = "server")]
 /// 允许处理的最大图片像素数（约 5k x 5k）。
 pub const MAX_IMAGE_PIXELS: u32 = 25_000_000; // ~5k x 5k
@@ -163,6 +173,21 @@ fn content_type(format: image::ImageFormat) -> HeaderValue {
         image::ImageFormat::Gif => HeaderValue::from_static("image/gif"),
         _ => HeaderValue::from_static("application/octet-stream"),
     }
+}
+
+#[cfg(feature = "server")]
+fn image_response(data: Vec<u8>, content_type: HeaderValue, cache_control: &'static str) -> Response {
+    let etag = etag_for(&data);
+    (
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, content_type),
+            (header::CACHE_CONTROL, HeaderValue::from_static(cache_control)),
+            (header::ETAG, HeaderValue::from_str(&etag).unwrap()),
+        ],
+        data,
+    )
+        .into_response()
 }
 
 #[cfg(feature = "server")]
@@ -392,12 +417,12 @@ pub async fn serve_image(
         return status.into_response();
     }
 
-    // No processing params: return raw file
+    // No processing params: return raw file with long-lived cache headers.
     if params.is_empty() {
         return match tokio::fs::read(&file_path).await {
             Ok(data) => {
                 let ct = content_type(detect_format(&path));
-                (StatusCode::OK, [(header::CONTENT_TYPE, ct)], data).into_response()
+                image_response(data, ct, "public, max-age=31536000, immutable")
             }
             Err(_) => StatusCode::NOT_FOUND.into_response(),
         };
@@ -405,12 +430,7 @@ pub async fn serve_image(
 
     let cache_key = params.cache_key(&path);
     if let Some(cached) = IMAGE_CACHE.get(&cache_key).await {
-        return (
-            StatusCode::OK,
-            [(header::CONTENT_TYPE, cached.content_type)],
-            cached.data,
-        )
-            .into_response();
+        return image_response(cached.data, cached.content_type, "public, max-age=86400");
     }
 
     if let Some(cached) = read_disk_cache(&cache_key).await {
@@ -423,12 +443,7 @@ pub async fn serve_image(
                 },
             )
             .await;
-        return (
-            StatusCode::OK,
-            [(header::CONTENT_TYPE, cached.content_type)],
-            cached.data,
-        )
-            .into_response();
+        return image_response(cached.data, cached.content_type, "public, max-age=86400");
     }
 
     let data = match tokio::fs::read(&file_path).await {
@@ -462,12 +477,7 @@ pub async fn serve_image(
     let _ = IMAGE_CACHE.insert(cache_key.clone(), cached.clone()).await;
     write_disk_cache(&cache_key, &cached).await;
 
-    (
-        StatusCode::OK,
-        [(header::CONTENT_TYPE, content_type)],
-        processed,
-    )
-        .into_response()
+    image_response(processed, content_type, "public, max-age=86400")
 }
 
 #[cfg(all(test, feature = "server"))]
@@ -711,5 +721,25 @@ mod tests {
         let (out, ct) = process_image_blocking(data, params, "test.png".to_string()).unwrap();
         assert!(!out.is_empty());
         assert_eq!(ct, HeaderValue::from_static("image/webp"));
+    }
+
+    #[test]
+    fn image_response_includes_cache_headers() {
+        let resp = image_response(vec![1, 2, 3], HeaderValue::from_static("image/webp"), "public, max-age=86400");
+        assert_eq!(resp.status(), StatusCode::OK);
+        let headers = resp.headers();
+        assert_eq!(
+            headers.get(header::CACHE_CONTROL).unwrap(),
+            "public, max-age=86400"
+        );
+        assert!(headers.get(header::ETAG).unwrap().to_str().unwrap().starts_with('"'));
+    }
+
+    #[test]
+    fn etag_for_same_data_is_stable() {
+        let a = etag_for(b"hello");
+        let b = etag_for(b"hello");
+        assert_eq!(a, b);
+        assert_ne!(a, etag_for(b"world"));
     }
 }
