@@ -7,3 +7,6 @@
 pub mod text;
 /// 跨平台的异步睡眠等时间工具。
 pub mod time;
+/// HTML 空白压缩工具。
+#[cfg(feature = "server")]
+pub mod html_minify;

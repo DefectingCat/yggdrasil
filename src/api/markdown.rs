@@ -190,8 +190,8 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
     }
 
     RenderedContent {
-        html: clean_html(&html),
-        toc_html,
+        html: crate::utils::html_minify::minify_html(&clean_html(&html)),
+        toc_html: crate::utils::html_minify::minify_html(&toc_html),
     }
 }
 
