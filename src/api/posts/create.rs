@@ -93,7 +93,7 @@ pub async fn create_post(
 
         // 计算字数与阅读时长，随文章一并持久化，供列表查询直接使用。
         let word_count = crate::utils::text::count_words(&content_md);
-        let reading_time = (word_count / 200).max(1);
+        let reading_time = crate::utils::text::reading_time(word_count);
 
         // 发布状态的文章设置当前发布时间；草稿则为 None。
         let published_at = if post_status == PostStatus::Published {

@@ -18,7 +18,8 @@ use crate::models::post::PostStats;
 
 /// 获取文章统计信息。
 ///
-/// 需要 admin 权限；优先命中缓存，未命中时分别统计总数、草稿数与已发布数。
+/// 需要 admin 权限；优先命中缓存，未命中时通过单次条件聚合查询同时统计
+/// 未删除文章总数、草稿数与已发布数。
 #[server(GetPostStats, "/api")]
 pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
     let _user = get_current_admin_user().await?;

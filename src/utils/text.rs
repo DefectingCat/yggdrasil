@@ -72,6 +72,13 @@ pub fn count_words(md: &str) -> u32 {
     count.max(1)
 }
 
+/// 由字数估算阅读时长（分钟）。
+///
+/// 按每分钟 200 字计算，至少返回 1 分钟。
+pub fn reading_time(word_count: u32) -> u32 {
+    (word_count / 200).max(1)
+}
+
 /// 自动生成文本摘要，取去除 Markdown 后的前 200 个字符。
 pub fn auto_summary(md: &str) -> String {
     let plain = strip_markdown(md);
@@ -156,6 +163,21 @@ mod tests {
     #[test]
     fn count_words_empty_returns_one() {
         assert_eq!(count_words(""), 1);
+    }
+
+    #[test]
+    fn reading_time_defaults_to_one() {
+        assert_eq!(reading_time(0), 1);
+        assert_eq!(reading_time(1), 1);
+        assert_eq!(reading_time(199), 1);
+    }
+
+    #[test]
+    fn reading_time_scales_by_two_hundred() {
+        assert_eq!(reading_time(200), 1);
+        assert_eq!(reading_time(201), 1);
+        assert_eq!(reading_time(400), 2);
+        assert_eq!(reading_time(1000), 5);
     }
 
     #[test]

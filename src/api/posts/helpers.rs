@@ -8,7 +8,7 @@ use crate::api::error::AppError;
 #[cfg(feature = "server")]
 use crate::models::post::{Post, PostListItem, PostStatus};
 #[cfg(feature = "server")]
-use crate::utils::text::count_words;
+use crate::utils::text::{count_words, reading_time};
 
 /// 复用认证模块的当前 admin 用户获取逻辑。
 #[cfg(feature = "server")]
@@ -110,7 +110,7 @@ pub(super) async fn row_to_post_full(
         (stored_word_count as u32, stored_reading_time as u32)
     } else {
         let wc = count_words(&content_md);
-        (wc, (wc / 200).max(1))
+        (wc, reading_time(wc))
     };
 
     let content_html: Option<String> = row.get("content_html");

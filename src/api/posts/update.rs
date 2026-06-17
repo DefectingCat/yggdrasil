@@ -57,7 +57,7 @@ pub async fn update_post(
 
         // 重新计算字数与阅读时长，保持与正文同步。
         let word_count = crate::utils::text::count_words(&content_md);
-        let reading_time = (word_count / 200).max(1);
+        let reading_time = crate::utils::text::reading_time(word_count);
 
         let tx = client.transaction().await.map_err(AppError::tx)?;
 

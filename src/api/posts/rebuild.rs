@@ -76,7 +76,7 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
             };
 
             let word_count = crate::utils::text::count_words(&content_md);
-            let reading_time = (word_count / 200).max(1);
+            let reading_time = crate::utils::text::reading_time(word_count);
 
             match client
                 .execute(
