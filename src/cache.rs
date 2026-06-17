@@ -291,9 +291,11 @@ pub fn invalidate_post_stats() {
 /// 按标签批量失效文章列表缓存。
 #[cfg(feature = "server")]
 pub async fn invalidate_tag_posts_for(tags: &[String]) {
-    for tag in tags {
-        invalidate_posts_by_tag(tag).await;
-    }
+    let futures: Vec<_> = tags
+        .iter()
+        .map(|tag| invalidate_posts_by_tag(tag))
+        .collect();
+    let _ = futures::future::join_all(futures).await;
 }
 
 /// 清空所有文章相关缓存（列表、标签、单篇、统计、标签文章）。

@@ -5397,6 +5397,7 @@ dependencies = [
  "deadpool-postgres",
  "dioxus",
  "dotenvy",
+ "futures",
  "governor",
  "hex",
  "http",
