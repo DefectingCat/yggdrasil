@@ -21,7 +21,6 @@ mod db;
 mod highlight;
 mod hooks;
 #[cfg(feature = "server")]
-mod middleware;
 mod models;
 mod pages;
 mod router;
@@ -103,11 +102,6 @@ fn main() {
 
             // 合并三条路由：自定义 API、静态资源、Dioxus 主应用
             let router = api_routes.merge(static_routes).merge(dioxus_app);
-
-            // 对 SSR 返回的 HTML 做空白压缩（保留 <pre>/<code> 等标签内格式）
-            let router = router.layer(axum::middleware::from_fn(
-                crate::middleware::minify_html::layer,
-            ));
 
             Ok(router)
         });
