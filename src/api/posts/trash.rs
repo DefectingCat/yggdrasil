@@ -34,10 +34,10 @@ pub async fn restore_post(post_id: i32) -> Result<CreatePostResponse, ServerFnEr
         let mut client = get_conn().await.map_err(AppError::db_conn)?;
         let tx = client.transaction().await.map_err(AppError::tx)?;
 
-        // 读取待恢复文章的当前 slug、标签与是否确已删除。
+        // 在事务内锁定行并读取当前 slug、标签与是否确已删除。
         let row = tx
             .query_opt(
-                "SELECT slug FROM posts WHERE id = $1 AND deleted_at IS NOT NULL",
+                "SELECT slug FROM posts WHERE id = $1 AND deleted_at IS NOT NULL FOR UPDATE",
                 &[&post_id],
             )
             .await
@@ -123,12 +123,13 @@ pub async fn purge_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErro
 
     #[cfg(feature = "server")]
     {
-        let client = get_conn().await.map_err(AppError::db_conn)?;
+        let mut client = get_conn().await.map_err(AppError::db_conn)?;
+        let tx = client.transaction().await.map_err(AppError::tx)?;
 
-        // 物理删除前查询 slug 与标签，用于精准失效缓存。
-        let slug_row = client
+        // 在事务内锁定行并读取 slug 与标签，避免并发更新导致缓存失效目标过期。
+        let slug_row = tx
             .query_opt(
-                "SELECT slug FROM posts WHERE id = $1 AND deleted_at IS NOT NULL",
+                "SELECT slug FROM posts WHERE id = $1 AND deleted_at IS NOT NULL FOR UPDATE",
                 &[&post_id],
             )
             .await
@@ -144,7 +145,7 @@ pub async fn purge_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErro
         };
         let slug: String = slug_row.get(0);
 
-        let tag_rows = client
+        let tag_rows = tx
             .query(
                 "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
                 &[&post_id],
@@ -153,13 +154,13 @@ pub async fn purge_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErro
             .map_err(AppError::query)?;
         let tags: Vec<String> = tag_rows.iter().map(|r| r.get(0)).collect();
 
-        let result = client
+        let result = tx
             .execute(
                 "DELETE FROM posts WHERE id = $1 AND deleted_at IS NOT NULL",
                 &[&post_id],
             )
             .await
-            .map_err(AppError::query)?;
+            .map_err(AppError::tx)?;
 
         if result == 0 {
             return Ok(CreatePostResponse {
@@ -169,6 +170,8 @@ pub async fn purge_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErro
                 slug: None,
             });
         }
+
+        tx.commit().await.map_err(AppError::tx)?;
 
         // 精准失效相关缓存。
         crate::cache::invalidate_post_lists();

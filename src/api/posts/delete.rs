@@ -25,12 +25,13 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
 
     #[cfg(feature = "server")]
     {
-        let client = get_conn().await.map_err(AppError::db_conn)?;
+        let mut client = get_conn().await.map_err(AppError::db_conn)?;
+        let tx = client.transaction().await.map_err(AppError::tx)?;
 
-        // 在软删除前查询 slug 与标签，用于后续精准失效缓存。
-        let slug_row = client
+        // 在事务内锁定行并读取 slug，避免并发更新导致缓存失效目标过期。
+        let slug_row = tx
             .query_opt(
-                "SELECT slug FROM posts WHERE id = $1 AND deleted_at IS NULL",
+                "SELECT slug FROM posts WHERE id = $1 AND deleted_at IS NULL FOR UPDATE",
                 &[&post_id],
             )
             .await
@@ -46,7 +47,7 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
         };
         let slug: String = slug_row.get(0);
 
-        let tag_rows = client
+        let tag_rows = tx
             .query(
                 "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
                 &[&post_id],
@@ -56,13 +57,13 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
         let tags: Vec<String> = tag_rows.iter().map(|r| r.get(0)).collect();
 
         // 软删除：仅影响未被删除的文章。
-        let result = client
+        let result = tx
             .execute(
                 "UPDATE posts SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
                 &[&post_id],
             )
             .await
-            .map_err(AppError::query)?;
+            .map_err(AppError::tx)?;
 
         if result == 0 {
             return Ok(CreatePostResponse {
@@ -72,6 +73,8 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
                 slug: None,
             });
         }
+
+        tx.commit().await.map_err(AppError::tx)?;
 
         // 删除后按影响范围精准失效缓存。
         crate::cache::invalidate_post_lists();
