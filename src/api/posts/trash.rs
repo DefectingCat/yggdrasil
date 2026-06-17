@@ -25,10 +25,11 @@ pub async fn restore_post(post_id: i32) -> Result<CreatePostResponse, ServerFnEr
 
     #[cfg(feature = "server")]
     {
-        let client = get_conn().await.map_err(AppError::db_conn)?;
+        let mut client = get_conn().await.map_err(AppError::db_conn)?;
+        let tx = client.transaction().await.map_err(AppError::tx)?;
 
         // 读取待恢复文章的当前 slug 与是否确已删除。
-        let row = client
+        let row = tx
             .query_opt(
                 "SELECT slug FROM posts WHERE id = $1 AND deleted_at IS NOT NULL",
                 &[&post_id],
@@ -47,17 +48,17 @@ pub async fn restore_post(post_id: i32) -> Result<CreatePostResponse, ServerFnEr
 
         let current_slug: String = row.get("slug");
 
-        // 恢复时确保 slug 在未删除文章中唯一（自动加后缀）。
-        let new_slug = ensure_unique_slug(&client, &current_slug, Some(post_id)).await?;
+        // 恢复时确保 slug 在未删除文章中唯一（自动加后缀）；在事务内检查避免并发竞态。
+        let new_slug = ensure_unique_slug(&tx, &current_slug, Some(post_id)).await?;
 
         // 置空 deleted_at，并更新 slug（可能已加后缀）。
-        let result = client
+        let result = tx
             .execute(
                 "UPDATE posts SET deleted_at = NULL, slug = $1 WHERE id = $2 AND deleted_at IS NOT NULL",
                 &[&new_slug, &post_id],
             )
             .await
-            .map_err(AppError::query)?;
+            .map_err(AppError::tx)?;
 
         if result == 0 {
             return Ok(CreatePostResponse {
@@ -67,6 +68,8 @@ pub async fn restore_post(post_id: i32) -> Result<CreatePostResponse, ServerFnEr
                 slug: None,
             });
         }
+
+        tx.commit().await.map_err(AppError::tx)?;
 
         crate::cache::invalidate_all_post_caches();
 
@@ -155,12 +158,13 @@ pub async fn batch_restore_posts(post_ids: Vec<i32>) -> Result<CreatePostRespons
             });
         }
 
-        let client = get_conn().await.map_err(AppError::db_conn)?;
+        let mut client = get_conn().await.map_err(AppError::db_conn)?;
+        let tx = client.transaction().await.map_err(AppError::tx)?;
 
         // 逐条恢复，slug 冲突时自动加后缀。
         let mut restored = 0u64;
         for id in &post_ids {
-            let row = client
+            let row = tx
                 .query_opt(
                     "SELECT slug FROM posts WHERE id = $1 AND deleted_at IS NOT NULL",
                     &[&id],
@@ -169,17 +173,19 @@ pub async fn batch_restore_posts(post_ids: Vec<i32>) -> Result<CreatePostRespons
                 .map_err(AppError::query)?;
             if let Some(row) = row {
                 let current_slug: String = row.get("slug");
-                let new_slug = ensure_unique_slug(&client, &current_slug, Some(*id)).await?;
-                let n = client
+                let new_slug = ensure_unique_slug(&tx, &current_slug, Some(*id)).await?;
+                let n = tx
                     .execute(
                         "UPDATE posts SET deleted_at = NULL, slug = $1 WHERE id = $2 AND deleted_at IS NOT NULL",
                         &[&new_slug, &id],
                     )
                     .await
-                    .map_err(AppError::query)?;
+                    .map_err(AppError::tx)?;
                 restored += n;
             }
         }
+
+        tx.commit().await.map_err(AppError::tx)?;
 
         crate::cache::invalidate_all_post_caches();
 

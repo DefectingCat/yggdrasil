@@ -13,7 +13,6 @@ pub async fn run_cleanup() {
     // 每小时触发一次
     let mut ticker = interval(Duration::from_secs(3600));
     loop {
-        ticker.tick().await;
         match get_conn().await {
             Ok(client) => {
                 // 删除已过期会话
@@ -28,5 +27,6 @@ pub async fn run_cleanup() {
                 tracing::error!("Failed to get DB connection for cleanup: {:?}", e);
             }
         }
+        ticker.tick().await;
     }
 }

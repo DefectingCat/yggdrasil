@@ -28,6 +28,7 @@ static MINIFY_CACHE: std::sync::LazyLock<Cache<String, String>> =
 /// Axum 中间件入口。
 pub async fn layer(request: Request, next: Next) -> Response {
     let uri = request.uri().clone();
+    let path = uri.path().to_string();
     let response = next.run(request).await;
 
     let is_html = response
@@ -41,10 +42,22 @@ pub async fn layer(request: Request, next: Next) -> Response {
         return response;
     }
 
-    // 命中缓存则直接返回
-    let cache_key = uri.to_string();
-    if let Some(cached) = MINIFY_CACHE.get(&cache_key).await {
-        return build_response(response, cached);
+    // 不缓存错误响应与后台管理页面，避免把错误页或敏感管理界面扩散。
+    let status = response.status();
+    let is_admin_or_auth = path.starts_with("/admin") || path == "/login" || path == "/register";
+    let should_cache = status.is_success() && !is_admin_or_auth;
+
+    // 缓存 key 必须包含完整 query string，避免不同参数共享同一份响应。
+    let cache_key = format!(
+        "{}{}",
+        path,
+        uri.query().map(|q| format!("?{}", q)).unwrap_or_default()
+    );
+
+    if should_cache {
+        if let Some(cached) = MINIFY_CACHE.get(&cache_key).await {
+            return build_response(response, cached);
+        }
     }
 
     let (parts, body) = response.into_parts();
@@ -61,8 +74,10 @@ pub async fn layer(request: Request, next: Next) -> Response {
     let original = String::from_utf8_lossy(&bytes);
     let minified = crate::utils::html_minify::minify_html(&original);
 
-    // 写入缓存（忽略失败）
-    let _ = MINIFY_CACHE.insert(cache_key, minified.clone()).await;
+    // 仅对成功且非后台页面写入缓存。
+    if should_cache {
+        let _ = MINIFY_CACHE.insert(cache_key, minified.clone()).await;
+    }
 
     let mut response = Response::builder()
         .status(parts.status)

@@ -19,9 +19,9 @@ pub static DB_POOL: LazyLock<Pool> = LazyLock::new(|| {
         .parse::<tokio_postgres::Config>()
         .expect("Invalid DATABASE_URL format");
 
-    // 使用 Fast 回收策略，避免每次归还连接时执行额外查询。
+    // 使用 Verified 回收策略，确保归还的连接仍然可用，避免 DB 重启后拿到死连接。
     let mgr_cfg = ManagerConfig {
-        recycling_method: RecyclingMethod::Fast,
+        recycling_method: RecyclingMethod::Verified,
     };
     let mgr = Manager::from_config(pg_cfg, NoTls, mgr_cfg);
 
@@ -32,6 +32,9 @@ pub static DB_POOL: LazyLock<Pool> = LazyLock::new(|| {
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(20),
         )
+        .wait_timeout(Some(Duration::from_secs(10)))
+        .create_timeout(Some(Duration::from_secs(10)))
+        .recycle_timeout(Some(Duration::from_secs(5)))
         .build()
         .expect("Failed to create database connection pool")
 });

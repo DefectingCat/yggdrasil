@@ -33,7 +33,9 @@ pub async fn get_comments(post_id: i32) -> Result<CommentTreeResponse, ServerFnE
                 "SELECT id, parent_id, depth, author_name, author_email, author_url, content_html, created_at \
                  FROM comments \
                  WHERE post_id = $1 AND status = 'approved' AND deleted_at IS NULL \
-                 ORDER BY id ASC",
+                   AND EXISTS (SELECT 1 FROM posts p WHERE p.id = $1 AND p.status = 'published' AND p.deleted_at IS NULL) \
+                 ORDER BY id ASC \
+                 LIMIT 200",
                 &[&post_id],
             )
             .await

@@ -15,6 +15,17 @@ pub fn md5_hash(input: &str) -> String {
     hex::encode(hash)
 }
 
+/// 对用于 HTML 展示的文本做基础转义，防止 XSS。
+#[cfg(feature = "server")]
+pub fn escape_html(input: &str) -> String {
+    input
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#x27;")
+}
+
 /// 根据邮箱生成 Cravatar（Gravatar 国内镜像）头像 URL。
 #[cfg(feature = "server")]
 pub fn gravatar_url(email: &str) -> String {
@@ -108,7 +119,8 @@ pub fn validate_comment_email(email: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// 校验评论作者网址：为空时允许，非空时必须以 http:// 或 https:// 开头且不超过 200 字符。
+/// 校验评论作者网址：为空时允许，非空时必须以 http:// 或 https:// 开头、
+/// 不含 HTML 特殊字符与空白，且不超过 200 字符。
 #[cfg(feature = "server")]
 pub fn validate_comment_url(url: &str) -> Result<(), String> {
     let trimmed = url.trim();
@@ -121,6 +133,10 @@ pub fn validate_comment_url(url: &str) -> Result<(), String> {
     }
     if trimmed.len() > 200 {
         return Err("网址长度不能超过 200 个字符".to_string());
+    }
+    if trimmed.chars().any(|c| matches!(c, '<' | '>' | '"' | '\'' | '&' | ' ' | '\t' | '\n' | '\r'))
+    {
+        return Err("网址包含非法字符".to_string());
     }
     Ok(())
 }
@@ -161,6 +177,18 @@ pub fn compute_content_hash(
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn escape_html_escapes_special_chars() {
+        assert_eq!(
+            escape_html("<script>alert(1)</script>"),
+            "&lt;script&gt;alert(1)&lt;/script&gt;"
+        );
+        assert_eq!(
+            escape_html("\"quoted' & ampersand"),
+            "&quot;quoted&#x27; &amp; ampersand"
+        );
+    }
 
     #[test]
     fn md5_hash_known_value() {

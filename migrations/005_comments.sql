@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS comments (
     id           BIGSERIAL PRIMARY KEY,
-    post_id      INT NOT NULL REFERENCES posts(id) ON DELETE RESTRICT,
+    post_id      INT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
     parent_id    BIGINT REFERENCES comments(id) ON DELETE SET NULL,
     depth        INT NOT NULL DEFAULT 0,
     author_name  VARCHAR(50) NOT NULL,

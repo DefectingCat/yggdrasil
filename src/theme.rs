@@ -160,17 +160,14 @@ pub fn ThemePreload() -> Element {
 #[component]
 pub fn ThemeToggle() -> Element {
     let mut theme = use_theme();
-    let mut mounted = use_signal(|| false);
-
-    use_effect(move || {
-        mounted.set(true);
-    });
 
     rsx! {
         button {
             class: "theme-toggle p-2 rounded-full cursor-pointer hover:text-paper-accent transition-colors duration-200 text-paper-secondary",
+            r#type: "button",
+            aria_label: "切换深色/浅色主题",
             onclick: move |_| theme.set(theme().toggle()),
-            if mounted() && theme() == Theme::Dark {
+            if theme() == Theme::Dark {
                 svg {
                     xmlns: "http://www.w3.org/2000/svg",
                     height: "24px",

@@ -5328,7 +5328,6 @@ dependencies = [
  "syntect",
  "tokio",
  "tokio-postgres",
- "tower-http",
  "tracing",
  "tracing-subscriber",
  "uuid",

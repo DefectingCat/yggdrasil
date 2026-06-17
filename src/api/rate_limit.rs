@@ -3,6 +3,12 @@
 //! 提供 strict、upload、image、comment 四个限流器，
 //! 支持从 `X-Forwarded-For` / `X-Real-IP` 中提取客户端 IP，
 //! 并可通过 `TRUSTED_PROXY_COUNT` 配置信任代理层数。
+//!
+//! 当未配置可信代理时，Axum handler 可回退到 TCP 连接的对端地址；
+//! Dioxus server function 无法获取对端地址，会退回到 `"unknown"` key，
+//! 此时所有请求共享一个限流桶。生产环境应在反向代理后部署并正确配置
+//! `TRUSTED_PROXY_COUNT`。
+//!
 //! 仅在 `feature = "server"` 时生效。
 
 #[cfg(feature = "server")]
@@ -82,48 +88,98 @@ fn trusted_proxy_count() -> usize {
 }
 
 #[cfg(feature = "server")]
+fn is_valid_ip(ip: &str) -> bool {
+    ip.parse::<std::net::IpAddr>().is_ok()
+}
+
+#[cfg(feature = "server")]
 fn ip_from_x_forwarded_for(value: &str, trusted_proxy_count: usize) -> Option<String> {
-    // 按逗号拆分并过滤空项，列表末尾是离服务端最近的代理。
+    // X-Forwarded-For 格式：client, proxy1, proxy2, ..., proxyN
+    // 越靠右的地址离服务端越近。
     let parts: Vec<&str> = value
         .split(',')
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .collect();
-    if parts.is_empty() || trusted_proxy_count == 0 {
+
+    if trusted_proxy_count == 0 || parts.len() <= trusted_proxy_count {
         return None;
     }
-    // 可信任代理数量不足时无法确定真实客户端 IP。
-    if parts.len() <= trusted_proxy_count {
-        return None;
-    }
-    // 从列表末尾倒数 `trusted_proxy_count + 1` 位即为真实客户端 IP。
+
+    // 真实客户端 IP 位于右侧第 trusted_proxy_count + 1 个。
     let idx = parts.len() - 1 - trusted_proxy_count;
-    parts.get(idx).map(|s| s.to_string())
+    let ip = parts[idx].to_string();
+    if is_valid_ip(&ip) {
+        Some(ip)
+    } else {
+        None
+    }
 }
 
 #[cfg(feature = "server")]
-/// 根据信任代理层数从请求头中提取客户端 IP。
-pub fn get_client_ip_with_trusted(headers: &http::HeaderMap, trusted_proxy_count: usize) -> String {
-    if let Some(value) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
-        if let Some(ip) = ip_from_x_forwarded_for(value, trusted_proxy_count) {
+fn ip_from_x_real_ip(value: &str) -> Option<String> {
+    let ip = value.trim().to_string();
+    if is_valid_ip(&ip) {
+        Some(ip)
+    } else {
+        None
+    }
+}
+
+#[cfg(feature = "server")]
+fn get_client_ip_internal(
+    headers: &http::HeaderMap,
+    trusted: usize,
+    peer: Option<std::net::SocketAddr>,
+) -> String {
+    if trusted > 0 {
+        if let Some(value) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
+            if let Some(ip) = ip_from_x_forwarded_for(value, trusted) {
+                return ip;
+            }
+        }
+
+        if let Some(ip) = headers
+            .get("x-real-ip")
+            .and_then(|v| v.to_str().ok())
+            .and_then(ip_from_x_real_ip)
+        {
             return ip;
         }
     }
 
-    // 配置了信任代理时，回退到 X-Real-IP。
-    if trusted_proxy_count > 0 {
-        if let Some(ip) = headers.get("x-real-ip").and_then(|v| v.to_str().ok()) {
-            return ip.trim().to_string();
-        }
+    if let Some(addr) = peer {
+        return addr.ip().to_string();
     }
 
+    // Server function 等非 Axum 上下文无法获取对端地址，退回到 unknown。
+    // 此时所有请求共享一个限流桶，生产环境应在反向代理后部署。
+    tracing::warn!(
+        "无法获取客户端真实 IP（未配置 TRUSTED_PROXY_COUNT 且无法读取 TCP 对端地址），\
+         限流将按 'unknown' 键聚合"
+    );
     "unknown".to_string()
 }
 
 #[cfg(feature = "server")]
+/// 根据信任代理层数从请求头中提取客户端 IP，并校验 IP 合法性。
+///
+/// 当未配置可信代理时，不会信任任何 `X-Forwarded-For` / `X-Real-IP` 头，
+/// 而是直接返回 `peer` 中的 TCP 对端地址（如果提供）。
+pub fn get_client_ip_with_peer(
+    headers: &http::HeaderMap,
+    peer: Option<std::net::SocketAddr>,
+) -> String {
+    get_client_ip_internal(headers, trusted_proxy_count(), peer)
+}
+
+#[cfg(feature = "server")]
 /// 使用环境变量配置的代理层数提取客户端 IP。
+///
+/// 适用于 Dioxus server function 等无法获取 `ConnectInfo` 的场景。
+/// 生产环境建议配合反向代理与 `TRUSTED_PROXY_COUNT` 使用。
 pub fn get_client_ip(headers: &http::HeaderMap) -> String {
-    get_client_ip_with_trusted(headers, trusted_proxy_count())
+    get_client_ip_internal(headers, trusted_proxy_count(), None)
 }
 
 #[cfg(feature = "server")]
@@ -148,12 +204,16 @@ pub fn check_upload_limit(ip: &str) -> Result<(), String> {
 mod tests {
     use super::*;
     use http::HeaderMap;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     #[test]
     fn get_client_ip_from_x_forwarded_for_with_one_trusted_proxy() {
         let mut headers = HeaderMap::new();
         headers.insert("x-forwarded-for", "1.2.3.4, 5.6.7.8".parse().unwrap());
-        assert_eq!(get_client_ip_with_trusted(&headers, 1), "1.2.3.4");
+        assert_eq!(
+            get_client_ip_with_trusted_and_peer(&headers, 1, None),
+            "1.2.3.4"
+        );
     }
 
     #[test]
@@ -163,28 +223,52 @@ mod tests {
             "x-forwarded-for",
             "1.2.3.4, 5.6.7.8, 9.10.11.12".parse().unwrap(),
         );
-        assert_eq!(get_client_ip_with_trusted(&headers, 2), "1.2.3.4");
+        assert_eq!(
+            get_client_ip_with_trusted_and_peer(&headers, 2, None),
+            "1.2.3.4"
+        );
     }
 
     #[test]
     fn get_client_ip_ignores_x_forwarded_for_when_no_trusted_proxies() {
         let mut headers = HeaderMap::new();
         headers.insert("x-forwarded-for", "1.2.3.4, 5.6.7.8".parse().unwrap());
-        assert_eq!(get_client_ip_with_trusted(&headers, 0), "unknown");
+        assert_eq!(
+            get_client_ip_with_trusted_and_peer(&headers, 0, None),
+            "unknown"
+        );
+    }
+
+    #[test]
+    fn get_client_ip_falls_back_to_peer_when_no_trusted_proxies() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "1.2.3.4, 5.6.7.8".parse().unwrap());
+        let peer = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12345);
+        assert_eq!(
+            get_client_ip_with_trusted_and_peer(&headers, 0, Some(peer)),
+            "127.0.0.1"
+        );
     }
 
     #[test]
     fn get_client_ip_from_x_real_ip_when_trusted() {
         let mut headers = HeaderMap::new();
         headers.insert("x-real-ip", "9.8.7.6".parse().unwrap());
-        assert_eq!(get_client_ip_with_trusted(&headers, 1), "9.8.7.6");
+        assert_eq!(
+            get_client_ip_with_trusted_and_peer(&headers, 1, None),
+            "9.8.7.6"
+        );
     }
 
     #[test]
     fn get_client_ip_x_real_ip_ignored_when_not_trusted() {
         let mut headers = HeaderMap::new();
         headers.insert("x-real-ip", "9.8.7.6".parse().unwrap());
-        assert_eq!(get_client_ip_with_trusted(&headers, 0), "unknown");
+        let peer = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)), 12345);
+        assert_eq!(
+            get_client_ip_with_trusted_and_peer(&headers, 0, Some(peer)),
+            "192.168.1.1"
+        );
     }
 
     #[test]
@@ -192,27 +276,39 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert("x-forwarded-for", "1.1.1.1, 2.2.2.2".parse().unwrap());
         headers.insert("x-real-ip", "3.3.3.3".parse().unwrap());
-        assert_eq!(get_client_ip_with_trusted(&headers, 1), "1.1.1.1");
+        assert_eq!(
+            get_client_ip_with_trusted_and_peer(&headers, 1, None),
+            "1.1.1.1"
+        );
     }
 
     #[test]
     fn get_client_ip_no_headers_returns_unknown() {
         let headers = HeaderMap::new();
-        assert_eq!(get_client_ip_with_trusted(&headers, 1), "unknown");
+        assert_eq!(
+            get_client_ip_with_trusted_and_peer(&headers, 1, None),
+            "unknown"
+        );
     }
 
     #[test]
     fn get_client_ip_ignores_short_x_forwarded_for_list() {
         let mut headers = HeaderMap::new();
         headers.insert("x-forwarded-for", "1.2.3.4".parse().unwrap());
-        assert_eq!(get_client_ip_with_trusted(&headers, 2), "unknown");
+        assert_eq!(
+            get_client_ip_with_trusted_and_peer(&headers, 2, None),
+            "unknown"
+        );
     }
 
     #[test]
     fn get_client_ip_ignores_x_forwarded_for_equal_to_proxy_count() {
         let mut headers = HeaderMap::new();
         headers.insert("x-forwarded-for", "1.2.3.4, 5.6.7.8".parse().unwrap());
-        assert_eq!(get_client_ip_with_trusted(&headers, 2), "unknown");
+        assert_eq!(
+            get_client_ip_with_trusted_and_peer(&headers, 2, None),
+            "unknown"
+        );
     }
 
     #[test]
@@ -222,7 +318,41 @@ mod tests {
             "x-forwarded-for",
             " , 1.2.3.4 , 5.6.7.8 , ".parse().unwrap(),
         );
-        assert_eq!(get_client_ip_with_trusted(&headers, 1), "1.2.3.4");
+        assert_eq!(
+            get_client_ip_with_trusted_and_peer(&headers, 1, None),
+            "1.2.3.4"
+        );
+    }
+
+    #[test]
+    fn get_client_ip_rejects_invalid_x_forwarded_for_value() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "not-an-ip, 5.6.7.8".parse().unwrap());
+        assert_eq!(
+            get_client_ip_with_trusted_and_peer(&headers, 1, None),
+            "unknown"
+        );
+    }
+
+    #[test]
+    fn get_client_ip_rejects_invalid_x_real_ip_value() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-real-ip", "not-an-ip".parse().unwrap());
+        assert_eq!(
+            get_client_ip_with_trusted_and_peer(&headers, 1, None),
+            "unknown"
+        );
+    }
+
+    #[test]
+    fn get_client_ip_prefers_xff_over_peer() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "1.2.3.4, 5.6.7.8".parse().unwrap());
+        let peer = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12345);
+        assert_eq!(
+            get_client_ip_with_trusted_and_peer(&headers, 1, Some(peer)),
+            "1.2.3.4"
+        );
     }
 
     #[test]
@@ -238,5 +368,14 @@ mod tests {
             Some(value) => std::env::set_var("TRUSTED_PROXY_COUNT", value),
             None => std::env::remove_var("TRUSTED_PROXY_COUNT"),
         }
+    }
+
+    // 测试辅助函数：绕过环境变量读取，直接指定 trusted_proxy_count。
+    fn get_client_ip_with_trusted_and_peer(
+        headers: &HeaderMap,
+        trusted: usize,
+        peer: Option<SocketAddr>,
+    ) -> String {
+        get_client_ip_internal(headers, trusted, peer)
     }
 }

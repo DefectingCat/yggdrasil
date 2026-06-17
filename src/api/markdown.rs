@@ -473,11 +473,12 @@ mod tests {
     }
 
     #[test]
-    fn render_markdown_data_uri_image() {
+    fn render_markdown_data_uri_image_removed() {
         let result = render_markdown_enhanced("![alt](data:image/svg+xml,%3csvg%3e%3c/svg%3e)");
+        // 出于 XSS 防护，文章正文不再保留 data URI src。
         assert!(
-            result.html.contains("data:image/svg+xml"),
-            "data URI should be preserved in img src, got: {}",
+            !result.html.contains("data:image/svg+xml"),
+            "data URI should be removed from img src, got: {}",
             result.html
         );
         assert!(result.html.contains("alt=\"alt\""));

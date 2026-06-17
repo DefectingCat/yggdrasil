@@ -97,7 +97,7 @@ pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, Server
                      ORDER BY published_at ASC
                      LIMIT 1
                  ) next ON true
-                 WHERE p.slug = $1 AND p.deleted_at IS NULL
+                 WHERE p.slug = $1 AND p.status = 'published' AND p.deleted_at IS NULL
                  GROUP BY p.id, prev.title, prev.slug, next.title, next.slug",
                 &[&slug],
             )

@@ -26,8 +26,8 @@
 # 配置数据库
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/yggdrasil
 
-# 运行迁移
-psql $DATABASE_URL -f migrations/001_init.sql
+# 运行迁移（自动创建数据库并按顺序执行 migrations/ 下所有 SQL）
+./migrate.sh
 
 # 启动开发服务器
 make dev

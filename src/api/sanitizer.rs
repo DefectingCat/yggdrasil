@@ -138,32 +138,55 @@ fn default_allowed_schemes() -> HashSet<&'static str> {
 }
 
 #[cfg(feature = "server")]
+fn is_safe_data_uri(url: &str) -> bool {
+    // data URI 只允许安全的图片类型；禁止 data:text/html、data:application/javascript 等。
+    let url = url.trim();
+    let Some(rest) = url.strip_prefix("data:") else {
+        return false;
+    };
+    let media_type = rest.split(',').next().unwrap_or("");
+    let media_type = media_type.split(';').next().unwrap_or("").trim();
+    matches!(
+        media_type.to_lowercase().as_str(),
+        "image/png"
+            | "image/jpeg"
+            | "image/jpg"
+            | "image/gif"
+            | "image/webp"
+            | "image/avif"
+            | "image/bmp"
+            | "image/tiff"
+            | "image/svg+xml"
+    )
+}
+
+#[cfg(feature = "server")]
 fn is_safe_url(url: &str, allowed_schemes: &HashSet<&str>, allow_data_uri: bool) -> bool {
     let trimmed = url.trim();
     if trimmed.is_empty() {
         return true;
     }
-    // 解析 scheme 并与白名单对比；data URI 与 javascript/vbscript 单独处理。
+    // 解析 scheme 并与白名单对比；未知 scheme 默认拒绝。
     if let Some(colon_pos) = trimmed.find(':') {
         let scheme = &trimmed[..colon_pos];
         let scheme_lower = scheme.to_lowercase();
-        if allowed_schemes.contains(scheme_lower.as_str()) {
-            return true;
-        }
-        if scheme_lower == "data" {
-            return allow_data_uri;
-        }
         if scheme_lower == "javascript" || scheme_lower == "vbscript" {
             return false;
         }
         if scheme.contains(|c: char| c.is_ascii_whitespace()) {
             return false;
         }
+        if allowed_schemes.contains(scheme_lower.as_str()) {
+            return true;
+        }
+        if scheme_lower == "data" {
+            return allow_data_uri && is_safe_data_uri(trimmed);
+        }
+        // 任何其它 scheme 均拒绝：file://、blob://、about:blank 等。
+        return false;
     }
-    if trimmed.starts_with('#') || trimmed.starts_with('/') {
-        return true;
-    }
-    true
+    // 无 scheme 时只允许相对路径与锚点。
+    trimmed.starts_with('#') || trimmed.starts_with('/')
 }
 
 #[cfg(feature = "server")]
@@ -329,7 +352,7 @@ pub fn clean_html(input: &str) -> String {
             ("h6", vec!["id", "class"]),
         ],
         allowed_schemes: default_allowed_schemes(),
-        allow_data_uri: true,
+        allow_data_uri: false,
         link_rel: Some("noopener noreferrer"),
         remove_tags: clean_content_tags(),
     };
@@ -459,12 +482,16 @@ mod tests {
     }
 
     #[test]
-    fn is_safe_url_data_uri_respects_flag() {
+    fn is_safe_url_data_uri_respects_flag_and_media_type() {
         let schemes = default_allowed_schemes();
-        // 文章正文允许 data URI
+        // 仅在显式允许且 media type 为图片时通过
         assert!(is_safe_url("data:image/png;base64,iVBOR", &schemes, true));
-        // 评论禁用 data URI
+        assert!(is_safe_url("data:image/svg+xml;base64,PHN2Zz4=", &schemes, true));
+        // 禁用 data URI 时拒绝
         assert!(!is_safe_url("data:image/png;base64,iVBOR", &schemes, false));
+        // 非图片 data URI 拒绝
+        assert!(!is_safe_url("data:text/html,<script>alert(1)</script>", &schemes, true));
+        assert!(!is_safe_url("data:application/javascript,alert(1)", &schemes, true));
     }
 
     #[test]
@@ -498,6 +525,16 @@ mod tests {
         let schemes = default_allowed_schemes();
         // 含空格的 scheme 名是已知的混淆手法，应被拒绝。
         assert!(!is_safe_url("java\tscript:alert(1)", &schemes, false));
+    }
+
+    #[test]
+    fn is_safe_url_rejects_unknown_schemes() {
+        let schemes = default_allowed_schemes();
+        // 未知 scheme 默认拒绝。
+        assert!(!is_safe_url("file:///etc/passwd", &schemes, false));
+        assert!(!is_safe_url("blob:https://example.com/abc", &schemes, false));
+        assert!(!is_safe_url("about:blank", &schemes, false));
+        assert!(!is_safe_url("custom-app://open", &schemes, false));
     }
 
     #[test]

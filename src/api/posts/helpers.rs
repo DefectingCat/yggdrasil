@@ -201,14 +201,14 @@ pub(super) async fn sync_tags(
     Ok(())
 }
 
-/// 清洗标签列表：去头尾空白并过滤空字符串。
-///
-/// 注意：该函数保留重复标签，由数据库唯一索引或调用方决定去重。
+/// 清洗标签列表：去头尾空白、过滤空字符串并去重（保留原始顺序）。
 #[cfg(feature = "server")]
 pub(super) fn clean_tags(tags: &[String]) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
     tags.iter()
         .map(|t| t.trim().to_string())
         .filter(|t| !t.is_empty())
+        .filter(|t| seen.insert(t.to_lowercase()))
         .collect()
 }
 
@@ -237,15 +237,16 @@ mod tests {
     }
 
     #[test]
-    fn clean_tags_preserves_duplicates() {
+    fn clean_tags_removes_duplicates_case_insensitive() {
         let input = vec![
             "rust".to_string(),
             "  rust  ".to_string(),
-            "rust".to_string(),
+            "Rust".to_string(),
+            "wasm".to_string(),
         ];
         assert_eq!(
             clean_tags(&input),
-            vec!["rust".to_string(), "rust".to_string(), "rust".to_string()]
+            vec!["rust".to_string(), "wasm".to_string()]
         );
     }
 

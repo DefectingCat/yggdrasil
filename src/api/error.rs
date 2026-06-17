@@ -27,21 +27,23 @@ pub enum AppError {
 #[cfg(feature = "server")]
 impl AppError {
     /// 记录并包装数据库连接错误。
-    pub fn db_conn(e: impl std::fmt::Debug) -> Self {
-        tracing::error!("DB connection failed: {e:?}");
-        AppError::DbConn(format!("{e:?}"))
+    ///
+    /// 日志仅记录 Display 摘要，避免 Debug 输出中的 SQL/参数泄露。
+    pub fn db_conn(e: impl std::fmt::Display + std::fmt::Debug) -> Self {
+        tracing::error!("DB connection failed: {e}");
+        AppError::DbConn("connection error".to_string())
     }
 
     /// 记录并包装 SQL 查询错误。
-    pub fn query(e: impl std::fmt::Debug) -> Self {
-        tracing::error!("Query failed: {e:?}");
-        AppError::Query(format!("{e:?}"))
+    pub fn query(e: impl std::fmt::Display + std::fmt::Debug) -> Self {
+        tracing::error!("Query failed: {e}");
+        AppError::Query("query error".to_string())
     }
 
     /// 记录并包装数据库事务错误。
-    pub fn tx(e: impl std::fmt::Debug) -> Self {
-        tracing::error!("Transaction failed: {e:?}");
-        AppError::Transaction(format!("{e:?}"))
+    pub fn tx(e: impl std::fmt::Display + std::fmt::Debug) -> Self {
+        tracing::error!("Transaction failed: {e}");
+        AppError::Transaction("transaction error".to_string())
     }
 }
 

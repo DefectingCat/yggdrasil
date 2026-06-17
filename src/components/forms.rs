@@ -13,6 +13,7 @@ pub const BUTTON_PRIMARY_CLASS: &str = "w-full py-2.5 px-4 bg-paper-accent text-
 /// 表单输入框组件。
 ///
 /// Props：
+/// - `id`：input 元素 id，用于与 label 关联
 /// - `r#type`：input 类型（如 `"text"`、`"email"`、`"password"`）
 /// - `placeholder`：占位提示文本
 /// - `value`：当前值
@@ -21,6 +22,7 @@ pub const BUTTON_PRIMARY_CLASS: &str = "w-full py-2.5 px-4 bg-paper-accent text-
 /// - `onkeydown`：可选的键盘事件回调
 #[component]
 pub fn FormInput(
+    id: Option<String>,
     r#type: &'static str,
     placeholder: &'static str,
     value: String,
@@ -35,6 +37,7 @@ pub fn FormInput(
     };
     rsx! {
         input {
+            id: id.unwrap_or_default(),
             class: "{INPUT_CLASS} {disabled_class}",
             r#type: "{r#type}",
             placeholder: "{placeholder}",
@@ -54,10 +57,13 @@ pub fn FormInput(
 ///
 /// Props：
 /// - `label`：标签文本
+/// - `html_for`：关联的 input id
 #[component]
-pub fn FormLabel(label: &'static str) -> Element {
+pub fn FormLabel(label: &'static str, html_for: Option<String>) -> Element {
     rsx! {
-        label { class: "block text-sm font-medium text-paper-secondary mb-1",
+        label {
+            class: "block text-sm font-medium text-paper-secondary mb-1",
+            r#for: html_for.unwrap_or_default(),
             "{label}"
         }
     }

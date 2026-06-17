@@ -113,50 +113,48 @@ pub async fn register(
 
     let client = get_conn().await.map_err(AppError::db_conn)?;
 
-    // 仅允许第一个注册用户注册为 admin，其余拒绝。
-    let admin_count: i64 = client
-        .query_one("SELECT COUNT(*) FROM users WHERE role = 'admin'", &[])
-        .await
-        .map_err(AppError::query)?
-        .get(0);
+    let password_hash =
+        password::hash_password(&password).map_err(|_| AppError::Internal("密码处理失败"))?;
 
-    if admin_count > 0 {
+    // 使用 INSERT ON CONFLICT 原子性地完成“首个用户成为 admin”的竞争。
+    // 若已有 admin 或用户名/邮箱冲突，RETURNING 将返回空。
+    let result = client
+        .query_opt(
+            "INSERT INTO users (username, email, password_hash, role)
+             VALUES ($1, $2, $3, 'admin')
+             ON CONFLICT DO NOTHING
+             RETURNING id",
+            &[&username, &email, &password_hash],
+        )
+        .await
+        .map_err(AppError::query)?;
+
+    if result.is_some() {
         return Ok(AuthResponse {
-            success: false,
-            message: "Registration is closed".to_string(),
+            success: true,
+            message: "注册成功".to_string(),
             token: None,
         });
     }
 
-    let password_hash =
-        password::hash_password(&password).map_err(|_| AppError::Internal("密码处理失败"))?;
+    // 插入失败：区分是已有 admin 还是用户名/邮箱冲突。
+    let admin_exists: bool = client
+        .query_one("SELECT EXISTS (SELECT 1 FROM users WHERE role = 'admin')", &[])
+        .await
+        .map_err(AppError::query)?
+        .get(0);
 
-    let result = client
-        .query_one(
-            "INSERT INTO users (username, email, password_hash, role) VALUES ($1, $2, $3, 'admin') RETURNING id",
-            &[&username, &email, &password_hash],
-        )
-        .await;
+    let message = if admin_exists {
+        "Registration is closed".to_string()
+    } else {
+        "用户名或邮箱已存在".to_string()
+    };
 
-    match result {
-        Ok(_) => Ok(AuthResponse {
-            success: true,
-            message: "注册成功".to_string(),
-            token: None,
-        }),
-        Err(e) => {
-            let msg = if e.to_string().contains("unique constraint") {
-                "用户名或邮箱已存在".to_string()
-            } else {
-                format!("注册失败: {}", e)
-            };
-            Ok(AuthResponse {
-                success: false,
-                message: msg,
-                token: None,
-            })
-        }
-    }
+    Ok(AuthResponse {
+        success: false,
+        message,
+        token: None,
+    })
 }
 
 /// 用户登录。
@@ -271,7 +269,7 @@ pub async fn login(username: String, password: String) -> Result<AuthResponse, S
     Ok(AuthResponse {
         success: true,
         message: "登录成功".to_string(),
-        token: Some(token),
+        token: None,
     })
 }
 

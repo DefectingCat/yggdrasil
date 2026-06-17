@@ -53,8 +53,11 @@ pub fn is_valid_slug(slug: &str) -> bool {
 ///
 /// 若 `exclude_id` 不为空，则排除该文章自身；
 /// 当冲突时依次尝试 `base-2`、`base-3` …… 直到生成唯一值。
+///
+/// 该函数应在事务内调用，确保与后续 INSERT/UPDATE 的 slug 唯一性检查
+/// 在同一个事务中完成，避免并发竞态。
 pub async fn ensure_unique_slug(
-    client: &tokio_postgres::Client,
+    tx: &deadpool_postgres::Transaction<'_>,
     base: &str,
     exclude_id: Option<i32>,
 ) -> Result<String, ServerFnError> {
@@ -66,23 +69,21 @@ pub async fn ensure_unique_slug(
     loop {
         // 查询当前候选 slug 是否已存在（排除指定文章 ID）。
         let exists = if let Some(exclude) = exclude_id {
-            client
-                .query_opt(
-                    "SELECT 1 FROM posts WHERE slug = $1 AND deleted_at IS NULL AND id != $2",
-                    &[&candidate, &exclude],
-                )
-                .await
-                .map_err(AppError::query)?
-                .is_some()
+            tx.query_opt(
+                "SELECT 1 FROM posts WHERE slug = $1 AND deleted_at IS NULL AND id != $2",
+                &[&candidate, &exclude],
+            )
+            .await
+            .map_err(AppError::query)?
+            .is_some()
         } else {
-            client
-                .query_opt(
-                    "SELECT 1 FROM posts WHERE slug = $1 AND deleted_at IS NULL",
-                    &[&candidate],
-                )
-                .await
-                .map_err(AppError::query)?
-                .is_some()
+            tx.query_opt(
+                "SELECT 1 FROM posts WHERE slug = $1 AND deleted_at IS NULL",
+                &[&candidate],
+            )
+            .await
+            .map_err(AppError::query)?
+            .is_some()
         };
 
         if !exists {

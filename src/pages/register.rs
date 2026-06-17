@@ -96,8 +96,9 @@ pub fn Register() -> Element {
 
                 div { class: "space-y-4",
                     div {
-                        FormLabel { label: "用户名" }
+                        FormLabel { label: "用户名", html_for: Some("register-username".to_string()) }
                         FormInput {
+                            id: Some("register-username".to_string()),
                             r#type: "text",
                             placeholder: "3-50 位字符",
                             value: username(),
@@ -107,8 +108,9 @@ pub fn Register() -> Element {
                         }
                     }
                     div {
-                        FormLabel { label: "邮箱" }
+                        FormLabel { label: "邮箱", html_for: Some("register-email".to_string()) }
                         FormInput {
+                            id: Some("register-email".to_string()),
                             r#type: "email",
                             placeholder: "your@email.com",
                             value: email(),
@@ -118,8 +120,9 @@ pub fn Register() -> Element {
                         }
                     }
                     div {
-                        FormLabel { label: "密码" }
+                        FormLabel { label: "密码", html_for: Some("register-password".to_string()) }
                         FormInput {
+                            id: Some("register-password".to_string()),
                             r#type: "password",
                             placeholder: "至少 8 位",
                             value: password(),
@@ -129,8 +132,9 @@ pub fn Register() -> Element {
                         }
                     }
                     div {
-                        FormLabel { label: "确认密码" }
+                        FormLabel { label: "确认密码", html_for: Some("register-confirm-password".to_string()) }
                         FormInput {
+                            id: Some("register-confirm-password".to_string()),
                             r#type: "password",
                             placeholder: "再次输入密码",
                             value: confirm_password(),

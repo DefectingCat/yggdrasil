@@ -94,6 +94,7 @@ fn strip_comments(css: &str) -> String {
 /// - `css`: syntect 生成的原始 CSS；
 /// - `base`: 作用域基础选择器，这里固定为 `.md-content pre code`；
 /// - `prefix`: 主题前缀，浅色主题传空字符串，深色主题传 `.dark `。
+///
 /// 压缩 CSS：移除注释、合并空白、删除选择器/属性周围的无用空格。
 fn minify_css(css: &str) -> String {
     let mut out = String::with_capacity(css.len());
@@ -124,7 +125,7 @@ fn minify_css(css: &str) -> String {
 
         // 在特定分隔符前后不需要空格
         let no_space_before = "{ } : ; ,".contains(ch);
-        let no_space_after = last_significant.map_or(false, |c| "{ } : ; ,".contains(c));
+        let no_space_after = last_significant.is_some_and(|c| "{ } : ; ,".contains(c));
 
         if pending_space && !no_space_after && !no_space_before {
             out.push(' ');

@@ -23,15 +23,35 @@ use crate::db::pool::get_conn;
 pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnError> {
     #[cfg(feature = "server")]
     {
+        use crate::api::rate_limit;
+
+        // 对搜索接口进行严格限流，防止滥用 expensive 查询。
+        if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
+            let parts = ctx.parts_mut();
+            let ip = rate_limit::get_client_ip(&parts.headers);
+            if let Err(_msg) = rate_limit::check_strict_limit(&ip) {
+                return Ok(PostListResponse {
+                    posts: Vec::new(),
+                    total: 0,
+                });
+            }
+        }
+
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
         let q = query.trim();
-        if q.is_empty() {
+        if q.is_empty() || q.chars().count() > 200 {
             return Ok(PostListResponse {
                 posts: Vec::new(),
                 total: 0,
             });
         }
+
+        // 转义 SQL LIKE 通配符，避免用户输入 % / _ 导致全表扫描。
+        let escaped = q
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
 
         // 使用 ILIKE 做前缀模糊匹配，并按 word_similarity 降序、发布时间降序排序。
         let rows = client
@@ -40,16 +60,16 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
                     p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, 
                     p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
                     COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags,
-                    word_similarity(p.search_text, $1) AS sml
+                    word_similarity(p.search_text, $2) AS sml
                  FROM posts p
                  LEFT JOIN post_tags pt ON p.id = pt.post_id
                  LEFT JOIN tags t ON pt.tag_id = t.id
                  WHERE p.status = 'published' AND p.deleted_at IS NULL
-                   AND p.search_text ILIKE '%' || $1 || '%'
+                   AND p.search_text ILIKE '%' || $1 || '%' ESCAPE '\\'
                  GROUP BY p.id, p.search_text
                  ORDER BY sml DESC, p.published_at DESC
                  LIMIT 50",
-                &[&q],
+                &[&escaped, &q],
             )
             .await
             .map_err(AppError::query)?;

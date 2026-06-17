@@ -83,11 +83,12 @@ fn main() {
                 ),
             );
 
-            // 自定义 API 路由：图片上传，禁用默认请求体大小限制以支持大文件
+            // 自定义 API 路由：图片上传，设置最大请求体大小为 10 MiB
+            // （包含 multipart 开销，实际文件限制由 upload_image 内 MAX_FILE_SIZE 控制）
             let api_routes = axum::Router::new().route(
                 "/api/upload",
                 axum::routing::post(crate::api::upload::upload_image)
-                    .layer(axum::extract::DefaultBodyLimit::disable()),
+                    .layer(axum::extract::DefaultBodyLimit::max(10 * 1024 * 1024)),
             );
 
             // 静态资源路由：图片文件服务，支持动态裁剪/旋转/格式转换

@@ -261,7 +261,8 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
                  LEFT JOIN tags t2 ON pt2.tag_id = t2.id
                  WHERE t.name = $1 AND p.status = 'published' AND p.deleted_at IS NULL
                  GROUP BY p.id
-                 ORDER BY p.published_at DESC",
+                 ORDER BY p.published_at DESC
+                 LIMIT 200",
                 &[&tag_name],
             )
             .await

@@ -39,4 +39,6 @@ test:
 
 clean:
 	@cargo clean
-	@rm -f public/style.css
+	@rm -f public/style.css public/highlight.css
+	@rm -rf public/tiptap
+	@rm -rf uploads/.cache

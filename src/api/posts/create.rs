@@ -76,8 +76,6 @@ pub async fn create_post(
     {
         let mut client = get_conn().await.map_err(AppError::db_conn)?;
 
-        // 保证 slug 全局唯一，若冲突则追加数字后缀。
-        let final_slug = crate::api::slug::ensure_unique_slug(&client, &base_slug, None).await?;
         // 渲染 Markdown 为 HTML，并提取目录。
         let rendered = crate::api::markdown::render_markdown_enhanced(&content_md);
         let content_html = rendered.html;
@@ -101,6 +99,9 @@ pub async fn create_post(
         };
 
         let tx = client.transaction().await.map_err(AppError::tx)?;
+
+        // 保证 slug 全局唯一，若冲突则追加数字后缀；在事务内检查避免并发竞态。
+        let final_slug = crate::api::slug::ensure_unique_slug(&tx, &base_slug, None).await?;
 
         // 插入文章记录。
         let row = tx
@@ -136,6 +137,8 @@ pub async fn create_post(
         crate::cache::invalidate_post_lists();
         crate::cache::invalidate_all_tags();
         crate::cache::invalidate_post_stats();
+        // 失效按 slug 缓存，避免之前缓存的 404 继续命中。
+        crate::cache::invalidate_post_by_slug(&final_slug).await;
 
         // 失效该文章涉及的所有标签缓存。
         for tag_name in &tags_cleaned {

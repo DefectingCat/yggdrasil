@@ -7,10 +7,12 @@
 
 #[cfg(feature = "server")]
 use axum::{
-    extract::Multipart,
+    extract::{ConnectInfo, Multipart},
     http::{HeaderMap, StatusCode},
     response::Json,
 };
+#[cfg(feature = "server")]
+use std::net::SocketAddr;
 #[cfg(feature = "server")]
 use serde_json::{json, Value};
 
@@ -34,16 +36,47 @@ fn mime_to_ext(mime: &str) -> &'static str {
 }
 
 #[cfg(feature = "server")]
+/// 通过文件头 magic bytes 校验实际格式是否与声明 MIME 一致。
+fn validate_image_magic_bytes(data: &[u8], mime_type: &str) -> bool {
+    if data.is_empty() {
+        return false;
+    }
+    match mime_type {
+        "image/jpeg" => data.starts_with(&[0xFF, 0xD8, 0xFF]),
+        "image/png" => data.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+        "image/gif" => data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a"),
+        "image/webp" => {
+            // RIFF....WEBP
+            data.len() >= 12
+                && &data[0..4] == b"RIFF"
+                && &data[8..12] == b"WEBP"
+        }
+        _ => false,
+    }
+}
+
+#[cfg(feature = "server")]
+/// 解码验证 GIF/WebP 原始字节，确保不是伪造扩展名的恶意文件。
+fn validate_raw_image(data: &[u8], mime_type: &str) -> bool {
+    match mime_type {
+        "image/webp" => crate::webp::decode(data).is_ok(),
+        "image/gif" => image::load_from_memory(data).is_ok(),
+        _ => true,
+    }
+}
+
+#[cfg(feature = "server")]
 /// 处理图片上传的 Axum handler。
 ///
 /// 流程：限流 → 解析 session → 校验 admin → 读取 multipart → 校验类型/大小 →
 /// 转码（如适用）→ 按日期落盘 → 返回相对 URL。
 pub async fn upload_image(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     mut multipart: Multipart,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     // 0. Rate limit check
-    let ip = crate::api::rate_limit::get_client_ip(&headers);
+    let ip = crate::api::rate_limit::get_client_ip_with_peer(&headers, Some(addr));
     if let Err(msg) = crate::api::rate_limit::check_upload_limit(&ip) {
         return Err((
             StatusCode::TOO_MANY_REQUESTS,
@@ -158,8 +191,30 @@ pub async fn upload_image(
         ));
     }
 
+    // 校验文件头 magic bytes，防止仅修改扩展名/Content-Type 上传非图片文件。
+    if !validate_image_magic_bytes(&data, mime_type.as_str()) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "success": false,
+                "error": "文件类型与内容不符"
+            })),
+        ));
+    }
+
     let is_gif = mime_type.as_str() == "image/gif";
     let is_webp = mime_type.as_str() == "image/webp";
+
+    // 对不经过重编码的格式做解码验证。
+    if (is_gif || is_webp) && !validate_raw_image(&data, mime_type.as_str()) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "success": false,
+                "error": "图片文件损坏或格式不正确"
+            })),
+        ));
+    }
 
     // GIF 与 WebP 保持原格式；其余格式尝试转 WebP。
     let (final_data, final_ext) = if is_gif {
@@ -173,7 +228,20 @@ pub async fn upload_image(
         // 在阻塞线程中执行图片解码与 WebP 编码，避免阻塞异步运行时。
         let result = tokio::task::spawn_blocking(move || -> (Vec<u8>, String, bool) {
             let total_start = std::time::Instant::now();
-            match image::load_from_memory(&original_data) {
+            let cursor = std::io::Cursor::new(&original_data);
+            let format = match mime.as_str() {
+                "image/jpeg" => image::ImageFormat::Jpeg,
+                "image/png" => image::ImageFormat::Png,
+                _ => image::ImageFormat::Jpeg,
+            };
+            let mut reader = image::ImageReader::with_format(cursor, format);
+            let mut limits = image::Limits::default();
+            limits.max_image_width = Some(crate::api::image::MAX_IMAGE_DIMENSION);
+            limits.max_image_height = Some(crate::api::image::MAX_IMAGE_DIMENSION);
+            limits.max_alloc = Some(crate::api::image::MAX_IMAGE_PIXELS as u64 * 4 + 1024 * 1024);
+            reader.limits(limits);
+
+            match reader.decode() {
                 Ok(img) => {
                     let decode_time = total_start.elapsed();
                     let enc_start = std::time::Instant::now();
@@ -338,5 +406,34 @@ mod tests {
     fn mime_to_ext_falls_back_for_unknown_mime() {
         assert_eq!(super::mime_to_ext("image/avif"), "bin");
         assert_eq!(super::mime_to_ext("application/octet-stream"), "bin");
+    }
+
+    #[test]
+    fn validate_jpeg_magic_bytes() {
+        assert!(super::validate_image_magic_bytes(&[0xFF, 0xD8, 0xFF], "image/jpeg"));
+        assert!(!super::validate_image_magic_bytes(&[0x89, 0x50], "image/jpeg"));
+    }
+
+    #[test]
+    fn validate_png_magic_bytes() {
+        assert!(super::validate_image_magic_bytes(
+            &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+            "image/png"
+        ));
+        assert!(!super::validate_image_magic_bytes(&[0xFF, 0xD8], "image/png"));
+    }
+
+    #[test]
+    fn validate_gif_magic_bytes() {
+        assert!(super::validate_image_magic_bytes(b"GIF89a", "image/gif"));
+        assert!(super::validate_image_magic_bytes(b"GIF87a", "image/gif"));
+        assert!(!super::validate_image_magic_bytes(b"GIF90a", "image/gif"));
+    }
+
+    #[test]
+    fn validate_webp_magic_bytes() {
+        let webp = b"RIFF\x00\x00\x00\x00WEBPVP8 ";
+        assert!(super::validate_image_magic_bytes(&webp[..12], "image/webp"));
+        assert!(!super::validate_image_magic_bytes(&[0xFF, 0xD8], "image/webp"));
     }
 }

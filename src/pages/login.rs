@@ -37,11 +37,7 @@ pub fn Login() -> Element {
         // 在异步任务中调用 server function 登录
         spawn(async move {
             match login(username_val, password_val).await {
-                Ok(AuthResponse {
-                    success: true,
-                    token: Some(_token),
-                    ..
-                }) => {
+                Ok(AuthResponse { success: true, .. }) => {
                     // 登录成功：重置上下文检查标记并跳转到后台
                     ctx.checked.set(false);
                     let _ = dioxus::router::navigator().push(Route::Admin {});
@@ -52,13 +48,6 @@ pub fn Login() -> Element {
                     ..
                 }) => {
                     error.set(Some(message));
-                }
-                Ok(AuthResponse {
-                    success: true,
-                    token: None,
-                    ..
-                }) => {
-                    error.set(Some("登录异常".to_string()));
                 }
                 Err(e) => {
                     error.set(Some(format!("请求失败: {}", e)));
@@ -83,8 +72,9 @@ pub fn Login() -> Element {
 
                 div { class: "space-y-4",
                     div {
-                        FormLabel { label: "用户名 / 邮箱" }
+                        FormLabel { label: "用户名 / 邮箱", html_for: Some("login-username".to_string()) }
                         FormInput {
+                            id: Some("login-username".to_string()),
                             r#type: "text",
                             placeholder: "用户名或邮箱",
                             value: username(),
@@ -95,8 +85,9 @@ pub fn Login() -> Element {
                         }
                     }
                     div {
-                        FormLabel { label: "密码" }
+                        FormLabel { label: "密码", html_for: Some("login-password".to_string()) }
                         FormInput {
+                            id: Some("login-password".to_string()),
                             r#type: "password",
                             placeholder: "密码",
                             value: password(),

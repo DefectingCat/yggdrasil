@@ -1,4 +1,4 @@
-CREATE TABLE posts (
+CREATE TABLE IF NOT EXISTS posts (
     id           SERIAL PRIMARY KEY,
     author_id    INT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
 
@@ -24,12 +24,12 @@ CREATE INDEX idx_posts_status_published ON posts(status, published_at DESC) WHER
 CREATE INDEX idx_posts_slug ON posts(slug) WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX idx_posts_slug_unique ON posts(slug) WHERE deleted_at IS NULL;
 
-CREATE TABLE tags (
+CREATE TABLE IF NOT EXISTS tags (
     id   SERIAL PRIMARY KEY,
     name VARCHAR(50) UNIQUE NOT NULL
 );
 
-CREATE TABLE post_tags (
+CREATE TABLE IF NOT EXISTS post_tags (
     post_id INT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
     tag_id  INT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
     PRIMARY KEY (post_id, tag_id)

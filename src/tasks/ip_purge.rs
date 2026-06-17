@@ -13,7 +13,6 @@ pub async fn run_purge() {
     // 每天触发一次
     let mut ticker = interval(Duration::from_secs(86400));
     loop {
-        ticker.tick().await;
         match get_conn().await {
             Ok(client) => {
                 // 仅清理 90 天前且仍保留 IP 的评论
@@ -28,5 +27,6 @@ pub async fn run_purge() {
                 tracing::error!("Failed to get DB connection for IP purge: {:?}", e);
             }
         }
+        ticker.tick().await;
     }
 }

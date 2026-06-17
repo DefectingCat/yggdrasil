@@ -18,7 +18,6 @@ use crate::models::settings::TrashSettings;
 pub async fn run_purge() {
     let mut ticker = interval(Duration::from_secs(86400));
     loop {
-        ticker.tick().await;
         match get_conn().await {
             Ok(client) => {
                 match purge_expired(&client).await {
@@ -32,6 +31,7 @@ pub async fn run_purge() {
             }
             Err(e) => tracing::error!("Failed to get DB connection for post purge: {:?}", e),
         }
+        ticker.tick().await;
     }
 }
 

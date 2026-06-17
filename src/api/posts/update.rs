@@ -40,15 +40,32 @@ pub async fn update_post(
     {
         let mut client = get_conn().await.map_err(AppError::db_conn)?;
 
+        // 重新渲染 Markdown 与目录。
+        let rendered = crate::api::markdown::render_markdown_enhanced(&content_md);
+        let content_html = rendered.html;
+        let toc_html = if rendered.toc_html.is_empty() {
+            None::<String>
+        } else {
+            Some(rendered.toc_html)
+        };
+        // 未填写摘要时自动从正文提取。
+        let summary = summary
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| crate::utils::text::auto_summary(&content_md));
+        let post_status = PostStatus::from_str(&status).unwrap_or(PostStatus::Draft);
+        let cover_image = cover_image.filter(|s| !s.trim().is_empty());
+
+        let tx = client.transaction().await.map_err(AppError::tx)?;
+
         // 查询旧 slug，用于后续缓存失效。
-        let old_slug: Option<String> = client
+        let old_slug: Option<String> = tx
             .query_opt("SELECT slug FROM posts WHERE id = $1", &[&post_id])
             .await
             .map_err(AppError::query)?
             .map(|r| r.get(0));
 
         // 校验文章存在、未删除且归属当前用户。
-        let exists: bool = client
+        let exists: bool = tx
             .query_opt(
                 "SELECT 1 FROM posts WHERE id = $1 AND author_id = $2 AND deleted_at IS NULL",
                 &[&post_id, &user.id],
@@ -83,25 +100,9 @@ pub async fn update_post(
             _ => crate::api::slug::slugify(&title),
         };
 
-        // 保证 slug 全局唯一，排除当前文章自身。
+        // 保证 slug 全局唯一，排除当前文章自身；在事务内检查避免并发竞态。
         let final_slug =
-            crate::api::slug::ensure_unique_slug(&client, &base_slug, Some(post_id)).await?;
-        // 重新渲染 Markdown 与目录。
-        let rendered = crate::api::markdown::render_markdown_enhanced(&content_md);
-        let content_html = rendered.html;
-        let toc_html = if rendered.toc_html.is_empty() {
-            None::<String>
-        } else {
-            Some(rendered.toc_html)
-        };
-        // 未填写摘要时自动从正文提取。
-        let summary = summary
-            .filter(|s| !s.trim().is_empty())
-            .unwrap_or_else(|| crate::utils::text::auto_summary(&content_md));
-        let post_status = PostStatus::from_str(&status).unwrap_or(PostStatus::Draft);
-        let cover_image = cover_image.filter(|s| !s.trim().is_empty());
-
-        let tx = client.transaction().await.map_err(AppError::tx)?;
+            crate::api::slug::ensure_unique_slug(&tx, &base_slug, Some(post_id)).await?;
 
         // 获取文章旧标签，用于后续失效标签缓存。
         let old_tags: Vec<String> = {
@@ -147,24 +148,34 @@ pub async fn update_post(
         };
 
         // 更新文章主表。
-        tx.execute(
-            "UPDATE posts SET title = $1, slug = $2, summary = $3, content_md = $4, content_html = $5, toc_html = $6, status = $7, published_at = $8, cover_image = $9, updated_at = NOW()
-             WHERE id = $10",
-            &[
-                &title.trim(),
-                &final_slug,
-                &summary,
-                &content_md,
-                &content_html,
-                &toc_html,
-                &post_status.as_str(),
-                &published_at,
-                &cover_image,
-                &post_id,
-            ],
-        )
-        .await
-        .map_err(AppError::tx)?;
+        let updated = tx
+            .execute(
+                "UPDATE posts SET title = $1, slug = $2, summary = $3, content_md = $4, content_html = $5, toc_html = $6, status = $7, published_at = $8, cover_image = $9, updated_at = NOW()
+                 WHERE id = $10",
+                &[
+                    &title.trim(),
+                    &final_slug,
+                    &summary,
+                    &content_md,
+                    &content_html,
+                    &toc_html,
+                    &post_status.as_str(),
+                    &published_at,
+                    &cover_image,
+                    &post_id,
+                ],
+            )
+            .await
+            .map_err(AppError::tx)?;
+
+        if updated == 0 {
+            return Ok(CreatePostResponse {
+                success: false,
+                message: "文章不存在或无权限".to_string(),
+                post_id: None,
+                slug: None,
+            });
+        }
 
         let tags_cleaned = clean_tags(&tags);
         let tags_for_invalidation = tags_cleaned.clone();

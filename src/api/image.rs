@@ -7,10 +7,12 @@
 
 #[cfg(feature = "server")]
 use axum::{
-    extract::{Path, Query},
+    extract::{ConnectInfo, Path, Query},
     http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
 };
+#[cfg(feature = "server")]
+use std::net::SocketAddr;
 #[cfg(feature = "server")]
 use moka::future::Cache;
 #[cfg(feature = "server")]
@@ -19,12 +21,12 @@ use serde::Deserialize;
 use std::sync::LazyLock;
 
 #[cfg(feature = "server")]
-const MAX_IMAGE_DIMENSION: u32 = 4096;
+pub const MAX_IMAGE_DIMENSION: u32 = 4096;
 #[cfg(feature = "server")]
 const DEFAULT_JPEG_QUALITY: u8 = 85;
 #[cfg(feature = "server")]
-/// 允许处理的最大图片像素数（约 10k x 10k）。
-pub const MAX_IMAGE_PIXELS: u32 = 100_000_000; // ~10k x 10k
+/// 允许处理的最大图片像素数（约 5k x 5k）。
+pub const MAX_IMAGE_PIXELS: u32 = 25_000_000; // ~5k x 5k
 
 #[cfg(feature = "server")]
 #[derive(Debug, Clone)]
@@ -164,11 +166,40 @@ fn content_type(format: image::ImageFormat) -> HeaderValue {
 }
 
 #[cfg(feature = "server")]
+fn check_image_dimensions(width: u32, height: u32) -> Result<(), StatusCode> {
+    if width == 0 || height == 0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let pixels = u64::from(width) * u64::from(height);
+    if pixels > u64::from(MAX_IMAGE_PIXELS) {
+        tracing::warn!(
+            "Image dimensions too large: {}x{} ({} pixels, max {})",
+            width,
+            height,
+            pixels,
+            MAX_IMAGE_PIXELS
+        );
+        return Err(StatusCode::PAYLOAD_TOO_LARGE);
+    }
+    Ok(())
+}
+
+#[cfg(feature = "server")]
+fn image_reader_limits() -> image::Limits {
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(MAX_IMAGE_DIMENSION);
+    limits.max_image_height = Some(MAX_IMAGE_DIMENSION);
+    limits.max_alloc = Some(MAX_IMAGE_PIXELS as u64 * 4 + 1024 * 1024);
+    limits
+}
+
+#[cfg(feature = "server")]
 fn process_image(
     img: image::DynamicImage,
     params: &ImageParams,
     original_format: image::ImageFormat,
 ) -> Result<(Vec<u8>, HeaderValue), StatusCode> {
+    check_image_dimensions(img.width(), img.height())?;
     let mut img = img;
 
     // Rotate first, then resize
@@ -257,11 +288,12 @@ const CACHE_DIR: &str = "uploads/.cache";
 
 #[cfg(feature = "server")]
 fn disk_cache_base(cache_key: &str) -> String {
-    use std::hash::{Hash, Hasher};
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    cache_key.hash(&mut hasher);
-    let hash = hasher.finish();
-    format!("{}/cache_{:016x}", CACHE_DIR, hash)
+    // 使用 SHA-256 生成稳定的磁盘缓存文件名，避免进程重启后 DefaultHasher 随机 seed
+    // 导致旧缓存无法命中且文件无限累积。
+    use sha2::Digest;
+    let hash = sha2::Sha256::digest(cache_key.as_bytes());
+    let hash_hex = hex::encode(hash);
+    format!("{}/cache_{}", CACHE_DIR, hash_hex)
 }
 
 #[cfg(feature = "server")]
@@ -301,11 +333,12 @@ async fn write_disk_cache(cache_key: &str, cached: &CachedImage) {
 /// 依次执行：限流 → 路径安全校验 → 参数校验 → 无参数时直接返回原文件 →
 /// 查询内存缓存 → 查询磁盘缓存 → 读取并解码 → 处理 → 写入两级缓存 → 返回。
 pub async fn serve_image(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Path(path): Path<String>,
     Query(params): Query<ImageParams>,
     headers: HeaderMap,
 ) -> Response {
-    let ip = crate::api::rate_limit::get_client_ip(&headers);
+    let ip = crate::api::rate_limit::get_client_ip_with_peer(&headers, Some(addr));
     if let Err(status) = crate::api::rate_limit::check_image_limit(&ip) {
         return status.into_response();
     }
@@ -369,7 +402,12 @@ pub async fn serve_image(
     let original_format = detect_format(&path);
     let img = if original_format == image::ImageFormat::WebP {
         match crate::webp::decode(&data) {
-            Ok(img) => img,
+            Ok(img) => {
+                if let Err(status) = check_image_dimensions(img.width(), img.height()) {
+                    return status.into_response();
+                }
+                img
+            }
             Err(e) => {
                 tracing::warn!("WebP decode failed ({}), returning raw bytes", e);
                 let ct = content_type(original_format);
@@ -377,9 +415,13 @@ pub async fn serve_image(
             }
         }
     } else {
-        match image::load_from_memory_with_format(&data, original_format) {
+        let cursor = std::io::Cursor::new(&data);
+        let mut reader = image::ImageReader::with_format(cursor, original_format);
+        reader.limits(image_reader_limits());
+        match reader.decode() {
             Ok(img) => img,
-            Err(_) => {
+            Err(e) => {
+                tracing::warn!("Image decode failed ({}), returning raw bytes", e);
                 let ct = content_type(original_format);
                 return (StatusCode::OK, [(header::CONTENT_TYPE, ct)], data).into_response();
             }

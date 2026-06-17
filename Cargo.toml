@@ -17,7 +17,7 @@ pulldown-cmark = { version = "0.13", optional = true }
 dotenvy = { version = "0.15", optional = true }
 tracing = { version = "0.1", optional = true, features = ["release_max_level_info"] }
 tracing-subscriber = { version = "0.3", optional = true }
-tower-http = { version = "0.6", optional = true }
+
 rand = { version = "0.8", features = ["getrandom"], optional = true }
 http = { version = "1", optional = true }
 axum = { version = "0.8", optional = true, features = ["multipart"] }
@@ -72,7 +72,6 @@ server = [
     "dep:dotenvy",
     "dep:tracing",
     "dep:tracing-subscriber",
-    "dep:tower-http",
     "dep:http-body-util",
     "dep:lol_html",
     "dep:syntect",

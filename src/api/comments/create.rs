@@ -219,6 +219,13 @@ pub async fn create_comment(
         // 将 Markdown 渲染为 HTML，并通过 sanitizer 过滤危险标签。
         let content_html = crate::api::comments::markdown::render_comment_markdown(&content_md);
 
+        // 对作者展示字段做 HTML 转义，避免 XSS；URL 为空字符串时统一为 None。
+        let author_name_safe = crate::api::comments::helpers::escape_html(author_name.trim());
+        let author_url_safe = author_url
+            .as_ref()
+            .map(|u| crate::api::comments::helpers::escape_html(u.trim()))
+            .filter(|u| !u.is_empty());
+
         // 获取客户端 IP 与 User-Agent，用于反垃圾与审计。
         let ip_address = if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
             let parts = ctx.parts_mut();
@@ -250,12 +257,9 @@ pub async fn create_comment(
                     &post_id,
                     &parent_id,
                     &depth,
-                    &author_name.trim(),
+                    &author_name_safe,
                     &author_email.trim(),
-                    &author_url
-                        .as_ref()
-                        .map(|u| u.trim())
-                        .filter(|u| !u.is_empty()),
+                    &author_url_safe,
                     &content_md,
                     &content_html,
                     &content_hash,
@@ -271,9 +275,10 @@ pub async fn create_comment(
         // 根据邮箱生成 Gravatar 头像链接。
         let avatar_url = crate::api::comments::helpers::gravatar_url(&author_email);
 
-        // 新评论可能影响文章评论列表与计数，清空相关缓存。
+        // 新评论可能影响文章评论列表、评论计数与待审核计数，清空相关缓存。
         cache::invalidate_comments_by_post(post_id).await;
         cache::invalidate_comment_count(post_id).await;
+        cache::invalidate_pending_count().await;
 
         Ok(CommentResponse {
             success: true,
