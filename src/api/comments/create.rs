@@ -275,9 +275,8 @@ pub async fn create_comment(
         // 根据邮箱生成 Gravatar 头像链接。
         let avatar_url = crate::api::comments::helpers::gravatar_url(&author_email);
 
-        // 新评论可能影响文章评论列表、评论计数与待审核计数，清空相关缓存。
+        // 新评论可能影响文章评论列表与待审核计数，清空相关缓存。
         cache::invalidate_comments_by_post(post_id).await;
-        cache::invalidate_comment_count(post_id).await;
         cache::invalidate_pending_count().await;
 
         Ok(CommentResponse {
