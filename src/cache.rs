@@ -288,7 +288,20 @@ pub fn invalidate_post_stats() {
     POST_STATS_CACHE.invalidate_all();
 }
 
+/// 按标签批量失效文章列表缓存。
+#[cfg(feature = "server")]
+pub async fn invalidate_tag_posts_for(tags: &[String]) {
+    for tag in tags {
+        invalidate_posts_by_tag(tag).await;
+    }
+}
+
 /// 清空所有文章相关缓存（列表、标签、单篇、统计、标签文章）。
+///
+/// 这是一个“紧急”使用的全量失效开关，会一次性冲刷所有文章缓存；
+/// 正常写路径应当使用更细粒度的 `invalidate_post_lists` / `invalidate_all_tags` /
+/// `invalidate_post_by_slug` / `invalidate_posts_by_tag` / `invalidate_post_stats` /
+/// `invalidate_tag_posts_for` 等函数，避免不必要的缓存击穿。
 #[cfg(feature = "server")]
 pub fn invalidate_all_post_caches() {
     POST_LIST_CACHE.invalidate_all();
