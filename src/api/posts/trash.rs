@@ -411,33 +411,29 @@ pub async fn empty_trash() -> Result<CreatePostResponse, ServerFnError> {
 
     #[cfg(feature = "server")]
     {
-        let client = get_conn().await.map_err(AppError::db_conn)?;
+        let mut client = get_conn().await.map_err(AppError::db_conn)?;
+        let tx = client.transaction().await.map_err(AppError::tx)?;
 
-        // 记录数较少时查询 slug 与标签，使用精准失效；否则回退到全量失效。
-        let count_row = client
-            .query_one(
-                "SELECT COUNT(*) FROM posts WHERE deleted_at IS NOT NULL",
+        // 在事务内锁定所有待删除行并读取 id/slug，用于后续精准失效；
+        // 同时根据数量决定使用精准失效还是回退到全量失效。
+        let deleted_rows = tx
+            .query(
+                "SELECT id, slug FROM posts WHERE deleted_at IS NOT NULL FOR UPDATE",
                 &[],
             )
             .await
             .map_err(AppError::query)?;
-        let count: i64 = count_row.get(0);
-        let use_precise = count > 0 && (count as usize) <= PRECISE_INVALIDATION_LIMIT;
+        let use_precise = !deleted_rows.is_empty()
+            && deleted_rows.len() <= PRECISE_INVALIDATION_LIMIT;
 
         let (slugs, tags) = if use_precise {
-            let slug_rows = client
-                .query(
-                    "SELECT slug FROM posts WHERE deleted_at IS NOT NULL",
-                    &[],
-                )
-                .await
-                .map_err(AppError::query)?;
-            let slugs: Vec<String> = slug_rows.iter().map(|r| r.get(0)).collect();
+            let slugs: Vec<String> = deleted_rows.iter().map(|r| r.get("slug")).collect();
+            let ids: Vec<i32> = deleted_rows.iter().map(|r| r.get("id")).collect();
 
-            let tag_rows = client
+            let tag_rows = tx
                 .query(
-                    "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id JOIN posts p ON p.id = pt.post_id WHERE p.deleted_at IS NOT NULL",
-                    &[],
+                    "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = ANY($1)",
+                    &[&ids],
                 )
                 .await
                 .map_err(AppError::query)?;
@@ -448,10 +444,12 @@ pub async fn empty_trash() -> Result<CreatePostResponse, ServerFnError> {
             (Vec::new(), Vec::new())
         };
 
-        let result = client
+        let result = tx
             .execute("DELETE FROM posts WHERE deleted_at IS NOT NULL", &[])
             .await
-            .map_err(AppError::query)?;
+            .map_err(AppError::tx)?;
+
+        tx.commit().await.map_err(AppError::tx)?;
 
         if use_precise {
             crate::cache::invalidate_post_lists();
