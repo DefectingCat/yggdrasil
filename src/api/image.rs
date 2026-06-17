@@ -28,6 +28,18 @@ fn etag_for(data: &[u8]) -> String {
 }
 
 #[cfg(feature = "server")]
+fn etag_matches(if_none_match: &str, etag: &str) -> bool {
+    let trimmed = if_none_match.trim();
+    if trimmed == "*" {
+        return true;
+    }
+    trimmed
+        .split(',')
+        .map(|s| s.trim().trim_start_matches("W/"))
+        .any(|candidate| candidate == etag)
+}
+
+#[cfg(feature = "server")]
 pub const MAX_IMAGE_DIMENSION: u32 = 4096;
 #[cfg(feature = "server")]
 const DEFAULT_JPEG_QUALITY: u8 = 85;
@@ -181,16 +193,21 @@ fn image_response(
 ) -> Response {
     let etag = etag_for(&data);
 
-    if headers
+    if let Some(if_none_match) = headers
         .get(header::IF_NONE_MATCH)
         .and_then(|v| v.to_str().ok())
-        == Some(&etag)
     {
-        return (
-            StatusCode::NOT_MODIFIED,
-            [(header::ETAG, HeaderValue::from_str(&etag).unwrap())],
-        )
-            .into_response();
+        if etag_matches(if_none_match, &etag) {
+            return (
+                StatusCode::NOT_MODIFIED,
+                [
+                    (header::ETAG, HeaderValue::from_str(&etag).unwrap()),
+                    (header::CACHE_CONTROL, HeaderValue::from_static(cache_control)),
+                    (header::CONTENT_TYPE, content_type),
+                ],
+            )
+                .into_response();
+        }
     }
 
     (
@@ -777,8 +794,33 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::NOT_MODIFIED);
         let headers = resp.headers();
         assert_eq!(headers.get(header::ETAG).unwrap(), etag.as_str());
-        assert!(headers.get(header::CONTENT_TYPE).is_none());
-        assert!(headers.get(header::CACHE_CONTROL).is_none());
+        assert_eq!(headers.get(header::CONTENT_TYPE).unwrap(), "image/webp");
+        assert_eq!(
+            headers.get(header::CACHE_CONTROL).unwrap(),
+            "public, max-age=86400"
+        );
+    }
+
+    #[test]
+    fn etag_matches_single() {
+        assert!(etag_matches("\"abc\"", "\"abc\""));
+        assert!(!etag_matches("\"abc\"", "\"def\""));
+    }
+
+    #[test]
+    fn etag_matches_list() {
+        assert!(etag_matches("\"abc\", \"def\"", "\"def\""));
+        assert!(!etag_matches("\"abc\", \"def\"", "\"ghi\""));
+    }
+
+    #[test]
+    fn etag_matches_weak_prefix() {
+        assert!(etag_matches("W/\"abc\"", "\"abc\""));
+    }
+
+    #[test]
+    fn etag_matches_wildcard() {
+        assert!(etag_matches("*", "\"anything\""));
     }
 
     #[test]
