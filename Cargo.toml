@@ -21,6 +21,7 @@ tracing-subscriber = { version = "0.3", optional = true }
 rand = { version = "0.8", features = ["getrandom"], optional = true }
 http = { version = "1", optional = true }
 axum = { version = "0.8", optional = true, features = ["multipart"] }
+tower-http = { version = "0.6", optional = true, features = ["compression-full", "timeout", "trace"] }
 http-body-util = { version = "0.1", optional = true }
 serde_json = "1.0"
 sha2 = { version = "0.10", optional = true }
@@ -76,6 +77,7 @@ server = [
     "dep:lol_html",
     "dep:syntect",
     "dep:axum",
+    "dep:tower-http",
     "dep:image",
     "dep:zenwebp",
     "dep:moka",
