@@ -75,10 +75,19 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
                 Some(rendered.toc_html)
             };
 
+            let word_count = crate::utils::text::count_words(&content_md);
+            let reading_time = (word_count / 200).max(1);
+
             match client
                 .execute(
-                    "UPDATE posts SET content_html = $1, toc_html = $2 WHERE id = $3",
-                    &[&rendered.html, &toc_html, &id],
+                    "UPDATE posts SET content_html = $1, toc_html = $2, word_count = $3, reading_time = $4 WHERE id = $5",
+                    &[
+                        &rendered.html,
+                        &toc_html,
+                        &(word_count as i32),
+                        &(reading_time as i32),
+                        &id,
+                    ],
                 )
                 .await
             {

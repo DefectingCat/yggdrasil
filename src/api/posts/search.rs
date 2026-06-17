@@ -57,8 +57,9 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
         let rows = client
             .query(
                 "SELECT
-                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md,
-                    p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
+                    p.id, p.author_id, p.title, p.slug, p.summary, p.status,
+                    p.published_at, p.created_at, p.updated_at, p.cover_image,
+                    p.word_count, p.reading_time,
                     COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags,
                     word_similarity(p.search_text, $2) AS sml
                  FROM posts p

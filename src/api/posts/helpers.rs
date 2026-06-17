@@ -63,7 +63,7 @@ pub(super) async fn row_to_post_list(
 
 /// 将数据库行转换为轻量列表项 DTO。
 ///
-/// 不包含 `content_md`/`content_html`，但会临时读取 `content_md` 以计算字数与阅读时长。
+/// 不包含 `content_md`/`content_html`；字数与阅读时长直接读取已持久化的列。
 /// 同步函数，不依赖数据库连接。
 #[cfg(feature = "server")]
 pub(super) fn row_to_post_list_item(row: &tokio_postgres::Row) -> PostListItem {
@@ -79,9 +79,8 @@ pub(super) fn row_to_post_list_item(row: &tokio_postgres::Row) -> PostListItem {
         .filter(|t| !t.is_empty())
         .collect();
 
-    // 临时读取 content_md 计算字数与阅读时长，不存入 DTO。
-    let content_md: String = row.get("content_md");
-    let word_count = count_words(&content_md);
+    let word_count: i32 = row.get("word_count");
+    let reading_time: i32 = row.get("reading_time");
 
     PostListItem {
         id,
@@ -96,8 +95,8 @@ pub(super) fn row_to_post_list_item(row: &tokio_postgres::Row) -> PostListItem {
         deleted_at: row.try_get("deleted_at").ok(),
         tags,
         cover_image: row.get("cover_image"),
-        reading_time: (word_count / 200).max(1),
-        word_count,
+        reading_time: reading_time.max(1) as u32,
+        word_count: word_count.max(0) as u32,
     }
 }
 
@@ -150,6 +149,17 @@ pub(super) async fn row_to_post_full(
         None
     };
 
+    // 读取正文与已持久化的字数/阅读时长；若列尚未回填（旧数据为 0），则现场计算。
+    let content_md: String = row.get("content_md");
+    let stored_word_count: i32 = row.get("word_count");
+    let stored_reading_time: i32 = row.get("reading_time");
+    let (word_count, reading_time) = if stored_word_count > 0 && stored_reading_time > 0 {
+        (stored_word_count as u32, stored_reading_time as u32)
+    } else {
+        let wc = count_words(&content_md);
+        (wc, (wc / 200).max(1))
+    };
+
     let content_html: Option<String> = row.get("content_html");
     let toc_html_row: Option<String> = row.get("toc_html");
 
@@ -157,7 +167,6 @@ pub(super) async fn row_to_post_full(
     let (content_html, toc_html) = if let Some(html) = content_html {
         (html, toc_html_row)
     } else {
-        let content_md: String = row.get("content_md");
         let rendered = crate::api::markdown::render_markdown_enhanced(&content_md);
         (
             rendered.html,
@@ -168,9 +177,6 @@ pub(super) async fn row_to_post_full(
             },
         )
     };
-
-    let content_md: String = row.get("content_md");
-    let word_count = count_words(&content_md);
 
     Post {
         id,
@@ -187,7 +193,7 @@ pub(super) async fn row_to_post_full(
         deleted_at: row.try_get("deleted_at").ok(),
         tags,
         cover_image: row.get("cover_image"),
-        reading_time: (word_count / 200).max(1),
+        reading_time,
         word_count,
         toc_html,
         prev_post,

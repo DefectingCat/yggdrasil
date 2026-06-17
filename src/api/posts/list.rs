@@ -82,8 +82,9 @@ pub async fn list_published_posts(
         let rows = client
             .query(
                 "SELECT
-                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md,
-                    p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
+                    p.id, p.author_id, p.title, p.slug, p.summary, p.status,
+                    p.published_at, p.created_at, p.updated_at, p.cover_image,
+                    p.word_count, p.reading_time,
                     COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags
                  FROM posts p
                  LEFT JOIN post_tags pt ON p.id = pt.post_id
@@ -139,8 +140,9 @@ pub async fn list_posts(page: i32, per_page: i32) -> Result<PostListResponse, Se
         let rows = client
             .query(
                 "SELECT
-                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md,
-                    p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
+                    p.id, p.author_id, p.title, p.slug, p.summary, p.status,
+                    p.published_at, p.created_at, p.updated_at, p.cover_image,
+                    p.word_count, p.reading_time,
                     COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags
                  FROM posts p
                  LEFT JOIN post_tags pt ON p.id = pt.post_id
@@ -198,8 +200,9 @@ pub async fn list_deleted_posts(
         let rows = client
             .query(
                 "SELECT
-                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md,
-                    p.status, p.published_at, p.created_at, p.updated_at, p.cover_image, p.deleted_at,
+                    p.id, p.author_id, p.title, p.slug, p.summary, p.status,
+                    p.published_at, p.created_at, p.updated_at, p.cover_image, p.deleted_at,
+                    p.word_count, p.reading_time,
                     COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags
                  FROM posts p
                  LEFT JOIN post_tags pt ON p.id = pt.post_id
@@ -251,8 +254,9 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
         let rows = client
             .query(
                 "SELECT
-                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md,
-                    p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
+                    p.id, p.author_id, p.title, p.slug, p.summary, p.status,
+                    p.published_at, p.created_at, p.updated_at, p.cover_image,
+                    p.word_count, p.reading_time,
                     COALESCE(array_agg(t2.name) FILTER (WHERE t2.name IS NOT NULL), '{}') as tags
                  FROM posts p
                  JOIN post_tags pt ON p.id = pt.post_id
