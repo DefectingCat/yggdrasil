@@ -21,9 +21,6 @@ pub use create::create_comment;
 /// 获取全部评论分页列表。
 #[allow(unused_imports)]
 pub use list::get_all_comments;
-/// 获取待审核评论分页列表。
-#[allow(unused_imports)]
-pub use list::get_pending_comments;
 /// 获取待审核评论总数。
 #[allow(unused_imports)]
 pub use list::get_pending_count;
