@@ -7,7 +7,7 @@
 
 #[cfg(feature = "server")]
 use axum::{
-    extract::{ConnectInfo, Path, Query},
+    extract::{ConnectInfo, Extension, Path, Query},
     http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
 };
@@ -333,12 +333,13 @@ async fn write_disk_cache(cache_key: &str, cached: &CachedImage) {
 /// 依次执行：限流 → 路径安全校验 → 参数校验 → 无参数时直接返回原文件 →
 /// 查询内存缓存 → 查询磁盘缓存 → 读取并解码 → 处理 → 写入两级缓存 → 返回。
 pub async fn serve_image(
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    connect_info: Option<Extension<ConnectInfo<SocketAddr>>>,
     Path(path): Path<String>,
     Query(params): Query<ImageParams>,
     headers: HeaderMap,
 ) -> Response {
-    let ip = crate::api::rate_limit::get_client_ip_with_peer(&headers, Some(addr));
+    let peer = connect_info.map(|Extension(ConnectInfo(addr))| addr);
+    let ip = crate::api::rate_limit::get_client_ip_with_peer(&headers, peer);
     if let Err(status) = crate::api::rate_limit::check_image_limit(&ip) {
         return status.into_response();
     }
