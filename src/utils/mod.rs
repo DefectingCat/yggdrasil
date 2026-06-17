@@ -10,3 +10,6 @@ pub mod time;
 /// HTML 空白压缩工具。
 #[cfg(feature = "server")]
 pub mod html_minify;
+
+#[cfg(all(test, feature = "server"))]
+mod html_minify_bench;

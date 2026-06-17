@@ -1,8 +1,11 @@
 //! SSR HTML 空白压缩中间件。
 //!
 //! 对 Dioxus fullstack 返回的 `text/html` 响应做轻量 minify。
-//! 为了避免 SSR 增量渲染缓存命中后仍然重复 minify，中间件内部维护了一个按 URL
-//! 缓存的内存缓存（容量有限、TTL 较短），minify 后的结果会直接复用。
+//!
+//! 注意：这里**不**维护 per-URL 缓存。同一个 URL 在 admin 登录态与匿名态下
+//! 渲染出的 HTML 不同（例如是否带管理按钮），按 URL 缓存会导致跨用户内容
+//! 泄露。Dioxus 的增量渲染器（ISRG）本身已经按 URL 缓存了 SSR HTML，
+//! 这里的 minify 只是对其输出做一次无损空白折叠，无需再叠加一层缓存。
 
 #[cfg(feature = "server")]
 use axum::{
@@ -13,22 +16,9 @@ use axum::{
     response::Response,
 };
 use http_body_util::BodyExt;
-use moka::future::Cache;
-use std::time::Duration;
-
-/// 按 URL 缓存 minify 结果，避免 SSR 缓存命中后重复计算。
-static MINIFY_CACHE: std::sync::LazyLock<Cache<String, String>> =
-    std::sync::LazyLock::new(|| {
-        Cache::builder()
-            .max_capacity(256)
-            .time_to_live(Duration::from_secs(300))
-            .build()
-    });
 
 /// Axum 中间件入口。
 pub async fn layer(request: Request, next: Next) -> Response {
-    let uri = request.uri().clone();
-    let path = uri.path().to_string();
     let response = next.run(request).await;
 
     let is_html = response
@@ -40,24 +30,6 @@ pub async fn layer(request: Request, next: Next) -> Response {
 
     if !is_html {
         return response;
-    }
-
-    // 不缓存错误响应与后台管理页面，避免把错误页或敏感管理界面扩散。
-    let status = response.status();
-    let is_admin_or_auth = path.starts_with("/admin") || path == "/login" || path == "/register";
-    let should_cache = status.is_success() && !is_admin_or_auth;
-
-    // 缓存 key 必须包含完整 query string，避免不同参数共享同一份响应。
-    let cache_key = format!(
-        "{}{}",
-        path,
-        uri.query().map(|q| format!("?{}", q)).unwrap_or_default()
-    );
-
-    if should_cache {
-        if let Some(cached) = MINIFY_CACHE.get(&cache_key).await {
-            return build_response(response, cached);
-        }
     }
 
     let (parts, body) = response.into_parts();
@@ -74,11 +46,6 @@ pub async fn layer(request: Request, next: Next) -> Response {
     let original = String::from_utf8_lossy(&bytes);
     let minified = crate::utils::html_minify::minify_html(&original);
 
-    // 仅对成功且非后台页面写入缓存。
-    if should_cache {
-        let _ = MINIFY_CACHE.insert(cache_key, minified.clone()).await;
-    }
-
     let mut response = Response::builder()
         .status(parts.status)
         .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
@@ -91,23 +58,6 @@ pub async fn layer(request: Request, next: Next) -> Response {
     response
         .headers_mut()
         .insert(header::CONTENT_LENGTH, minified.len().into());
-
-    response
-}
-
-fn build_response(original: Response, body: String) -> Response {
-    let (parts, _body) = original.into_parts();
-    let mut response = Response::builder()
-        .status(parts.status)
-        .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-        .body(Body::from(body.clone()))
-        .expect("failed to build cached response");
-
-    *response.headers_mut() = parts.headers;
-    response.headers_mut().remove(header::TRANSFER_ENCODING);
-    response
-        .headers_mut()
-        .insert(header::CONTENT_LENGTH, body.len().into());
 
     response
 }
