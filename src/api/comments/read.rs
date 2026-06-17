@@ -1,4 +1,4 @@
-//! 前端评论读取接口：已审核评论列表与评论计数。
+//! 前端评论读取接口：已审核评论列表。
 //!
 //! 结果按文章 id 缓存，Dioxus server function 注册在 `/api` 路径下。
 //! 仅在 `feature = "server"` 启用的服务端构建中查询数据库。
@@ -52,36 +52,3 @@ pub async fn get_comments(post_id: i32) -> Result<CommentTreeResponse, ServerFnE
     unreachable!()
 }
 
-/// 获取指定文章的已审核评论数量。
-///
-/// 优先命中缓存；未命中时执行 COUNT 查询并写入缓存。
-#[server(GetCommentCount, "/api")]
-pub async fn get_comment_count(post_id: i32) -> Result<CommentCountResponse, ServerFnError> {
-    #[cfg(feature = "server")]
-    {
-        use crate::api::error::AppError;
-        use crate::cache;
-        use crate::db::pool::get_conn;
-
-        if let Some(cached) = cache::get_comment_count(post_id).await {
-            return Ok(CommentCountResponse { count: cached });
-        }
-
-        let client = get_conn().await.map_err(AppError::db_conn)?;
-
-        let count: i64 = client
-            .query_one(
-                "SELECT COUNT(*) FROM comments WHERE post_id = $1 AND status = 'approved' AND deleted_at IS NULL",
-                &[&post_id],
-            )
-            .await
-            .map_err(AppError::query)?
-            .get(0);
-
-        cache::set_comment_count(post_id, count).await;
-
-        Ok(CommentCountResponse { count })
-    }
-    #[cfg(not(feature = "server"))]
-    unreachable!()
-}
