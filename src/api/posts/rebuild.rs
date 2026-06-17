@@ -34,14 +34,14 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
     {
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
-        // 根据参数构造 WHERE 条件，限制单次处理数量；同时查询 slug 用于精准失效缓存。
+        // 根据参数构造 WHERE 条件，限制单次处理数量。
         let query = if rebuild_all {
             format!(
-                "SELECT id, slug, content_md FROM posts WHERE deleted_at IS NULL ORDER BY id LIMIT {REBUILD_BATCH_LIMIT}"
+                "SELECT id, content_md FROM posts WHERE deleted_at IS NULL ORDER BY id LIMIT {REBUILD_BATCH_LIMIT}"
             )
         } else {
             format!(
-                "SELECT id, slug, content_md FROM posts WHERE deleted_at IS NULL AND content_html IS NULL ORDER BY id LIMIT {REBUILD_BATCH_LIMIT}"
+                "SELECT id, content_md FROM posts WHERE deleted_at IS NULL AND content_html IS NULL ORDER BY id LIMIT {REBUILD_BATCH_LIMIT}"
             )
         };
 
@@ -50,12 +50,10 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
         let mut rebuilt: u64 = 0;
         let mut failed: u64 = 0;
         let mut errors: Vec<String> = Vec::new();
-        let mut rebuilt_slugs: Vec<String> = Vec::with_capacity(rows.len());
 
         for row in &rows {
             let id: i32 = row.get(0);
-            let slug: String = row.get(1);
-            let content_md: String = row.get(2);
+            let content_md: String = row.get(1);
 
             // 捕获 Markdown 渲染 panic，避免单条记录导致整批失败。
             let rendered = match std::panic::catch_unwind(|| {
@@ -95,7 +93,6 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
             {
                 Ok(_) => {
                     rebuilt += 1;
-                    rebuilt_slugs.push(slug);
                 }
                 Err(_) => {
                     failed += 1;
@@ -106,14 +103,10 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
             }
         }
 
-        // 只要有文章被更新，就按影响范围失效缓存：列表、标签云、统计，以及每篇被重建文章的 slug 缓存。
+        // 重建会修改 word_count / reading_time 等列表项字段，批量影响列表、标签云、
+        // 标签文章及单篇缓存；这里使用全量失效作为务实的回退策略。
         if rebuilt > 0 {
-            crate::cache::invalidate_post_lists();
-            crate::cache::invalidate_all_tags();
-            crate::cache::invalidate_post_stats();
-            for slug in &rebuilt_slugs {
-                crate::cache::invalidate_post_by_slug(slug).await;
-            }
+            crate::cache::invalidate_all_post_caches();
         }
 
         Ok(RebuildResult {
