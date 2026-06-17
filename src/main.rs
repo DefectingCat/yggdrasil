@@ -28,6 +28,48 @@ mod theme;
 mod utils;
 mod webp;
 
+/// 根据 COMPRESSION_ALGORITHMS 环境变量构造 CompressionLayer。
+/// 环境变量为空或未设置时返回 None，表示不启用压缩。
+#[cfg(feature = "server")]
+fn compression_layer_from_env() -> Option<tower_http::compression::CompressionLayer> {
+    use tower_http::compression::CompressionLayer;
+
+    let env = std::env::var("COMPRESSION_ALGORITHMS").unwrap_or_default();
+    let env = env.trim();
+    if env.is_empty() {
+        return None;
+    }
+
+    let mut gzip = false;
+    let mut brotli = false;
+    let mut deflate = false;
+    let mut zstd = false;
+
+    for part in env.split(',') {
+        match part.trim().to_lowercase().as_str() {
+            "gzip" => gzip = true,
+            "brotli" | "br" => brotli = true,
+            "deflate" => deflate = true,
+            "zstd" => zstd = true,
+            other => tracing::warn!(
+                "Unknown compression algorithm in COMPRESSION_ALGORITHMS: '{}'",
+                other
+            ),
+        }
+    }
+
+    if !gzip && !brotli && !deflate && !zstd {
+        return None;
+    }
+
+    let mut layer = CompressionLayer::new();
+    layer = layer.gzip(gzip);
+    layer = layer.br(brotli);
+    layer = layer.deflate(deflate);
+    layer = layer.zstd(zstd);
+    Some(layer)
+}
+
 /// 程序入口
 fn main() {
     // server feature：启动服务端
@@ -54,7 +96,6 @@ fn main() {
         dioxus::server::serve(|| async move {
             use dioxus::server::{axum, DioxusRouterExt, ServeConfig};
             use std::time::Duration;
-            use tower_http::compression::CompressionLayer;
             use tower_http::timeout::TimeoutLayer;
             use axum::http::StatusCode;
 
@@ -101,13 +142,16 @@ fn main() {
             let dioxus_app =
                 axum::Router::new().serve_dioxus_application(config, router::AppRouter);
 
-            // 合并 Dioxus + 压缩/30s 超时中间件
-            let app_routes = dioxus_app
-                .layer(CompressionLayer::new())
-                .layer(TimeoutLayer::with_status_code(
-                    StatusCode::REQUEST_TIMEOUT,
-                    Duration::from_secs(30),
-                ));
+            // 合并 Dioxus + 可选压缩/30s 超时中间件
+            let app_routes = if let Some(layer) = compression_layer_from_env() {
+                dioxus_app.layer(layer)
+            } else {
+                dioxus_app
+            }
+            .layer(TimeoutLayer::with_status_code(
+                StatusCode::REQUEST_TIMEOUT,
+                Duration::from_secs(30),
+            ));
 
             // 静态资源路由：图片文件服务。
             // 注意：axum 0.8 没有 ConnectInfoLayer，且 dioxus::server::serve 不会把
@@ -124,7 +168,7 @@ fn main() {
                     axum::routing::get(|| async { StatusCode::NOT_FOUND }),
                 );
 
-            // 合并：upload 路由保持自己独立的 300s 超时；app routes 加压缩/30s；static routes 无任何中间件
+            // 合并：upload 路由保持自己独立的 300s 超时；app routes 加可选压缩/30s；static routes 无任何中间件
             let router = upload_route.merge(app_routes).merge(static_routes);
 
             Ok(router)
