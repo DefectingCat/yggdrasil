@@ -293,6 +293,7 @@ pub async fn logout() -> Result<AuthResponse, ServerFnError> {
 
     if let Some(t) = token {
         let token_hash = session::hash_token(&t);
+        crate::cache::invalidate_session_user(&token_hash).await;
         client
             .execute("DELETE FROM sessions WHERE token_hash = $1", &[&token_hash])
             .await
@@ -316,11 +317,17 @@ pub struct CurrentUserResponse {
 #[cfg(feature = "server")]
 /// 根据会话 token 查询对应用户（含密码哈希等完整信息）。
 ///
+/// 优先命中内存缓存，避免每次请求都执行 DB JOIN；未命中时回查数据库并回填缓存。
 /// 仅服务端内部使用，不会暴露给前端。
 pub async fn get_user_by_token(token: &str) -> Result<Option<User>, ServerFnError> {
+    let token_hash = session::hash_token(token);
+
+    if let Some(user) = crate::cache::get_session_user(&token_hash).await {
+        return Ok(Some(user));
+    }
+
     let client = get_conn().await.map_err(AppError::db_conn)?;
 
-    let token_hash = session::hash_token(token);
     let row = client
         .query_opt(
             "SELECT u.id, u.username, u.email, u.password_hash, u.role, u.created_at
@@ -347,6 +354,10 @@ pub async fn get_user_by_token(token: &str) -> Result<Option<User>, ServerFnErro
         }
         None => None,
     };
+
+    if let Some(ref u) = user {
+        crate::cache::set_session_user(&token_hash, u.clone()).await;
+    }
 
     Ok(user)
 }

@@ -15,6 +15,8 @@ use std::time::Duration;
 use crate::models::comment::PublicComment;
 #[cfg(feature = "server")]
 use crate::models::post::{Post, PostListItem, PostStats, Tag};
+#[cfg(feature = "server")]
+use crate::models::user::User;
 
 // ============================================================================
 // 缓存 TTL 配置
@@ -47,6 +49,10 @@ const TTL_COMMENTS: Duration = Duration::from_secs(60);
 /// 待审核评论数量缓存 TTL：10 秒，因管理后台需要较实时数据。
 #[cfg(feature = "server")]
 const TTL_PENDING_COUNT: Duration = Duration::from_secs(10);
+
+/// 会话用户缓存 TTL：300 秒（5 分钟），短于 DB 会话过期时间。
+#[cfg(feature = "server")]
+const TTL_SESSION: Duration = Duration::from_secs(300);
 
 // ============================================================================
 // 缓存 Key 类型
@@ -158,6 +164,19 @@ static PENDING_COUNT_CACHE: LazyLock<Cache<CacheKey, i64>> = LazyLock::new(|| {
     Cache::builder()
         .max_capacity(10)
         .time_to_live(TTL_PENDING_COUNT)
+        .build()
+});
+
+/// 会话用户缓存类型。
+#[cfg(feature = "server")]
+pub type SessionCache = Cache<String, User>;
+
+/// 全局会话用户缓存实例，最大容量 1000，TTL 5 分钟。
+#[cfg(feature = "server")]
+static SESSION_CACHE: LazyLock<SessionCache> = LazyLock::new(|| {
+    Cache::builder()
+        .max_capacity(1000)
+        .time_to_live(TTL_SESSION)
         .build()
 });
 
@@ -345,6 +364,24 @@ pub async fn set_pending_count(count: i64) {
         .await;
 }
 
+/// 读取会话用户缓存。
+#[cfg(feature = "server")]
+pub async fn get_session_user(token_hash: &str) -> Option<User> {
+    SESSION_CACHE.get(token_hash).await
+}
+
+/// 写入会话用户缓存。
+#[cfg(feature = "server")]
+pub async fn set_session_user(token_hash: &str, user: User) {
+    let _ = SESSION_CACHE.insert(token_hash.to_string(), user).await;
+}
+
+/// 失效指定会话用户缓存。
+#[cfg(feature = "server")]
+pub async fn invalidate_session_user(token_hash: &str) {
+    SESSION_CACHE.invalidate(token_hash).await;
+}
+
 /// 按文章主键失效评论列表缓存。
 #[cfg(feature = "server")]
 pub async fn invalidate_comments_by_post(post_id: i32) {
@@ -366,6 +403,7 @@ mod tests {
     use super::*;
     use crate::models::comment::PublicComment;
     use crate::models::post::PostStatus;
+    use crate::models::user::{User, UserRole};
     use serial_test::serial;
 
     #[test]
@@ -570,6 +608,34 @@ mod tests {
 
         invalidate_pending_count().await;
         assert!(get_pending_count().await.is_none());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn session_cache_roundtrip() {
+        let user = User {
+            id: 42,
+            username: "cached_user".to_string(),
+            email: "cached@example.com".to_string(),
+            password_hash: "argon2_hash".to_string(),
+            role: UserRole::Admin,
+            created_at: chrono::Utc::now(),
+        };
+        let token_hash = "sha256_token_hash";
+
+        set_session_user(token_hash, user.clone()).await;
+        let cached = get_session_user(token_hash).await;
+
+        assert!(cached.is_some());
+        let cached_user = cached.unwrap();
+        assert_eq!(cached_user.id, user.id);
+        assert_eq!(cached_user.username, user.username);
+        assert_eq!(cached_user.email, user.email);
+        assert_eq!(cached_user.password_hash, user.password_hash);
+        assert_eq!(cached_user.role, user.role);
+
+        invalidate_session_user(token_hash).await;
+        assert!(get_session_user(token_hash).await.is_none());
     }
 
 }
