@@ -8,7 +8,7 @@
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
-use super::helpers::row_to_post_list;
+use super::helpers::row_to_post_list_item;
 use super::types::PostListResponse;
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
@@ -56,8 +56,8 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
         // 使用 ILIKE 做前缀模糊匹配，并按 word_similarity 降序、发布时间降序排序。
         let rows = client
             .query(
-                "SELECT 
-                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, 
+                "SELECT
+                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md,
                     p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
                     COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags,
                     word_similarity(p.search_text, $2) AS sml
@@ -76,7 +76,7 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
 
         let mut posts = Vec::new();
         for row in &rows {
-            posts.push(row_to_post_list(&client, row).await);
+            posts.push(row_to_post_list_item(row));
         }
 
         let total = posts.len() as i64;

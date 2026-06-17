@@ -15,7 +15,7 @@ use crate::api::posts::{delete_post, rebuild_content_html, CreatePostResponse, R
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::posts_skeleton::PostsSkeleton;
 use crate::components::ui::{EmptyState, Pagination, StatusBadge, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_TEXT_RED};
-use crate::models::post::Post;
+use crate::models::post::PostListItem;
 use crate::router::Route;
 
 /// 每页展示的文章数量。
@@ -34,7 +34,7 @@ pub fn Posts() -> Element {
 pub fn PostsPage(page: i32) -> Element {
     let current_page = page.max(1);
     // 文章列表、总数、加载状态、删除中 ID、重建缓存状态与结果。
-    let mut posts = use_signal(Vec::new);
+    let mut posts = use_signal(Vec::<PostListItem>::new);
     let mut total = use_signal(|| 0_i64);
     let mut loading = use_signal(|| true);
     let mut deleting = use_signal(|| None::<i32>);
@@ -96,7 +96,7 @@ pub fn PostsPage(page: i32) -> Element {
         }
     });
 
-    let get_posts = move || -> Vec<Post> { posts() };
+    let get_posts = move || -> Vec<PostListItem> { posts() };
 
     rsx! {
         div { class: "space-y-6",
@@ -215,7 +215,7 @@ pub fn PostsPage(page: i32) -> Element {
 
 /// 文章表格行组件，展示单篇文章的标题、状态、日期与操作按钮。
 #[component]
-fn PostRow(post: Post, deleting: bool, on_delete: EventHandler<i32>) -> Element {
+fn PostRow(post: PostListItem, deleting: bool, on_delete: EventHandler<i32>) -> Element {
     let date_str = post.formatted_date();
 
     rsx! {

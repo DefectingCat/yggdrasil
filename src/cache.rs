@@ -14,7 +14,7 @@ use std::time::Duration;
 #[cfg(feature = "server")]
 use crate::models::comment::PublicComment;
 #[cfg(feature = "server")]
-use crate::models::post::{Post, PostStats, Tag};
+use crate::models::post::{Post, PostListItem, PostStats, Tag};
 
 // ============================================================================
 // 缓存 TTL 配置
@@ -80,7 +80,7 @@ pub enum CacheKey {
 
 /// 文章列表缓存类型，值为（文章列表，总数）。
 #[cfg(feature = "server")]
-pub type PostListCache = Cache<CacheKey, (Vec<Post>, i64)>;
+pub type PostListCache = Cache<CacheKey, (Vec<PostListItem>, i64)>;
 
 /// 标签列表缓存类型。
 #[cfg(feature = "server")]
@@ -167,13 +167,13 @@ static PENDING_COUNT_CACHE: LazyLock<Cache<CacheKey, i64>> = LazyLock::new(|| {
 
 /// 读取文章分页列表缓存。
 #[cfg(feature = "server")]
-pub async fn get_post_list(key: &CacheKey) -> Option<(Vec<Post>, i64)> {
+pub async fn get_post_list(key: &CacheKey) -> Option<(Vec<PostListItem>, i64)> {
     POST_LIST_CACHE.get(key).await
 }
 
 /// 写入文章分页列表缓存。
 #[cfg(feature = "server")]
-pub async fn set_post_list(key: &CacheKey, posts: Vec<Post>, total: i64) {
+pub async fn set_post_list(key: &CacheKey, posts: Vec<PostListItem>, total: i64) {
     let _ = POST_LIST_CACHE.insert(key.clone(), (posts, total)).await;
 }
 
@@ -224,7 +224,7 @@ pub async fn set_post_by_slug(slug: &str, post: Option<Post>) {
 
 /// 按标签读取文章列表缓存。
 #[cfg(feature = "server")]
-pub async fn get_posts_by_tag(tag: &str) -> Option<(Vec<Post>, i64)> {
+pub async fn get_posts_by_tag(tag: &str) -> Option<(Vec<PostListItem>, i64)> {
     TAG_POSTS_CACHE
         .get(&CacheKey::PostsByTag(tag.to_string()))
         .await
@@ -232,7 +232,7 @@ pub async fn get_posts_by_tag(tag: &str) -> Option<(Vec<Post>, i64)> {
 
 /// 按标签写入文章列表缓存。
 #[cfg(feature = "server")]
-pub async fn set_posts_by_tag(tag: &str, posts: Vec<Post>, total: i64) {
+pub async fn set_posts_by_tag(tag: &str, posts: Vec<PostListItem>, total: i64) {
     let _ = TAG_POSTS_CACHE
         .insert(CacheKey::PostsByTag(tag.to_string()), (posts, total))
         .await;
@@ -379,15 +379,31 @@ mod tests {
             page: 999,
             per_page: 99,
         };
-        let posts = vec![];
+        let posts = vec![PostListItem {
+            id: 1,
+            author_id: 1,
+            title: "List Item".to_string(),
+            slug: "list-item".to_string(),
+            summary: None,
+            status: PostStatus::Published,
+            published_at: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            deleted_at: None,
+            tags: vec!["rust".to_string()],
+            cover_image: None,
+            reading_time: 1,
+            word_count: 10,
+        }];
 
-        set_post_list(&key, posts.clone(), 0).await;
+        set_post_list(&key, posts.clone(), 1).await;
         let cached = get_post_list(&key).await;
 
         assert!(cached.is_some());
         let (cached_posts, cached_total) = cached.unwrap();
-        assert_eq!(cached_posts.len(), 0);
-        assert_eq!(cached_total, 0);
+        assert_eq!(cached_posts.len(), 1);
+        assert_eq!(cached_posts[0].title, "List Item");
+        assert_eq!(cached_total, 1);
     }
 
     #[tokio::test]

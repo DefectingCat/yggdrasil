@@ -13,7 +13,7 @@ use crate::api::posts::{get_post_stats, list_posts};
 #[cfg(target_arch = "wasm32")]
 use crate::api::posts::{PostListResponse, PostStatsResponse};
 use crate::components::ui::ADMIN_CARD_CLASS;
-use crate::models::post::{Post, PostStats};
+use crate::models::post::{PostListItem, PostStats};
 use crate::router::Route;
 
 /// 后台仪表盘页面组件。
@@ -25,7 +25,7 @@ use crate::router::Route;
 pub fn Admin() -> Element {
     // 仪表盘状态：统计数据、最近文章、待审核评论数与首次加载标志。
     let mut stats = use_signal(|| None::<PostStats>);
-    let mut recent_posts = use_signal(|| None::<Vec<Post>>);
+    let mut recent_posts = use_signal(|| None::<Vec<PostListItem>>);
     let mut pending_count = use_signal(|| None::<i64>);
     let mut loaded = use_signal(|| false);
 
@@ -165,7 +165,7 @@ fn StatCard(value: String, label: String) -> Element {
 
 /// 最近文章列表项，显示标题、状态标签与发布日期。
 #[component]
-fn RecentPostItem(post: Post) -> Element {
+fn RecentPostItem(post: PostListItem) -> Element {
     let date_str = post.formatted_date();
     let status_label = post.status_label();
     let status_class = post.status_class();

@@ -113,6 +113,77 @@ impl Post {
     }
 }
 
+/// 文章列表项 DTO。
+///
+/// 仅包含列表/标签/搜索/归档等场景需要的字段，不含 `content_md` 与 `content_html`，
+/// 以降低缓存内存占用与序列化体积。`deleted_at` 保留，供回收站列表使用。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PostListItem {
+    /// 文章主键。
+    pub id: i32,
+    /// 作者用户主键。
+    pub author_id: i32,
+    /// 文章标题。
+    pub title: String,
+    /// URL slug，用于生成文章链接。
+    pub slug: String,
+    /// 摘要，可选。
+    pub summary: Option<String>,
+    /// 文章发布状态。
+    pub status: PostStatus,
+    /// 正式发布时间，None 表示尚未发布。
+    pub published_at: Option<DateTime<Utc>>,
+    /// 创建时间。
+    pub created_at: DateTime<Utc>,
+    /// 最后更新时间。
+    pub updated_at: DateTime<Utc>,
+    /// 软删除时间，None 表示未删除。仅回收站查询填充。
+    pub deleted_at: Option<DateTime<Utc>>,
+    /// 关联标签列表。
+    pub tags: Vec<String>,
+    /// 封面图片 URL。
+    pub cover_image: Option<String>,
+    /// 预计阅读时间（分钟）。
+    pub reading_time: u32,
+    /// 字数统计。
+    pub word_count: u32,
+}
+
+impl PostListItem {
+    /// 返回用于展示的文章日期：优先使用发布时间，否则回退到创建时间。
+    pub fn formatted_date(&self) -> String {
+        self.published_at
+            .map(|d| d.format("%Y-%m-%d").to_string())
+            .unwrap_or_else(|| self.created_at.format("%Y-%m-%d").to_string())
+    }
+
+    /// 返回中文状态标签。
+    pub fn status_label(&self) -> &'static str {
+        match self.status {
+            PostStatus::Published => "已发布",
+            PostStatus::Draft => "草稿",
+        }
+    }
+
+    /// 返回状态文本在 light/dark 模式下的 Tailwind 颜色类。
+    pub fn status_class(&self) -> &'static str {
+        match self.status {
+            PostStatus::Published => "text-green-600 dark:text-green-400",
+            PostStatus::Draft => "text-gray-400 dark:text-[#9b9c9d]",
+        }
+    }
+
+    /// 返回状态徽章在 light/dark 模式下的 Tailwind 背景与颜色类。
+    pub fn status_badge_class(&self) -> &'static str {
+        match self.status {
+            PostStatus::Published => {
+                "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+            }
+            PostStatus::Draft => "bg-gray-100 dark:bg-[#333] text-gray-600 dark:text-[#9b9c9d]",
+        }
+    }
+}
+
 /// 前后文章导航结构体。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PostNav {

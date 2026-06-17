@@ -6,7 +6,7 @@
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
 #[cfg(feature = "server")]
-use crate::models::post::{Post, PostStatus};
+use crate::models::post::{Post, PostListItem, PostStatus};
 #[cfg(feature = "server")]
 use crate::utils::text::count_words;
 
@@ -58,6 +58,46 @@ pub(super) async fn row_to_post_list(
         toc_html: None,
         prev_post: None,
         next_post: None,
+    }
+}
+
+/// 将数据库行转换为轻量列表项 DTO。
+///
+/// 不包含 `content_md`/`content_html`，但会临时读取 `content_md` 以计算字数与阅读时长。
+/// 同步函数，不依赖数据库连接。
+#[cfg(feature = "server")]
+pub(super) fn row_to_post_list_item(row: &tokio_postgres::Row) -> PostListItem {
+    let id: i32 = row.get("id");
+    let status_str: String = row.get("status");
+    let status = PostStatus::from_str(&status_str).unwrap_or(PostStatus::Draft);
+
+    // 聚合标签并过滤空字符串。
+    let tags: Vec<String> = row
+        .try_get::<_, Vec<String>>("tags")
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|t| !t.is_empty())
+        .collect();
+
+    // 临时读取 content_md 计算字数与阅读时长，不存入 DTO。
+    let content_md: String = row.get("content_md");
+    let word_count = count_words(&content_md);
+
+    PostListItem {
+        id,
+        author_id: row.get("author_id"),
+        title: row.get("title"),
+        slug: row.get("slug"),
+        summary: row.get("summary"),
+        status,
+        published_at: row.get("published_at"),
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
+        deleted_at: row.try_get("deleted_at").ok(),
+        tags,
+        cover_image: row.get("cover_image"),
+        reading_time: (word_count / 200).max(1),
+        word_count,
     }
 }
 

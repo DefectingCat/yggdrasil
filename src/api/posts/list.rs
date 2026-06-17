@@ -8,7 +8,7 @@
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
-use super::helpers::{get_current_admin_user, row_to_post_list};
+use super::helpers::{get_current_admin_user, row_to_post_list_item};
 use super::types::PostListResponse;
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
@@ -81,8 +81,8 @@ pub async fn list_published_posts(
         let limit = per_page as i64;
         let rows = client
             .query(
-                "SELECT 
-                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, 
+                "SELECT
+                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md,
                     p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
                     COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags
                  FROM posts p
@@ -99,7 +99,7 @@ pub async fn list_published_posts(
 
         let mut posts = Vec::new();
         for row in &rows {
-            posts.push(row_to_post_list(&client, row).await);
+            posts.push(row_to_post_list_item(row));
         }
 
         crate::cache::set_post_list(&cache_key, posts.clone(), total).await;
@@ -138,8 +138,8 @@ pub async fn list_posts(page: i32, per_page: i32) -> Result<PostListResponse, Se
         let limit = per_page as i64;
         let rows = client
             .query(
-                "SELECT 
-                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, 
+                "SELECT
+                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md,
                     p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
                     COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags
                  FROM posts p
@@ -156,7 +156,7 @@ pub async fn list_posts(page: i32, per_page: i32) -> Result<PostListResponse, Se
 
         let mut posts = Vec::new();
         for row in &rows {
-            posts.push(row_to_post_list(&client, row).await);
+            posts.push(row_to_post_list_item(row));
         }
 
         Ok(PostListResponse { posts, total })
@@ -197,8 +197,8 @@ pub async fn list_deleted_posts(
         let limit = per_page as i64;
         let rows = client
             .query(
-                "SELECT 
-                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, 
+                "SELECT
+                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md,
                     p.status, p.published_at, p.created_at, p.updated_at, p.cover_image, p.deleted_at,
                     COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags
                  FROM posts p
@@ -215,7 +215,7 @@ pub async fn list_deleted_posts(
 
         let mut posts = Vec::new();
         for row in &rows {
-            posts.push(row_to_post_list(&client, row).await);
+            posts.push(row_to_post_list_item(row));
         }
 
         Ok(PostListResponse { posts, total })
@@ -250,8 +250,8 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
         // 通过 JOIN 筛选含目标标签的已发布文章，并聚合该文章的所有标签。
         let rows = client
             .query(
-                "SELECT 
-                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, 
+                "SELECT
+                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md,
                     p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
                     COALESCE(array_agg(t2.name) FILTER (WHERE t2.name IS NOT NULL), '{}') as tags
                  FROM posts p
@@ -270,7 +270,7 @@ pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, Serv
 
         let mut posts = Vec::new();
         for row in &rows {
-            posts.push(row_to_post_list(&client, row).await);
+            posts.push(row_to_post_list_item(row));
         }
 
         // 当前查询未分页，返回全部匹配文章，因此 total 等于结果长度。
