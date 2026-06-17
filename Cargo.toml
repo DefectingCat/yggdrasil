@@ -21,7 +21,6 @@ tracing-subscriber = { version = "0.3", optional = true }
 rand = { version = "0.8", features = ["getrandom"], optional = true }
 http = { version = "1", optional = true }
 axum = { version = "0.8", optional = true, features = ["multipart"] }
-http-body-util = { version = "0.1", optional = true }
 serde_json = "1.0"
 sha2 = { version = "0.10", optional = true }
 hex = { version = "0.4", optional = true }
@@ -72,7 +71,6 @@ server = [
     "dep:dotenvy",
     "dep:tracing",
     "dep:tracing-subscriber",
-    "dep:http-body-util",
     "dep:lol_html",
     "dep:syntect",
     "dep:axum",
