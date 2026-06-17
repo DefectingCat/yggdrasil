@@ -32,30 +32,6 @@ pub struct CommentTreeResponse {
     pub count: i64,
 }
 
-/// 评论计数响应。
-///
-/// 此类型仅在服务端函数体中构造；保留 `#[allow(dead_code)]` 以避免 WASM 构建中
-/// 因函数体被剥离而产生的未使用警告。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)]
-pub struct CommentCountResponse {
-    /// 评论数量。
-    pub count: i64,
-}
-
-/// 待审核评论列表响应。
-///
-/// 当前前端未直接调用 `get_pending_comments`，此类型仅在服务端函数体中构造；
-/// 保留 `#[allow(dead_code)]` 以避免 WASM 构建中因函数体被剥离而产生的未使用警告。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)]
-pub struct PendingCommentsResponse {
-    /// 待审核评论列表。
-    pub comments: Vec<AdminComment>,
-    /// 总数。
-    pub total: i64,
-}
-
 /// 全部评论列表响应。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AllCommentsResponse {

@@ -70,7 +70,6 @@ pub async fn approve_comment(id: i64) -> Result<CommentResponse, ServerFnError> 
             .map_err(AppError::query)?;
 
         cache::invalidate_comments_by_post(post_id).await;
-        cache::invalidate_comment_count(post_id).await;
         cache::invalidate_pending_count().await;
 
         Ok(CommentResponse {
@@ -124,7 +123,6 @@ pub async fn spam_comment(id: i64) -> Result<CommentResponse, ServerFnError> {
 
             if old_status == "approved" {
                 cache::invalidate_comments_by_post(post_id).await;
-                cache::invalidate_comment_count(post_id).await;
             }
             cache::invalidate_pending_count().await;
         }
@@ -178,7 +176,6 @@ pub async fn trash_comment(id: i64) -> Result<CommentResponse, ServerFnError> {
                 .map_err(AppError::query)?;
 
             cache::invalidate_comments_by_post(post_id).await;
-            cache::invalidate_comment_count(post_id).await;
             cache::invalidate_pending_count().await;
         }
 
@@ -266,7 +263,6 @@ pub async fn batch_update_comment_status(
         cache::invalidate_pending_count().await;
         for pid in post_ids {
             cache::invalidate_comments_by_post(pid).await;
-            cache::invalidate_comment_count(pid).await;
         }
 
         Ok(BatchStatusResponse {

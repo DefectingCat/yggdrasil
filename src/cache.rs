@@ -44,10 +44,6 @@ const TTL_TAG_POSTS: Duration = Duration::from_secs(120);
 #[cfg(feature = "server")]
 const TTL_COMMENTS: Duration = Duration::from_secs(60);
 
-/// 评论数量缓存 TTL：60 秒。
-#[cfg(feature = "server")]
-const TTL_COMMENT_COUNT: Duration = Duration::from_secs(60);
-
 /// 待审核评论数量缓存 TTL：10 秒，因管理后台需要较实时数据。
 #[cfg(feature = "server")]
 const TTL_PENDING_COUNT: Duration = Duration::from_secs(10);
@@ -74,8 +70,6 @@ pub enum CacheKey {
     PostStats,
     /// 某篇文章下的评论列表。
     CommentsByPost { post_id: i32 },
-    /// 某篇文章的评论数量。
-    CommentCount { post_id: i32 },
     /// 待审核评论总数。
     PendingCommentCount,
 }
@@ -149,10 +143,6 @@ static TAG_POSTS_CACHE: LazyLock<PostListCache> = LazyLock::new(|| {
 #[cfg(feature = "server")]
 pub type CommentListCache = Cache<CacheKey, Vec<PublicComment>>;
 
-/// 评论数量缓存类型。
-#[cfg(feature = "server")]
-pub type CommentCountCache = Cache<CacheKey, i64>;
-
 /// 全局评论列表缓存实例，最大容量 200。
 #[cfg(feature = "server")]
 static COMMENT_CACHE: LazyLock<CommentListCache> = LazyLock::new(|| {
@@ -162,18 +152,9 @@ static COMMENT_CACHE: LazyLock<CommentListCache> = LazyLock::new(|| {
         .build()
 });
 
-/// 全局评论数量缓存实例，最大容量 200。
-#[cfg(feature = "server")]
-static COMMENT_COUNT_CACHE: LazyLock<CommentCountCache> = LazyLock::new(|| {
-    Cache::builder()
-        .max_capacity(200)
-        .time_to_live(TTL_COMMENT_COUNT)
-        .build()
-});
-
 /// 全局待审核评论数量缓存实例，最大容量 10。
 #[cfg(feature = "server")]
-static PENDING_COUNT_CACHE: LazyLock<CommentCountCache> = LazyLock::new(|| {
+static PENDING_COUNT_CACHE: LazyLock<Cache<CacheKey, i64>> = LazyLock::new(|| {
     Cache::builder()
         .max_capacity(10)
         .time_to_live(TTL_PENDING_COUNT)
@@ -333,22 +314,6 @@ pub async fn set_comments_by_post(post_id: i32, comments: Vec<PublicComment>) {
         .await;
 }
 
-/// 按文章主键读取评论数量缓存。
-#[cfg(feature = "server")]
-pub async fn get_comment_count(post_id: i32) -> Option<i64> {
-    COMMENT_COUNT_CACHE
-        .get(&CacheKey::CommentCount { post_id })
-        .await
-}
-
-/// 按文章主键写入评论数量缓存。
-#[cfg(feature = "server")]
-pub async fn set_comment_count(post_id: i32, count: i64) {
-    let _ = COMMENT_COUNT_CACHE
-        .insert(CacheKey::CommentCount { post_id }, count)
-        .await;
-}
-
 /// 读取待审核评论总数缓存。
 #[cfg(feature = "server")]
 pub async fn get_pending_count() -> Option<i64> {
@@ -370,14 +335,6 @@ pub async fn set_pending_count(count: i64) {
 pub async fn invalidate_comments_by_post(post_id: i32) {
     COMMENT_CACHE
         .invalidate(&CacheKey::CommentsByPost { post_id })
-        .await;
-}
-
-/// 按文章主键失效评论数量缓存。
-#[cfg(feature = "server")]
-pub async fn invalidate_comment_count(post_id: i32) {
-    COMMENT_COUNT_CACHE
-        .invalidate(&CacheKey::CommentCount { post_id })
         .await;
 }
 
@@ -556,16 +513,6 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn comment_count_cache_roundtrip() {
-        set_comment_count(42, 15).await;
-        let cached = get_comment_count(42).await;
-
-        assert!(cached.is_some());
-        assert_eq!(cached.unwrap(), 15);
-    }
-
-    #[tokio::test]
-    #[serial]
     async fn pending_count_cache_roundtrip() {
         set_pending_count(7).await;
         let cached = get_pending_count().await;
@@ -582,16 +529,6 @@ mod tests {
 
         invalidate_comments_by_post(99).await;
         assert!(get_comments_by_post(99).await.is_none());
-    }
-
-    #[tokio::test]
-    #[serial]
-    async fn comment_count_invalidation() {
-        set_comment_count(99, 5).await;
-        assert!(get_comment_count(99).await.is_some());
-
-        invalidate_comment_count(99).await;
-        assert!(get_comment_count(99).await.is_none());
     }
 
     #[tokio::test]
