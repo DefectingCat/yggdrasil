@@ -27,6 +27,34 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
     {
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
+        // 在软删除前查询 slug 与标签，用于后续精准失效缓存。
+        let slug_row = client
+            .query_opt(
+                "SELECT slug FROM posts WHERE id = $1 AND deleted_at IS NULL",
+                &[&post_id],
+            )
+            .await
+            .map_err(AppError::query)?;
+
+        let Some(slug_row) = slug_row else {
+            return Ok(CreatePostResponse {
+                success: false,
+                message: "文章不存在".to_string(),
+                post_id: None,
+                slug: None,
+            });
+        };
+        let slug: String = slug_row.get(0);
+
+        let tag_rows = client
+            .query(
+                "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
+                &[&post_id],
+            )
+            .await
+            .map_err(AppError::query)?;
+        let tags: Vec<String> = tag_rows.iter().map(|r| r.get(0)).collect();
+
         // 软删除：仅影响未被删除的文章。
         let result = client
             .execute(
@@ -45,14 +73,18 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
             });
         }
 
-        // 删除后所有文章相关缓存均失效。
-        crate::cache::invalidate_all_post_caches();
+        // 删除后按影响范围精准失效缓存。
+        crate::cache::invalidate_post_lists();
+        crate::cache::invalidate_all_tags();
+        crate::cache::invalidate_post_stats();
+        crate::cache::invalidate_post_by_slug(&slug).await;
+        crate::cache::invalidate_tag_posts_for(&tags).await;
 
         Ok(CreatePostResponse {
             success: true,
             message: "删除成功".to_string(),
             post_id: Some(post_id),
-            slug: None,
+            slug: Some(slug),
         })
     }
 

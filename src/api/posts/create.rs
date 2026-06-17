@@ -139,17 +139,14 @@ pub async fn create_post(
 
         tx.commit().await.map_err(AppError::tx)?;
 
-        // 写入成功后失效文章列表、标签与统计缓存。
+        // 写入成功后按粒度失效相关缓存。
         crate::cache::invalidate_post_lists();
         crate::cache::invalidate_all_tags();
         crate::cache::invalidate_post_stats();
         // 失效按 slug 缓存，避免之前缓存的 404 继续命中。
         crate::cache::invalidate_post_by_slug(&final_slug).await;
-
-        // 失效该文章涉及的所有标签缓存。
-        for tag_name in &tags_cleaned {
-            crate::cache::invalidate_posts_by_tag(tag_name).await;
-        }
+        // 失效该文章涉及的所有标签下文章列表缓存。
+        crate::cache::invalidate_tag_posts_for(&tags_cleaned).await;
 
         Ok(CreatePostResponse {
             success: true,

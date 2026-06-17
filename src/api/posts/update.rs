@@ -198,17 +198,17 @@ pub async fn update_post(
         // 失效文章列表、标签、当前 slug 与统计缓存。
         crate::cache::invalidate_post_lists();
         crate::cache::invalidate_all_tags();
-        crate::cache::invalidate_post_by_slug(&final_slug).await;
         crate::cache::invalidate_post_stats();
+        crate::cache::invalidate_post_by_slug(&final_slug).await;
 
         // 合并旧标签与新标签，统一失效标签下的文章列表缓存。
-        let all_tags_to_invalidate: std::collections::HashSet<String> = old_tags
+        let all_tags_to_invalidate: Vec<String> = old_tags
             .into_iter()
             .chain(tags_for_invalidation.into_iter())
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
             .collect();
-        for tag_name in &all_tags_to_invalidate {
-            crate::cache::invalidate_posts_by_tag(tag_name).await;
-        }
+        crate::cache::invalidate_tag_posts_for(&all_tags_to_invalidate).await;
 
         // 若 slug 发生变更，额外失效旧 slug 缓存。
         if let Some(ref old) = old_slug {
