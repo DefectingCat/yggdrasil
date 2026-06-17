@@ -14,53 +14,6 @@ use crate::utils::text::count_words;
 #[cfg(feature = "server")]
 pub(super) use crate::api::auth::get_current_admin_user;
 
-/// 将数据库行转换为文章列表项。
-///
-/// 用于列表接口，包含标签聚合、字数与阅读时长估算，
-/// 不包含上下篇导航与目录。
-#[cfg(feature = "server")]
-pub(super) async fn row_to_post_list(
-    _client: &tokio_postgres::Client,
-    row: &tokio_postgres::Row,
-) -> Post {
-    let id: i32 = row.get("id");
-    let role_str: String = row.get("status");
-    let status = PostStatus::from_str(&role_str).unwrap_or(PostStatus::Draft);
-
-    // 聚合标签并过滤空字符串。
-    let tags: Vec<String> = row
-        .try_get::<_, Vec<String>>("tags")
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|t| !t.is_empty())
-        .collect();
-
-    let content_md: String = row.get("content_md");
-    let word_count = count_words(&content_md);
-
-    Post {
-        id,
-        author_id: row.get("author_id"),
-        title: row.get("title"),
-        slug: row.get("slug"),
-        summary: row.get("summary"),
-        content_md,
-        content_html: row.get("content_html"),
-        status,
-        published_at: row.get("published_at"),
-        created_at: row.get("created_at"),
-        updated_at: row.get("updated_at"),
-        deleted_at: row.try_get("deleted_at").ok(),
-        tags,
-        cover_image: row.get("cover_image"),
-        reading_time: (word_count / 200).max(1),
-        word_count,
-        toc_html: None,
-        prev_post: None,
-        next_post: None,
-    }
-}
-
 /// 将数据库行转换为轻量列表项 DTO。
 ///
 /// 不包含 `content_md`/`content_html`；字数与阅读时长直接读取已持久化的列。
