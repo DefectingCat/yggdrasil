@@ -321,47 +321,61 @@ pub async fn batch_purge_posts(post_ids: Vec<i32>) -> Result<CreatePostResponse,
             });
         }
 
-        let client = get_conn().await.map_err(AppError::db_conn)?;
+        let mut client = get_conn().await.map_err(AppError::db_conn)?;
+        let tx = client.transaction().await.map_err(AppError::tx)?;
         let total = post_ids.len() as i64;
 
-        // 记录数较少时查询 slug 与标签，使用精准失效；否则回退到全量失效。
+        // 记录数较少时锁定行并读取 slug 与标签，使用精准失效；否则回退到全量失效。
         let use_precise = post_ids.len() <= PRECISE_INVALIDATION_LIMIT;
         let (slugs, tags) = if use_precise {
-            let slug_rows = client
-                .query(
-                    "SELECT slug FROM posts WHERE id = ANY($1) AND deleted_at IS NOT NULL",
-                    &[&post_ids],
-                )
-                .await
-                .map_err(AppError::query)?;
-            let slugs: Vec<String> = slug_rows.iter().map(|r| r.get(0)).collect();
+            let mut slugs = Vec::with_capacity(post_ids.len());
+            let mut tags_set: std::collections::HashSet<String> =
+                std::collections::HashSet::new();
 
-            let tag_rows = client
-                .query(
-                    "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = ANY($1)",
-                    &[&post_ids],
-                )
-                .await
-                .map_err(AppError::query)?;
-            let tags: Vec<String> = tag_rows.iter().map(|r| r.get(0)).collect();
+            for id in &post_ids {
+                let slug_row = tx
+                    .query_opt(
+                        "SELECT slug FROM posts WHERE id = $1 AND deleted_at IS NOT NULL FOR UPDATE",
+                        &[&id],
+                    )
+                    .await
+                    .map_err(AppError::query)?;
 
-            (slugs, tags)
+                if let Some(slug_row) = slug_row {
+                    let slug: String = slug_row.get(0);
+                    let tag_rows = tx
+                        .query(
+                            "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
+                            &[&id],
+                        )
+                        .await
+                        .map_err(AppError::query)?;
+                    for tag_row in &tag_rows {
+                        tags_set.insert(tag_row.get(0));
+                    }
+                    slugs.push(slug);
+                }
+            }
+
+            (slugs, tags_set.into_iter().collect::<Vec<_>>())
         } else {
             (Vec::new(), Vec::new())
         };
 
-        let result = client
+        let result = tx
             .execute(
                 "DELETE FROM posts WHERE id = ANY($1) AND deleted_at IS NOT NULL",
                 &[&post_ids],
             )
             .await
-            .map_err(AppError::query)?;
+            .map_err(AppError::tx)?;
 
-        crate::cache::invalidate_post_lists();
-        crate::cache::invalidate_all_tags();
-        crate::cache::invalidate_post_stats();
+        tx.commit().await.map_err(AppError::tx)?;
+
         if use_precise {
+            crate::cache::invalidate_post_lists();
+            crate::cache::invalidate_all_tags();
+            crate::cache::invalidate_post_stats();
             for slug in &slugs {
                 crate::cache::invalidate_post_by_slug(slug).await;
             }
@@ -439,10 +453,10 @@ pub async fn empty_trash() -> Result<CreatePostResponse, ServerFnError> {
             .await
             .map_err(AppError::query)?;
 
-        crate::cache::invalidate_post_lists();
-        crate::cache::invalidate_all_tags();
-        crate::cache::invalidate_post_stats();
         if use_precise {
+            crate::cache::invalidate_post_lists();
+            crate::cache::invalidate_all_tags();
+            crate::cache::invalidate_post_stats();
             for slug in &slugs {
                 crate::cache::invalidate_post_by_slug(slug).await;
             }
