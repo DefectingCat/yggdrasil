@@ -13,6 +13,8 @@ use super::types::PostListResponse;
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
 #[cfg(feature = "server")]
+use crate::cache;
+#[cfg(feature = "server")]
 use crate::db::pool::get_conn;
 
 /// 搜索已发布文章。
@@ -45,6 +47,12 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
                 posts: Vec::new(),
                 total: 0,
             });
+        }
+
+        // 先检查短 TTL 的搜索结果缓存。
+        let cache_key = cache::normalize_search_key(q);
+        if let Some((posts, total)) = cache::get_search_results(&cache_key).await {
+            return Ok(PostListResponse { posts, total });
         }
 
         // 转义 SQL LIKE 通配符，避免用户输入 % / _ 导致全表扫描。
@@ -81,6 +89,7 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
         }
 
         let total = posts.len() as i64;
+        cache::set_search_results(&cache_key, posts.clone(), total).await;
         Ok(PostListResponse { posts, total })
     }
 

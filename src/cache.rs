@@ -54,6 +54,10 @@ const TTL_PENDING_COUNT: Duration = Duration::from_secs(10);
 #[cfg(feature = "server")]
 const TTL_SESSION: Duration = Duration::from_secs(300);
 
+/// 搜索结果缓存 TTL：10 秒。
+#[cfg(feature = "server")]
+const TTL_SEARCH: Duration = Duration::from_secs(10);
+
 // ============================================================================
 // 缓存 Key 类型
 // ============================================================================
@@ -171,12 +175,25 @@ static PENDING_COUNT_CACHE: LazyLock<Cache<CacheKey, i64>> = LazyLock::new(|| {
 #[cfg(feature = "server")]
 pub type SessionCache = Cache<String, User>;
 
+/// 搜索结果缓存类型。
+#[cfg(feature = "server")]
+pub type SearchCache = Cache<String, (Vec<PostListItem>, i64)>;
+
 /// 全局会话用户缓存实例，最大容量 1000，TTL 5 分钟。
 #[cfg(feature = "server")]
 static SESSION_CACHE: LazyLock<SessionCache> = LazyLock::new(|| {
     Cache::builder()
         .max_capacity(1000)
         .time_to_live(TTL_SESSION)
+        .build()
+});
+
+/// 全局搜索结果缓存实例，最大容量 200，TTL 10 秒。
+#[cfg(feature = "server")]
+static SEARCH_CACHE: LazyLock<SearchCache> = LazyLock::new(|| {
+    Cache::builder()
+        .max_capacity(200)
+        .time_to_live(TTL_SEARCH)
         .build()
 });
 
@@ -364,6 +381,12 @@ pub async fn set_pending_count(count: i64) {
         .await;
 }
 
+/// 规范化搜索查询键：trim、转小写、截断至 200 字符。
+#[cfg(feature = "server")]
+pub fn normalize_search_key(query: &str) -> String {
+    query.trim().to_lowercase().chars().take(200).collect()
+}
+
 /// 读取会话用户缓存。
 #[cfg(feature = "server")]
 pub async fn get_session_user(token_hash: &str) -> Option<User> {
@@ -380,6 +403,26 @@ pub async fn set_session_user(token_hash: &str, user: User) {
 #[cfg(feature = "server")]
 pub async fn invalidate_session_user(token_hash: &str) {
     SESSION_CACHE.invalidate(token_hash).await;
+}
+
+/// 读取搜索结果缓存。
+#[cfg(feature = "server")]
+pub async fn get_search_results(query: &str) -> Option<(Vec<PostListItem>, i64)> {
+    SEARCH_CACHE.get(&normalize_search_key(query)).await
+}
+
+/// 写入搜索结果缓存。
+#[cfg(feature = "server")]
+pub async fn set_search_results(query: &str, posts: Vec<PostListItem>, total: i64) {
+    let _ = SEARCH_CACHE
+        .insert(normalize_search_key(query), (posts, total))
+        .await;
+}
+
+/// 清空所有搜索结果缓存。
+#[cfg(feature = "server")]
+pub fn invalidate_search_results() {
+    SEARCH_CACHE.invalidate_all();
 }
 
 /// 按文章主键失效评论列表缓存。
@@ -636,6 +679,60 @@ mod tests {
 
         invalidate_session_user(token_hash).await;
         assert!(get_session_user(token_hash).await.is_none());
+    }
+
+    #[test]
+    fn search_key_normalization() {
+        assert_eq!(normalize_search_key("  Rust "), "rust");
+        assert_eq!(normalize_search_key("Rust"), "rust");
+        assert_eq!(normalize_search_key("  rust "), "rust");
+        assert_eq!(normalize_search_key(""), "");
+
+        let long = "a".repeat(250);
+        let normalized = normalize_search_key(&long);
+        assert_eq!(normalized.len(), 200);
+        assert!(normalized.chars().all(|c| c == 'a'));
+
+        // 大小写与空格差异应映射到同一键。
+        assert_eq!(
+            normalize_search_key("  Dioxus Fullstack "),
+            normalize_search_key("dioxus fullstack")
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn search_cache_roundtrip() {
+        let query = "Rust";
+        let posts = vec![PostListItem {
+            id: 1,
+            author_id: 1,
+            title: "Search Result".to_string(),
+            slug: "search-result".to_string(),
+            summary: None,
+            status: PostStatus::Published,
+            published_at: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            deleted_at: None,
+            tags: vec!["rust".to_string()],
+            cover_image: None,
+            reading_time: 1,
+            word_count: 10,
+        }];
+
+        set_search_results(query, posts.clone(), 1).await;
+
+        // 大小写与空格差异应命中同一缓存条目。
+        let cached = get_search_results(" rust ").await;
+        assert!(cached.is_some());
+        let (cached_posts, cached_total) = cached.unwrap();
+        assert_eq!(cached_posts.len(), 1);
+        assert_eq!(cached_posts[0].title, "Search Result");
+        assert_eq!(cached_total, 1);
+
+        invalidate_search_results();
+        assert!(get_search_results(query).await.is_none());
     }
 
 }
