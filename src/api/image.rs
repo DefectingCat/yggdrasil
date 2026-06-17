@@ -24,16 +24,13 @@ use std::sync::LazyLock;
 fn etag_for(data: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     let hash = Sha256::digest(data);
-    format!("\"{}\"", hex::encode(&hash[..8]))
+    format!("\"{}\"", hex::encode(&hash[..16]))
 }
 
 #[cfg(feature = "server")]
 pub const MAX_IMAGE_DIMENSION: u32 = 4096;
 #[cfg(feature = "server")]
 const DEFAULT_JPEG_QUALITY: u8 = 85;
-#[cfg(feature = "server")]
-#[allow(dead_code)]
-const IMAGE_CACHE_MAX_AGE: u64 = 31_536_000; // 1 year
 #[cfg(feature = "server")]
 /// 允许处理的最大图片像素数（约 5k x 5k）。
 pub const MAX_IMAGE_PIXELS: u32 = 25_000_000; // ~5k x 5k
@@ -176,8 +173,26 @@ fn content_type(format: image::ImageFormat) -> HeaderValue {
 }
 
 #[cfg(feature = "server")]
-fn image_response(data: Vec<u8>, content_type: HeaderValue, cache_control: &'static str) -> Response {
+fn image_response(
+    data: Vec<u8>,
+    content_type: HeaderValue,
+    cache_control: &'static str,
+    headers: &HeaderMap,
+) -> Response {
     let etag = etag_for(&data);
+
+    if headers
+        .get(header::IF_NONE_MATCH)
+        .and_then(|v| v.to_str().ok())
+        == Some(&etag)
+    {
+        return (
+            StatusCode::NOT_MODIFIED,
+            [(header::ETAG, HeaderValue::from_str(&etag).unwrap())],
+        )
+            .into_response();
+    }
+
     (
         StatusCode::OK,
         [
@@ -422,7 +437,7 @@ pub async fn serve_image(
         return match tokio::fs::read(&file_path).await {
             Ok(data) => {
                 let ct = content_type(detect_format(&path));
-                image_response(data, ct, "public, max-age=31536000, immutable")
+                image_response(data, ct, "public, max-age=31536000, immutable", &headers)
             }
             Err(_) => StatusCode::NOT_FOUND.into_response(),
         };
@@ -430,7 +445,7 @@ pub async fn serve_image(
 
     let cache_key = params.cache_key(&path);
     if let Some(cached) = IMAGE_CACHE.get(&cache_key).await {
-        return image_response(cached.data, cached.content_type, "public, max-age=86400");
+        return image_response(cached.data, cached.content_type, "public, max-age=86400", &headers);
     }
 
     if let Some(cached) = read_disk_cache(&cache_key).await {
@@ -443,7 +458,7 @@ pub async fn serve_image(
                 },
             )
             .await;
-        return image_response(cached.data, cached.content_type, "public, max-age=86400");
+        return image_response(cached.data, cached.content_type, "public, max-age=86400", &headers);
     }
 
     let data = match tokio::fs::read(&file_path).await {
@@ -477,7 +492,7 @@ pub async fn serve_image(
     let _ = IMAGE_CACHE.insert(cache_key.clone(), cached.clone()).await;
     write_disk_cache(&cache_key, &cached).await;
 
-    image_response(processed, content_type, "public, max-age=86400")
+    image_response(processed, content_type, "public, max-age=86400", &headers)
 }
 
 #[cfg(all(test, feature = "server"))]
@@ -725,14 +740,63 @@ mod tests {
 
     #[test]
     fn image_response_includes_cache_headers() {
-        let resp = image_response(vec![1, 2, 3], HeaderValue::from_static("image/webp"), "public, max-age=86400");
+        let resp = image_response(
+            vec![1, 2, 3],
+            HeaderValue::from_static("image/webp"),
+            "public, max-age=86400",
+            &HeaderMap::new(),
+        );
         assert_eq!(resp.status(), StatusCode::OK);
         let headers = resp.headers();
+        assert_eq!(
+            headers.get(header::CONTENT_TYPE).unwrap(),
+            "image/webp"
+        );
         assert_eq!(
             headers.get(header::CACHE_CONTROL).unwrap(),
             "public, max-age=86400"
         );
         assert!(headers.get(header::ETAG).unwrap().to_str().unwrap().starts_with('"'));
+    }
+
+    #[test]
+    fn image_response_returns_304_when_etag_matches() {
+        let data = vec![1, 2, 3];
+        let etag = etag_for(&data);
+        let mut req_headers = HeaderMap::new();
+        req_headers.insert(
+            header::IF_NONE_MATCH,
+            HeaderValue::from_str(&etag).unwrap(),
+        );
+        let resp = image_response(
+            data,
+            HeaderValue::from_static("image/webp"),
+            "public, max-age=86400",
+            &req_headers,
+        );
+        assert_eq!(resp.status(), StatusCode::NOT_MODIFIED);
+        let headers = resp.headers();
+        assert_eq!(headers.get(header::ETAG).unwrap(), etag.as_str());
+        assert!(headers.get(header::CONTENT_TYPE).is_none());
+        assert!(headers.get(header::CACHE_CONTROL).is_none());
+    }
+
+    #[test]
+    fn image_response_raw_file_is_immutable() {
+        let resp = image_response(
+            vec![1, 2, 3],
+            HeaderValue::from_static("image/jpeg"),
+            "public, max-age=31536000, immutable",
+            &HeaderMap::new(),
+        );
+        assert_eq!(resp.status(), StatusCode::OK);
+        let cache_control = resp
+            .headers()
+            .get(header::CACHE_CONTROL)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(cache_control.contains("immutable"));
     }
 
     #[test]
