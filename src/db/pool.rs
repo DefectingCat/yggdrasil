@@ -7,7 +7,7 @@
 use std::sync::LazyLock;
 use std::time::Duration;
 
-use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
+use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod, Runtime};
 use tokio_postgres::NoTls;
 
 /// 全局数据库连接池，基于 `DATABASE_URL` 环境变量延迟初始化。
@@ -35,6 +35,7 @@ pub static DB_POOL: LazyLock<Pool> = LazyLock::new(|| {
         .wait_timeout(Some(Duration::from_secs(10)))
         .create_timeout(Some(Duration::from_secs(10)))
         .recycle_timeout(Some(Duration::from_secs(5)))
+        .runtime(Runtime::Tokio1)
         .build()
         .expect("Failed to create database connection pool")
 });
