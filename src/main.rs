@@ -53,6 +53,10 @@ fn main() {
         // 启动 Dioxus 服务端，返回构建好的 Axum Router
         dioxus::server::serve(|| async move {
             use dioxus::server::{axum, DioxusRouterExt, ServeConfig};
+            use std::time::Duration;
+            use tower_http::compression::CompressionLayer;
+            use tower_http::timeout::TimeoutLayer;
+            use axum::http::StatusCode;
 
             // 启动后台定时任务：IP 信息清理
             tokio::spawn(async {
@@ -81,26 +85,38 @@ fn main() {
                 ),
             );
 
-            // 自定义 API 路由：图片上传，设置最大请求体大小为 10 MiB
-            // （包含 multipart 开销，实际文件限制由 upload_image 内 MAX_FILE_SIZE 控制）
-            let api_routes = axum::Router::new().route(
-                "/api/upload",
-                axum::routing::post(crate::api::upload::upload_image)
-                    .layer(axum::extract::DefaultBodyLimit::max(10 * 1024 * 1024)),
-            );
-
-            // 静态资源路由：图片文件服务，支持动态裁剪/旋转/格式转换
-            let static_routes = axum::Router::new().route(
-                "/uploads/{*path}",
-                axum::routing::get(crate::api::image::serve_image),
-            );
+            // 自定义 API 路由：图片上传（大文件，需要更长超时）
+            let upload_route = axum::Router::new()
+                .route(
+                    "/api/upload",
+                    axum::routing::post(crate::api::upload::upload_image),
+                )
+                .layer(axum::extract::DefaultBodyLimit::max(10 * 1024 * 1024))
+                .layer(TimeoutLayer::with_status_code(
+                    StatusCode::REQUEST_TIMEOUT,
+                    Duration::from_secs(300),
+                ));
 
             // Dioxus 应用路由：自动挂载所有 server function 并渲染前端组件
             let dioxus_app =
                 axum::Router::new().serve_dioxus_application(config, router::AppRouter);
 
-            // 合并三条路由：自定义 API、静态资源、Dioxus 主应用
-            let router = api_routes.merge(static_routes).merge(dioxus_app);
+            // 合并 Dioxus + 压缩/30s 超时中间件
+            let app_routes = dioxus_app
+                .layer(CompressionLayer::new())
+                .layer(TimeoutLayer::with_status_code(
+                    StatusCode::REQUEST_TIMEOUT,
+                    Duration::from_secs(30),
+                ));
+
+            // 静态资源路由：图片文件服务（不加压缩/超时）
+            let static_routes = axum::Router::new().route(
+                "/uploads/{*path}",
+                axum::routing::get(crate::api::image::serve_image),
+            );
+
+            // 合并：upload 路由保持自己独立的 300s 超时；app routes 加压缩/30s；static routes 无任何中间件
+            let router = upload_route.merge(app_routes).merge(static_routes);
 
             Ok(router)
         });
