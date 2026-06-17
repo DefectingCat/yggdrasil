@@ -80,6 +80,7 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
         crate::cache::invalidate_post_lists();
         crate::cache::invalidate_all_tags();
         crate::cache::invalidate_post_stats();
+        crate::cache::invalidate_search_results();
         crate::cache::invalidate_post_by_slug(&slug).await;
         crate::cache::invalidate_tag_posts_for(&tags).await;
 

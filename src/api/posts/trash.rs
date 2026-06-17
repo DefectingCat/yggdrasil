@@ -90,6 +90,7 @@ pub async fn restore_post(post_id: i32) -> Result<CreatePostResponse, ServerFnEr
         crate::cache::invalidate_post_lists();
         crate::cache::invalidate_all_tags();
         crate::cache::invalidate_post_stats();
+        crate::cache::invalidate_search_results();
         crate::cache::invalidate_post_by_slug(&current_slug).await;
         crate::cache::invalidate_post_by_slug(&new_slug).await;
         crate::cache::invalidate_tag_posts_for(&tags).await;
@@ -177,6 +178,7 @@ pub async fn purge_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErro
         crate::cache::invalidate_post_lists();
         crate::cache::invalidate_all_tags();
         crate::cache::invalidate_post_stats();
+        crate::cache::invalidate_search_results();
         crate::cache::invalidate_post_by_slug(&slug).await;
         crate::cache::invalidate_tag_posts_for(&tags).await;
 
@@ -277,6 +279,7 @@ pub async fn batch_restore_posts(post_ids: Vec<i32>) -> Result<CreatePostRespons
             crate::cache::invalidate_post_lists();
             crate::cache::invalidate_all_tags();
             crate::cache::invalidate_post_stats();
+            crate::cache::invalidate_search_results();
             for slug in &unique_slugs {
                 crate::cache::invalidate_post_by_slug(slug).await;
             }
@@ -284,6 +287,7 @@ pub async fn batch_restore_posts(post_ids: Vec<i32>) -> Result<CreatePostRespons
         } else {
             // 影响集过大时回退到全量失效，避免大量串行缓存操作。
             crate::cache::invalidate_all_post_caches();
+            crate::cache::invalidate_search_results();
         }
 
         Ok(CreatePostResponse {
@@ -376,6 +380,7 @@ pub async fn batch_purge_posts(post_ids: Vec<i32>) -> Result<CreatePostResponse,
             crate::cache::invalidate_post_lists();
             crate::cache::invalidate_all_tags();
             crate::cache::invalidate_post_stats();
+            crate::cache::invalidate_search_results();
             for slug in &slugs {
                 crate::cache::invalidate_post_by_slug(slug).await;
             }
@@ -383,6 +388,7 @@ pub async fn batch_purge_posts(post_ids: Vec<i32>) -> Result<CreatePostResponse,
         } else {
             // 影响集过大时回退到全量失效，避免大量串行缓存操作。
             crate::cache::invalidate_all_post_caches();
+            crate::cache::invalidate_search_results();
         }
 
         Ok(CreatePostResponse {
@@ -455,6 +461,7 @@ pub async fn empty_trash() -> Result<CreatePostResponse, ServerFnError> {
             crate::cache::invalidate_post_lists();
             crate::cache::invalidate_all_tags();
             crate::cache::invalidate_post_stats();
+            crate::cache::invalidate_search_results();
             for slug in &slugs {
                 crate::cache::invalidate_post_by_slug(slug).await;
             }
@@ -462,6 +469,7 @@ pub async fn empty_trash() -> Result<CreatePostResponse, ServerFnError> {
         } else {
             // 影响集过大时回退到全量失效，避免大量串行缓存操作。
             crate::cache::invalidate_all_post_caches();
+            crate::cache::invalidate_search_results();
         }
 
         Ok(CreatePostResponse {

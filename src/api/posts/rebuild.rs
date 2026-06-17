@@ -107,6 +107,7 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
         // 标签文章及单篇缓存；这里使用全量失效作为务实的回退策略。
         if rebuilt > 0 {
             crate::cache::invalidate_all_post_caches();
+            crate::cache::invalidate_search_results();
         }
 
         Ok(RebuildResult {
