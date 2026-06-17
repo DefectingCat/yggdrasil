@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- 图片响应新增 `Cache-Control` 与 `ETag` 头：原始上传文件使用 `immutable, max-age=31536000`，处理变体使用 `max-age=86400`。
+
+### Fixed
+
+- 修复 `/uploads/{*path}` 路径因缺少 `ConnectInfo` 扩展而返回 HTTP 500 的问题。
+
+### Changed
+
+- 图片解码、缩放、编码逻辑通过 `tokio::task::spawn_blocking` 移至阻塞线程池，避免阻塞异步运行时。
+- 为非图片路由启用 `CompressionLayer` 与 `TimeoutLayer`，`/uploads/*` 图片路由跳过压缩与全局超时。
+
 ## [0.2.0] - 2026-06-10
 
 ### Added

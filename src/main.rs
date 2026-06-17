@@ -110,10 +110,15 @@ fn main() {
                 ));
 
             // 静态资源路由：图片文件服务（不加压缩/超时）
-            let static_routes = axum::Router::new().route(
-                "/uploads/{*path}",
-                axum::routing::get(crate::api::image::serve_image),
-            );
+            let static_routes = axum::Router::new()
+                .route(
+                    "/uploads/{*path}",
+                    axum::routing::get(crate::api::image::serve_image),
+                )
+                .route(
+                    "/uploads",
+                    axum::routing::get(|| async { StatusCode::NOT_FOUND }),
+                );
 
             // 合并：upload 路由保持自己独立的 300s 超时；app routes 加压缩/30s；static routes 无任何中间件
             let router = upload_route.merge(app_routes).merge(static_routes);
