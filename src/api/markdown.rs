@@ -37,8 +37,12 @@ pub struct RenderedContent {
 pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
     use pulldown_cmark::{Event, HeadingLevel, Options, Tag, TagEnd};
 
+    // 两遍解析使用相同的 Options，避免 TOC 收集与正文渲染对 Markdown 扩展语法
+    // （表格、删除线、脚注等）的处理不一致。
+    let opts = Options::all();
+
     // 1. Parse markdown and collect headings for TOC
-    let parser = pulldown_cmark::Parser::new_ext(md, Options::all());
+    let parser = pulldown_cmark::Parser::new_ext(md, opts);
     // (level, text, id)
     let mut headings: Vec<(u8, String, String)> = Vec::new();
     let mut current_heading: Option<(u8, String)> = None;
@@ -80,7 +84,7 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
     let toc_html = generate_toc_html(&headings);
 
     // 3. Generate HTML with heading anchors
-    let parser = pulldown_cmark::Parser::new_ext(md, Options::ENABLE_TABLES);
+    let parser = pulldown_cmark::Parser::new_ext(md, opts);
     let mut html = String::new();
     let mut heading_idx = 0;
     let mut in_heading = false;
