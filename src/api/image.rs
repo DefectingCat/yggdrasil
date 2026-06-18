@@ -373,16 +373,24 @@ fn process_image_blocking(
 }
 
 #[cfg(feature = "server")]
-fn is_path_safe(path: &str) -> bool {
-    // Reject paths with parent directory references or null bytes
-    if path.contains("..") || path.contains('\0') {
+/// 校验请求路径不会逃出 uploads 目录。
+///
+/// 两层校验：① 子串级拒绝 `..`/`\0`/绝对路径前缀；② 对已存在文件用 canonicalize
+/// 确认解析后真实路径仍在 uploads 目录内（纵深防御，抵御符号链接等绕过）。
+/// 文件不存在或 uploads 目录不存在时只做第一层校验（由后续 read 报 404）。
+async fn is_path_safe(path: &str) -> bool {
+    if path.contains("..") || path.contains('\0') || path.starts_with('/') {
         return false;
     }
-    // Reject absolute paths
-    if path.starts_with('/') {
-        return false;
+    let candidate = std::path::Path::new("uploads").join(path);
+    let uploads_root = match tokio::fs::canonicalize("uploads").await {
+        Ok(p) => p,
+        Err(_) => return true, // uploads 目录不存在（测试环境），只靠第一层校验。
+    };
+    match tokio::fs::canonicalize(&candidate).await {
+        Ok(resolved) => resolved.starts_with(&uploads_root),
+        Err(_) => true, // 文件不存在，交由后续读取报 404。
     }
-    true
 }
 
 #[cfg(feature = "server")]
@@ -452,7 +460,7 @@ pub async fn serve_image(
         return status.into_response();
     }
 
-    if !is_path_safe(&path) {
+    if !is_path_safe(&path).await {
         return StatusCode::FORBIDDEN.into_response();
     }
 
@@ -654,26 +662,26 @@ mod tests {
         assert!(params.validate().is_err());
     }
 
-    #[test]
-    fn is_path_safe_normal() {
-        assert!(is_path_safe("images/photo.jpg"));
-        assert!(is_path_safe("2024/01/photo.png"));
+    #[tokio::test]
+    async fn is_path_safe_normal() {
+        assert!(is_path_safe("images/photo.jpg").await);
+        assert!(is_path_safe("2024/01/photo.png").await);
     }
 
-    #[test]
-    fn is_path_safe_rejects_parent_dir() {
-        assert!(!is_path_safe("../etc/passwd"));
-        assert!(!is_path_safe("foo/../../bar"));
+    #[tokio::test]
+    async fn is_path_safe_rejects_parent_dir() {
+        assert!(!is_path_safe("../etc/passwd").await);
+        assert!(!is_path_safe("foo/../../bar").await);
     }
 
-    #[test]
-    fn is_path_safe_rejects_null_bytes() {
-        assert!(!is_path_safe("foo\0bar"));
+    #[tokio::test]
+    async fn is_path_safe_rejects_null_bytes() {
+        assert!(!is_path_safe("foo\0bar").await);
     }
 
-    #[test]
-    fn is_path_safe_rejects_absolute_path() {
-        assert!(!is_path_safe("/etc/passwd"));
+    #[tokio::test]
+    async fn is_path_safe_rejects_absolute_path() {
+        assert!(!is_path_safe("/etc/passwd").await);
     }
 
     #[test]
