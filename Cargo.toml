@@ -37,7 +37,7 @@ moka = { version = "0.12", features = ["future"], optional = true }
 governor = { version = "0.8", optional = true }
 md-5 = { version = "0.10", optional = true }
 futures = { version = "0.3", optional = true }
-bytes = "1"
+bytes = { version = "1", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = ["Document", "Window", "Storage", "Element", "HtmlElement", "DomTokenList", "MediaQueryList", "HtmlImageElement", "MouseEvent", "KeyboardEvent", "Node", "EventTarget", "Navigator"] }
@@ -85,4 +85,5 @@ server = [
     "dep:governor",
     "dep:md-5",
     "dep:futures",
+    "dep:bytes",
 ]
