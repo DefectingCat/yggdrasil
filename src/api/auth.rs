@@ -190,7 +190,7 @@ pub async fn login(username: String, password: String) -> Result<AuthResponse, S
         }
     }
 
-    let client = get_conn().await.map_err(AppError::db_conn)?;
+    let mut client = get_conn().await.map_err(AppError::db_conn)?;
 
     let row = match client
         .query_opt(
@@ -242,8 +242,15 @@ pub async fn login(username: String, password: String) -> Result<AuthResponse, S
         .unwrap_or(5)
         .max(1);
 
-    // 查询当前活跃会话数，超出限制时删除最早的一条。
-    let session_count: i64 = client
+    // 用事务 + 对 users 行加 FOR UPDATE 锁，串行化同一用户的并发登录，
+    // 避免 COUNT→DELETE→INSERT 之间的竞态导致超出上限（M1）。
+    let tx = client.transaction().await.map_err(AppError::query)?;
+    // 锁住该用户行，并发登录在此排队。
+    tx.execute("SELECT 1 FROM users WHERE id = $1 FOR UPDATE", &[&user_id])
+        .await
+        .map_err(AppError::query)?;
+
+    let session_count: i64 = tx
         .query_one(
             "SELECT COUNT(*) FROM sessions WHERE user_id = $1 AND expires_at > NOW()",
             &[&user_id],
@@ -253,27 +260,27 @@ pub async fn login(username: String, password: String) -> Result<AuthResponse, S
         .get(0);
 
     if session_count >= max_sessions {
-        client
-            .execute(
-                "DELETE FROM sessions WHERE id IN (
-                    SELECT id FROM sessions
-                    WHERE user_id = $1 AND expires_at > NOW()
-                    ORDER BY created_at ASC
-                    LIMIT 1
-                )",
-                &[&user_id],
-            )
-            .await
-            .map_err(AppError::query)?;
-    }
-
-    client
-        .execute(
-            "INSERT INTO sessions (user_id, token_hash, user_agent, expires_at) VALUES ($1, $2, $3, $4)",
-            &[&user_id, &token_hash, &None::<String>, &expires_at],
+        tx.execute(
+            "DELETE FROM sessions WHERE id IN (
+                SELECT id FROM sessions
+                WHERE user_id = $1 AND expires_at > NOW()
+                ORDER BY created_at ASC
+                LIMIT 1
+            )",
+            &[&user_id],
         )
         .await
         .map_err(AppError::query)?;
+    }
+
+    tx.execute(
+        "INSERT INTO sessions (user_id, token_hash, user_agent, expires_at) VALUES ($1, $2, $3, $4)",
+        &[&user_id, &token_hash, &None::<String>, &expires_at],
+    )
+    .await
+    .map_err(AppError::query)?;
+
+    tx.commit().await.map_err(AppError::query)?;
 
     let cookie = session::session_cookie(&token, 30 * 24 * 60 * 60, session::cookie_secure());
     // 通过 Dioxus FullstackContext 设置 HttpOnly Cookie 响应头。
