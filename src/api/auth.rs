@@ -201,6 +201,16 @@ pub async fn login(username: String, password: String) -> Result<AuthResponse, S
     {
         Ok(Some(row)) => row,
         Ok(None) => {
+            // 用户不存在时也执行一次 Argon2 verify，抹平「用户不存在」与
+            // 「密码错误」的响应时序差，防止通过响应时间枚举账号（L2）。
+            // 用固定合法哈希做 verify（必然失败），耗时与真实校验一致。
+            const DUMMY_HASH: &str =
+                "$argon2id$v=19$m=19456,t=2,p=1$j3rNaAXzdExYaL94WBWtfg$n1S75LUQKaYJwaRl5bkFF/f/N1tLfRYR/7TuQxKP94c";
+            let dummy_pw = password.clone();
+            let _ = tokio::task::spawn_blocking(move || {
+                crate::auth::password::verify_password(&dummy_pw, DUMMY_HASH)
+            })
+            .await;
             return Ok(AuthResponse {
                 success: false,
                 message: "Invalid credentials".to_string(),
