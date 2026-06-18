@@ -489,12 +489,11 @@ pub async fn serve_image(
 
     // Offload decode + resize + encode to the blocking pool so the async
     // runtime stays responsive to other requests.
-    let data_for_blocking = data.clone();
     let path_for_blocking = path.clone();
     let params_for_blocking = params.clone();
     let (processed, content_type) =
         match tokio::task::spawn_blocking(move || {
-            process_image_blocking(data_for_blocking, params_for_blocking, path_for_blocking)
+            process_image_blocking(data, params_for_blocking, path_for_blocking)
         })
         .await
         {
