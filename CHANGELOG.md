@@ -10,6 +10,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - 图片响应新增 `Cache-Control` 与 `ETag` 头：原始上传文件使用 `immutable, max-age=31536000`，处理变体使用 `max-age=86400`。
+- 新增 `PostListItem` 轻量 DTO，列表/标签/搜索接口不再返回完整正文，显著降低缓存与序列化体积。
+- 新增数据库迁移 `010_post_word_counts.sql`，在 `posts` 表存储 `word_count` 与 `reading_time`，并在写入时维护。
+- 新增基于 moka 的会话内存缓存，减少每次认证请求的 `sessions JOIN users` 数据库查询；缓存对象 `SessionUser` 不包含密码哈希。
+- 新增搜索结果短 TTL 缓存（10 秒），并对查询 key 做规范化处理。
+- 新增图片内存缓存使用 `bytes::Bytes` 存储，命中时仅做引用计数克隆。
+- 新增图片磁盘缓存定时清理后台任务，按文件年龄与总大小上限淘汰。
+- 新增 `src/ssr_cache.rs` SSR 生成号基础设施，为后续 Dioxus 暴露缓存失效 API 做准备。
+
+### Changed
+
+- 文章写路径缓存失效从「全量清空」改为「精确到 slug / tag / 列表页」，并在读取 slug/tag 元数据时使用事务 + `FOR UPDATE` 避免并发竞态。
+- `get_post_stats` 将 3 次独立 `COUNT(*)` 合并为单次条件聚合查询。
+- `row_to_post_list` 已移除，`get_post_by_id` 复用 `row_to_post_full`。
+
+### Fixed
+
+- 过期 session 清理任务现在同时失效会话内存缓存，避免已过期会话在缓存 TTL 窗口内继续被使用。
+- 图片磁盘清理跳过符号链接，防止遍历到缓存目录外部。
+
+### Internal
+
+- 新增 `utils::text::reading_time` 辅助函数，统一阅读时间计算逻辑。
+- 新增缓存、SSR 生成号相关单元测试。
 
 ### Fixed
 
