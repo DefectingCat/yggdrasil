@@ -271,6 +271,7 @@ fn main() {
             }
 
             // 自定义 API 路由：图片上传（大文件，需要更长超时）
+            // CSRF 校验置于最外层，先拦截非法来源再做超时/限体。
             let upload_route = axum::Router::new()
                 .route(
                     "/api/upload",
@@ -280,16 +281,23 @@ fn main() {
                 .layer(TimeoutLayer::with_status_code(
                     StatusCode::REQUEST_TIMEOUT,
                     Duration::from_secs(300),
+                ))
+                .layer(axum::middleware::from_fn(
+                    crate::api::csrf::csrf_middleware,
                 ));
 
             // Dioxus 应用路由：自动挂载所有 server function 并渲染前端组件
             let dioxus_app =
                 axum::Router::new().serve_dioxus_application(config, router::AppRouter);
 
-            // 合并 Dioxus + 世代号/缓存头/可选压缩/30s 超时中间件
+            // 合并 Dioxus + CSRF/世代号/缓存头/可选压缩/30s 超时中间件
+            // layer 顺序：后加的最外层先执行。CSRF 最外层先拦截非法来源。
             let mut app_routes = dioxus_app
                 .layer(axum::middleware::from_fn(ssr_generation_middleware))
-                .layer(axum::middleware::from_fn(add_cache_control));
+                .layer(axum::middleware::from_fn(add_cache_control))
+                .layer(axum::middleware::from_fn(
+                    crate::api::csrf::csrf_middleware,
+                ));
             if let Some(layer) = compression_layer_from_env() {
                 app_routes = app_routes.layer(layer);
             }

@@ -50,6 +50,7 @@ Session / security tuning:
 ```
 COOKIE_SECURE=false         # set true/1/yes to add Secure flag to session cookie
 TRUSTED_PROXY_COUNT=0       # number of reverse proxies in front of the app; used to extract real client IP from X-Forwarded-For
+APP_BASE_URL=               # e.g. https://your-domain.example — trusted origin for CSRF checks on write requests; unset falls back to Host header + X-Forwarded-Proto
 ```
 
 Run migrations before first dev server start:
