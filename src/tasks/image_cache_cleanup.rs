@@ -9,10 +9,12 @@ use std::time::{Duration, SystemTime};
 use tokio::time::interval;
 
 const CACHE_DIR: &str = "uploads/.cache";
+const BYTES_PER_MB: u64 = 1024 * 1024;
+const SECS_PER_HOUR: u64 = 3600;
 
 /// 启动图片磁盘缓存清理循环，每小时触发一次。
 pub async fn run_cleanup() {
-    let mut ticker = interval(Duration::from_secs(3600));
+    let mut ticker = interval(Duration::from_secs(SECS_PER_HOUR));
     loop {
         if let Err(e) = cleanup_image_cache().await {
             tracing::error!("Image disk cache cleanup error: {:?}", e);
@@ -55,7 +57,7 @@ pub async fn cleanup_image_cache_at(
         return Ok((Vec::new(), 0));
     }
 
-    let max_age = Duration::from_secs(max_age_hours * 3600);
+    let max_age = Duration::from_secs(max_age_hours * SECS_PER_HOUR);
     let now = SystemTime::now();
     let cutoff = now - max_age;
 
@@ -84,7 +86,7 @@ pub async fn cleanup_image_cache_at(
     }
 
     // 第二轮：若总大小仍超过上限，按修改时间从旧到新删除。
-    let max_bytes = max_mb.saturating_mul(1024 * 1024);
+    let max_bytes = max_mb.saturating_mul(BYTES_PER_MB);
     let mut total: u64 = remaining.iter().map(|(_, size, _)| size).sum();
     if total > max_bytes {
         remaining.sort_by_key(|a| a.2);
