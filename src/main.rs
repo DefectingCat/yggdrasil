@@ -82,8 +82,9 @@ fn main() {
             });
 
             // 配置增量渲染缓存，默认缓存 3600 秒，可通过 SSR_CACHE_SECS 覆盖。
-            // 注意：世代号失效机制已就位（见 src/ssr_cache.rs），但 Dioxus 0.7 未暴露
-            // 自定义缓存键 API，因此 TTL 仍是当前有效的兜底策略。
+            // 注意：src/ssr_cache.rs 中的世代号是未来就绪基础设施，当前并不会使
+            // Dioxus 0.7 的 SSR 缓存实际失效（Dioxus 未暴露相应 API）。在 API 可用
+            // 之前，SSR_CACHE_SECS 仍是唯一有效的兜底 TTL。
             let config = ServeConfig::builder().incremental(
                 dioxus::server::IncrementalRendererConfig::default().invalidate_after(
                     std::time::Duration::from_secs(
@@ -95,21 +96,25 @@ fn main() {
                 ),
             );
 
-            // SSR 世代号中间件：把当前全局世代号注入请求扩展并附加到响应头。
-            // 这是为 Dioxus 未来支持自定义 SSR 缓存键预留的钩子；目前主要提供可观测性。
+            // SSR 世代号中间件：把当前全局世代号注入请求扩展，并对 GET 请求的
+            // 响应附加 `X-SSR-Generation` 头。这是为未来 Dioxus 支持自定义 SSR 缓存键
+            // 预留的钩子；目前主要提供可观测性，不会实际失效 SSR 缓存。
             async fn ssr_generation_middleware(
                 req: axum::http::Request<axum::body::Body>,
                 next: axum::middleware::Next,
             ) -> axum::response::Response {
                 let generation = crate::ssr_cache::current_global_generation();
+                let is_get = req.method() == axum::http::Method::GET;
                 let (mut parts, body) = req.into_parts();
                 parts.extensions.insert(crate::ssr_cache::SsrGeneration(generation));
                 let mut response = next.run(axum::http::Request::from_parts(parts, body)).await;
-                response.headers_mut().insert(
-                    axum::http::header::HeaderName::from_static("x-ssr-generation"),
-                    axum::http::HeaderValue::from_str(&generation.to_string())
-                        .unwrap_or_else(|_| axum::http::HeaderValue::from_static("0")),
-                );
+                if is_get {
+                    response.headers_mut().insert(
+                        axum::http::header::HeaderName::from_static("x-ssr-generation"),
+                        axum::http::HeaderValue::from_str(&generation.to_string())
+                            .unwrap_or_else(|_| axum::http::HeaderValue::from_static("0")),
+                    );
+                }
                 response
             }
 
