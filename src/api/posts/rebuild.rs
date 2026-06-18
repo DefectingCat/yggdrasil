@@ -32,7 +32,7 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
 
     #[cfg(feature = "server")]
     {
-        let client = get_conn().await.map_err(AppError::db_conn)?;
+        let mut client = get_conn().await.map_err(AppError::db_conn)?;
 
         // 根据参数构造 WHERE 条件，限制单次处理数量。
         let query = if rebuild_all {
@@ -50,6 +50,10 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
         let mut rebuilt: u64 = 0;
         let mut failed: u64 = 0;
         let mut errors: Vec<String> = Vec::new();
+
+        // 整批 UPDATE 纳入单事务：中途断连或写入失败整批回滚，避免产生
+        // 「部分文章已重建」的中间态（M5）。
+        let tx = client.transaction().await.map_err(AppError::query)?;
 
         for row in &rows {
             let id: i32 = row.get(0);
@@ -82,7 +86,7 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
             let word_count = crate::utils::text::count_words(&content_md);
             let reading_time = crate::utils::text::reading_time(word_count);
 
-            match client
+            match tx
                 .execute(
                     "UPDATE posts SET content_html = $1, toc_html = $2, word_count = $3, reading_time = $4 WHERE id = $5",
                     &[
@@ -98,14 +102,25 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
                 Ok(_) => {
                     rebuilt += 1;
                 }
-                Err(_) => {
+                Err(e) => {
+                    // 事务内任一写入失败会使事务进入 abort 状态，后续写入都会失败；
+                    // 此时整批回滚，保证不产生中间态。
                     failed += 1;
                     if errors.len() < MAX_DISPLAY_ERRORS {
-                        errors.push(format!("文章 #{id}: DB 写入失败"));
+                        errors.push(format!("文章 #{id}: DB 写入失败（整批将回滚）"));
                     }
+                    tracing::error!("rebuild UPDATE 失败，整批回滚: {:?}", e);
+                    tx.rollback().await.ok();
+                    return Ok(RebuildResult {
+                        rebuilt: 0,
+                        failed,
+                        errors,
+                    });
                 }
             }
         }
+
+        tx.commit().await.map_err(AppError::query)?;
 
         // 重建会修改 word_count / reading_time 等列表项字段，批量影响列表、标签云、
         // 标签文章及单篇缓存；这里使用全量失效作为务实的回退策略。
