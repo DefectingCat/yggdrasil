@@ -113,6 +113,8 @@ pub async fn cleanup_image_cache_at(
 }
 
 /// 递归收集目录下的所有常规文件，返回路径、大小与修改时间。
+///
+/// 跳过符号链接，避免 traversal 到 `uploads/.cache/` 外部。
 async fn collect_files(
     base: &Path,
     entries: &mut Vec<(PathBuf, u64, SystemTime)>,
@@ -121,11 +123,14 @@ async fn collect_files(
     while let Some(dir) = stack.pop() {
         let mut reader = tokio::fs::read_dir(&dir).await?;
         while let Some(entry) = reader.next_entry().await? {
-            let metadata = entry.metadata().await?;
-            if metadata.is_file() {
+            let file_type = entry.file_type().await?;
+            if file_type.is_symlink() {
+                continue;
+            } else if file_type.is_file() {
+                let metadata = entry.metadata().await?;
                 let mtime = metadata.modified()?;
                 entries.push((entry.path(), metadata.len(), mtime));
-            } else if metadata.is_dir() {
+            } else if file_type.is_dir() {
                 stack.push(entry.path());
             }
         }
