@@ -205,15 +205,33 @@ pub async fn upload_image(
     let is_gif = mime_type.as_str() == "image/gif";
     let is_webp = mime_type.as_str() == "image/webp";
 
-    // 对不经过重编码的格式做解码验证。
-    if (is_gif || is_webp) && !validate_raw_image(&data, mime_type.as_str()) {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(json!({
-                "success": false,
-                "error": "图片文件损坏或格式不正确"
-            })),
-        ));
+    // 对不经过重编码的格式做解码验证。GIF 走 image::load_from_memory 会完整解码，
+    // 移到阻塞线程池避免拖住 async 运行时。
+    if is_gif || is_webp {
+        let validate_data = data.to_vec();
+        let validate_mime = mime_type.clone();
+        let is_valid = tokio::task::spawn_blocking(move || {
+            validate_raw_image(&validate_data, validate_mime.as_str())
+        })
+        .await
+        .map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({
+                    "success": false,
+                    "error": "图片校验任务失败"
+                })),
+            )
+        })?;
+        if !is_valid {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "success": false,
+                    "error": "图片文件损坏或格式不正确"
+                })),
+            ));
+        }
     }
 
     // GIF 与 WebP 保持原格式；其余格式尝试转 WebP。
