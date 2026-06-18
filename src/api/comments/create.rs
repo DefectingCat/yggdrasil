@@ -196,8 +196,43 @@ pub async fn create_comment(
         // 基于文章、父评论、作者与内容计算哈希，防止短时间重复提交。
         let content_hash = compute_content_hash(post_id, parent_id, &author_name, &content_md);
 
-        // 查重与插入必须在同一事务内，避免并发请求双双通过查重窗口（M4）。
+        // 在开事务前完成纯计算（Markdown 渲染、字段转义、IP/UA 提取），避免
+        // 在事务持锁期间做无谓工作，缩短关键排他锁窗口。
+        let content_html = crate::api::comments::markdown::render_comment_markdown(&content_md);
+        let author_name_safe = crate::api::comments::helpers::escape_html(author_name.trim());
+        let author_url_safe = author_url
+            .as_ref()
+            .map(|u| crate::api::comments::helpers::escape_html(u.trim()))
+            .filter(|u| !u.is_empty());
+        let ip_address = if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
+            let parts = ctx.parts_mut();
+            Some(crate::api::rate_limit::get_client_ip(&parts.headers))
+        } else {
+            None
+        };
+        let user_agent = if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
+            let parts = ctx.parts_mut();
+            parts
+                .headers
+                .get("user-agent")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.to_string())
+        } else {
+            None
+        };
+
+        // 查重与插入在同一事务内，并用 advisory lock 串行化相同内容的并发提交（M4）。
+        // 仅靠普通 SELECT+事务在 Read Committed 下无法阻止并发重复（两个事务都看不到
+        // 对方未提交的 INSERT）；pg_advisory_xact_lock 以内容哈希派生的 key 加事务级
+        // 排他锁，使相同内容的并发请求在锁上排队，第二个提交时查重必然命中前一个。
+        // key 取 content_hash 前 16 个 hex 字符（8 字节）解析为 i64。
+        let lock_key: i64 = i64::from_str_radix(&content_hash[..16], 16).unwrap_or(0);
+
         let tx = client.transaction().await.map_err(AppError::query)?;
+        // 事务级 advisory 锁：随事务结束自动释放，无需显式 unlock。
+        tx.execute("SELECT pg_advisory_xact_lock($1)", &[&lock_key])
+            .await
+            .map_err(AppError::query)?;
 
         let dup: Option<i64> = tx
             .query_opt(
@@ -209,7 +244,7 @@ pub async fn create_comment(
             .map(|r| r.get(0));
 
         if dup.is_some() {
-            // 重复：回滚空事务后返回。
+            // 重复：回滚（释放 advisory 锁）后返回。
             tx.rollback().await.ok();
             return Ok(CommentResponse {
                 success: false,
@@ -220,35 +255,6 @@ pub async fn create_comment(
                 depth: None,
             });
         }
-
-        // 将 Markdown 渲染为 HTML，并通过 sanitizer 过滤危险标签。
-        let content_html = crate::api::comments::markdown::render_comment_markdown(&content_md);
-
-        // 对作者展示字段做 HTML 转义，避免 XSS；URL 为空字符串时统一为 None。
-        let author_name_safe = crate::api::comments::helpers::escape_html(author_name.trim());
-        let author_url_safe = author_url
-            .as_ref()
-            .map(|u| crate::api::comments::helpers::escape_html(u.trim()))
-            .filter(|u| !u.is_empty());
-
-        // 获取客户端 IP 与 User-Agent，用于反垃圾与审计。
-        let ip_address = if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
-            let parts = ctx.parts_mut();
-            Some(crate::api::rate_limit::get_client_ip(&parts.headers))
-        } else {
-            None
-        };
-
-        let user_agent = if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
-            let parts = ctx.parts_mut();
-            parts
-                .headers
-                .get("user-agent")
-                .and_then(|v| v.to_str().ok())
-                .map(|s| s.to_string())
-        } else {
-            None
-        };
 
         // 插入评论，默认状态为 pending，等待管理员审核。
         let row = tx
