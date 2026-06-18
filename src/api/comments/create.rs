@@ -92,7 +92,7 @@ pub async fn create_comment(
             });
         }
 
-        let client = get_conn().await.map_err(AppError::db_conn)?;
+        let mut client = get_conn().await.map_err(AppError::db_conn)?;
 
         // 确认目标文章存在且处于已发布状态。
         let post_row = client
@@ -196,7 +196,10 @@ pub async fn create_comment(
         // 基于文章、父评论、作者与内容计算哈希，防止短时间重复提交。
         let content_hash = compute_content_hash(post_id, parent_id, &author_name, &content_md);
 
-        let dup: Option<i64> = client
+        // 查重与插入必须在同一事务内，避免并发请求双双通过查重窗口（M4）。
+        let tx = client.transaction().await.map_err(AppError::query)?;
+
+        let dup: Option<i64> = tx
             .query_opt(
                 "SELECT id FROM comments WHERE post_id = $1 AND content_hash = $2 AND created_at > NOW() - INTERVAL '5 minutes'",
                 &[&post_id, &content_hash],
@@ -206,6 +209,8 @@ pub async fn create_comment(
             .map(|r| r.get(0));
 
         if dup.is_some() {
+            // 重复：回滚空事务后返回。
+            tx.rollback().await.ok();
             return Ok(CommentResponse {
                 success: false,
                 message: "请勿重复提交".to_string(),
@@ -246,7 +251,7 @@ pub async fn create_comment(
         };
 
         // 插入评论，默认状态为 pending，等待管理员审核。
-        let row = client
+        let row = tx
             .query_one(
                 "INSERT INTO comments \
                  (post_id, parent_id, depth, author_name, author_email, author_url, \
@@ -269,6 +274,8 @@ pub async fn create_comment(
             )
             .await
             .map_err(AppError::query)?;
+
+        tx.commit().await.map_err(AppError::query)?;
 
         let comment_id: i64 = row.get(0);
 
