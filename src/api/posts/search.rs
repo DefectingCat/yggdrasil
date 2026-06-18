@@ -61,7 +61,9 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
             .replace('%', "\\%")
             .replace('_', "\\_");
 
-        // 使用 ILIKE 做前缀模糊匹配，并按 word_similarity 降序、发布时间降序排序。
+        // 使用 ILIKE 做子串模糊匹配（双侧 %）。注意：此查询无法利用 trgm GIN
+        // 索引（仅前缀模式命中），走全表扫，靠 LIMIT 50 + search 限流兜底。
+        // 后续可升级为 tsvector 全文检索（独立大改动）。
         let rows = client
             .query(
                 "SELECT
