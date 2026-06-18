@@ -62,6 +62,20 @@ static COMMENT_LIMITER: LazyLock<DefaultKeyedRateLimiter<String>> = LazyLock::ne
 });
 
 #[cfg(feature = "server")]
+/// 当无法识别真实客户端 IP（"unknown"）时使用的宽松限流桶。
+///
+/// TRUSTED_PROXY_COUNT=0（默认）时，Dioxus server function 拿不到 TCP 对端地址，
+/// get_client_ip 会返回 "unknown"，导致所有匿名请求共享同一个严格桶
+/// （1 req/s, burst 5），正常用户的高频请求被误杀。此桶阈值更高，
+/// 通过 env RATE_LIMIT_UNKNOWN_PER_SEC / RATE_LIMIT_UNKNOWN_BURST 可调。
+static UNKNOWN_BUCKET_LIMITER: LazyLock<DefaultKeyedRateLimiter<String>> = LazyLock::new(|| {
+    RateLimiter::keyed(
+        Quota::per_second(env_or("RATE_LIMIT_UNKNOWN_PER_SEC", 30))
+            .allow_burst(env_or("RATE_LIMIT_UNKNOWN_BURST", 100)),
+    )
+});
+
+#[cfg(feature = "server")]
 /// 检查评论请求是否超出限流阈值。
 pub fn check_comment_limit(ip: &str) -> Result<(), String> {
     COMMENT_LIMITER
@@ -184,11 +198,23 @@ pub fn get_client_ip(headers: &http::HeaderMap) -> String {
 
 #[cfg(feature = "server")]
 /// 检查严格限流（注册、登录等敏感接口）。
+///
+/// 当 IP 为 "unknown"（无法识别真实客户端，通常是 TRUSTED_PROXY_COUNT=0
+/// 且调用方为 Dioxus server function 时）改用宽松桶，避免所有匿名请求共享
+/// 严格桶导致正常用户被误杀。生产环境配好 TRUSTED_PROXY_COUNT 后走真实 IP，
+/// 始终命中严格桶。
 pub fn check_strict_limit(ip: &str) -> Result<(), String> {
-    STRICT_LIMITER
-        .check_key(&ip.to_string())
-        .map(|_| ())
-        .map_err(|_| "请求过于频繁，请稍后再试".to_string())
+    if ip == "unknown" {
+        UNKNOWN_BUCKET_LIMITER
+            .check_key(&ip.to_string())
+            .map(|_| ())
+            .map_err(|_| "服务繁忙，请稍后再试".to_string())
+    } else {
+        STRICT_LIMITER
+            .check_key(&ip.to_string())
+            .map(|_| ())
+            .map_err(|_| "请求过于频繁，请稍后再试".to_string())
+    }
 }
 
 #[cfg(feature = "server")]
@@ -368,6 +394,43 @@ mod tests {
             Some(value) => std::env::set_var("TRUSTED_PROXY_COUNT", value),
             None => std::env::remove_var("TRUSTED_PROXY_COUNT"),
         }
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn check_strict_unknown_ip_uses_lenient_bucket() {
+        // "unknown" 桶 burst 为 100，少量请求应全部放行，不被严格桶误杀。
+        // 用 serial 隔离，因为 UNKNOWN_BUCKET_LIMITER 是全局状态。
+        for _ in 0..20 {
+            assert!(
+                super::check_strict_limit("unknown").is_ok(),
+                "unknown bucket should allow small bursts, not hit strict 1 req/s limit"
+            );
+        }
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn check_strict_real_ip_uses_strict_bucket() {
+        // 真实 IP 命中严格桶（1 req/s, burst 5）。连发超过 burst 应被限流。
+        // 用一个唯一的 IP 避免与其他测试状态冲突。
+        let unique_ip = "198.51.100.42";
+        let mut allowed = 0;
+        let mut blocked = false;
+        for _ in 0..50 {
+            match super::check_strict_limit(unique_ip) {
+                Ok(()) => allowed += 1,
+                Err(_) => blocked = true,
+            }
+            if blocked {
+                break;
+            }
+        }
+        assert!(blocked, "strict bucket should eventually block real IP burst");
+        assert!(
+            allowed <= 6,
+            "strict burst is 5, allowed should be <= 6, got {allowed}"
+        );
     }
 
     // 测试辅助函数：绕过环境变量读取，直接指定 trusted_proxy_count。
