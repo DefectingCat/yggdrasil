@@ -35,25 +35,28 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
         let mut client = get_conn().await.map_err(AppError::db_conn)?;
 
         // 根据参数构造 WHERE 条件，限制单次处理数量。
+        // SELECT 在事务内并加 FOR UPDATE，锁住待处理行直到 UPDATE 完成，避免
+        // 并发编辑造成非可重复读（review 发现）：事务外读到的 content_md 可能在
+        // UPDATE 前被并发请求修改，导致用旧内容覆盖新内容。
         let query = if rebuild_all {
             format!(
-                "SELECT id, content_md FROM posts WHERE deleted_at IS NULL ORDER BY id LIMIT {REBUILD_BATCH_LIMIT}"
+                "SELECT id, content_md FROM posts WHERE deleted_at IS NULL ORDER BY id LIMIT {REBUILD_BATCH_LIMIT} FOR UPDATE"
             )
         } else {
             format!(
-                "SELECT id, content_md FROM posts WHERE deleted_at IS NULL AND content_html IS NULL ORDER BY id LIMIT {REBUILD_BATCH_LIMIT}"
+                "SELECT id, content_md FROM posts WHERE deleted_at IS NULL AND content_html IS NULL ORDER BY id LIMIT {REBUILD_BATCH_LIMIT} FOR UPDATE"
             )
         };
-
-        let rows = client.query(&query, &[]).await.map_err(AppError::query)?;
 
         let mut rebuilt: u64 = 0;
         let mut failed: u64 = 0;
         let mut errors: Vec<String> = Vec::new();
 
-        // 整批 UPDATE 纳入单事务：中途断连或写入失败整批回滚，避免产生
-        // 「部分文章已重建」的中间态（M5）。
+        // 整批 SELECT + UPDATE 纳入单事务：中途断连或写入失败整批回滚，避免产生
+        // 「部分文章已重建」的中间态（M5）；FOR UPDATE 锁住的行随事务结束释放。
         let tx = client.transaction().await.map_err(AppError::query)?;
+
+        let rows = tx.query(&query, &[]).await.map_err(AppError::query)?;
 
         for row in &rows {
             let id: i32 = row.get(0);
