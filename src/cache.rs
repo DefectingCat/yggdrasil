@@ -16,7 +16,7 @@ use crate::models::comment::PublicComment;
 #[cfg(feature = "server")]
 use crate::models::post::{Post, PostListItem, PostStats, Tag};
 #[cfg(feature = "server")]
-use crate::models::user::User;
+use crate::models::user::SessionUser;
 
 // ============================================================================
 // 缓存 TTL 配置
@@ -173,7 +173,7 @@ static PENDING_COUNT_CACHE: LazyLock<Cache<CacheKey, i64>> = LazyLock::new(|| {
 
 /// 会话用户缓存类型。
 #[cfg(feature = "server")]
-pub type SessionCache = Cache<String, User>;
+pub type SessionCache = Cache<String, SessionUser>;
 
 /// 搜索结果缓存类型。
 #[cfg(feature = "server")]
@@ -181,7 +181,7 @@ pub type SearchCache = Cache<String, (Vec<PostListItem>, i64)>;
 
 /// 全局会话用户缓存实例，最大容量 1000，TTL 5 分钟。
 #[cfg(feature = "server")]
-static SESSION_CACHE: LazyLock<SessionCache> = LazyLock::new(|| {
+pub static SESSION_CACHE: LazyLock<SessionCache> = LazyLock::new(|| {
     Cache::builder()
         .max_capacity(1000)
         .time_to_live(TTL_SESSION)
@@ -389,13 +389,13 @@ pub fn normalize_search_key(query: &str) -> String {
 
 /// 读取会话用户缓存。
 #[cfg(feature = "server")]
-pub async fn get_session_user(token_hash: &str) -> Option<User> {
+pub async fn get_session_user(token_hash: &str) -> Option<SessionUser> {
     SESSION_CACHE.get(token_hash).await
 }
 
 /// 写入会话用户缓存。
 #[cfg(feature = "server")]
-pub async fn set_session_user(token_hash: &str, user: User) {
+pub async fn set_session_user(token_hash: &str, user: SessionUser) {
     let _ = SESSION_CACHE.insert(token_hash.to_string(), user).await;
 }
 
@@ -446,7 +446,7 @@ mod tests {
     use super::*;
     use crate::models::comment::PublicComment;
     use crate::models::post::PostStatus;
-    use crate::models::user::{User, UserRole};
+    use crate::models::user::{SessionUser, UserRole};
     use serial_test::serial;
 
     #[test]
@@ -656,11 +656,10 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn session_cache_roundtrip() {
-        let user = User {
+        let user = SessionUser {
             id: 42,
             username: "cached_user".to_string(),
             email: "cached@example.com".to_string(),
-            password_hash: "argon2_hash".to_string(),
             role: UserRole::Admin,
             created_at: chrono::Utc::now(),
         };
@@ -674,7 +673,6 @@ mod tests {
         assert_eq!(cached_user.id, user.id);
         assert_eq!(cached_user.username, user.username);
         assert_eq!(cached_user.email, user.email);
-        assert_eq!(cached_user.password_hash, user.password_hash);
         assert_eq!(cached_user.role, user.role);
 
         invalidate_session_user(token_hash).await;
@@ -733,6 +731,16 @@ mod tests {
 
         invalidate_search_results();
         assert!(get_search_results(query).await.is_none());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn search_cache_invalidation() {
+        set_search_results("tokio", vec![], 0).await;
+        assert!(get_search_results("tokio").await.is_some());
+
+        invalidate_search_results();
+        assert!(get_search_results("tokio").await.is_none());
     }
 
 }

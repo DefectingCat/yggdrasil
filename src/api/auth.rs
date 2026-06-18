@@ -20,7 +20,7 @@ use crate::auth::{password, session};
 #[cfg(feature = "server")]
 use crate::db::pool::get_conn;
 #[cfg(feature = "server")]
-use crate::models::user::{User, UserRole};
+use crate::models::user::{SessionUser, UserRole};
 use crate::models::user::PublicUser;
 
 #[cfg(feature = "server")]
@@ -315,11 +315,11 @@ pub struct CurrentUserResponse {
 }
 
 #[cfg(feature = "server")]
-/// 根据会话 token 查询对应用户（含密码哈希等完整信息）。
+/// 根据会话 token 查询对应用户（不含密码哈希，供会话缓存使用）。
 ///
 /// 优先命中内存缓存，避免每次请求都执行 DB JOIN；未命中时回查数据库并回填缓存。
 /// 仅服务端内部使用，不会暴露给前端。
-pub async fn get_user_by_token(token: &str) -> Result<Option<User>, ServerFnError> {
+pub async fn get_user_by_token(token: &str) -> Result<Option<SessionUser>, ServerFnError> {
     let token_hash = session::hash_token(token);
 
     if let Some(user) = crate::cache::get_session_user(&token_hash).await {
@@ -330,7 +330,7 @@ pub async fn get_user_by_token(token: &str) -> Result<Option<User>, ServerFnErro
 
     let row = client
         .query_opt(
-            "SELECT u.id, u.username, u.email, u.password_hash, u.role, u.created_at
+            "SELECT u.id, u.username, u.email, u.role, u.created_at
              FROM sessions s
              JOIN users u ON s.user_id = u.id
              WHERE s.token_hash = $1 AND s.expires_at > NOW()",
@@ -343,11 +343,10 @@ pub async fn get_user_by_token(token: &str) -> Result<Option<User>, ServerFnErro
         Some(row) => {
             let role_str: String = row.get("role");
             let role = UserRole::from_str(&role_str).unwrap_or(UserRole::Blocked);
-            Some(User {
+            Some(SessionUser {
                 id: row.get("id"),
                 username: row.get("username"),
                 email: row.get("email"),
-                password_hash: row.get("password_hash"),
                 role,
                 created_at: row.get("created_at"),
             })
@@ -381,19 +380,19 @@ pub async fn get_current_user() -> Result<CurrentUserResponse, ServerFnError> {
 /// 获取当前登录用户并要求其为 admin，否则返回 401/403。
 ///
 /// 供其它服务端接口内部调用。
-pub async fn get_current_admin_user() -> Result<User, AppError> {
+pub async fn get_current_admin_user() -> Result<SessionUser, AppError> {
     let token = get_session_from_ctx().ok_or(AppError::Unauthorized("未登录"))?;
 
-    let user = get_user_by_token(&token)
+    let session_user = get_user_by_token(&token)
         .await
         .map_err(AppError::query)?
         .ok_or(AppError::Unauthorized("会话已过期"))?;
 
-    if user.role != UserRole::Admin {
+    if session_user.role != UserRole::Admin {
         return Err(AppError::Forbidden("权限不足"));
     }
 
-    Ok(user)
+    Ok(session_user)
 }
 
 #[cfg(all(test, feature = "server"))]
