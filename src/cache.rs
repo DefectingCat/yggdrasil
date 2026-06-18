@@ -74,8 +74,10 @@ pub enum CacheKey {
     AllTags,
     /// 按 slug 查询的单篇文章。
     PostBySlug(String),
-    /// 按标签查询的文章列表。
+    /// 按标签查询的文章列表（不分页，返回全部）。
     PostsByTag(String),
+    /// 按标签查询的分页文章列表。
+    PostsByTagPage { tag: String, page: i32, per_page: i32 },
     /// 文章统计信息。
     PostStats,
     /// 某篇文章下的评论列表。
@@ -272,6 +274,18 @@ pub async fn set_posts_by_tag(tag: &str, posts: Vec<PostListItem>, total: i64) {
     let _ = TAG_POSTS_CACHE
         .insert(CacheKey::PostsByTag(tag.to_string()), (posts, total))
         .await;
+}
+
+/// 按标签+分页读取文章列表缓存。
+#[cfg(feature = "server")]
+pub async fn get_posts_by_tag_paged(key: &CacheKey) -> Option<(Vec<PostListItem>, i64)> {
+    TAG_POSTS_CACHE.get(key).await
+}
+
+/// 按标签+分页写入文章列表缓存。
+#[cfg(feature = "server")]
+pub async fn set_posts_by_tag_paged(key: &CacheKey, posts: Vec<PostListItem>, total: i64) {
+    let _ = TAG_POSTS_CACHE.insert(key.clone(), (posts, total)).await;
 }
 
 /// 读取文章统计缓存。

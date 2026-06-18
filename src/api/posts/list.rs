@@ -235,53 +235,141 @@ pub async fn list_deleted_posts(
 
 /// 获取指定标签下的已发布文章列表。
 ///
-/// 优先命中缓存；当前实现返回全部匹配文章，因此 total 用 posts.len() 计算。
+/// 分页参数为可选：
+/// - `page` 与 `per_page` 均为 `None` 时返回该标签下全部已发布文章（上限 200），
+///   用于无分页 UI 的标签详情页。
+/// - 两者均提供时走标准分页（经 `clamp_pagination` 钳制）。
+/// 结果缓存于按标签的分页键空间。
 #[server(GetPostsByTag, "/api")]
-pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, ServerFnError> {
+pub async fn get_posts_by_tag(
+    tag_name: String,
+    page: Option<i32>,
+    per_page: Option<i32>,
+) -> Result<PostListResponse, ServerFnError> {
     #[cfg(feature = "server")]
     {
-        if let Some((cached_posts, cached_total)) = crate::cache::get_posts_by_tag(&tag_name).await
-        {
-            return Ok(PostListResponse {
-                posts: cached_posts,
-                total: cached_total,
-            });
-        }
+        // 仅当两个分页参数都提供时才走分页路径；任一为 None 视为不分页。
+        let (page, per_page) = match (page, per_page) {
+            (Some(p), Some(pp)) => (Some(p), Some(pp)),
+            _ => (None, None),
+        };
 
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
-        // 通过 JOIN 筛选含目标标签的已发布文章，并聚合该文章的所有标签。
-        let rows = client
-            .query(
-                "SELECT
-                    p.id, p.author_id, p.title, p.slug, p.summary, p.status,
-                    p.published_at, p.created_at, p.updated_at, p.cover_image,
-                    p.word_count, p.reading_time,
-                    COALESCE(array_agg(t2.name) FILTER (WHERE t2.name IS NOT NULL), '{}') as tags
-                 FROM posts p
-                 JOIN post_tags pt ON p.id = pt.post_id
-                 JOIN tags t ON pt.tag_id = t.id
-                 LEFT JOIN post_tags pt2 ON p.id = pt2.post_id
-                 LEFT JOIN tags t2 ON pt2.tag_id = t2.id
-                 WHERE t.name = $1 AND p.status = 'published' AND p.deleted_at IS NULL
-                 GROUP BY p.id
-                 ORDER BY p.published_at DESC
-                 LIMIT 200",
-                &[&tag_name],
-            )
-            .await
-            .map_err(AppError::query)?;
+        if let (Some(page), Some(per_page)) = (page, per_page) {
+            // 分页路径：钳制参数，走分页缓存键。
+            let (page, per_page) = clamp_pagination(page, per_page);
+            let cache_key = crate::cache::CacheKey::PostsByTagPage {
+                tag: tag_name.clone(),
+                page,
+                per_page,
+            };
+            if let Some((cached_posts, cached_total)) =
+                crate::cache::get_posts_by_tag_paged(&cache_key).await
+            {
+                return Ok(PostListResponse {
+                    posts: cached_posts,
+                    total: cached_total,
+                });
+            }
 
-        let mut posts = Vec::new();
-        for row in &rows {
-            posts.push(row_to_post_list_item(row));
+            // 标签下已发布文章总数。
+            let total: i64 = client
+                .query_one(
+                    "SELECT COUNT(*) FROM posts p
+                     JOIN post_tags pt ON p.id = pt.post_id
+                     JOIN tags t ON pt.tag_id = t.id
+                     WHERE t.name = $1 AND p.status = 'published' AND p.deleted_at IS NULL",
+                    &[&tag_name],
+                )
+                .await
+                .map_err(AppError::query)?
+                .get(0);
+
+            let offset = ((page - 1).max(0) as i64) * (per_page as i64);
+            let limit = per_page as i64;
+            let rows = client
+                .query(
+                    "SELECT
+                        p.id, p.author_id, p.title, p.slug, p.summary, p.status,
+                        p.published_at, p.created_at, p.updated_at, p.cover_image,
+                        p.word_count, p.reading_time,
+                        COALESCE(array_agg(t2.name) FILTER (WHERE t2.name IS NOT NULL), '{}') as tags
+                     FROM posts p
+                     JOIN post_tags pt ON p.id = pt.post_id
+                     JOIN tags t ON pt.tag_id = t.id
+                     LEFT JOIN post_tags pt2 ON p.id = pt2.post_id
+                     LEFT JOIN tags t2 ON pt2.tag_id = t2.id
+                     WHERE t.name = $1 AND p.status = 'published' AND p.deleted_at IS NULL
+                     GROUP BY p.id
+                     ORDER BY p.published_at DESC
+                     LIMIT $2 OFFSET $3",
+                    &[&tag_name, &limit, &offset],
+                )
+                .await
+                .map_err(AppError::query)?;
+
+            let mut posts = Vec::new();
+            for row in &rows {
+                posts.push(row_to_post_list_item(row));
+            }
+
+            crate::cache::set_posts_by_tag_paged(&cache_key, posts.clone(), total).await;
+            Ok(PostListResponse { posts, total })
+        } else {
+            // 不分页路径：返回全部（上限 200），用于无翻页 UI 的标签详情页。
+            if let Some((cached_posts, cached_total)) =
+                crate::cache::get_posts_by_tag(&tag_name).await
+            {
+                return Ok(PostListResponse {
+                    posts: cached_posts,
+                    total: cached_total,
+                });
+            }
+
+            // 真实总数（即使被 LIMIT 截断也返回完整计数）。
+            let total: i64 = client
+                .query_one(
+                    "SELECT COUNT(*) FROM posts p
+                     JOIN post_tags pt ON p.id = pt.post_id
+                     JOIN tags t ON pt.tag_id = t.id
+                     WHERE t.name = $1 AND p.status = 'published' AND p.deleted_at IS NULL",
+                    &[&tag_name],
+                )
+                .await
+                .map_err(AppError::query)?
+                .get(0);
+
+            let rows = client
+                .query(
+                    "SELECT
+                        p.id, p.author_id, p.title, p.slug, p.summary, p.status,
+                        p.published_at, p.created_at, p.updated_at, p.cover_image,
+                        p.word_count, p.reading_time,
+                        COALESCE(array_agg(t2.name) FILTER (WHERE t2.name IS NOT NULL), '{}') as tags
+                     FROM posts p
+                     JOIN post_tags pt ON p.id = pt.post_id
+                     JOIN tags t ON pt.tag_id = t.id
+                     LEFT JOIN post_tags pt2 ON p.id = pt2.post_id
+                     LEFT JOIN tags t2 ON pt2.tag_id = t2.id
+                     WHERE t.name = $1 AND p.status = 'published' AND p.deleted_at IS NULL
+                     GROUP BY p.id
+                     ORDER BY p.published_at DESC
+                     LIMIT 200",
+                    &[&tag_name],
+                )
+                .await
+                .map_err(AppError::query)?;
+
+            let mut posts = Vec::new();
+            for row in &rows {
+                posts.push(row_to_post_list_item(row));
+            }
+
+            // total 为真实 COUNT(*)，不再用 posts.len()。
+            crate::cache::set_posts_by_tag(&tag_name, posts.clone(), total).await;
+            Ok(PostListResponse { posts, total })
         }
-
-        // 当前查询未分页，返回全部匹配文章，因此 total 等于结果长度。
-        // 若后续增加分页，应改为 COUNT(*) 查询。
-        let total = posts.len() as i64;
-        crate::cache::set_posts_by_tag(&tag_name, posts.clone(), total).await;
-        Ok(PostListResponse { posts, total })
     }
 
     #[cfg(not(feature = "server"))]
