@@ -10,9 +10,11 @@
 use std::collections::HashSet;
 
 #[cfg(feature = "server")]
-fn default_allowed_tags() -> HashSet<&'static str> {
-    let mut set = HashSet::new();
-    for tag in [
+use std::sync::LazyLock;
+
+#[cfg(feature = "server")]
+static DEFAULT_ALLOWED_TAGS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    HashSet::from([
         "a",
         "abbr",
         "acronym",
@@ -88,24 +90,16 @@ fn default_allowed_tags() -> HashSet<&'static str> {
         "ul",
         "var",
         "wbr",
-    ] {
-        set.insert(tag);
-    }
-    set
-}
+    ])
+});
 
 #[cfg(feature = "server")]
-fn clean_content_tags() -> HashSet<&'static str> {
-    let mut set = HashSet::new();
-    set.insert("script");
-    set.insert("style");
-    set
-}
+static CLEAN_CONTENT_TAGS: LazyLock<HashSet<&'static str>> =
+    LazyLock::new(|| HashSet::from(["script", "style"]));
 
 #[cfg(feature = "server")]
-fn default_allowed_schemes() -> HashSet<&'static str> {
-    let mut set = HashSet::new();
-    for scheme in [
+static DEFAULT_ALLOWED_SCHEMES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    HashSet::from([
         "bitcoin",
         "ftp",
         "ftps",
@@ -131,11 +125,18 @@ fn default_allowed_schemes() -> HashSet<&'static str> {
         "webcal",
         "wtai",
         "xmpp",
-    ] {
-        set.insert(scheme);
-    }
+    ])
+});
+
+#[cfg(feature = "server")]
+/// 评论允许的标签：在默认集合基础上移除 img / details / summary。
+static COMMENT_ALLOWED_TAGS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut set = DEFAULT_ALLOWED_TAGS.clone();
+    set.remove("img");
+    set.remove("details");
+    set.remove("summary");
     set
-}
+});
 
 #[cfg(feature = "server")]
 fn is_safe_data_uri(url: &str) -> bool {
@@ -192,19 +193,19 @@ fn is_safe_url(url: &str, allowed_schemes: &HashSet<&str>, allow_data_uri: bool)
 #[cfg(feature = "server")]
 /// HTML 消毒配置：白名单 tag/attribute、允许 URL scheme 与链接 rel。
 struct SanitizerConfig {
-    allowed_tags: HashSet<&'static str>,
+    allowed_tags: &'static HashSet<&'static str>,
     extra_generic_attrs: Vec<&'static str>,
     extra_tag_attrs: Vec<(&'static str, Vec<&'static str>)>,
-    allowed_schemes: HashSet<&'static str>,
+    allowed_schemes: &'static HashSet<&'static str>,
     allow_data_uri: bool,
     link_rel: Option<&'static str>,
-    remove_tags: HashSet<&'static str>,
+    remove_tags: &'static HashSet<&'static str>,
 }
 
 #[cfg(feature = "server")]
 fn sanitize(input: &str, config: &SanitizerConfig) -> String {
-    let allowed_tags = config.allowed_tags.clone();
-    let remove_tags = config.remove_tags.clone();
+    let allowed_tags = config.allowed_tags;
+    let remove_tags = config.remove_tags;
     let generic_attrs: HashSet<&str> = config
         .extra_generic_attrs
         .iter()
@@ -251,7 +252,7 @@ fn sanitize(input: &str, config: &SanitizerConfig) -> String {
         }
         m
     };
-    let allowed_schemes = config.allowed_schemes.clone();
+    let allowed_schemes = config.allowed_schemes;
     let allow_data_uri = config.allow_data_uri;
     let link_rel = config.link_rel;
 
@@ -286,7 +287,7 @@ fn sanitize(input: &str, config: &SanitizerConfig) -> String {
                 if allowed_for_tag.contains(name_lower.as_str()) {
                     if name_lower == "href" || name_lower == "src" || name_lower == "cite" {
                         let val = attr.value();
-                        if !is_safe_url(&val, &allowed_schemes, allow_data_uri) {
+                        if !is_safe_url(&val, allowed_schemes, allow_data_uri) {
                             return Some(name);
                         }
                     }
@@ -331,7 +332,7 @@ fn sanitize(input: &str, config: &SanitizerConfig) -> String {
 /// 文章正文 HTML 清理：允许较完整的标签与 data URI，外链添加 `noopener noreferrer`。
 pub fn clean_html(input: &str) -> String {
     let config = SanitizerConfig {
-        allowed_tags: default_allowed_tags(),
+        allowed_tags: &DEFAULT_ALLOWED_TAGS,
         extra_generic_attrs: vec![
             "class",
             "aria-hidden",
@@ -351,10 +352,10 @@ pub fn clean_html(input: &str) -> String {
             ("h5", vec!["id", "class"]),
             ("h6", vec!["id", "class"]),
         ],
-        allowed_schemes: default_allowed_schemes(),
+        allowed_schemes: &DEFAULT_ALLOWED_SCHEMES,
         allow_data_uri: false,
         link_rel: Some("noopener noreferrer"),
-        remove_tags: clean_content_tags(),
+        remove_tags: &CLEAN_CONTENT_TAGS,
     };
     sanitize(input, &config)
 }
@@ -362,13 +363,8 @@ pub fn clean_html(input: &str) -> String {
 #[cfg(feature = "server")]
 /// 评论 HTML 清理：移除图片与折叠块，禁用 data URI，外链添加 `nofollow noopener`。
 pub fn clean_comment_html(input: &str) -> String {
-    let mut tags = default_allowed_tags();
-    tags.remove("img");
-    tags.remove("details");
-    tags.remove("summary");
-
     let config = SanitizerConfig {
-        allowed_tags: tags,
+        allowed_tags: &COMMENT_ALLOWED_TAGS,
         extra_generic_attrs: vec![
             "class",
             "title",
@@ -381,10 +377,10 @@ pub fn clean_comment_html(input: &str) -> String {
             ("a", vec!["class", "aria-hidden", "aria-label"]),
             ("span", vec!["class"]),
         ],
-        allowed_schemes: default_allowed_schemes(),
+        allowed_schemes: &DEFAULT_ALLOWED_SCHEMES,
         allow_data_uri: false,
         link_rel: Some("nofollow noopener"),
-        remove_tags: clean_content_tags(),
+        remove_tags: &CLEAN_CONTENT_TAGS,
     };
     sanitize(input, &config)
 }
@@ -464,26 +460,26 @@ mod tests {
 
     #[test]
     fn is_safe_url_allows_https() {
-        let schemes = default_allowed_schemes();
+        let schemes = DEFAULT_ALLOWED_SCHEMES.clone();
         assert!(is_safe_url("https://example.com", &schemes, false));
         assert!(is_safe_url("http://example.com", &schemes, false));
     }
 
     #[test]
     fn is_safe_url_rejects_javascript() {
-        let schemes = default_allowed_schemes();
+        let schemes = DEFAULT_ALLOWED_SCHEMES.clone();
         assert!(!is_safe_url("javascript:alert(1)", &schemes, false));
     }
 
     #[test]
     fn is_safe_url_rejects_vbscript() {
-        let schemes = default_allowed_schemes();
+        let schemes = DEFAULT_ALLOWED_SCHEMES.clone();
         assert!(!is_safe_url("vbscript:msgbox", &schemes, false));
     }
 
     #[test]
     fn is_safe_url_data_uri_respects_flag_and_media_type() {
-        let schemes = default_allowed_schemes();
+        let schemes = DEFAULT_ALLOWED_SCHEMES.clone();
         // 仅在显式允许且 media type 为图片时通过
         assert!(is_safe_url("data:image/png;base64,iVBOR", &schemes, true));
         assert!(is_safe_url("data:image/svg+xml;base64,PHN2Zz4=", &schemes, true));
@@ -496,7 +492,7 @@ mod tests {
 
     #[test]
     fn is_safe_url_allows_relative_and_fragment() {
-        let schemes = default_allowed_schemes();
+        let schemes = DEFAULT_ALLOWED_SCHEMES.clone();
         // 绝对路径
         assert!(is_safe_url("/path/to/page", &schemes, false));
         // 锚点
@@ -505,7 +501,7 @@ mod tests {
 
     #[test]
     fn is_safe_url_empty_is_safe() {
-        let schemes = default_allowed_schemes();
+        let schemes = DEFAULT_ALLOWED_SCHEMES.clone();
         // 空 URL（如 img 无 src）视为安全。
         assert!(is_safe_url("", &schemes, false));
         assert!(is_safe_url("   ", &schemes, false));
@@ -513,7 +509,7 @@ mod tests {
 
     #[test]
     fn is_safe_url_allows_other_whitelisted_schemes() {
-        let schemes = default_allowed_schemes();
+        let schemes = DEFAULT_ALLOWED_SCHEMES.clone();
         // mailto / tel / ftp 等均在默认白名单中。
         assert!(is_safe_url("mailto:user@example.com", &schemes, false));
         assert!(is_safe_url("tel:+8613800138000", &schemes, false));
@@ -522,14 +518,14 @@ mod tests {
 
     #[test]
     fn is_safe_url_rejects_scheme_with_whitespace() {
-        let schemes = default_allowed_schemes();
+        let schemes = DEFAULT_ALLOWED_SCHEMES.clone();
         // 含空格的 scheme 名是已知的混淆手法，应被拒绝。
         assert!(!is_safe_url("java\tscript:alert(1)", &schemes, false));
     }
 
     #[test]
     fn is_safe_url_rejects_unknown_schemes() {
-        let schemes = default_allowed_schemes();
+        let schemes = DEFAULT_ALLOWED_SCHEMES.clone();
         // 未知 scheme 默认拒绝。
         assert!(!is_safe_url("file:///etc/passwd", &schemes, false));
         assert!(!is_safe_url("blob:https://example.com/abc", &schemes, false));
@@ -539,7 +535,7 @@ mod tests {
 
     #[test]
     fn is_safe_url_scheme_matching_is_case_insensitive() {
-        let schemes = default_allowed_schemes();
+        let schemes = DEFAULT_ALLOWED_SCHEMES.clone();
         // scheme 大小写不敏感：HTTPS 与 https 等价。
         assert!(is_safe_url("HTTPS://example.com", &schemes, false));
         assert!(!is_safe_url("JAVASCRIPT:alert(1)", &schemes, false));
