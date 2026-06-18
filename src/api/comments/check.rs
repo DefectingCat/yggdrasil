@@ -31,6 +31,17 @@ pub async fn check_pending_status(ids: Vec<i64>) -> Result<Vec<PendingStatusItem
             return Ok(vec![]);
         }
 
+        // 限流防高速遍历枚举评论状态（L3）。本接口供访客轮询自己刚提交的评论
+        // 审核状态，故不加 admin 鉴权；但 strict 限流（对 unknown IP 降级宽松桶）
+        // 足以阻止批量枚举。
+        if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
+            let parts = ctx.parts_mut();
+            let ip = crate::api::rate_limit::get_client_ip(&parts.headers);
+            if let Err(_msg) = crate::api::rate_limit::check_strict_limit(&ip) {
+                return Err(ServerFnError::new("请求过于频繁，请稍后再试"));
+            }
+        }
+
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
         let rows = client
