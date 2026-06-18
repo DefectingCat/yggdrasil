@@ -7,7 +7,7 @@
 
 #[cfg(feature = "server")]
 use axum::{
-    extract::{ConnectInfo, Multipart},
+    extract::{ConnectInfo, Extension, Multipart},
     http::{HeaderMap, StatusCode},
     response::Json,
 };
@@ -70,13 +70,19 @@ fn validate_raw_image(data: &[u8], mime_type: &str) -> bool {
 ///
 /// 流程：限流 → 解析 session → 校验 admin → 读取 multipart → 校验类型/大小 →
 /// 转码（如适用）→ 按日期落盘 → 返回相对 URL。
+///
+/// `ConnectInfo` 以可选扩展注入：`dioxus::server::serve()` 接管了 listener，
+/// 无法调用 `into_make_service_with_connect_info::<SocketAddr>()`，所以这里
+/// 与 `serve_image` 保持一致的优雅降级——扩展缺失时退回 `"unknown"` 限流桶。
+/// 生产环境应在反向代理后部署并配置 `TRUSTED_PROXY_COUNT`，让限流拿到真实 IP。
 pub async fn upload_image(
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    connect_info: Option<Extension<ConnectInfo<SocketAddr>>>,
     headers: HeaderMap,
     mut multipart: Multipart,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
     // 0. Rate limit check
-    let ip = crate::api::rate_limit::get_client_ip_with_peer(&headers, Some(addr));
+    let peer = connect_info.map(|Extension(ConnectInfo(addr))| addr);
+    let ip = crate::api::rate_limit::get_client_ip_with_peer(&headers, peer);
     if let Err(msg) = crate::api::rate_limit::check_upload_limit(&ip) {
         return Err((
             StatusCode::TOO_MANY_REQUESTS,
