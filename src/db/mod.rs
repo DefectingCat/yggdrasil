@@ -12,6 +12,10 @@
 #[cfg(feature = "server")]
 pub mod pool;
 
+/// 连接获取的指数退避重试策略，仅在启用 server feature 时编译。
+#[cfg(feature = "server")]
+pub mod retry;
+
 /// 占位连接池实现，仅在不启用 server feature 时编译。
 ///
 /// `DummyPool` 是一个最小 stub：它提供与真实连接池相同的公开接口形状
