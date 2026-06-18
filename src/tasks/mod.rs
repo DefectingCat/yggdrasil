@@ -11,3 +11,6 @@ pub mod session_cleanup;
 /// 定时清理回收站中超过保留期的已删除文章。
 #[cfg(feature = "server")]
 pub mod post_purge;
+/// 定时清理图片磁盘缓存，避免缓存目录无限增长。
+#[cfg(feature = "server")]
+pub mod image_cache_cleanup;
