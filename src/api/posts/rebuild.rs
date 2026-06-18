@@ -55,10 +55,14 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
             let id: i32 = row.get(0);
             let content_md: String = row.get(1);
 
-            // 捕获 Markdown 渲染 panic，避免单条记录导致整批失败。
-            let rendered = match std::panic::catch_unwind(|| {
-                crate::api::markdown::render_markdown_enhanced(&content_md)
-            }) {
+            // Markdown 渲染在阻塞线程池执行；spawn_blocking 的 JoinError 自动捕获 panic，
+            // 替代原先的 catch_unwind。
+            let md_for_render = content_md.clone();
+            let rendered = match tokio::task::spawn_blocking(move || {
+                crate::api::markdown::render_markdown_enhanced(&md_for_render)
+            })
+            .await
+            {
                 Ok(r) => r,
                 Err(_) => {
                     failed += 1;

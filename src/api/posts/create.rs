@@ -76,8 +76,13 @@ pub async fn create_post(
     {
         let mut client = get_conn().await.map_err(AppError::db_conn)?;
 
-        // 渲染 Markdown 为 HTML，并提取目录。
-        let rendered = crate::api::markdown::render_markdown_enhanced(&content_md);
+        // Markdown 渲染（含 syntect 高亮）是 CPU 密集任务，移到阻塞线程池执行。
+        let md_for_render = content_md.clone();
+        let rendered = tokio::task::spawn_blocking(move || {
+            crate::api::markdown::render_markdown_enhanced(&md_for_render)
+        })
+        .await
+        .map_err(|_| AppError::Internal("Markdown 渲染任务失败"))?;
         let content_html = rendered.html;
         let toc_html = if rendered.toc_html.is_empty() {
             None::<String>
