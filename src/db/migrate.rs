@@ -135,4 +135,59 @@ mod tests {
     fn migrations_non_empty() {
         assert!(!MIGRATIONS.is_empty(), "MIGRATIONS must not be empty");
     }
+
+    /// 防止"新建了 .sql 但忘记在 MIGRATIONS 加行"的脚枪。
+    /// 扫描 migrations/ 目录，断言每个 .sql 文件都在 MIGRATIONS 里有对应版本行。
+    /// 仅在 server feature + test 下运行（WASM 无文件系统）。
+    #[test]
+    fn migrations_match_files_on_disk() {
+        use std::collections::HashSet;
+        use std::fs;
+
+        // CARGO_MANIFEST_DIR 指向 crate 根目录（yggdrasil/）。
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let migrations_dir = std::path::Path::new(manifest_dir).join("migrations");
+
+        let mut files_on_disk: HashSet<String> = HashSet::new();
+        for entry in fs::read_dir(&migrations_dir)
+            .unwrap_or_else(|e| panic!("failed to read {}: {}", migrations_dir.display(), e))
+        {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) == Some("sql") {
+                let filename = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or_else(|| panic!("non-utf8 filename: {}", path.display()));
+                // 文件名形如 "001_init.sql"，取前 3 位数字作为 version。
+                let version = filename
+                    .split('_')
+                    .next()
+                    .unwrap_or_else(|| panic!("filename has no '_' separator: {}", filename));
+                files_on_disk.insert(version.to_string());
+            }
+        }
+
+        let versions_in_array: HashSet<String> =
+            MIGRATIONS.iter().map(|(v, _)| v.to_string()).collect();
+
+        // 磁盘上有但数组里没有 → 忘记加行（会静默不执行该迁移）。
+        let missing_in_array: Vec<&String> =
+            files_on_disk.difference(&versions_in_array).collect();
+        assert!(
+            missing_in_array.is_empty(),
+            "migrations/*.sql files not registered in MIGRATIONS: {:?}. \
+             Add a row for each in src/db/migrate.rs.",
+            missing_in_array
+        );
+
+        // 数组里有但磁盘上没有 → include_str! 本就会编译失败，这里只是双保险。
+        let missing_on_disk: Vec<&String> =
+            versions_in_array.difference(&files_on_disk).collect();
+        assert!(
+            missing_on_disk.is_empty(),
+            "MIGRATIONS rows without a corresponding .sql file: {:?}",
+            missing_on_disk
+        );
+    }
 }
