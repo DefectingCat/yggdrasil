@@ -51,12 +51,12 @@ fn normalize_origin(input: &str) -> String {
 #[cfg(feature = "server")]
 fn extract_origin(headers: &HeaderMap) -> Option<String> {
     if let Some(origin) = headers.get(axum::http::header::ORIGIN) {
-        return origin.to_str().ok().map(|s| normalize_origin(s));
+        return origin.to_str().ok().map(normalize_origin);
     }
     headers
         .get(axum::http::header::REFERER)
         .and_then(|v| v.to_str().ok())
-        .map(|s| normalize_origin(s))
+        .map(normalize_origin)
 }
 
 /// 计算本站可信 origin：优先 `APP_BASE_URL` 环境变量（生产域名），
