@@ -16,6 +16,10 @@ pub mod pool;
 #[cfg(feature = "server")]
 pub mod retry;
 
+/// 数据库迁移运行器，仅在启用 server feature 时编译。
+#[cfg(feature = "server")]
+pub mod migrate;
+
 /// 占位连接池实现，仅在不启用 server feature 时编译。
 ///
 /// `DummyPool` 是一个最小 stub：它提供与真实连接池相同的公开接口形状

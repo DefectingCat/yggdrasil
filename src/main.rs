@@ -206,6 +206,25 @@ fn main() {
             std::process::exit(1);
         }
 
+        // 启动前执行数据库迁移。阻塞：完成前不监听端口。
+        // 失败直接 panic（expect），避免启动一个 schema 不一致的半残服务。
+        // 多实例滚动发布时由咨询锁串行化，详见 src/db/migrate.rs。
+        //
+        // main() 是同步函数，这里用一个独立的多线程 runtime 驱动迁移的异步逻辑，
+        // 完成后再交给 dioxus::server::serve() 启动它自己的 runtime。
+        // 两个 runtime 不重叠，避免与 Dioxus 内部 runtime 产生交互。
+        let migrate_rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("failed to build migration runtime");
+        migrate_rt.block_on(async {
+            db::migrate::run()
+                .await
+                .expect("Database migration failed on startup");
+        });
+        // 迁移 runtime 用完即弃，显式 drop 以在 serve() 前释放其线程资源。
+        drop(migrate_rt);
+
         // 启动 Dioxus 服务端，返回构建好的 Axum Router
         dioxus::server::serve(|| async move {
             use dioxus::server::{axum, DioxusRouterExt, ServeConfig};
