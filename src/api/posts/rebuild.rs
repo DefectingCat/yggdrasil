@@ -75,14 +75,25 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
                 Some(rendered.toc_html)
             };
 
+            let word_count = crate::utils::text::count_words(&content_md);
+            let reading_time = crate::utils::text::reading_time(word_count);
+
             match client
                 .execute(
-                    "UPDATE posts SET content_html = $1, toc_html = $2 WHERE id = $3",
-                    &[&rendered.html, &toc_html, &id],
+                    "UPDATE posts SET content_html = $1, toc_html = $2, word_count = $3, reading_time = $4 WHERE id = $5",
+                    &[
+                        &rendered.html,
+                        &toc_html,
+                        &(word_count as i32),
+                        &(reading_time as i32),
+                        &id,
+                    ],
                 )
                 .await
             {
-                Ok(_) => rebuilt += 1,
+                Ok(_) => {
+                    rebuilt += 1;
+                }
                 Err(_) => {
                     failed += 1;
                     if errors.len() < MAX_DISPLAY_ERRORS {
@@ -92,9 +103,13 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
             }
         }
 
-        // 只要有文章被更新，就清空所有文章缓存。
-        if rebuilt > 0 || failed > 0 {
+        // 重建会修改 word_count / reading_time 等列表项字段，批量影响列表、标签云、
+        // 标签文章及单篇缓存；这里使用全量失效作为务实的回退策略。
+        if rebuilt > 0 {
             crate::cache::invalidate_all_post_caches();
+            crate::cache::invalidate_search_results();
+            // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
+            crate::ssr_cache::bump_global_generation();
         }
 
         Ok(RebuildResult {

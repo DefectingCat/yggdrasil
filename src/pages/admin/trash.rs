@@ -23,7 +23,7 @@ use crate::components::ui::{
     EmptyState, Pagination, StatusBadge, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_SOLID_GREEN,
     BTN_SOLID_RED, BTN_TEXT_ACCENT, BTN_TEXT_RED, CHECKBOX_CLASS,
 };
-use crate::models::post::Post;
+use crate::models::post::PostListItem;
 use crate::models::settings::TrashSettings;
 use crate::router::Route;
 
@@ -44,7 +44,7 @@ pub fn Trash() -> Element {
 pub fn TrashPage(page: i32) -> Element {
     let current_page = page.max(1);
     let mut selected_ids: Signal<HashSet<i32>> = use_signal(HashSet::new);
-    let mut posts: Signal<Vec<Post>> = use_signal(Vec::new);
+    let mut posts: Signal<Vec<PostListItem>> = use_signal(Vec::new);
     let mut total: Signal<i64> = use_signal(|| 0);
     #[allow(unused_mut)]
     let mut loading: Signal<bool> = use_signal(|| false);
@@ -500,7 +500,7 @@ pub fn TrashPage(page: i32) -> Element {
 /// 计算剩余天数（保留期 - 已删除天数）。
 ///
 /// 返回 (剩余天数, 是否已过期)。基于客户端时钟计算，轻微漂移可接受。
-fn remaining_days(post: &Post, retention_days: i32) -> (i64, bool) {
+fn remaining_days(post: &PostListItem, retention_days: i32) -> (i64, bool) {
     #[cfg(target_arch = "wasm32")]
     {
         if let Some(deleted_at) = post.deleted_at {
@@ -523,7 +523,7 @@ fn remaining_days(post: &Post, retention_days: i32) -> (i64, bool) {
 /// 回收站表格行组件。
 #[component]
 fn TrashRow(
-    post: Post,
+    post: PostListItem,
     retention_days: i32,
     selected: bool,
     on_select: EventHandler<bool>,

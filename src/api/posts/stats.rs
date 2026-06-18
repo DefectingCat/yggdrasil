@@ -18,7 +18,8 @@ use crate::models::post::PostStats;
 
 /// 获取文章统计信息。
 ///
-/// 需要 admin 权限；优先命中缓存，未命中时分别统计总数、草稿数与已发布数。
+/// 需要 admin 权限；优先命中缓存，未命中时通过单次条件聚合查询同时统计
+/// 未删除文章总数、草稿数与已发布数。
 #[server(GetPostStats, "/api")]
 pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
     let _user = get_current_admin_user().await?;
@@ -31,37 +32,23 @@ pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
 
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
-        // 统计未删除文章总数。
-        let total: i64 = client
-            .query_one("SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL", &[])
-            .await
-            .map_err(AppError::query)?
-            .get(0);
-
-        // 统计草稿数量。
-        let drafts: i64 = client
+        // 通过单次条件聚合查询同时统计总数、草稿数与已发布数。
+        let row = client
             .query_one(
-                "SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL AND status = 'draft'",
+                "SELECT
+                    COUNT(*) FILTER (WHERE deleted_at IS NULL) AS total,
+                    COUNT(*) FILTER (WHERE deleted_at IS NULL AND status = 'draft') AS drafts,
+                    COUNT(*) FILTER (WHERE deleted_at IS NULL AND status = 'published') AS published
+                 FROM posts",
                 &[],
             )
             .await
-            .map_err(AppError::query)?
-            .get(0);
-
-        // 统计已发布数量。
-        let published: i64 = client
-            .query_one(
-                "SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL AND status = 'published'",
-                &[],
-            )
-            .await
-            .map_err(AppError::query)?
-            .get(0);
+            .map_err(AppError::query)?;
 
         let stats = PostStats {
-            total,
-            drafts,
-            published,
+            total: row.get("total"),
+            drafts: row.get("drafts"),
+            published: row.get("published"),
         };
         crate::cache::set_post_stats(stats.clone()).await;
         Ok(PostStatsResponse { stats })

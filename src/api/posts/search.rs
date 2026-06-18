@@ -8,17 +8,19 @@
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
-use super::helpers::row_to_post_list;
+use super::helpers::row_to_post_list_item;
 use super::types::PostListResponse;
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
+#[cfg(feature = "server")]
+use crate::cache;
 #[cfg(feature = "server")]
 use crate::db::pool::get_conn;
 
 /// 搜索已发布文章。
 ///
 /// 空查询直接返回空结果；非空查询使用 `word_similarity` 计算相关度，
-/// 并限制返回 50 条记录。当前未缓存，每次均查询数据库。
+/// 并限制返回 50 条记录。结果写入短 TTL 内存缓存以减轻 DB 压力。
 #[server(SearchPosts, "/api")]
 pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnError> {
     #[cfg(feature = "server")]
@@ -47,6 +49,12 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
             });
         }
 
+        // 先检查短 TTL 的搜索结果缓存。
+        let cache_key = cache::normalize_search_key(q);
+        if let Some((posts, total)) = cache::get_search_results(&cache_key).await {
+            return Ok(PostListResponse { posts, total });
+        }
+
         // 转义 SQL LIKE 通配符，避免用户输入 % / _ 导致全表扫描。
         let escaped = q
             .replace('\\', "\\\\")
@@ -56,9 +64,10 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
         // 使用 ILIKE 做前缀模糊匹配，并按 word_similarity 降序、发布时间降序排序。
         let rows = client
             .query(
-                "SELECT 
-                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, 
-                    p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
+                "SELECT
+                    p.id, p.author_id, p.title, p.slug, p.summary, p.status,
+                    p.published_at, p.created_at, p.updated_at, p.cover_image,
+                    p.word_count, p.reading_time,
                     COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags,
                     word_similarity(p.search_text, $2) AS sml
                  FROM posts p
@@ -76,10 +85,11 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
 
         let mut posts = Vec::new();
         for row in &rows {
-            posts.push(row_to_post_list(&client, row).await);
+            posts.push(row_to_post_list_item(row));
         }
 
         let total = posts.len() as i64;
+        cache::set_search_results(&cache_key, posts.clone(), total).await;
         Ok(PostListResponse { posts, total })
     }
 

@@ -23,6 +23,9 @@ mod hooks;
 mod models;
 mod pages;
 mod router;
+// ssr_cache 仅在 server feature 启用时编译；保存 SSR 世代号失效状态。
+#[cfg(feature = "server")]
+mod ssr_cache;
 mod tasks;
 mod theme;
 mod utils;
@@ -225,7 +228,15 @@ fn main() {
                 tasks::post_purge::run_purge().await;
             });
 
-            // 配置增量渲染缓存，默认缓存 3600 秒，可通过 SSR_CACHE_SECS 覆盖
+            // 启动后台定时任务：图片磁盘缓存清理
+            tokio::spawn(async {
+                tasks::image_cache_cleanup::run_cleanup().await;
+            });
+
+            // 配置增量渲染缓存，默认缓存 3600 秒，可通过 SSR_CACHE_SECS 覆盖。
+            // 注意：src/ssr_cache.rs 中的世代号是未来就绪基础设施，当前并不会使
+            // Dioxus 0.7 的 SSR 缓存实际失效（Dioxus 未暴露相应 API）。在 API 可用
+            // 之前，SSR_CACHE_SECS 仍是唯一有效的兜底 TTL。
             let config = ServeConfig::builder().incremental(
                 dioxus::server::IncrementalRendererConfig::default().invalidate_after(
                     std::time::Duration::from_secs(
@@ -236,6 +247,28 @@ fn main() {
                     ),
                 ),
             );
+
+            // SSR 世代号中间件：把当前全局世代号注入请求扩展，并对 GET 请求的
+            // 响应附加 `X-SSR-Generation` 头。这是为未来 Dioxus 支持自定义 SSR 缓存键
+            // 预留的钩子；目前主要提供可观测性，不会实际失效 SSR 缓存。
+            async fn ssr_generation_middleware(
+                req: axum::http::Request<axum::body::Body>,
+                next: axum::middleware::Next,
+            ) -> axum::response::Response {
+                let generation = crate::ssr_cache::current_global_generation();
+                let is_get = req.method() == axum::http::Method::GET;
+                let (mut parts, body) = req.into_parts();
+                parts.extensions.insert(crate::ssr_cache::SsrGeneration(generation));
+                let mut response = next.run(axum::http::Request::from_parts(parts, body)).await;
+                if is_get {
+                    response.headers_mut().insert(
+                        axum::http::header::HeaderName::from_static("x-ssr-generation"),
+                        axum::http::HeaderValue::from_str(&generation.to_string())
+                            .unwrap_or_else(|_| axum::http::HeaderValue::from_static("0")),
+                    );
+                }
+                response
+            }
 
             // 自定义 API 路由：图片上传（大文件，需要更长超时）
             let upload_route = axum::Router::new()
@@ -253,8 +286,10 @@ fn main() {
             let dioxus_app =
                 axum::Router::new().serve_dioxus_application(config, router::AppRouter);
 
-            // 合并 Dioxus + 缓存头/可选压缩/30s 超时中间件
-            let mut app_routes = dioxus_app.layer(axum::middleware::from_fn(add_cache_control));
+            // 合并 Dioxus + 世代号/缓存头/可选压缩/30s 超时中间件
+            let mut app_routes = dioxus_app
+                .layer(axum::middleware::from_fn(ssr_generation_middleware))
+                .layer(axum::middleware::from_fn(add_cache_control));
             if let Some(layer) = compression_layer_from_env() {
                 app_routes = app_routes.layer(layer);
             }

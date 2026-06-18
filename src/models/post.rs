@@ -85,6 +85,51 @@ impl Post {
             .map(|d| d.format("%Y-%m-%d").to_string())
             .unwrap_or_else(|| self.created_at.format("%Y-%m-%d").to_string())
     }
+}
+
+/// 文章列表项 DTO。
+///
+/// 仅包含列表/标签/搜索/归档等场景需要的字段，不含 `content_md` 与 `content_html`，
+/// 以降低缓存内存占用与序列化体积。`deleted_at` 保留，供回收站列表使用。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PostListItem {
+    /// 文章主键。
+    pub id: i32,
+    /// 作者用户主键。
+    pub author_id: i32,
+    /// 文章标题。
+    pub title: String,
+    /// URL slug，用于生成文章链接。
+    pub slug: String,
+    /// 摘要，可选。
+    pub summary: Option<String>,
+    /// 文章发布状态。
+    pub status: PostStatus,
+    /// 正式发布时间，None 表示尚未发布。
+    pub published_at: Option<DateTime<Utc>>,
+    /// 创建时间。
+    pub created_at: DateTime<Utc>,
+    /// 最后更新时间。
+    pub updated_at: DateTime<Utc>,
+    /// 软删除时间，None 表示未删除。仅回收站查询填充。
+    pub deleted_at: Option<DateTime<Utc>>,
+    /// 关联标签列表。
+    pub tags: Vec<String>,
+    /// 封面图片 URL。
+    pub cover_image: Option<String>,
+    /// 预计阅读时间（分钟）。
+    pub reading_time: u32,
+    /// 字数统计。
+    pub word_count: u32,
+}
+
+impl PostListItem {
+    /// 返回用于展示的文章日期：优先使用发布时间，否则回退到创建时间。
+    pub fn formatted_date(&self) -> String {
+        self.published_at
+            .map(|d| d.format("%Y-%m-%d").to_string())
+            .unwrap_or_else(|| self.created_at.format("%Y-%m-%d").to_string())
+    }
 
     /// 返回中文状态标签。
     pub fn status_label(&self) -> &'static str {
@@ -173,6 +218,25 @@ mod tests {
         }
     }
 
+    fn sample_post_list_item() -> PostListItem {
+        PostListItem {
+            id: 1,
+            author_id: 1,
+            title: "Test".to_string(),
+            slug: "test".to_string(),
+            summary: None,
+            status: PostStatus::Draft,
+            published_at: None,
+            created_at: Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap(),
+            updated_at: Utc.with_ymd_and_hms(2024, 1, 15, 10, 0, 0).unwrap(),
+            deleted_at: None,
+            tags: vec![],
+            cover_image: None,
+            reading_time: 1,
+            word_count: 10,
+        }
+    }
+
     #[test]
     #[cfg(feature = "server")]
     fn post_status_from_str() {
@@ -213,8 +277,21 @@ mod tests {
     }
 
     #[test]
-    fn status_label() {
-        let mut post = sample_post();
+    fn post_list_item_formatted_date_uses_published_at_when_available() {
+        let mut post = sample_post_list_item();
+        post.published_at = Some(Utc.with_ymd_and_hms(2024, 6, 1, 12, 0, 0).unwrap());
+        assert_eq!(post.formatted_date(), "2024-06-01");
+    }
+
+    #[test]
+    fn post_list_item_formatted_date_falls_back_to_created_at() {
+        let post = sample_post_list_item();
+        assert_eq!(post.formatted_date(), "2024-01-15");
+    }
+
+    #[test]
+    fn post_list_item_status_label() {
+        let mut post = sample_post_list_item();
         post.status = PostStatus::Published;
         assert_eq!(post.status_label(), "已发布");
         post.status = PostStatus::Draft;
@@ -222,8 +299,8 @@ mod tests {
     }
 
     #[test]
-    fn status_class_returns_non_empty() {
-        let mut post = sample_post();
+    fn post_list_item_status_class_returns_non_empty() {
+        let mut post = sample_post_list_item();
         post.status = PostStatus::Published;
         assert_eq!(post.status_class(), "text-green-600 dark:text-green-400");
         post.status = PostStatus::Draft;
@@ -231,8 +308,8 @@ mod tests {
     }
 
     #[test]
-    fn status_badge_class_returns_non_empty() {
-        let mut post = sample_post();
+    fn post_list_item_status_badge_class_returns_non_empty() {
+        let mut post = sample_post_list_item();
         post.status = PostStatus::Published;
         assert_eq!(
             post.status_badge_class(),

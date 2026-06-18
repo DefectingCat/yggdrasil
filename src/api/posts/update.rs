@@ -55,6 +55,10 @@ pub async fn update_post(
         let post_status = PostStatus::from_str(&status).unwrap_or(PostStatus::Draft);
         let cover_image = cover_image.filter(|s| !s.trim().is_empty());
 
+        // 重新计算字数与阅读时长，保持与正文同步。
+        let word_count = crate::utils::text::count_words(&content_md);
+        let reading_time = crate::utils::text::reading_time(word_count);
+
         let tx = client.transaction().await.map_err(AppError::tx)?;
 
         // 查询旧 slug，用于后续缓存失效。
@@ -150,8 +154,8 @@ pub async fn update_post(
         // 更新文章主表。
         let updated = tx
             .execute(
-                "UPDATE posts SET title = $1, slug = $2, summary = $3, content_md = $4, content_html = $5, toc_html = $6, status = $7, published_at = $8, cover_image = $9, updated_at = NOW()
-                 WHERE id = $10",
+                "UPDATE posts SET title = $1, slug = $2, summary = $3, content_md = $4, content_html = $5, toc_html = $6, status = $7, published_at = $8, cover_image = $9, word_count = $10, reading_time = $11, updated_at = NOW()
+                 WHERE id = $12",
                 &[
                     &title.trim(),
                     &final_slug,
@@ -162,6 +166,8 @@ pub async fn update_post(
                     &post_status.as_str(),
                     &published_at,
                     &cover_image,
+                    &(word_count as i32),
+                    &(reading_time as i32),
                     &post_id,
                 ],
             )
@@ -192,17 +198,18 @@ pub async fn update_post(
         // 失效文章列表、标签、当前 slug 与统计缓存。
         crate::cache::invalidate_post_lists();
         crate::cache::invalidate_all_tags();
-        crate::cache::invalidate_post_by_slug(&final_slug).await;
         crate::cache::invalidate_post_stats();
+        crate::cache::invalidate_search_results();
+        crate::cache::invalidate_post_by_slug(&final_slug).await;
 
         // 合并旧标签与新标签，统一失效标签下的文章列表缓存。
-        let all_tags_to_invalidate: std::collections::HashSet<String> = old_tags
+        let all_tags_to_invalidate: Vec<String> = old_tags
             .into_iter()
             .chain(tags_for_invalidation.into_iter())
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
             .collect();
-        for tag_name in &all_tags_to_invalidate {
-            crate::cache::invalidate_posts_by_tag(tag_name).await;
-        }
+        crate::cache::invalidate_tag_posts_for(&all_tags_to_invalidate).await;
 
         // 若 slug 发生变更，额外失效旧 slug 缓存。
         if let Some(ref old) = old_slug {
@@ -210,6 +217,9 @@ pub async fn update_post(
                 crate::cache::invalidate_post_by_slug(old).await;
             }
         }
+
+        // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
+        crate::ssr_cache::bump_global_generation();
 
         Ok(CreatePostResponse {
             success: true,

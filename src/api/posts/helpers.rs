@@ -6,26 +6,23 @@
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
 #[cfg(feature = "server")]
-use crate::models::post::{Post, PostStatus};
+use crate::models::post::{Post, PostListItem, PostStatus};
 #[cfg(feature = "server")]
-use crate::utils::text::count_words;
+use crate::utils::text::{count_words, reading_time};
 
 /// 复用认证模块的当前 admin 用户获取逻辑。
 #[cfg(feature = "server")]
 pub(super) use crate::api::auth::get_current_admin_user;
 
-/// 将数据库行转换为文章列表项。
+/// 将数据库行转换为轻量列表项 DTO。
 ///
-/// 用于列表接口，包含标签聚合、字数与阅读时长估算，
-/// 不包含上下篇导航与目录。
+/// 不包含 `content_md`/`content_html`；字数与阅读时长直接读取已持久化的列。
+/// 同步函数，不依赖数据库连接。
 #[cfg(feature = "server")]
-pub(super) async fn row_to_post_list(
-    _client: &tokio_postgres::Client,
-    row: &tokio_postgres::Row,
-) -> Post {
+pub(super) fn row_to_post_list_item(row: &tokio_postgres::Row) -> PostListItem {
     let id: i32 = row.get("id");
-    let role_str: String = row.get("status");
-    let status = PostStatus::from_str(&role_str).unwrap_or(PostStatus::Draft);
+    let status_str: String = row.get("status");
+    let status = PostStatus::from_str(&status_str).unwrap_or(PostStatus::Draft);
 
     // 聚合标签并过滤空字符串。
     let tags: Vec<String> = row
@@ -35,17 +32,15 @@ pub(super) async fn row_to_post_list(
         .filter(|t| !t.is_empty())
         .collect();
 
-    let content_md: String = row.get("content_md");
-    let word_count = count_words(&content_md);
+    let word_count: i32 = row.get("word_count");
+    let reading_time: i32 = row.get("reading_time");
 
-    Post {
+    PostListItem {
         id,
         author_id: row.get("author_id"),
         title: row.get("title"),
         slug: row.get("slug"),
         summary: row.get("summary"),
-        content_md,
-        content_html: row.get("content_html"),
         status,
         published_at: row.get("published_at"),
         created_at: row.get("created_at"),
@@ -53,11 +48,8 @@ pub(super) async fn row_to_post_list(
         deleted_at: row.try_get("deleted_at").ok(),
         tags,
         cover_image: row.get("cover_image"),
-        reading_time: (word_count / 200).max(1),
-        word_count,
-        toc_html: None,
-        prev_post: None,
-        next_post: None,
+        reading_time: reading_time.max(1) as u32,
+        word_count: word_count.max(0) as u32,
     }
 }
 
@@ -110,6 +102,17 @@ pub(super) async fn row_to_post_full(
         None
     };
 
+    // 读取正文与已持久化的字数/阅读时长；若列尚未回填（旧数据为 0），则现场计算。
+    let content_md: String = row.get("content_md");
+    let stored_word_count: i32 = row.get("word_count");
+    let stored_reading_time: i32 = row.get("reading_time");
+    let (word_count, reading_time) = if stored_word_count > 0 && stored_reading_time > 0 {
+        (stored_word_count as u32, stored_reading_time as u32)
+    } else {
+        let wc = count_words(&content_md);
+        (wc, reading_time(wc))
+    };
+
     let content_html: Option<String> = row.get("content_html");
     let toc_html_row: Option<String> = row.get("toc_html");
 
@@ -117,7 +120,6 @@ pub(super) async fn row_to_post_full(
     let (content_html, toc_html) = if let Some(html) = content_html {
         (html, toc_html_row)
     } else {
-        let content_md: String = row.get("content_md");
         let rendered = crate::api::markdown::render_markdown_enhanced(&content_md);
         (
             rendered.html,
@@ -128,9 +130,6 @@ pub(super) async fn row_to_post_full(
             },
         )
     };
-
-    let content_md: String = row.get("content_md");
-    let word_count = count_words(&content_md);
 
     Post {
         id,
@@ -147,7 +146,7 @@ pub(super) async fn row_to_post_full(
         deleted_at: row.try_get("deleted_at").ok(),
         tags,
         cover_image: row.get("cover_image"),
-        reading_time: (word_count / 200).max(1),
+        reading_time,
         word_count,
         toc_html,
         prev_post,

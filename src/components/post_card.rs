@@ -6,7 +6,7 @@ use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
 use crate::components::image_viewer::ImageViewer;
-use crate::models::post::Post;
+use crate::models::post::PostListItem;
 use crate::router::Route;
 
 /// 文章卡片组件。
@@ -23,7 +23,7 @@ use crate::router::Route;
 /// 关键事件：
 /// - 点击标签时阻止事件冒泡，避免触发整卡跳转
 #[component]
-pub fn PostCard(post: Post) -> Element {
+pub fn PostCard(post: PostListItem) -> Element {
     let post_slug = post.slug.clone();
     let date_str = post.formatted_date();
     let has_cover = post.cover_image.is_some();

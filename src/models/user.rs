@@ -44,6 +44,21 @@ pub struct User {
     pub created_at: DateTime<Utc>,
 }
 
+/// 会话缓存使用的轻量用户结构体，不含密码哈希。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionUser {
+    /// 用户主键。
+    pub id: i32,
+    /// 用户名。
+    pub username: String,
+    /// 邮箱地址。
+    pub email: String,
+    /// 用户角色。
+    pub role: UserRole,
+    /// 账户创建时间。
+    pub created_at: DateTime<Utc>,
+}
+
 /// 可公开的用户信息，从 User 转换而来，不含密码哈希。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PublicUser {
@@ -57,6 +72,32 @@ pub struct PublicUser {
     pub role: UserRole,
     /// 账户创建时间。
     pub created_at: DateTime<Utc>,
+}
+
+impl From<User> for SessionUser {
+    /// 将 User 转换为 SessionUser，丢弃 password_hash 字段。
+    fn from(u: User) -> Self {
+        SessionUser {
+            id: u.id,
+            username: u.username,
+            email: u.email,
+            role: u.role,
+            created_at: u.created_at,
+        }
+    }
+}
+
+impl From<SessionUser> for PublicUser {
+    /// 将 SessionUser 转换为 PublicUser。
+    fn from(u: SessionUser) -> Self {
+        PublicUser {
+            id: u.id,
+            username: u.username,
+            email: u.email,
+            role: u.role,
+            created_at: u.created_at,
+        }
+    }
 }
 
 impl From<User> for PublicUser {
@@ -123,5 +164,25 @@ mod tests {
             serde_json::from_str::<UserRole>(&json).unwrap(),
             UserRole::Admin
         );
+    }
+
+    #[test]
+    fn user_to_session_user_excludes_password_hash() {
+        let user = sample_user();
+        let session: SessionUser = user.clone().into();
+        assert_eq!(session.id, user.id);
+        assert_eq!(session.username, user.username);
+        assert_eq!(session.email, user.email);
+        assert_eq!(session.role, user.role);
+        assert_eq!(session.created_at, user.created_at);
+    }
+
+    #[test]
+    fn session_user_to_public_user_excludes_password_hash() {
+        let user = sample_user();
+        let session: SessionUser = user.into();
+        let public: PublicUser = session.into();
+        let json = serde_json::to_string(&public).unwrap();
+        assert!(!json.contains("password_hash"));
     }
 }

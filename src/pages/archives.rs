@@ -13,7 +13,7 @@ use dioxus::router::components::Link;
 use crate::api::posts::{list_published_posts, PostListResponse};
 use crate::components::skeletons::archive_skeleton::ArchiveSkeleton;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
-use crate::models::post::Post;
+use crate::models::post::PostListItem;
 use crate::router::Route;
 
 /// 按年份分组的文章归档结构。
@@ -28,13 +28,13 @@ struct YearGroup {
 struct MonthGroup {
     month: String,
     month_en: String,
-    posts: Vec<Post>,
+    posts: Vec<PostListItem>,
 }
 
 /// 将文章列表按 `formatted_date()` 返回的 `YYYY-MM-DD` 格式进行年、月分组。
 ///
 /// 返回的结果按原始文章顺序组织，调用前已按发布时间降序排列。
-fn group_posts(posts: &[Post]) -> Vec<YearGroup> {
+fn group_posts(posts: &[PostListItem]) -> Vec<YearGroup> {
     let mut years: Vec<YearGroup> = vec![];
 
     for post in posts {
@@ -204,7 +204,7 @@ fn MonthSection(month_group: MonthGroup, year: String) -> Element {
 
 /// 单条归档文章组件，展示标题与发布日期，并通过覆盖层链接到文章详情。
 #[component]
-fn ArchiveEntry(post: Post) -> Element {
+fn ArchiveEntry(post: PostListItem) -> Element {
     let date_str = post.formatted_date();
 
     rsx! {

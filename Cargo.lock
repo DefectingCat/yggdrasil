@@ -5393,10 +5393,12 @@ version = "0.2.0"
 dependencies = [
  "argon2",
  "axum",
+ "bytes",
  "chrono",
  "deadpool-postgres",
  "dioxus",
  "dotenvy",
+ "futures",
  "governor",
  "hex",
  "http",

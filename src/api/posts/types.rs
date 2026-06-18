@@ -1,6 +1,6 @@
 //! 文章 API 的请求与响应数据结构。
 
-use crate::models::post::{Post, PostStats, Tag};
+use crate::models::post::{Post, PostListItem, PostStats, Tag};
 
 /// 创建/更新/删除文章的统一响应结构。
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -18,8 +18,8 @@ pub struct CreatePostResponse {
 /// 文章列表响应。
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PostListResponse {
-    /// 文章列表。
-    pub posts: Vec<Post>,
+    /// 文章列表（轻量 DTO，不含正文）。
+    pub posts: Vec<PostListItem>,
     /// 符合查询条件的总数。
     pub total: i64,
 }

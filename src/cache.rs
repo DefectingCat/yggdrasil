@@ -1,7 +1,7 @@
 //! 基于 moka 的内存缓存层。
 //!
-//! 仅在启用 `server` feature 时编译，为文章列表、标签、单篇文章、统计信息
-//! 以及评论相关数据提供按键缓存与失效能力。
+//! 仅在启用 `server` feature 时编译，为文章列表、标签、单篇文章、统计信息、
+//! 评论、会话用户以及搜索结果提供按键缓存与失效能力。
 //! 缓存使用 `std::sync::LazyLock` 全局实例，按不同业务数据设置独立的 TTL。
 
 #[cfg(feature = "server")]
@@ -14,7 +14,9 @@ use std::time::Duration;
 #[cfg(feature = "server")]
 use crate::models::comment::PublicComment;
 #[cfg(feature = "server")]
-use crate::models::post::{Post, PostStats, Tag};
+use crate::models::post::{Post, PostListItem, PostStats, Tag};
+#[cfg(feature = "server")]
+use crate::models::user::SessionUser;
 
 // ============================================================================
 // 缓存 TTL 配置
@@ -48,6 +50,14 @@ const TTL_COMMENTS: Duration = Duration::from_secs(60);
 #[cfg(feature = "server")]
 const TTL_PENDING_COUNT: Duration = Duration::from_secs(10);
 
+/// 会话用户缓存 TTL：300 秒（5 分钟），短于 DB 会话过期时间。
+#[cfg(feature = "server")]
+const TTL_SESSION: Duration = Duration::from_secs(300);
+
+/// 搜索结果缓存 TTL：10 秒。
+#[cfg(feature = "server")]
+const TTL_SEARCH: Duration = Duration::from_secs(10);
+
 // ============================================================================
 // 缓存 Key 类型
 // ============================================================================
@@ -80,7 +90,7 @@ pub enum CacheKey {
 
 /// 文章列表缓存类型，值为（文章列表，总数）。
 #[cfg(feature = "server")]
-pub type PostListCache = Cache<CacheKey, (Vec<Post>, i64)>;
+pub type PostListCache = Cache<CacheKey, (Vec<PostListItem>, i64)>;
 
 /// 标签列表缓存类型。
 #[cfg(feature = "server")]
@@ -161,19 +171,45 @@ static PENDING_COUNT_CACHE: LazyLock<Cache<CacheKey, i64>> = LazyLock::new(|| {
         .build()
 });
 
+/// 会话用户缓存类型。
+#[cfg(feature = "server")]
+pub type SessionCache = Cache<String, SessionUser>;
+
+/// 搜索结果缓存类型。
+#[cfg(feature = "server")]
+pub type SearchCache = Cache<String, (Vec<PostListItem>, i64)>;
+
+/// 全局会话用户缓存实例，最大容量 1000，TTL 5 分钟。
+#[cfg(feature = "server")]
+pub static SESSION_CACHE: LazyLock<SessionCache> = LazyLock::new(|| {
+    Cache::builder()
+        .max_capacity(1000)
+        .time_to_live(TTL_SESSION)
+        .build()
+});
+
+/// 全局搜索结果缓存实例，最大容量 200，TTL 10 秒。
+#[cfg(feature = "server")]
+static SEARCH_CACHE: LazyLock<SearchCache> = LazyLock::new(|| {
+    Cache::builder()
+        .max_capacity(200)
+        .time_to_live(TTL_SEARCH)
+        .build()
+});
+
 // ============================================================================
 // 公共缓存 API
 // ============================================================================
 
 /// 读取文章分页列表缓存。
 #[cfg(feature = "server")]
-pub async fn get_post_list(key: &CacheKey) -> Option<(Vec<Post>, i64)> {
+pub async fn get_post_list(key: &CacheKey) -> Option<(Vec<PostListItem>, i64)> {
     POST_LIST_CACHE.get(key).await
 }
 
 /// 写入文章分页列表缓存。
 #[cfg(feature = "server")]
-pub async fn set_post_list(key: &CacheKey, posts: Vec<Post>, total: i64) {
+pub async fn set_post_list(key: &CacheKey, posts: Vec<PostListItem>, total: i64) {
     let _ = POST_LIST_CACHE.insert(key.clone(), (posts, total)).await;
 }
 
@@ -224,7 +260,7 @@ pub async fn set_post_by_slug(slug: &str, post: Option<Post>) {
 
 /// 按标签读取文章列表缓存。
 #[cfg(feature = "server")]
-pub async fn get_posts_by_tag(tag: &str) -> Option<(Vec<Post>, i64)> {
+pub async fn get_posts_by_tag(tag: &str) -> Option<(Vec<PostListItem>, i64)> {
     TAG_POSTS_CACHE
         .get(&CacheKey::PostsByTag(tag.to_string()))
         .await
@@ -232,7 +268,7 @@ pub async fn get_posts_by_tag(tag: &str) -> Option<(Vec<Post>, i64)> {
 
 /// 按标签写入文章列表缓存。
 #[cfg(feature = "server")]
-pub async fn set_posts_by_tag(tag: &str, posts: Vec<Post>, total: i64) {
+pub async fn set_posts_by_tag(tag: &str, posts: Vec<PostListItem>, total: i64) {
     let _ = TAG_POSTS_CACHE
         .insert(CacheKey::PostsByTag(tag.to_string()), (posts, total))
         .await;
@@ -288,7 +324,22 @@ pub fn invalidate_post_stats() {
     POST_STATS_CACHE.invalidate_all();
 }
 
+/// 按标签批量失效文章列表缓存。
+#[cfg(feature = "server")]
+pub async fn invalidate_tag_posts_for(tags: &[String]) {
+    let futures: Vec<_> = tags
+        .iter()
+        .map(|tag| invalidate_posts_by_tag(tag))
+        .collect();
+    let _ = futures::future::join_all(futures).await;
+}
+
 /// 清空所有文章相关缓存（列表、标签、单篇、统计、标签文章）。
+///
+/// 这是一个“紧急”使用的全量失效开关，会一次性冲刷所有文章缓存；
+/// 正常写路径应当使用更细粒度的 `invalidate_post_lists` / `invalidate_all_tags` /
+/// `invalidate_post_by_slug` / `invalidate_posts_by_tag` / `invalidate_post_stats` /
+/// `invalidate_tag_posts_for` 等函数，避免不必要的缓存击穿。
 #[cfg(feature = "server")]
 pub fn invalidate_all_post_caches() {
     POST_LIST_CACHE.invalidate_all();
@@ -330,6 +381,53 @@ pub async fn set_pending_count(count: i64) {
         .await;
 }
 
+/// 规范化搜索查询键：trim、转小写、截断至 200 字符。
+#[cfg(feature = "server")]
+pub fn normalize_search_key(query: &str) -> String {
+    query.trim().to_lowercase().chars().take(200).collect()
+}
+
+/// 读取会话用户缓存。
+#[cfg(feature = "server")]
+pub async fn get_session_user(token_hash: &str) -> Option<SessionUser> {
+    SESSION_CACHE.get(token_hash).await
+}
+
+/// 写入会话用户缓存。
+#[cfg(feature = "server")]
+pub async fn set_session_user(token_hash: &str, user: SessionUser) {
+    let _ = SESSION_CACHE.insert(token_hash.to_string(), user).await;
+}
+
+/// 失效指定会话用户缓存。
+#[cfg(feature = "server")]
+pub async fn invalidate_session_user(token_hash: &str) {
+    SESSION_CACHE.invalidate(token_hash).await;
+}
+
+/// 读取搜索结果缓存。
+#[cfg(feature = "server")]
+pub async fn get_search_results(query: &str) -> Option<(Vec<PostListItem>, i64)> {
+    SEARCH_CACHE.get(&normalize_search_key(query)).await
+}
+
+/// 写入搜索结果缓存。
+#[cfg(feature = "server")]
+pub async fn set_search_results(query: &str, posts: Vec<PostListItem>, total: i64) {
+    let _ = SEARCH_CACHE
+        .insert(normalize_search_key(query), (posts, total))
+        .await;
+}
+
+/// 清空所有搜索结果缓存。
+///
+/// 使用同步签名是因为 `moka::Cache::invalidate_all` 为同步操作；
+/// 该函数通常由写路径直接调用，无需额外等待。
+#[cfg(feature = "server")]
+pub fn invalidate_search_results() {
+    SEARCH_CACHE.invalidate_all();
+}
+
 /// 按文章主键失效评论列表缓存。
 #[cfg(feature = "server")]
 pub async fn invalidate_comments_by_post(post_id: i32) {
@@ -351,6 +449,7 @@ mod tests {
     use super::*;
     use crate::models::comment::PublicComment;
     use crate::models::post::PostStatus;
+    use crate::models::user::{SessionUser, UserRole};
     use serial_test::serial;
 
     #[test]
@@ -379,15 +478,31 @@ mod tests {
             page: 999,
             per_page: 99,
         };
-        let posts = vec![];
+        let posts = vec![PostListItem {
+            id: 1,
+            author_id: 1,
+            title: "List Item".to_string(),
+            slug: "list-item".to_string(),
+            summary: None,
+            status: PostStatus::Published,
+            published_at: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            deleted_at: None,
+            tags: vec!["rust".to_string()],
+            cover_image: None,
+            reading_time: 1,
+            word_count: 10,
+        }];
 
-        set_post_list(&key, posts.clone(), 0).await;
+        set_post_list(&key, posts.clone(), 1).await;
         let cached = get_post_list(&key).await;
 
         assert!(cached.is_some());
         let (cached_posts, cached_total) = cached.unwrap();
-        assert_eq!(cached_posts.len(), 0);
-        assert_eq!(cached_total, 0);
+        assert_eq!(cached_posts.len(), 1);
+        assert_eq!(cached_posts[0].title, "List Item");
+        assert_eq!(cached_total, 1);
     }
 
     #[tokio::test]
@@ -539,6 +654,96 @@ mod tests {
 
         invalidate_pending_count().await;
         assert!(get_pending_count().await.is_none());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn session_cache_roundtrip() {
+        let user = SessionUser {
+            id: 42,
+            username: "cached_user".to_string(),
+            email: "cached@example.com".to_string(),
+            role: UserRole::Admin,
+            created_at: chrono::Utc::now(),
+        };
+        let token_hash = "sha256_token_hash";
+
+        set_session_user(token_hash, user.clone()).await;
+        let cached = get_session_user(token_hash).await;
+
+        assert!(cached.is_some());
+        let cached_user = cached.unwrap();
+        assert_eq!(cached_user.id, user.id);
+        assert_eq!(cached_user.username, user.username);
+        assert_eq!(cached_user.email, user.email);
+        assert_eq!(cached_user.role, user.role);
+
+        invalidate_session_user(token_hash).await;
+        assert!(get_session_user(token_hash).await.is_none());
+    }
+
+    #[test]
+    fn search_key_normalization() {
+        assert_eq!(normalize_search_key("  Rust "), "rust");
+        assert_eq!(normalize_search_key("Rust"), "rust");
+        assert_eq!(normalize_search_key("  rust "), "rust");
+        assert_eq!(normalize_search_key(""), "");
+
+        let long = "a".repeat(250);
+        let normalized = normalize_search_key(&long);
+        assert_eq!(normalized.len(), 200);
+        assert!(normalized.chars().all(|c| c == 'a'));
+
+        // 大小写与空格差异应映射到同一键。
+        assert_eq!(
+            normalize_search_key("  Dioxus Fullstack "),
+            normalize_search_key("dioxus fullstack")
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn search_cache_roundtrip() {
+        let query = "Rust";
+        let posts = vec![PostListItem {
+            id: 1,
+            author_id: 1,
+            title: "Search Result".to_string(),
+            slug: "search-result".to_string(),
+            summary: None,
+            status: PostStatus::Published,
+            published_at: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            deleted_at: None,
+            tags: vec!["rust".to_string()],
+            cover_image: None,
+            reading_time: 1,
+            word_count: 10,
+        }];
+
+        set_search_results(query, posts.clone(), 1).await;
+
+        // 大小写与空格差异应命中同一缓存条目。
+        let cached = get_search_results(" rust ").await;
+        assert!(cached.is_some());
+        let (cached_posts, cached_total) = cached.unwrap();
+        assert_eq!(cached_posts.len(), 1);
+        assert_eq!(cached_posts[0].title, "Search Result");
+        assert_eq!(cached_total, 1);
+
+        invalidate_search_results();
+        assert!(get_search_results(query).await.is_none());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn search_cache_invalidation() {
+        set_search_results("tokio", vec![], 0).await;
+        assert!(get_search_results("tokio").await.is_some());
+
+        invalidate_search_results();
+        assert!(get_search_results("tokio").await.is_none());
     }
 
 }

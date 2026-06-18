@@ -91,6 +91,10 @@ pub async fn create_post(
         let post_status = PostStatus::from_str(&status).unwrap_or(PostStatus::Draft);
         let cover_image = cover_image.filter(|s| !s.trim().is_empty());
 
+        // 计算字数与阅读时长，随文章一并持久化，供列表查询直接使用。
+        let word_count = crate::utils::text::count_words(&content_md);
+        let reading_time = crate::utils::text::reading_time(word_count);
+
         // 发布状态的文章设置当前发布时间；草稿则为 None。
         let published_at = if post_status == PostStatus::Published {
             Some(chrono::Utc::now())
@@ -106,8 +110,8 @@ pub async fn create_post(
         // 插入文章记录。
         let row = tx
             .query_one(
-                "INSERT INTO posts (author_id, title, slug, summary, content_md, content_html, toc_html, status, published_at, cover_image)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                "INSERT INTO posts (author_id, title, slug, summary, content_md, content_html, toc_html, status, published_at, cover_image, word_count, reading_time)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                  RETURNING id",
                 &[
                     &user.id,
@@ -120,6 +124,8 @@ pub async fn create_post(
                     &post_status.as_str(),
                     &published_at,
                     &cover_image,
+                    &(word_count as i32),
+                    &(reading_time as i32),
                 ],
             )
             .await
@@ -133,17 +139,18 @@ pub async fn create_post(
 
         tx.commit().await.map_err(AppError::tx)?;
 
-        // 写入成功后失效文章列表、标签与统计缓存。
+        // 写入成功后按粒度失效相关缓存。
         crate::cache::invalidate_post_lists();
         crate::cache::invalidate_all_tags();
         crate::cache::invalidate_post_stats();
+        crate::cache::invalidate_search_results();
         // 失效按 slug 缓存，避免之前缓存的 404 继续命中。
         crate::cache::invalidate_post_by_slug(&final_slug).await;
+        // 失效该文章涉及的所有标签下文章列表缓存。
+        crate::cache::invalidate_tag_posts_for(&tags_cleaned).await;
 
-        // 失效该文章涉及的所有标签缓存。
-        for tag_name in &tags_cleaned {
-            crate::cache::invalidate_posts_by_tag(tag_name).await;
-        }
+        // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
+        crate::ssr_cache::bump_global_generation();
 
         Ok(CreatePostResponse {
             success: true,

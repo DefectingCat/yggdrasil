@@ -8,7 +8,7 @@
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
-use super::helpers::{get_current_admin_user, row_to_post_full, row_to_post_list};
+use super::helpers::{get_current_admin_user, row_to_post_full};
 use super::types::SinglePostResponse;
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
@@ -28,9 +28,10 @@ pub async fn get_post_by_id(post_id: i32) -> Result<SinglePostResponse, ServerFn
 
         let row = client
             .query_opt(
-                "SELECT 
-                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, 
+                "SELECT
+                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, p.toc_html,
                     p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
+                    p.word_count, p.reading_time,
                     COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags
                  FROM posts p
                  LEFT JOIN post_tags pt ON p.id = pt.post_id
@@ -43,7 +44,7 @@ pub async fn get_post_by_id(post_id: i32) -> Result<SinglePostResponse, ServerFn
             .map_err(AppError::query)?;
 
         let post = match row {
-            Some(row) => Some(row_to_post_list(&client, &row).await),
+            Some(row) => Some(row_to_post_full(&client, &row).await),
             None => None,
         };
 
@@ -72,9 +73,10 @@ pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, Server
         // 使用 LATERAL JOIN 查询按 published_at 排序的相邻文章。
         let row = client
             .query_opt(
-                "SELECT 
+                "SELECT
                     p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, p.toc_html,
                     p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
+                    p.word_count, p.reading_time,
                     COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags,
                     prev.title as prev_title, prev.slug as prev_slug,
                     next.title as next_title, next.slug as next_slug
