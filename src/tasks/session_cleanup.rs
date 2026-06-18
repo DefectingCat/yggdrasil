@@ -16,11 +16,17 @@ pub async fn run_cleanup() {
         match get_conn().await {
             Ok(client) => {
                 // 删除已过期会话
-                if let Err(e) = client
+                match client
                     .execute("DELETE FROM sessions WHERE expires_at < NOW()", &[])
                     .await
                 {
-                    tracing::error!("Session cleanup error: {:?}", e);
+                    Ok(_) => {
+                        // 同时清空内存中的会话缓存，避免已失效会话继续命中。
+                        crate::cache::SESSION_CACHE.invalidate_all();
+                    }
+                    Err(e) => {
+                        tracing::error!("Session cleanup error: {:?}", e);
+                    }
                 }
             }
             Err(e) => {
