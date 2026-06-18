@@ -350,9 +350,10 @@ fn process_image_blocking(
                 img
             }
             Err(e) => {
-                tracing::warn!("WebP decode failed ({}), returning raw bytes", e);
-                let ct = content_type(original_format);
-                return Ok((data, ct));
+                // decode 失败不再降级返回原始字节（可能是构造的畸形文件，配合 nosniff
+                // 构成内容混淆面），直接报错让上层返回 422（M3）。
+                tracing::warn!("WebP decode failed ({}), rejecting", e);
+                return Err(StatusCode::UNPROCESSABLE_ENTITY);
             }
         }
     } else {
@@ -362,9 +363,8 @@ fn process_image_blocking(
         match reader.decode() {
             Ok(img) => img,
             Err(e) => {
-                tracing::warn!("Image decode failed ({}), returning raw bytes", e);
-                let ct = content_type(original_format);
-                return Ok((data, ct));
+                tracing::warn!("Image decode failed ({}), rejecting", e);
+                return Err(StatusCode::UNPROCESSABLE_ENTITY);
             }
         }
     };
@@ -465,11 +465,18 @@ pub async fn serve_image(
 
     // No processing params: return raw file with long-lived cache headers.
     if params.is_empty() {
-        return match tokio::fs::read(&file_path).await {
-            Ok(data) => {
-                let ct = content_type(detect_format(&path));
-                image_response(Bytes::from(data), ct, "public, max-age=31536000, immutable", &headers)
-            }
+        // 原始分支也限制大小，避免读取超大文件撑爆内存（M3）。上限 20MB
+        // 覆盖正常上传图（上传侧 MAX_FILE_SIZE=5MB），拒绝异常大文件。
+        const MAX_RAW_BYTES: u64 = 20 * 1024 * 1024;
+        return match tokio::fs::metadata(&file_path).await {
+            Ok(meta) if meta.len() > MAX_RAW_BYTES => StatusCode::PAYLOAD_TOO_LARGE.into_response(),
+            Ok(_) => match tokio::fs::read(&file_path).await {
+                Ok(data) => {
+                    let ct = content_type(detect_format(&path));
+                    image_response(Bytes::from(data), ct, "public, max-age=31536000, immutable", &headers)
+                }
+                Err(_) => StatusCode::NOT_FOUND.into_response(),
+            },
             Err(_) => StatusCode::NOT_FOUND.into_response(),
         };
     }
