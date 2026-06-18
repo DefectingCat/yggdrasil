@@ -206,6 +206,11 @@ fn image_response(
                     (header::ETAG, HeaderValue::from_str(&etag).unwrap()),
                     (header::CACHE_CONTROL, HeaderValue::from_static(cache_control)),
                     (header::CONTENT_TYPE, content_type),
+                    // nosniff 防止浏览器对 content-type 错配的图片字节做 MIME sniff（M2）。
+                    (
+                        header::X_CONTENT_TYPE_OPTIONS,
+                        HeaderValue::from_static("nosniff"),
+                    ),
                 ],
             )
                 .into_response();
@@ -218,6 +223,10 @@ fn image_response(
             (header::CONTENT_TYPE, content_type),
             (header::CACHE_CONTROL, HeaderValue::from_static(cache_control)),
             (header::ETAG, HeaderValue::from_str(&etag).unwrap()),
+            (
+                header::X_CONTENT_TYPE_OPTIONS,
+                HeaderValue::from_static("nosniff"),
+            ),
         ],
         data,
     )
