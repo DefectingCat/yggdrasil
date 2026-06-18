@@ -9,10 +9,11 @@
 //!
 //! 仅在 `feature = "server"` 时编译。
 
+use std::collections::HashSet;
+
 /// 咨询锁的固定 key。Postgres 咨询锁是数据库级唯一的；
 /// 这里用一个项目专属的大整数，避免与同库其它应用冲突。
 /// 该值无语义，仅要求唯一性。
-#[allow(dead_code)] // used by run() in Task 3
 const ADVISORY_LOCK_KEY: i64 = 0x5947_4752_4153_494C;
 
 /// 所有迁移的 (version, sql) 列表，按 version 升序排列。
@@ -107,7 +108,130 @@ impl std::error::Error for MigrateError {}
 ///
 /// 失败时返回错误；调用方（`main.rs`）应让进程退出，避免启动半残服务。
 pub async fn run() -> Result<(), MigrateError> {
-    unimplemented!("filled in by Task 3")
+    use crate::db::pool::get_conn;
+
+    tracing::info!("running database migrations");
+
+    // 咨询锁是 session 级的，必须在同一连接上 lock/unlock。
+    // 因此整个迁移流程独占一个池连接。
+    let mut conn = get_conn().await?;
+
+    // 抢咨询锁：多实例滚动发布时只有一个进程能进入迁移循环，
+    // 其余实例在此等待；锁释放后它们查版本表发现已全部应用，直接返回。
+    conn.execute("SELECT pg_advisory_lock($1)", &[&ADVISORY_LOCK_KEY])
+        .await?;
+
+    // 在已持锁连接上执行迁移主体逻辑。
+    // 锁释放策略：
+    // - 正常返回 / 返回 Err：下面的显式 pg_advisory_unlock 释放锁。
+    // - panic：panic 会跳过显式 unlock。此时 `conn` 在 unwind 中被 drop，
+    //   但 deadpool 会把连接归还池中复用（不关闭 Postgres 会话），
+    //   所以 session 级咨询锁不会立即释放。安全性依赖调用方（main.rs 的
+    //   `.expect()`）在 panic 时终止进程——进程退出会关闭所有池连接，
+    //   Postgres 检测到会话断开后释放 session 级咨询锁。
+    let result = run_inner(&mut conn).await;
+
+    // 无论成功失败都尝试显式释放锁；释放失败不应掩盖原始错误，仅记录告警。
+    if let Err(unlock_err) = conn
+        .execute("SELECT pg_advisory_unlock($1)", &[&ADVISORY_LOCK_KEY])
+        .await
+    {
+        tracing::warn!("failed to release migration advisory lock: {}", unlock_err);
+    }
+
+    result
+}
+
+/// 在已持有咨询锁的连接上执行迁移主体逻辑。
+async fn run_inner(conn: &mut deadpool_postgres::Object) -> Result<(), MigrateError> {
+    // 确保版本表存在（独立语句，不在事务里，否则建表失败无法记录）。
+    ensure_versions_table(conn).await?;
+
+    // 查询已应用的版本集合。
+    let applied = applied_versions(conn).await?;
+
+    // 按序应用未应用的迁移。
+    let mut applied_count = 0usize;
+    for (version, sql) in MIGRATIONS {
+        if applied.contains(*version) {
+            continue;
+        }
+        tracing::info!("applying migration {}", version);
+        apply_one(conn, version, sql).await?;
+        applied_count += 1;
+    }
+
+    if applied_count == 0 {
+        tracing::info!("database is up to date, 0 migrations applied");
+    } else {
+        tracing::info!("successfully applied {} migration(s)", applied_count);
+    }
+    Ok(())
+}
+
+/// 创建 `schema_migrations` 表（若不存在）。
+async fn ensure_versions_table(conn: &deadpool_postgres::Object) -> Result<(), MigrateError> {
+    conn.batch_execute(
+        "CREATE TABLE IF NOT EXISTS schema_migrations (
+            version    TEXT PRIMARY KEY,
+            applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )",
+    )
+    .await?;
+    Ok(())
+}
+
+/// 查询已应用的版本集合。
+async fn applied_versions(
+    conn: &deadpool_postgres::Object,
+) -> Result<HashSet<String>, MigrateError> {
+    let rows = conn.query("SELECT version FROM schema_migrations", &[]).await?;
+    let mut set = HashSet::with_capacity(rows.len());
+    for row in rows {
+        set.insert(row.get::<_, String>(0));
+    }
+    Ok(set)
+}
+
+/// 在一个事务内应用单个迁移：执行 SQL + 写入版本行，失败则回滚。
+async fn apply_one(
+    conn: &mut deadpool_postgres::Object,
+    version: &str,
+    sql: &str,
+) -> Result<(), MigrateError> {
+    let tx = conn.transaction().await.map_err(MigrateError::Query)?;
+
+    // batch_execute 执行整段 SQL（可含多条语句）。
+    if let Err(e) = tx.batch_execute(sql).await {
+        // 显式回滚以尽早释放事务（而非等 Transaction drop 的隐式回滚）；
+        // 回滚本身的错误丢弃，因为已有更具信息量的 apply 错误要上报。
+        let _ = tx.rollback().await;
+        return Err(MigrateError::Apply {
+            version: version.to_string(),
+            source: e,
+        });
+    }
+
+    // 记录版本行。显式构造 Apply 错误（不能用 ?，否则会被 blanket From 映射成 Query）。
+    if let Err(e) = tx
+        .execute(
+            "INSERT INTO schema_migrations (version) VALUES ($1)",
+            &[&version],
+        )
+        .await
+    {
+        let _ = tx.rollback().await;
+        return Err(MigrateError::Apply {
+            version: version.to_string(),
+            source: e,
+        });
+    }
+
+    tx.commit().await.map_err(|e| MigrateError::Apply {
+        version: version.to_string(),
+        source: e,
+    })?;
+    Ok(())
 }
 
 #[cfg(all(test, feature = "server"))]
