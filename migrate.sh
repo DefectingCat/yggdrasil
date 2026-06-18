@@ -1,4 +1,16 @@
 #!/usr/bin/env bash
+#
+# 数据库迁移脚本（手动 / CI 备用）。
+#
+# 注意：服务器二进制现在会在启动时自动执行迁移（见 src/db/migrate.rs），
+# 正常情况下无需手动运行本脚本。保留它是为了：
+#   - 运维 escape hatch：二进制因迁移失败起不来时，手动救库
+#   - CI/CD 中“先迁移再滚动发布”的工作流
+#
+# 本脚本与服务器内置运行器读取相同的 migrations/*.sql 文件，且这些 SQL
+# 都是幂等的（IF NOT EXISTS / IF EXISTS / ON CONFLICT DO NOTHING），
+# 因此两者混用安全。
+#
 set -euo pipefail
 
 # 从 .env 加载环境变量
