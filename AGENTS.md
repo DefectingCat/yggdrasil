@@ -42,6 +42,7 @@ RATE_LIMIT_UPLOAD_BURST=15
 RATE_LIMIT_IMAGE_PER_SEC=10
 RATE_LIMIT_IMAGE_BURST=50
 DB_POOL_SIZE=20             # database connection pool size
+STATEMENT_TIMEOUT_SECS=30   # per-query timeout; slow queries are canceled to protect the pool
 SSR_CACHE_SECS=3600         # incremental SSR cache TTL
 ```
 

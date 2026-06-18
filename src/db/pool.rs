@@ -15,9 +15,18 @@ use tokio_postgres::NoTls;
 /// 最大连接数可通过 `DB_POOL_SIZE` 环境变量调整，默认 20。
 pub static DB_POOL: LazyLock<Pool> = LazyLock::new(|| {
     let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL environment variable not set");
-    let pg_cfg = db_url
+    let mut pg_cfg = db_url
         .parse::<tokio_postgres::Config>()
         .expect("Invalid DATABASE_URL format");
+
+    // statement_timeout：防止单条慢查询（如全表扫搜索）长时间占用连接拖垮池。
+    // 默认 30s，可由 STATEMENT_TIMEOUT_SECS 覆盖（L6）。
+    let statement_timeout_secs = std::env::var("STATEMENT_TIMEOUT_SECS")
+        .ok()
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(30);
+    // 通过 libpq options 传递 GUC；tokio-postgres 在建连时执行。
+    pg_cfg.options(format!("-c statement_timeout={}", statement_timeout_secs * 1000));
 
     // 使用 Fast 回收策略：归还连接时不额外发 SELECT 1 验证，直接复用。
     // Verified 在高并发下会为每次 get() 增加一次往返；Fast 依赖 tokio-postgres
@@ -44,8 +53,9 @@ pub static DB_POOL: LazyLock<Pool> = LazyLock::new(|| {
 
 /// 从全局连接池获取一个数据库连接，失败时按指数退避 + jitter 重试。
 ///
-/// 退避策略见 `retry::backoff_for`。jitter 使用 `rand` 生成 [0,1) 随机数，
-/// 避免多请求同步重试形成惊群。若所有尝试均失败，返回最后一次的 PoolError。
+/// 退避策略见 `retry::backoff_for`。仅对 Backend/Postgres 错误（DB 不可达）重试；
+/// Timeout（池满）直接返回，让上层限流兜底，避免雪崩（L6）。
+/// 若所有重试均失败，返回最后一次的 PoolError。
 pub async fn get_conn() -> Result<deadpool_postgres::Object, deadpool_postgres::PoolError> {
     use rand::Rng;
 
@@ -54,17 +64,23 @@ pub async fn get_conn() -> Result<deadpool_postgres::Object, deadpool_postgres::
         match DB_POOL.get().await {
             Ok(conn) => return Ok(conn),
             Err(e) => {
+                // Timeout（池满）不重试：快速失败让上层限流兜底，避免雪崩。
+                // Backend/Postgres（DB 不可达）才退避重试。
+                let is_timeout = matches!(e, deadpool_postgres::PoolError::Timeout(_));
                 last_err = Some(e);
-                if attempt < crate::db::retry::MAX_RETRIES {
+                if !is_timeout && attempt < crate::db::retry::MAX_RETRIES {
                     let jitter = rand::thread_rng().gen::<f64>();
                     let delay = crate::db::retry::backoff_for(attempt, jitter);
                     tracing::warn!(
-                        "DB connection attempt {} failed, retrying in {:?}: {:?}",
+                        "DB connection attempt {} failed (backend error), retrying in {:?}: {:?}",
                         attempt + 1,
                         delay,
                         last_err.as_ref().unwrap(),
                     );
                     tokio::time::sleep(delay).await;
+                } else if is_timeout {
+                    // 池满：立即返回，不再 sleep。
+                    break;
                 }
             }
         }
