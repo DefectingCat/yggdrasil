@@ -113,8 +113,14 @@ pub async fn register(
 
     let client = get_conn().await.map_err(AppError::db_conn)?;
 
-    let password_hash =
-        password::hash_password(&password).map_err(|_| AppError::Internal("密码处理失败"))?;
+    // Argon2 是 memory-hard 计算，必须在 spawn_blocking 中执行，避免阻塞 Tokio worker。
+    let pw_for_hash = password.clone();
+    let password_hash = tokio::task::spawn_blocking(move || {
+        password::hash_password(&pw_for_hash)
+    })
+    .await
+    .map_err(|_| AppError::Internal("密码处理任务失败"))?
+    .map_err(|_| AppError::Internal("密码处理失败"))?;
 
     // 使用 INSERT ON CONFLICT 原子性地完成“首个用户成为 admin”的竞争。
     // 若已有 admin 或用户名/邮箱冲突，RETURNING 将返回空。
@@ -203,8 +209,15 @@ pub async fn login(username: String, password: String) -> Result<AuthResponse, S
     };
 
     let password_hash: String = row.get("password_hash");
-    let valid = password::verify_password(&password, &password_hash)
-        .map_err(|_| AppError::Internal("密码处理失败"))?;
+    // Argon2 校验同样在 spawn_blocking 中执行。
+    let pw_for_verify = password.clone();
+    let hash_for_verify = password_hash.clone();
+    let valid = tokio::task::spawn_blocking(move || {
+        password::verify_password(&pw_for_verify, &hash_for_verify)
+    })
+    .await
+    .map_err(|_| AppError::Internal("密码处理任务失败"))?
+    .map_err(|_| AppError::Internal("密码处理失败"))?;
 
     if !valid {
         return Ok(AuthResponse {
