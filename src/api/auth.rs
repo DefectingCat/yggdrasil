@@ -35,9 +35,13 @@ fn validate_username(username: &str) -> Result<(), String> {
 }
 
 #[cfg(feature = "server")]
+static EMAIL_REGEX: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap()
+});
+
+#[cfg(feature = "server")]
 fn validate_email(email: &str) -> Result<(), String> {
-    let re = regex::Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap();
-    if !re.is_match(email) {
+    if !EMAIL_REGEX.is_match(email) {
         return Err("邮箱格式不正确".to_string());
     }
     Ok(())
