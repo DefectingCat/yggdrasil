@@ -19,6 +19,8 @@ use moka::future::Cache;
 use serde::Deserialize;
 #[cfg(feature = "server")]
 use std::sync::LazyLock;
+#[cfg(feature = "server")]
+use bytes::Bytes;
 
 #[cfg(feature = "server")]
 fn etag_for(data: &[u8]) -> String {
@@ -51,7 +53,7 @@ pub const MAX_IMAGE_PIXELS: u32 = 25_000_000; // ~5k x 5k
 #[derive(Debug, Clone)]
 /// 缓存条目，保存处理后的图片字节与 Content-Type。
 struct CachedImage {
-    data: Vec<u8>,
+    data: Bytes,
     content_type: HeaderValue,
 }
 
@@ -186,7 +188,7 @@ fn content_type(format: image::ImageFormat) -> HeaderValue {
 
 #[cfg(feature = "server")]
 fn image_response(
-    data: Vec<u8>,
+    data: Bytes,
     content_type: HeaderValue,
     cache_control: &'static str,
     headers: &HeaderMap,
@@ -399,7 +401,10 @@ async fn read_disk_cache(cache_key: &str) -> Option<CachedImage> {
         .ok()
         .unwrap_or_else(|| "application/octet-stream".to_string());
     let content_type = HeaderValue::from_str(&ct_str).ok()?;
-    Some(CachedImage { data, content_type })
+    Some(CachedImage {
+        data: Bytes::from(data),
+        content_type,
+    })
 }
 
 #[cfg(feature = "server")]
@@ -454,7 +459,7 @@ pub async fn serve_image(
         return match tokio::fs::read(&file_path).await {
             Ok(data) => {
                 let ct = content_type(detect_format(&path));
-                image_response(data, ct, "public, max-age=31536000, immutable", &headers)
+                image_response(Bytes::from(data), ct, "public, max-age=31536000, immutable", &headers)
             }
             Err(_) => StatusCode::NOT_FOUND.into_response(),
         };
@@ -462,20 +467,19 @@ pub async fn serve_image(
 
     let cache_key = params.cache_key(&path);
     if let Some(cached) = IMAGE_CACHE.get(&cache_key).await {
-        return image_response(cached.data, cached.content_type, "public, max-age=86400", &headers);
+        return image_response(
+            cached.data.clone(),
+            cached.content_type,
+            "public, max-age=86400",
+            &headers,
+        );
     }
 
     if let Some(cached) = read_disk_cache(&cache_key).await {
-        let _ = IMAGE_CACHE
-            .insert(
-                cache_key.clone(),
-                CachedImage {
-                    data: cached.data.clone(),
-                    content_type: cached.content_type.clone(),
-                },
-            )
-            .await;
-        return image_response(cached.data, cached.content_type, "public, max-age=86400", &headers);
+        let data = cached.data.clone();
+        let content_type = cached.content_type.clone();
+        let _ = IMAGE_CACHE.insert(cache_key.clone(), cached).await;
+        return image_response(data, content_type, "public, max-age=86400", &headers);
     }
 
     let data = match tokio::fs::read(&file_path).await {
@@ -502,6 +506,7 @@ pub async fn serve_image(
             }
         };
 
+    let processed = Bytes::from(processed);
     let cached = CachedImage {
         data: processed.clone(),
         content_type: content_type.clone(),
@@ -758,7 +763,7 @@ mod tests {
     #[test]
     fn image_response_includes_cache_headers() {
         let resp = image_response(
-            vec![1, 2, 3],
+            Bytes::from(vec![1, 2, 3]),
             HeaderValue::from_static("image/webp"),
             "public, max-age=86400",
             &HeaderMap::new(),
@@ -778,7 +783,7 @@ mod tests {
 
     #[test]
     fn image_response_returns_304_when_etag_matches() {
-        let data = vec![1, 2, 3];
+        let data = Bytes::from(vec![1, 2, 3]);
         let etag = etag_for(&data);
         let mut req_headers = HeaderMap::new();
         req_headers.insert(
@@ -826,7 +831,7 @@ mod tests {
     #[test]
     fn image_response_raw_file_is_immutable() {
         let resp = image_response(
-            vec![1, 2, 3],
+            Bytes::from(vec![1, 2, 3]),
             HeaderValue::from_static("image/jpeg"),
             "public, max-age=31536000, immutable",
             &HeaderMap::new(),
