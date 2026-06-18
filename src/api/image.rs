@@ -435,11 +435,31 @@ async fn write_disk_cache(cache_key: &str, cached: &CachedImage) {
         .content_type
         .to_str()
         .unwrap_or("application/octet-stream");
-    if let Err(e) = tokio::fs::write(format!("{}.dat", base), &cached.data).await {
-        tracing::warn!("Failed to write disk cache data: {:?}", e);
+
+    // 原子写：先写 .tmp 再 rename，避免并发请求读到 .dat 与 .ct 错配的半成品（L5）。
+    let dat_path = format!("{}.dat", base);
+    let ct_path = format!("{}.ct", base);
+    let dat_tmp = format!("{}.dat.tmp", base);
+    let ct_tmp = format!("{}.ct.tmp", base);
+
+    // 两个临时文件都写成功后才 rename；任一失败则清理半成品。
+    let writes_ok = tokio::fs::write(&dat_tmp, &cached.data).await.is_ok()
+        && tokio::fs::write(&ct_tmp, ct_str).await.is_ok();
+
+    if !writes_ok {
+        let _ = tokio::fs::remove_file(&dat_tmp).await;
+        let _ = tokio::fs::remove_file(&ct_tmp).await;
+        tracing::warn!("Failed to write disk cache temp files at {}", base);
+        return;
     }
-    if let Err(e) = tokio::fs::write(format!("{}.ct", base), ct_str).await {
-        tracing::warn!("Failed to write disk cache content type: {:?}", e);
+
+    let rename_dat = tokio::fs::rename(&dat_tmp, &dat_path).await;
+    let rename_ct = tokio::fs::rename(&ct_tmp, &ct_path).await;
+    if rename_dat.is_err() || rename_ct.is_err() {
+        // rename 失败：清理可能残留的临时文件与目标，避免读到错配内容。
+        let _ = tokio::fs::remove_file(&dat_tmp).await;
+        let _ = tokio::fs::remove_file(&ct_tmp).await;
+        tracing::warn!("Failed to atomically rename disk cache at {}", base);
     }
 }
 
