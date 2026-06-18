@@ -20,7 +20,7 @@ use crate::db::pool::get_conn;
 /// 搜索已发布文章。
 ///
 /// 空查询直接返回空结果；非空查询使用 `word_similarity` 计算相关度，
-/// 并限制返回 50 条记录。当前未缓存，每次均查询数据库。
+/// 并限制返回 50 条记录。结果写入短 TTL 内存缓存以减轻 DB 压力。
 #[server(SearchPosts, "/api")]
 pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnError> {
     #[cfg(feature = "server")]

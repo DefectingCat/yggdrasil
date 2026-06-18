@@ -1,7 +1,7 @@
 //! 基于 moka 的内存缓存层。
 //!
-//! 仅在启用 `server` feature 时编译，为文章列表、标签、单篇文章、统计信息
-//! 以及评论相关数据提供按键缓存与失效能力。
+//! 仅在启用 `server` feature 时编译，为文章列表、标签、单篇文章、统计信息、
+//! 评论、会话用户以及搜索结果提供按键缓存与失效能力。
 //! 缓存使用 `std::sync::LazyLock` 全局实例，按不同业务数据设置独立的 TTL。
 
 #[cfg(feature = "server")]
@@ -420,6 +420,9 @@ pub async fn set_search_results(query: &str, posts: Vec<PostListItem>, total: i6
 }
 
 /// 清空所有搜索结果缓存。
+///
+/// 使用同步签名是因为 `moka::Cache::invalidate_all` 为同步操作；
+/// 该函数通常由写路径直接调用，无需额外等待。
 #[cfg(feature = "server")]
 pub fn invalidate_search_results() {
     SEARCH_CACHE.invalidate_all();
