@@ -66,10 +66,20 @@ echo "$MIGRATION_FILES" | sort | while IFS= read -r file; do
     filename=$(basename "$file")
     echo -n "[$filename] ... "
 
-    if psql "$DATABASE_URL" -f "$file" > /dev/null 2>&1; then
+    # 区分「已应用」与「真出错」：迁移本身已幂等（IF NOT EXISTS），正常应返回 0。
+    # 非零退出码视为真错误，打印输出并中止，避免静默吞错（M6）。
+    err_output=$(psql "$DATABASE_URL" -f "$file" 2>&1 >/dev/null)
+    rc=$?
+
+    if [[ $rc -eq 0 ]]; then
         echo "OK"
+    elif echo "$err_output" | grep -qiE "already exists|duplicate|multiple primary keys"; then
+        echo "SKIPPED (already applied)"
     else
-        echo "SKIPPED (already applied or error)"
+        echo "FAIL"
+        echo "$err_output" | head -5 | sed 's/^/  /'
+        echo "Migration aborted due to error in $filename"
+        exit 1
     fi
 done
 
