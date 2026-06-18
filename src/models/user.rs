@@ -42,6 +42,8 @@ pub struct User {
     pub role: UserRole,
     /// 账户创建时间。
     pub created_at: DateTime<Utc>,
+    /// 会话世代号，角色/封禁变更时 +1 使旧 session 失效。
+    pub session_generation: i32,
 }
 
 /// 会话缓存使用的轻量用户结构体，不含密码哈希。
@@ -57,6 +59,8 @@ pub struct SessionUser {
     pub role: UserRole,
     /// 账户创建时间。
     pub created_at: DateTime<Utc>,
+    /// 会话世代号，签发 session 时记录；与 users 表当前值不一致则 session 失效。
+    pub session_generation: i32,
 }
 
 /// 可公开的用户信息，从 User 转换而来，不含密码哈希。
@@ -83,6 +87,7 @@ impl From<User> for SessionUser {
             email: u.email,
             role: u.role,
             created_at: u.created_at,
+            session_generation: u.session_generation,
         }
     }
 }
@@ -126,6 +131,7 @@ mod tests {
             password_hash: "hash".to_string(),
             role: UserRole::Admin,
             created_at: Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
+            session_generation: 0,
         }
     }
 

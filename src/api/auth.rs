@@ -335,19 +335,39 @@ pub struct CurrentUserResponse {
 /// 根据会话 token 查询对应用户（不含密码哈希，供会话缓存使用）。
 ///
 /// 优先命中内存缓存，避免每次请求都执行 DB JOIN；未命中时回查数据库并回填缓存。
-/// 仅服务端内部使用，不会暴露给前端。
+/// 缓存命中后仍回查 `users.session_generation`：若用户已被降级/封禁（generation 被
+/// bump），缓存的旧 SessionUser.generation 不再匹配，此时逐出缓存并视为未登录，
+/// 消除权限残留窗口（见 H2）。仅服务端内部使用，不会暴露给前端。
 pub async fn get_user_by_token(token: &str) -> Result<Option<SessionUser>, ServerFnError> {
     let token_hash = session::hash_token(token);
 
-    if let Some(user) = crate::cache::get_session_user(&token_hash).await {
-        return Ok(Some(user));
+    if let Some(cached) = crate::cache::get_session_user(&token_hash).await {
+        // 缓存命中后校验世代号：bump 后该用户所有 session 应失效。
+        // 查询走主键，亚毫秒级，代价可接受。
+        let current_gen: Option<i32> = get_conn()
+            .await
+            .map_err(AppError::db_conn)?
+            .query_opt(
+                "SELECT session_generation FROM users WHERE id = $1",
+                &[&cached.id],
+            )
+            .await
+            .map_err(AppError::query)?
+            .map(|r| r.get::<_, i32>(0));
+        match current_gen {
+            Some(gen) if gen == cached.session_generation => return Ok(Some(cached)),
+            _ => {
+                // 世代不匹配或用户已删：逐出缓存，落入下方重新查询。
+                crate::cache::invalidate_session_user(&token_hash).await;
+            }
+        }
     }
 
     let client = get_conn().await.map_err(AppError::db_conn)?;
 
     let row = client
         .query_opt(
-            "SELECT u.id, u.username, u.email, u.role, u.created_at
+            "SELECT u.id, u.username, u.email, u.role, u.created_at, u.session_generation
              FROM sessions s
              JOIN users u ON s.user_id = u.id
              WHERE s.token_hash = $1 AND s.expires_at > NOW()",
@@ -366,6 +386,7 @@ pub async fn get_user_by_token(token: &str) -> Result<Option<SessionUser>, Serve
                 email: row.get("email"),
                 role,
                 created_at: row.get("created_at"),
+                session_generation: row.get("session_generation"),
             })
         }
         None => None,
@@ -376,6 +397,26 @@ pub async fn get_user_by_token(token: &str) -> Result<Option<SessionUser>, Serve
     }
 
     Ok(user)
+}
+
+#[cfg(feature = "server")]
+/// 使指定用户的所有 session 立即失效：bump `session_generation`。
+///
+/// 用于角色降级、封禁、密码修改等场景。bump 后该用户所有已签发 session 在下次
+/// `get_user_by_token` 时因世代不匹配被逐出缓存并视为未登录。内存缓存无需主动清，
+/// 惰性逐出即可。当前仓库无运行时角色变更入口，本函数是为未来「用户管理」功能
+/// 预备的基础设施，一旦引入降级/封禁的 server function，必须在 UPDATE 后调用。
+#[allow(dead_code)] // 预留给未来的用户管理功能（角色变更/封禁触发全量 session 失效）
+pub async fn invalidate_user_sessions(user_id: i32) -> Result<(), ServerFnError> {
+    let client = get_conn().await.map_err(AppError::db_conn)?;
+    client
+        .execute(
+            "UPDATE users SET session_generation = session_generation + 1 WHERE id = $1",
+            &[&user_id],
+        )
+        .await
+        .map_err(AppError::query)?;
+    Ok(())
 }
 
 /// 获取当前登录用户的公开信息。

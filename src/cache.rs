@@ -679,6 +679,7 @@ mod tests {
             email: "cached@example.com".to_string(),
             role: UserRole::Admin,
             created_at: chrono::Utc::now(),
+            session_generation: 0,
         };
         let token_hash = "sha256_token_hash";
 
