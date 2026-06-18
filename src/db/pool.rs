@@ -2,7 +2,7 @@
 //!
 //! 仅在启用 `server` feature 时编译，使用 deadpool-postgres 管理连接池，
 //! 并通过 `std::sync::LazyLock` 在首次访问时延迟初始化全局连接池。
-//! `get_conn` 失败时按固定 2 秒间隔进行简单重试，以应对瞬时连接失败。
+//! `get_conn` 失败时按指数退避 + jitter 重试（见 `retry` 模块），以应对瞬时连接失败。
 
 use std::sync::LazyLock;
 use std::time::Duration;
@@ -40,31 +40,30 @@ pub static DB_POOL: LazyLock<Pool> = LazyLock::new(|| {
         .expect("Failed to create database connection pool")
 });
 
-/// 最大重试次数。
-const MAX_RETRIES: u32 = 3;
-
-/// 每次重试之间的固定等待时间。
-const RETRY_DELAY: Duration = Duration::from_secs(2);
-
-/// 从全局连接池获取一个数据库连接，失败时按 `MAX_RETRIES` 进行重试。
+/// 从全局连接池获取一个数据库连接，失败时按指数退避 + jitter 重试。
 ///
-/// 若所有尝试均失败，则返回最后一次遇到的 PoolError。
+/// 退避策略见 `retry::backoff_for`。jitter 使用 `rand` 生成 [0,1) 随机数，
+/// 避免多请求同步重试形成惊群。若所有尝试均失败，返回最后一次的 PoolError。
 pub async fn get_conn() -> Result<deadpool_postgres::Object, deadpool_postgres::PoolError> {
+    use rand::Rng;
+
     let mut last_err = None;
-    for attempt in 0..=MAX_RETRIES {
+    for attempt in 0..=crate::db::retry::MAX_RETRIES {
         match DB_POOL.get().await {
             Ok(conn) => return Ok(conn),
             Err(e) => {
-                if attempt < MAX_RETRIES {
+                last_err = Some(e);
+                if attempt < crate::db::retry::MAX_RETRIES {
+                    let jitter = rand::thread_rng().gen::<f64>();
+                    let delay = crate::db::retry::backoff_for(attempt, jitter);
                     tracing::warn!(
                         "DB connection attempt {} failed, retrying in {:?}: {:?}",
                         attempt + 1,
-                        RETRY_DELAY,
-                        e
+                        delay,
+                        last_err.as_ref().unwrap(),
                     );
-                    tokio::time::sleep(RETRY_DELAY).await;
+                    tokio::time::sleep(delay).await;
                 }
-                last_err = Some(e);
             }
         }
     }
