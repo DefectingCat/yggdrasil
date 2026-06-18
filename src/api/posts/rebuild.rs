@@ -108,6 +108,8 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
         if rebuilt > 0 {
             crate::cache::invalidate_all_post_caches();
             crate::cache::invalidate_search_results();
+            // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
+            crate::ssr_cache::bump_global_generation();
         }
 
         Ok(RebuildResult {

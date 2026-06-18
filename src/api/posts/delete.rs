@@ -84,6 +84,9 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
         crate::cache::invalidate_post_by_slug(&slug).await;
         crate::cache::invalidate_tag_posts_for(&tags).await;
 
+        // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
+        crate::ssr_cache::bump_global_generation();
+
         Ok(CreatePostResponse {
             success: true,
             message: "删除成功".to_string(),

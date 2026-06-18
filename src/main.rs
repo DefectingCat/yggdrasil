@@ -23,6 +23,9 @@ mod hooks;
 mod models;
 mod pages;
 mod router;
+// ssr_cache 仅在 server feature 启用时编译；保存 SSR 世代号失效状态。
+#[cfg(feature = "server")]
+mod ssr_cache;
 mod tasks;
 mod theme;
 mod utils;
@@ -78,7 +81,9 @@ fn main() {
                 tasks::image_cache_cleanup::run_cleanup().await;
             });
 
-            // 配置增量渲染缓存，默认缓存 3600 秒，可通过 SSR_CACHE_SECS 覆盖
+            // 配置增量渲染缓存，默认缓存 3600 秒，可通过 SSR_CACHE_SECS 覆盖。
+            // 注意：世代号失效机制已就位（见 src/ssr_cache.rs），但 Dioxus 0.7 未暴露
+            // 自定义缓存键 API，因此 TTL 仍是当前有效的兜底策略。
             let config = ServeConfig::builder().incremental(
                 dioxus::server::IncrementalRendererConfig::default().invalidate_after(
                     std::time::Duration::from_secs(
@@ -89,6 +94,24 @@ fn main() {
                     ),
                 ),
             );
+
+            // SSR 世代号中间件：把当前全局世代号注入请求扩展并附加到响应头。
+            // 这是为 Dioxus 未来支持自定义 SSR 缓存键预留的钩子；目前主要提供可观测性。
+            async fn ssr_generation_middleware(
+                req: axum::http::Request<axum::body::Body>,
+                next: axum::middleware::Next,
+            ) -> axum::response::Response {
+                let generation = crate::ssr_cache::current_global_generation();
+                let (mut parts, body) = req.into_parts();
+                parts.extensions.insert(crate::ssr_cache::SsrGeneration(generation));
+                let mut response = next.run(axum::http::Request::from_parts(parts, body)).await;
+                response.headers_mut().insert(
+                    axum::http::header::HeaderName::from_static("x-ssr-generation"),
+                    axum::http::HeaderValue::from_str(&generation.to_string())
+                        .unwrap_or_else(|_| axum::http::HeaderValue::from_static("0")),
+                );
+                response
+            }
 
             // 自定义 API 路由：图片上传（大文件，需要更长超时）
             let upload_route = axum::Router::new()
@@ -106,8 +129,9 @@ fn main() {
             let dioxus_app =
                 axum::Router::new().serve_dioxus_application(config, router::AppRouter);
 
-            // 合并 Dioxus + 压缩/30s 超时中间件
+            // 合并 Dioxus + 世代号/压缩/30s 超时中间件
             let app_routes = dioxus_app
+                .layer(axum::middleware::from_fn(ssr_generation_middleware))
                 .layer(CompressionLayer::new())
                 .layer(TimeoutLayer::with_status_code(
                     StatusCode::REQUEST_TIMEOUT,
