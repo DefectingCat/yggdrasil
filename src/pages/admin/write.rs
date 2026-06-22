@@ -113,6 +113,11 @@ fn write_editor(post_id: Option<i32>) -> Element {
     // 上传状态：当前进行中计数（保存拦截）+ 顶部失败提示堆叠（用户手动关闭）
     let mut uploads_in_flight = use_signal(UploadsInFlight::default);
     let mut upload_errors: Signal<Vec<UploadErrorEntry>> = use_signal(Vec::new);
+    // 已展示过错误的上传 id（去重 + 重试后再失败时原地更新）。
+    // 用 signal 而非局部变量：use_future 的 FnMut 闭包要求可重复调用，
+    // signal 是 Copy 可被多次 move 进 async。
+    let mut seen_error_ids: Signal<std::collections::HashSet<String>> =
+        use_signal(std::collections::HashSet::new);
 
     // 编辑模式：文章数据加载完成后，将字段回填到表单信号。
     use_effect(move || {
@@ -298,11 +303,10 @@ fn write_editor(post_id: Option<i32>) -> Element {
     // 轮询 window.__tiptap_uploads，消费上传事件并更新 signal（仅 WASM）
     #[cfg(target_arch = "wasm32")]
     {
-        use std::collections::HashSet;
-        let mut seen_error_ids: HashSet<String> = HashSet::new();
         use_future(move || {
             let mut uploads_in_flight = uploads_in_flight;
             let mut upload_errors = upload_errors;
+            let mut seen_error_ids = seen_error_ids;
             async move {
                 loop {
                     // 500ms 间隔
@@ -333,7 +337,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
                                 match ev.kind.as_str() {
                                     "error" => {
                                         let msg = ev.error_msg.unwrap_or_else(|| "上传失败".to_string());
-                                        if seen_error_ids.insert(ev.upload_id.clone()) {
+                                        if seen_error_ids.write().insert(ev.upload_id.clone()) {
                                             // 新失败：追加提示
                                             upload_errors.write().push(UploadErrorEntry {
                                                 id: ev.upload_id,
@@ -350,7 +354,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
                                         }
                                     }
                                     "success" | "removed" => {
-                                        seen_error_ids.remove(&ev.upload_id);
+                                        seen_error_ids.write().remove(&ev.upload_id);
                                         upload_errors.write().retain(|e| e.id != ev.upload_id);
                                     }
                                     _ => {}
