@@ -235,6 +235,8 @@ class TiptapEditorInstance {
     this.editor?.destroy()
     this.editor = null
     this.coordinator = null
+    // 清除 NodeView 的 coordinator 引用，避免指向已销毁的实例
+    setUploadCoordinator(null)
     // 清理源码模式相关引用（容器 innerHTML 已清空，DOM 会随之移除）
     this.sourceTextarea = null
     this.toggleButton = null

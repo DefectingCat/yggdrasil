@@ -332,14 +332,21 @@ fn write_editor(post_id: Option<i32>) -> Element {
                             for ev in parsed.events {
                                 match ev.kind.as_str() {
                                     "error" => {
-                                        if !seen_error_ids.contains(&ev.upload_id) {
-                                            seen_error_ids.insert(ev.upload_id.clone());
+                                        let msg = ev.error_msg.unwrap_or_else(|| "上传失败".to_string());
+                                        if seen_error_ids.insert(ev.upload_id.clone()) {
+                                            // 新失败：追加提示
                                             upload_errors.write().push(UploadErrorEntry {
                                                 id: ev.upload_id,
                                                 file_name: ev.file_name,
-                                                message: ev.error_msg
-                                                    .unwrap_or_else(|| "上传失败".to_string()),
+                                                message: msg,
                                             });
+                                        } else {
+                                            // 已存在的 id（重试后再失败）：原地更新消息，
+                                            // 避免顶部提示停留在旧错误文案。
+                                            let mut errors = upload_errors.write();
+                                            if let Some(entry) = errors.iter_mut().find(|e| e.id == ev.upload_id) {
+                                                entry.message = msg;
+                                            }
                                         }
                                     }
                                     "success" | "removed" => {
@@ -392,8 +399,10 @@ fn write_editor(post_id: Option<i32>) -> Element {
                 })()
             "#).ok().and_then(|v| v.as_string()).unwrap_or_default();
 
-            // 兜底：扫描残留的 blob: 或 data-upload-state（轮询窗口期漏判防护）
-            if md.contains("blob:") || md.contains("data-upload-state") {
+            // 兜底：扫描残留的上传占位符标记（轮询窗口期漏判防护）
+            // 检测 ![](blob:...) 形式的泄漏图片 src，而非裸 "blob:" 字符串，
+            // 避免误伤合法讨论 blob URL 的代码块/正文。
+            if md.contains("](blob:") || md.contains("data-upload-state") {
                 error.set(Some("检测到未完成上传的图片，请处理后保存".to_string()));
                 return;
             }

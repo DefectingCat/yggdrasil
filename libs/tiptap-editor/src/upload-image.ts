@@ -1,5 +1,5 @@
 import { Image } from '@tiptap/extension-image'
-import { mergeAttributes, type Editor } from '@tiptap/core'
+import { mergeAttributes } from '@tiptap/core'
 import type { Node as PMNode } from '@tiptap/pm/model'
 
 /** NodeView 按钮点击回调注入接口。 */
@@ -20,7 +20,6 @@ export interface UploadNodeViewCallbacks {
  * 属性变化时 ProseMirror 调 update(node)，NodeView 比较新旧 data-upload-state 重渲染遮罩。
  */
 class UploadImageNodeView {
-  private editor: Editor
   private node: PMNode
   private callbacks: UploadNodeViewCallbacks
 
@@ -30,12 +29,10 @@ class UploadImageNodeView {
 
   constructor(opts: {
     node: PMNode
-    editor: Editor
     HTMLAttributes: Record<string, unknown>
     callbacks: UploadNodeViewCallbacks
   }) {
     this.node = opts.node
-    this.editor = opts.editor
     this.callbacks = opts.callbacks
 
     this.container = document.createElement('div')
@@ -183,10 +180,9 @@ export const UploadImage = Image.configure({ allowBase64: true }).extend({
   },
 
   addNodeView() {
-    return ({ node, HTMLAttributes, editor }) => {
+    return ({ node, HTMLAttributes }) => {
       return new UploadImageNodeView({
         node,
-        editor,
         HTMLAttributes,
         callbacks: {
           onRetry: (id) => coordinatorRef?.retryUpload(id),
