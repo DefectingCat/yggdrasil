@@ -193,10 +193,64 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
         pulldown_cmark::html::push_html(&mut html, non_heading_events.into_iter());
     }
 
+    let html = wrap_images_with_blur(&html);
     RenderedContent {
         html: clean_html(&html),
         toc_html,
     }
+}
+
+/// 把 HTML 里的 /uploads/ 图片转成 blur-up 双层结构。
+///
+/// 仅处理 src 以 /uploads/ 开头的 img；外链图保持原样。
+/// 对每个匹配的 img：
+/// 1. 提取 src，解析出 rel_path（去 /uploads/ 前缀和 query）
+/// 2. 查 get_image_dimensions 拿真实宽高，算 --ar（如 "16:9"）
+/// 3. 生成 <span class="blur-img" style="--ar:.."> 包裹两层 img
+#[cfg(feature = "server")]
+fn wrap_images_with_blur(html: &str) -> String {
+    use regex::Regex;
+    use std::sync::LazyLock;
+
+    // 匹配 pulldown-cmark 产出的 <img src="..." alt="..." /> 或 <img src="..." alt="...">
+    // pulldown-cmark 格式可控：src 在前，alt 在后，属性用双引号
+    static IMG_RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r#"<img\s+src="(/uploads/[^"]+)"(?:\s+alt="([^"]*)")?\s*/?>"#).unwrap()
+    });
+
+    IMG_RE
+        .replace_all(html, |caps: &regex::Captures| {
+            let src = caps.get(1).map(|m| m.as_str()).unwrap_or("");
+            let alt = caps.get(2).map(|m| m.as_str()).unwrap_or("");
+
+            // 从 src 解析 rel_path：去 /uploads/ 前缀 + 去 query
+            let rel_path = src
+                .strip_prefix("/uploads/")
+                .unwrap_or(src)
+                .split('?')
+                .next()
+                .unwrap_or("");
+
+            // 查 dimensions，算 aspect-ratio
+            let ar_style = crate::api::image::get_image_dimensions(rel_path)
+                .map(|(w, h)| format!(" style=\"--ar:{}:{};\"", w, h))
+                .unwrap_or_default();
+
+            // alt 转义（src/alt 来自 markdown，pulldown-cmark 已转义过，这里直接用）
+            let alt_attr = if alt.is_empty() {
+                String::new()
+            } else {
+                format!(" alt=\"{}\"", alt)
+            };
+
+            format!(
+                "<span class=\"blur-img\"{ar}><img class=\"blur-img-placeholder\" src=\"{src}?w=20\"{alt_attr}><img class=\"blur-img-full\" data-src=\"{src}?w=800\"{alt_attr}></span>",
+                ar = ar_style,
+                src = src,
+                alt_attr = alt_attr,
+            )
+        })
+        .to_string()
 }
 
 #[cfg(feature = "server")]
@@ -287,6 +341,27 @@ fn slugify_heading(text: &str) -> String {
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wrap_images_with_blur_wraps_uploads_image() {
+        // 注意：此测试依赖 uploads/ 目录下存在对应文件才能拿到 dimensions。
+        // 用一个不含 dimensions 的路径验证 --ar 缺省时的结构正确性。
+        let html = r#"<p><img src="/uploads/nonexistent/test.webp" alt="test"></p>"#;
+        let result = wrap_images_with_blur(html);
+        assert!(result.contains("blur-img-placeholder"), "should have placeholder");
+        assert!(result.contains("blur-img-full"), "should have full layer");
+        assert!(result.contains("?w=20"), "placeholder should use ?w=20");
+        assert!(result.contains("?w=800"), "full should use ?w=800");
+        assert!(result.contains("data-src"), "full should use data-src");
+    }
+
+    #[test]
+    fn wrap_images_with_blur_skips_external_image() {
+        let html = r#"<img src="https://example.com/img.png" alt="ext">"#;
+        let result = wrap_images_with_blur(html);
+        // 外链图不处理，保持原样
+        assert!(!result.contains("blur-img"), "external image should not be wrapped");
+    }
 
     #[test]
     fn slugify_heading_simple() {
