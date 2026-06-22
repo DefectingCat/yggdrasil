@@ -87,8 +87,12 @@ class TiptapEditorInstance {
         TaskList,
         TaskItem.configure({ nested: true }),
         // 把宿主注入的图片上传回调透传给斜杠命令扩展，使 /上传图片 命令可用。
+        // 注意：闭包延迟读取 this.coordinator（它在 editor 创建后才实例化）。
         SlashCommand.configure({
           onImageUpload: this.options.onImageUpload,
+          onInsertUploading: this.options.onImageUpload
+            ? (file) => this.coordinator?.insertUploading(file)
+            : undefined,
         }),
         FileHandler.configure({
           allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],

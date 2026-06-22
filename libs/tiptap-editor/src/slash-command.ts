@@ -18,6 +18,8 @@ interface CommandItem {
  */
 export interface SlashCommandOptions {
   onImageUpload?: (file: File) => Promise<string>
+  /** 由 index.ts 注入：直接调 coordinator.insertUploading（走占位符 + 上传）。 */
+  onInsertUploading?: (file: File) => void
 }
 
 const SlashCommandPluginKey = new PluginKey('slashCommand')
@@ -33,6 +35,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
   addOptions() {
     return {
       onImageUpload: undefined,
+      onInsertUploading: undefined,
     }
   },
 
@@ -137,14 +140,19 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
           input.addEventListener('change', () => {
             const file = input.files?.[0]
             if (!file) return
-            uploadFn(file)
-              .then((url) => {
-                editor.chain().focus().setImage({ src: url }).run()
-              })
-              .catch((err) => {
-                const msg = err instanceof Error ? err.message : String(err)
-                console.error('[SlashCommand] Upload failed:', msg)
-              })
+            // 优先走 coordinator（占位符 + 上传），否则退回直接上传（无占位符）
+            if (this.options.onInsertUploading) {
+              this.options.onInsertUploading(file)
+            } else if (uploadFn) {
+              uploadFn(file)
+                .then((url) => {
+                  editor.chain().focus().setImage({ src: url }).run()
+                })
+                .catch((err) => {
+                  const msg = err instanceof Error ? err.message : String(err)
+                  console.error('[SlashCommand] Upload failed:', msg)
+                })
+            }
           })
           // click() 会立即触发原生文件选择器；回调在用户选择文件后异步执行。
           input.click()
