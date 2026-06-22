@@ -78,22 +78,15 @@ pub fn row_to_admin_comment(row: &tokio_postgres::Row) -> AdminComment {
 }
 
 /// 将 UTC 时间格式化为相对时间（刚刚 / N 分钟前 / N 小时前 / N 天前 / 日期）。
+///
+/// 分档规则与前端 `crate::hooks::comment_storage::relative_label_from_millis` 完全一致，
+/// 通过共享分档函数保证服务端预渲染与前端实时计算的口径统一。
 #[cfg(feature = "server")]
 pub fn format_relative_time(dt: chrono::DateTime<chrono::Utc>) -> String {
     let now = chrono::Utc::now();
-    let diff = now.signed_duration_since(dt);
-
-    if diff.num_seconds() < 60 {
-        "刚刚".to_string()
-    } else if diff.num_minutes() < 60 {
-        format!("{} 分钟前", diff.num_minutes())
-    } else if diff.num_hours() < 24 {
-        format!("{} 小时前", diff.num_hours())
-    } else if diff.num_days() < 30 {
-        format!("{} 天前", diff.num_days())
-    } else {
-        dt.format("%Y-%m-%d").to_string()
-    }
+    let delta_millis = now.signed_duration_since(dt).num_milliseconds();
+    let iso = dt.to_rfc3339();
+    crate::hooks::comment_storage::relative_label_from_millis(delta_millis, &iso).0
 }
 
 /// 校验评论作者昵称：非空且不超过 50 字符。
