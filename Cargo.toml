@@ -33,7 +33,7 @@ syntect = { version = "5", default-features = false, features = ["default-syntax
 # Do NOT add "webp" to the features list without updating src/webp.rs.
 image = { version = "0.25", optional = true, default-features = false, features = ["jpeg", "png", "gif"] }
 zenwebp = { version = "0.3", optional = true }
-moka = { version = "0.12", features = ["future"], optional = true }
+moka = { version = "0.12", features = ["future", "sync"], optional = true }
 governor = { version = "0.8", optional = true }
 md-5 = { version = "0.10", optional = true }
 futures = { version = "0.3", optional = true }

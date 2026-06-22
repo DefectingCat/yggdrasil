@@ -16,6 +16,8 @@ use std::net::SocketAddr;
 #[cfg(feature = "server")]
 use moka::future::Cache;
 #[cfg(feature = "server")]
+use moka::sync::Cache as SyncCache;
+#[cfg(feature = "server")]
 use serde::Deserialize;
 #[cfg(feature = "server")]
 use std::sync::LazyLock;
@@ -560,9 +562,87 @@ pub async fn serve_image(
     image_response(processed, content_type, "public, max-age=86400", &headers)
 }
 
+/// 图片尺寸缓存（moka sync）。key = 相对路径如 "2026/06/22/x.webp"。
+/// 用 sync cache 而非 future cache：render_markdown_enhanced 是同步函数，不能 .await。
+#[cfg(feature = "server")]
+static IMAGE_DIMENSIONS_CACHE: LazyLock<SyncCache<String, (u32, u32)>> = LazyLock::new(|| {
+    let ttl = std::env::var("IMAGE_DIMENSIONS_CACHE_TTL_SECS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .map(std::time::Duration::from_secs)
+        .unwrap_or(std::time::Duration::from_secs(86400)); // 默认 24h
+    SyncCache::builder().time_to_live(ttl).build()
+});
+
+/// 读取图片真实尺寸（只读 header，不解码像素）。
+///
+/// - `rel_path`：相对路径如 "2026/06/22/x.webp"（不含 /uploads/ 前缀和 query）
+/// - 优先查缓存；miss 时读文件、解析 header、写入缓存
+/// - 失败返回 None（调用方回退到不设 aspect-ratio）
+#[cfg(feature = "server")]
+pub fn get_image_dimensions(rel_path: &str) -> Option<(u32, u32)> {
+    if let Some(dims) = IMAGE_DIMENSIONS_CACHE.get(rel_path) {
+        return Some(dims);
+    }
+    let full_path = std::path::Path::new("uploads").join(rel_path);
+    let data = std::fs::read(&full_path).ok()?;
+    let dims = read_dimensions_from_bytes(&data, rel_path)?;
+    IMAGE_DIMENSIONS_CACHE.insert(rel_path.to_string(), dims);
+    Some(dims)
+}
+
+/// 按扩展名分发：webp 走 zenwebp header，gif/png/jpeg 走 image crate。
+#[cfg(feature = "server")]
+fn read_dimensions_from_bytes(data: &[u8], path: &str) -> Option<(u32, u32)> {
+    let ext = std::path::Path::new(path)
+        .extension()?
+        .to_str()?
+        .to_lowercase();
+    match ext.as_str() {
+        "webp" => {
+            // zenwebp 的 WebPDecoder::build 只解析 RIFF header，不解码像素
+            let decoder = zenwebp::WebPDecoder::build(data).ok()?;
+            let info = decoder.info();
+            Some((info.width, info.height))
+        }
+        "gif" | "png" | "jpg" | "jpeg" => {
+            // image crate 的 into_dimensions 只读 header
+            let reader = image::ImageReader::new(std::io::Cursor::new(data))
+                .with_guessed_format()
+                .ok()?;
+            reader.into_dimensions().ok()
+        }
+        _ => None,
+    }
+}
+
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn read_webp_dimensions_from_bytes() {
+        // 构造一个 16x9 的 webp
+        let img = image::DynamicImage::new_rgb8(16, 9);
+        let webp_bytes = crate::webp::encode(&img, 85.0, 2).unwrap();
+        let dims = read_dimensions_from_bytes(&webp_bytes, "test.webp");
+        assert_eq!(dims, Some((16, 9)));
+    }
+
+    #[test]
+    fn read_png_dimensions_from_bytes() {
+        let img = image::DynamicImage::new_rgb8(32, 24);
+        let mut buf = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut buf, image::ImageFormat::Png).unwrap();
+        let dims = read_dimensions_from_bytes(&buf.into_inner(), "test.png");
+        assert_eq!(dims, Some((32, 24)));
+    }
+
+    #[test]
+    fn read_dimensions_unknown_extension_returns_none() {
+        let dims = read_dimensions_from_bytes(b"not an image", "test.xyz");
+        assert_eq!(dims, None);
+    }
 
     #[test]
     fn image_params_validate_valid_defaults() {
