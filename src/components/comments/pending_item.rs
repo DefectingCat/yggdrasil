@@ -5,7 +5,9 @@
 
 use dioxus::prelude::*;
 
-use crate::hooks::comment_storage::{render_pending_content, PendingComment};
+use crate::hooks::comment_storage::{
+    format_relative_time_iso, render_pending_content, PendingComment,
+};
 
 /// 待审核评论项组件。
 ///
@@ -13,7 +15,7 @@ use crate::hooks::comment_storage::{render_pending_content, PendingComment};
 /// - `comment`：待审核评论数据
 /// - `post_id`：所属文章 ID（当前未使用，保留用于未来扩展）
 ///
-/// 展示内容包括：作者头像/链接、"刚刚"时间占位、审核中徽章、Markdown 渲染内容。
+/// 展示内容包括：作者头像/链接、基于创建时间动态计算的相对时间、审核中徽章、Markdown 渲染内容。
 /// 深度最大展示 6 层缩进，孤儿评论深度会被修正为 0。
 #[component]
 #[allow(unused_variables)]
@@ -27,6 +29,8 @@ pub fn PendingCommentItem(comment: PendingComment, post_id: i32) -> Element {
 
     let indent = depth.min(6) * 24;
     let content_html = render_pending_content(&comment.content_md);
+    // 基于创建时间实时计算相对时间，避免"刚刚"永久显示。
+    let relative_time = format_relative_time_iso(&comment.created_at);
 
     // 作者名展示为链接或普通文本
     let author_element = match &comment.author_url {
@@ -66,7 +70,8 @@ pub fn PendingCommentItem(comment: PendingComment, post_id: i32) -> Element {
                         span { class: "text-paper-tertiary", "·" }
                         span {
                             class: "text-paper-tertiary",
-                            "刚刚"
+                            title: "{comment.created_at}",
+                            "{relative_time}"
                         }
                         span {
                             class: "inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
