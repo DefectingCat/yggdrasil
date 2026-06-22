@@ -1,0 +1,197 @@
+import { Image, mergeAttributes, type Editor } from '@tiptap/core'
+import type { Node as PMNode } from '@tiptap/pm/model'
+
+/** NodeView 按钮点击回调注入接口。 */
+export interface UploadNodeViewCallbacks {
+  onRetry: (uploadId: string) => void
+  onRemove: (uploadId: string) => void
+}
+
+/**
+ * 上传图片占位符 NodeView：plain class，实现 ProseMirror NodeView 接口。
+ *
+ * 根据 data-upload-state 渲染三种态：
+ * - null：普通 img
+ * - uploading：img（本地 blob 预览）+ 遮罩（spinner + "上传中…"）
+ * - error：img（灰化）+ 遮罩（⚠ + 错误文案 + 重试/移除按钮）
+ *
+ * NodeView 纯渲染，不发起上传——按钮点击转发给注入的 callbacks（实际是 coordinator）。
+ * 属性变化时 ProseMirror 调 update(node)，NodeView 比较新旧 data-upload-state 重渲染遮罩。
+ */
+class UploadImageNodeView {
+  private editor: Editor
+  private node: PMNode
+  private callbacks: UploadNodeViewCallbacks
+
+  private container: HTMLDivElement
+  private img: HTMLImageElement
+  private overlay: HTMLDivElement | null = null
+
+  constructor(opts: {
+    node: PMNode
+    editor: Editor
+    HTMLAttributes: Record<string, unknown>
+    callbacks: UploadNodeViewCallbacks
+  }) {
+    this.node = opts.node
+    this.editor = opts.editor
+    this.callbacks = opts.callbacks
+
+    this.container = document.createElement('div')
+    this.container.classList.add('upload-image-container')
+
+    this.img = document.createElement('img')
+    this.img.draggable = false
+    const merged = mergeAttributes(opts.HTMLAttributes)
+    Object.entries(merged).forEach(([k, v]) => {
+      if (v != null) this.img.setAttribute(k, String(v))
+    })
+    const src = this.node.attrs.src
+    if (src != null) this.img.src = src
+    this.container.appendChild(this.img)
+
+    this.renderOverlay()
+  }
+
+  get dom(): HTMLElement {
+    return this.container
+  }
+
+  get contentDOM(): HTMLElement | null {
+    return null
+  }
+
+  /** ProseMirror 调用：节点属性变化时重渲染遮罩。返回 false 拒绝非同类节点。 */
+  update(node: PMNode): boolean {
+    if (node.type !== this.node.type) return false
+    const oldState = this.node.attrs['data-upload-state']
+    const newState = node.attrs['data-upload-state']
+    const oldSrc = this.node.attrs.src
+    const newSrc = node.attrs.src
+    this.node = node
+    if (oldSrc !== newSrc && newSrc != null) {
+      this.img.src = newSrc
+    }
+    if (oldState !== newState || this.overlay === null) {
+      this.renderOverlay()
+    }
+    return true
+  }
+
+  /** 遮罩内按钮点击不被 ProseMirror 当编辑，避免误触发事务。 */
+  ignoreMutation(): boolean {
+    return true
+  }
+
+  /** 事件不被编辑器 stopEvent 拦截（按钮点击要响应）。 */
+  stopEvent(_event: Event): boolean {
+    return false
+  }
+
+  /** 根据 data-upload-state 渲染遮罩。null 时移除遮罩。 */
+  private renderOverlay(): void {
+    if (this.overlay) {
+      this.overlay.remove()
+      this.overlay = null
+    }
+    const state = this.node.attrs['data-upload-state']
+    if (state == null) {
+      this.container.classList.remove('is-uploading', 'is-error')
+      return
+    }
+    this.overlay = document.createElement('div')
+    this.overlay.classList.add('upload-image-overlay')
+    if (state === 'uploading') {
+      this.container.classList.add('is-uploading')
+      this.container.classList.remove('is-error')
+      this.overlay.innerHTML =
+        '<div class="upload-spinner"></div><div class="upload-overlay-text">上传中…</div>'
+    } else if (state === 'error') {
+      this.container.classList.add('is-error')
+      this.container.classList.remove('is-uploading')
+      const msg = this.node.attrs['data-error-msg'] || '上传失败'
+      this.overlay.innerHTML =
+        '<div class="upload-error-icon">⚠</div>' +
+        '<div class="upload-error-msg"></div>' +
+        '<div class="upload-error-actions">' +
+        '<button type="button" class="upload-btn upload-btn-retry">重试</button>' +
+        '<button type="button" class="upload-btn upload-btn-remove">移除</button>' +
+        '</div>'
+      const msgEl = this.overlay.querySelector('.upload-error-msg') as HTMLElement
+      msgEl.textContent = msg
+      const uploadId = this.node.attrs['data-upload-id'] as string | null
+      this.overlay.querySelector('.upload-btn-retry')?.addEventListener('click', (e) => {
+        e.preventDefault()
+        if (uploadId) this.callbacks.onRetry(uploadId)
+      })
+      this.overlay.querySelector('.upload-btn-remove')?.addEventListener('click', (e) => {
+        e.preventDefault()
+        if (uploadId) this.callbacks.onRemove(uploadId)
+      })
+    }
+    this.container.appendChild(this.overlay)
+  }
+
+  destroy(): void {
+    this.overlay?.remove()
+    this.overlay = null
+    this.container.remove()
+  }
+}
+
+/** coordinator 引用（由 index.ts 在创建 editor 前注入）。 */
+let coordinatorRef: { retryUpload: (id: string) => void; removeUpload: (id: string) => boolean } | null = null
+
+/** index.ts 注入 coordinator，供 NodeView 的 onRetry/onRemove 调用。 */
+export function setUploadCoordinator(c: typeof coordinatorRef): void {
+  coordinatorRef = c
+}
+
+/**
+ * 自定义 Image 扩展：继承父类属性，加三个上传状态属性，用自定义 NodeView。
+ */
+export const UploadImage = Image.configure({ allowBase64: true }).extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      'data-upload-state': {
+        default: null,
+        parseHTML: (el) => (el as HTMLElement).getAttribute('data-upload-state'),
+        renderHTML: (attrs) => {
+          const v = attrs['data-upload-state']
+          return v == null ? {} : { 'data-upload-state': v }
+        },
+      },
+      'data-upload-id': {
+        default: null,
+        parseHTML: (el) => (el as HTMLElement).getAttribute('data-upload-id'),
+        renderHTML: (attrs) => {
+          const v = attrs['data-upload-id']
+          return v == null ? {} : { 'data-upload-id': v }
+        },
+      },
+      'data-error-msg': {
+        default: null,
+        parseHTML: (el) => (el as HTMLElement).getAttribute('data-error-msg'),
+        renderHTML: (attrs) => {
+          const v = attrs['data-error-msg']
+          return v == null ? {} : { 'data-error-msg': v }
+        },
+      },
+    }
+  },
+
+  addNodeView() {
+    return ({ node, HTMLAttributes, editor }) => {
+      return new UploadImageNodeView({
+        node,
+        editor,
+        HTMLAttributes,
+        callbacks: {
+          onRetry: (id) => coordinatorRef?.retryUpload(id),
+          onRemove: (id) => coordinatorRef?.removeUpload(id),
+        },
+      })
+    }
+  },
+})
