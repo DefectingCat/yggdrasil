@@ -84,7 +84,10 @@ class TiptapEditorInstance {
         Image.configure({ allowBase64: true }),
         TaskList,
         TaskItem.configure({ nested: true }),
-        SlashCommand,
+        // 把宿主注入的图片上传回调透传给斜杠命令扩展，使 /上传图片 命令可用。
+        SlashCommand.configure({
+          onImageUpload: this.options.onImageUpload,
+        }),
         FileHandler.configure({
           allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
           onPaste: (editor, files) => {

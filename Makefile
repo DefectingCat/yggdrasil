@@ -1,4 +1,4 @@
-.PHONY: dev build build-linux css css-watch clean build-editor highlight-css test
+.PHONY: dev build build-linux css css-watch clean build-editor build-editor-incremental highlight-css test
 
 build:
 	@$(MAKE) build-editor
@@ -21,7 +21,13 @@ build-editor:
 	@cd libs/tiptap-editor && npm ci --include=dev && npm run build
 	@echo "Tiptap editor built."
 
-dev:
+# dev 用的增量构建：跳过 npm ci（假设 node_modules 已存在），仅 vite build。
+# 与 build-editor 分开，避免每次 make dev 都重装依赖。
+build-editor-incremental:
+	@cd libs/tiptap-editor && npm run build
+
+dev: build-editor-incremental
+	@echo "Building Tiptap editor (incremental)..."
 	@echo "Starting tailwindcss watch and dx serve..."
 	@tailwindcss -i input.css -o public/style.css --watch & \
 	TAILWIND_PID=$$!; \
@@ -40,5 +46,4 @@ test:
 clean:
 	@cargo clean
 	@rm -f public/style.css public/highlight.css
-	@rm -rf public/tiptap
 	@rm -rf uploads/.cache

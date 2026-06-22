@@ -9,112 +9,217 @@ interface CommandItem {
   command: (props: { editor: any; range: Range }) => void
 }
 
-const COMMANDS: CommandItem[] = [
-  {
-    title: '标题 1',
-    description: '大标题',
-    icon: 'H1',
-    command: ({ editor, range }) => {
-      editor.chain().focus().deleteRange(range).setHeading({ level: 1 }).run()
-    },
-  },
-  {
-    title: '标题 2',
-    description: '中标题',
-    icon: 'H2',
-    command: ({ editor, range }) => {
-      editor.chain().focus().deleteRange(range).setHeading({ level: 2 }).run()
-    },
-  },
-  {
-    title: '标题 3',
-    description: '小标题',
-    icon: 'H3',
-    command: ({ editor, range }) => {
-      editor.chain().focus().deleteRange(range).setHeading({ level: 3 }).run()
-    },
-  },
-  {
-    title: '无序列表',
-    description: '创建无序列表',
-    icon: '•',
-    command: ({ editor, range }) => {
-      editor.chain().focus().deleteRange(range).toggleBulletList().run()
-    },
-  },
-  {
-    title: '有序列表',
-    description: '创建有序列表',
-    icon: '1.',
-    command: ({ editor, range }) => {
-      editor.chain().focus().deleteRange(range).toggleOrderedList().run()
-    },
-  },
-  {
-    title: '任务列表',
-    description: '创建任务列表',
-    icon: '☑',
-    command: ({ editor, range }) => {
-      editor.chain().focus().deleteRange(range).toggleTaskList().run()
-    },
-  },
-  {
-    title: '引用',
-    description: '插入引用块',
-    icon: '❝',
-    command: ({ editor, range }) => {
-      editor.chain().focus().deleteRange(range).toggleBlockquote().run()
-    },
-  },
-  {
-    title: '代码块',
-    description: '插入代码块',
-    icon: '<>',
-    command: ({ editor, range }) => {
-      editor.chain().focus().deleteRange(range).toggleCodeBlock().run()
-    },
-  },
-  {
-    title: '分割线',
-    description: '插入水平分割线',
-    icon: '—',
-    command: ({ editor, range }) => {
-      editor.chain().focus().deleteRange(range).setHorizontalRule().run()
-    },
-  },
-  {
-    title: '表格',
-    description: '插入 3×3 表格',
-    icon: '▦',
-    command: ({ editor, range }) => {
-      editor.chain().focus().deleteRange(range).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
-    },
-  },
-  {
-    title: '图片',
-    description: '插入图片',
-    icon: '🖼',
-    command: ({ editor, range }) => {
-      const url = window.prompt('输入图片 URL')
-      if (url) {
-        editor.chain().focus().deleteRange(range).setImage({ src: url }).run()
-      }
-    },
-  },
-  {
-    title: '链接',
-    description: '插入链接',
-    icon: '🔗',
-    command: ({ editor, range }) => {
-      const url = window.prompt('输入链接 URL')
-      if (url) {
-        editor.chain().focus().deleteRange(range).setLink({ href: url }).insertContent(url).run()
-      }
-    },
-  },
-]
+/**
+ * 斜杠命令扩展的选项。
+ *
+ * `onImageUpload` 由宿主注入（参见 index.ts），用于把用户选择的图片文件
+ * 上传到服务端并返回可访问的 URL。未提供时"上传图片"命令会被隐藏，
+ * 只保留"图片链接"（手动填 URL）。
+ */
+export interface SlashCommandOptions {
+  onImageUpload?: (file: File) => Promise<string>
+}
 
 const SlashCommandPluginKey = new PluginKey('slashCommand')
+
+/**
+ * 斜杠命令扩展。
+ *
+ * `onImageUpload` 通过 `addOptions` 注入，"上传图片"命令据此决定是否出现。
+ */
+export const SlashCommand = Extension.create<SlashCommandOptions>({
+  name: 'slashCommand',
+
+  addOptions() {
+    return {
+      onImageUpload: undefined,
+    }
+  },
+
+  addProseMirrorPlugins() {
+    // 依据是否提供上传回调，决定可用命令集。
+    const uploadFn = this.options.onImageUpload
+    const COMMANDS: CommandItem[] = [
+      {
+        title: '标题 1',
+        description: '大标题',
+        icon: 'H1',
+        command: ({ editor, range }) => {
+          editor.chain().focus().deleteRange(range).setHeading({ level: 1 }).run()
+        },
+      },
+      {
+        title: '标题 2',
+        description: '中标题',
+        icon: 'H2',
+        command: ({ editor, range }) => {
+          editor.chain().focus().deleteRange(range).setHeading({ level: 2 }).run()
+        },
+      },
+      {
+        title: '标题 3',
+        description: '小标题',
+        icon: 'H3',
+        command: ({ editor, range }) => {
+          editor.chain().focus().deleteRange(range).setHeading({ level: 3 }).run()
+        },
+      },
+      {
+        title: '无序列表',
+        description: '创建无序列表',
+        icon: '•',
+        command: ({ editor, range }) => {
+          editor.chain().focus().deleteRange(range).toggleBulletList().run()
+        },
+      },
+      {
+        title: '有序列表',
+        description: '创建有序列表',
+        icon: '1.',
+        command: ({ editor, range }) => {
+          editor.chain().focus().deleteRange(range).toggleOrderedList().run()
+        },
+      },
+      {
+        title: '任务列表',
+        description: '创建任务列表',
+        icon: '☑',
+        command: ({ editor, range }) => {
+          editor.chain().focus().deleteRange(range).toggleTaskList().run()
+        },
+      },
+      {
+        title: '引用',
+        description: '插入引用块',
+        icon: '❝',
+        command: ({ editor, range }) => {
+          editor.chain().focus().deleteRange(range).toggleBlockquote().run()
+        },
+      },
+      {
+        title: '代码块',
+        description: '插入代码块',
+        icon: '<>',
+        command: ({ editor, range }) => {
+          editor.chain().focus().deleteRange(range).toggleCodeBlock().run()
+        },
+      },
+      {
+        title: '分割线',
+        description: '插入水平分割线',
+        icon: '—',
+        command: ({ editor, range }) => {
+          editor.chain().focus().deleteRange(range).setHorizontalRule().run()
+        },
+      },
+      {
+        title: '表格',
+        description: '插入 3×3 表格',
+        icon: '▦',
+        command: ({ editor, range }) => {
+          editor.chain().focus().deleteRange(range).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+        },
+      },
+    ]
+
+    // 图片相关命令：上传命令仅在上传回调可用时才出现。
+    if (uploadFn) {
+      COMMANDS.push({
+        title: '上传图片',
+        description: '从本地选择并上传图片',
+        icon: '📤',
+        command: ({ editor, range }) => {
+          // 必须先删掉 /命令 文本，文件选择对话框会阻塞，关闭后 range 可能失效。
+          editor.chain().focus().deleteRange(range).run()
+          const input = document.createElement('input')
+          input.type = 'file'
+          input.accept = 'image/jpeg,image/png,image/gif,image/webp'
+          input.addEventListener('change', () => {
+            const file = input.files?.[0]
+            if (!file) return
+            uploadFn(file)
+              .then((url) => {
+                editor.chain().focus().setImage({ src: url }).run()
+              })
+              .catch((err) => {
+                const msg = err instanceof Error ? err.message : String(err)
+                console.error('[SlashCommand] Upload failed:', msg)
+              })
+          })
+          // click() 会立即触发原生文件选择器；回调在用户选择文件后异步执行。
+          input.click()
+        },
+      })
+    }
+
+    COMMANDS.push(
+      {
+        title: '图片链接',
+        description: '通过 URL 插入图片',
+        icon: '🖼',
+        command: ({ editor, range }) => {
+          const url = window.prompt('输入图片 URL')
+          if (url) {
+            editor.chain().focus().deleteRange(range).setImage({ src: url }).run()
+          }
+        },
+      },
+      {
+        title: '链接',
+        description: '插入链接',
+        icon: '🔗',
+        command: ({ editor, range }) => {
+          const url = window.prompt('输入链接 URL')
+          if (url) {
+            editor.chain().focus().deleteRange(range).setLink({ href: url }).insertContent(url).run()
+          }
+        },
+      },
+    )
+
+    return [
+      Suggestion<CommandItem>({
+        pluginKey: SlashCommandPluginKey,
+        editor: this.editor,
+        char: '/',
+        items: ({ query }) => {
+          return COMMANDS.filter(
+            (item) =>
+              item.title.toLowerCase().includes(query.toLowerCase()) ||
+              item.description.toLowerCase().includes(query.toLowerCase())
+          )
+        },
+        render() {
+          let popup: ReturnType<typeof createPopup> | null = null
+
+          return {
+            onStart(props) {
+              popup = createPopup(props)
+            },
+            onUpdate(props) {
+              if (!popup) return
+              popup.updateItems(props.items)
+              popup.updatePosition()
+            },
+            onKeyDown(props) {
+              if (!popup) return false
+              return popup.onKeyDown(props)
+            },
+            onExit() {
+              if (popup) {
+                popup.destroy()
+                popup = null
+              }
+            },
+          }
+        },
+        command: ({ editor, range, props: item }) => {
+          item.command({ editor, range })
+        },
+      }),
+    ]
+  },
+})
 
 function createPopup(props: SuggestionProps<CommandItem>) {
   const component = document.createElement('div')
@@ -222,51 +327,3 @@ function createPopup(props: SuggestionProps<CommandItem>) {
     },
   }
 }
-
-export const SlashCommand = Extension.create({
-  name: 'slashCommand',
-
-  addProseMirrorPlugins() {
-    return [
-      Suggestion<CommandItem>({
-        pluginKey: SlashCommandPluginKey,
-        editor: this.editor,
-        char: '/',
-        items: ({ query }) => {
-          return COMMANDS.filter(
-            (item) =>
-              item.title.toLowerCase().includes(query.toLowerCase()) ||
-              item.description.toLowerCase().includes(query.toLowerCase())
-          )
-        },
-        render() {
-          let popup: ReturnType<typeof createPopup> | null = null
-
-          return {
-            onStart(props) {
-              popup = createPopup(props)
-            },
-            onUpdate(props) {
-              if (!popup) return
-              popup.updateItems(props.items)
-              popup.updatePosition()
-            },
-            onKeyDown(props) {
-              if (!popup) return false
-              return popup.onKeyDown(props)
-            },
-            onExit() {
-              if (popup) {
-                popup.destroy()
-                popup = null
-              }
-            },
-          }
-        },
-        command: ({ editor, range, props: item }) => {
-          item.command({ editor, range })
-        },
-      }),
-    ]
-  },
-})
