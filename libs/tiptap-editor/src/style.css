@@ -384,6 +384,8 @@
   border-radius: 6px;
   margin: 1em 0;
   display: block;
+  /* blur/grayscale 出现与消失的过渡（上传中→成功/失败的 filter 切换） */
+  transition: filter 0.2s ease;
 }
 .upload-image-container.is-error img {
   opacity: 0.5;
