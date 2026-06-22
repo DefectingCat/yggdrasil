@@ -33,6 +33,33 @@ struct UploadErrorEntry {
     message: String,
 }
 
+/// window.__tiptap_uploads 快照（轮询消费用）。
+#[cfg(target_arch = "wasm32")]
+#[derive(serde::Deserialize)]
+struct UploadSnapshot {
+    events: Vec<UploadSnapshotEvent>,
+    counts: UploadSnapshotCounts,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(serde::Deserialize)]
+struct UploadSnapshotEvent {
+    kind: String,
+    #[serde(rename = "uploadId")]
+    upload_id: String,
+    #[serde(rename = "fileName")]
+    file_name: String,
+    #[serde(rename = "errorMsg")]
+    error_msg: Option<String>,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(serde::Deserialize, Default, Clone, Copy)]
+struct UploadSnapshotCounts {
+    uploading: u32,
+    error: u32,
+}
+
 /// 新建文章页面组件。
 ///
 /// 内部委托给 `write_editor`，以 `None` 表示新建模式。
@@ -261,6 +288,71 @@ fn write_editor(post_id: Option<i32>) -> Element {
             loading.set(false);
         }
     });
+
+    // 轮询 window.__tiptap_uploads，消费上传事件并更新 signal（仅 WASM）
+    #[cfg(target_arch = "wasm32")]
+    {
+        use std::collections::HashSet;
+        let mut seen_error_ids: HashSet<String> = HashSet::new();
+        use_future(move || {
+            let mut uploads_in_flight = uploads_in_flight;
+            let mut upload_errors = upload_errors;
+            async move {
+                loop {
+                    // 500ms 间隔
+                    if let Ok(promise_val) = js_sys::eval("new Promise(r => setTimeout(r, 500))") {
+                        if let Ok(promise) = promise_val.dyn_into::<js_sys::Promise>() {
+                            let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+                        }
+                    }
+
+                    // 读取并清空 events，读取 counts
+                    let snapshot = js_sys::eval(
+                        r#"
+                        (function() {
+                            var u = window.__tiptap_uploads;
+                            if (!u) return null;
+                            var events = u.events || [];
+                            u.events = [];
+                            return JSON.stringify({ events: events, counts: u.counts || {uploading:0,error:0} });
+                        })()
+                        "#,
+                    )
+                    .ok()
+                    .and_then(|v| v.as_string());
+
+                    if let Some(json) = snapshot {
+                        if let Ok(parsed) = serde_json::from_str::<UploadSnapshot>(&json) {
+                            for ev in parsed.events {
+                                match ev.kind.as_str() {
+                                    "error" => {
+                                        if !seen_error_ids.contains(&ev.upload_id) {
+                                            seen_error_ids.insert(ev.upload_id.clone());
+                                            upload_errors.write().push(UploadErrorEntry {
+                                                id: ev.upload_id,
+                                                file_name: ev.file_name,
+                                                message: ev.error_msg
+                                                    .unwrap_or_else(|| "上传失败".to_string()),
+                                            });
+                                        }
+                                    }
+                                    "success" | "removed" => {
+                                        seen_error_ids.remove(&ev.upload_id);
+                                        upload_errors.write().retain(|e| e.id != ev.upload_id);
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            uploads_in_flight.set(UploadsInFlight {
+                                uploading: parsed.counts.uploading,
+                                error: parsed.counts.error,
+                            });
+                        }
+                    }
+                }
+            }
+        });
+    }
 
     // 提交表单：校验标题与内容，读取 Tiptap 编辑器 Markdown，调用 create_post 或 update_post。
     let on_submit = move |_| {
