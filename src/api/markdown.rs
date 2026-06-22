@@ -365,6 +365,17 @@ mod tests {
     }
 
     #[test]
+    fn wrap_images_with_blur_uses_slash_in_aspect_ratio() {
+        // 用真实存在的 uploads 文件，让 dimensions 成功返回，验证 --ar 格式
+        let html = r#"<img src="/uploads/2026/06/18/090402.21c4f0b6-6d5a-49ee-bc79-99cb557ff385.webp" alt="t">"#;
+        let result = wrap_images_with_blur(html);
+        println!("ACTUAL OUTPUT: {}", result);
+        // aspect-ratio 必须用斜杠分隔，如 "--ar:800 / 600;"
+        assert!(result.contains("--ar:"), "should have --ar");
+        assert!(result.contains(" / "), "aspect-ratio must use slash separator, got: {}", result);
+    }
+
+    #[test]
     fn slugify_heading_simple() {
         assert_eq!(slugify_heading("Hello World"), "hello-world");
     }
