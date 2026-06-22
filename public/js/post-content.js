@@ -48,40 +48,62 @@
   }
 
   function initImageZoom(root) {
-    var images = root.querySelectorAll("img");
-    for (var i = 0; i < images.length; i++) {
-      var img = images[i];
-      if (img.getAttribute("data-zoom-enabled")) continue;
-      var src = img.getAttribute("src") || img.src || "";
-      if (src.indexOf("data:") === 0) continue;
+    var containers = root.querySelectorAll(".blur-img");
+    for (var i = 0; i < containers.length; i++) {
+      var container = containers[i];
+      if (container.getAttribute("data-blur-init")) continue;
+      container.setAttribute("data-blur-init", "true");
 
-      img.setAttribute("data-zoom-enabled", "true");
+      var fullImg = container.querySelector(".blur-img-full");
+      if (!fullImg) continue;
+      var fullSrc = fullImg.getAttribute("data-src");
+      if (!fullSrc) continue;
 
-      var originalSrc = img.src;
-      var sep = originalSrc.indexOf("?") !== -1 ? "&" : "?";
-      img.src = originalSrc + sep + "w=800";
-      img.classList.add("md-content-img-zoomable");
+      // 加载高清图：onload 后加 is-loaded 触发 CSS opacity 淡入
+      fullImg.addEventListener("load", function () {
+        this.classList.add("is-loaded");
+      });
 
-      (function (origSrc, altText) {
-        img.addEventListener("click", function (e) {
+      // 懒加载：进入视口才设 src
+      if ("IntersectionObserver" in window) {
+        var io = new IntersectionObserver(
+          function (entries) {
+            entries.forEach(function (entry) {
+              if (entry.isIntersecting) {
+                fullImg.src = fullSrc;
+                io.unobserve(container);
+              }
+            });
+          },
+          { rootMargin: "200px" }
+        );
+        io.observe(container);
+      } else {
+        // 不支持 IO：直接加载
+        fullImg.src = fullSrc;
+      }
+
+      // 灯箱：点击用高清图 URL 放大
+      (function (src, altText) {
+        container.addEventListener("click", function (e) {
           e.preventDefault();
           var overlay = document.createElement("div");
           overlay.className = "md-image-lightbox-overlay";
 
-          var container = document.createElement("div");
-          container.className = "md-image-lightbox-content";
+          var containerEl = document.createElement("div");
+          containerEl.className = "md-image-lightbox-content";
 
-          var fullImg = document.createElement("img");
-          fullImg.src = origSrc;
-          fullImg.alt = altText;
+          var bigImg = document.createElement("img");
+          bigImg.src = src;
+          bigImg.alt = altText;
 
           var closeBtn = document.createElement("button");
           closeBtn.className = "md-image-lightbox-close";
           closeBtn.textContent = "\u2715";
 
-          container.appendChild(fullImg);
-          container.appendChild(closeBtn);
-          overlay.appendChild(container);
+          containerEl.appendChild(bigImg);
+          containerEl.appendChild(closeBtn);
+          overlay.appendChild(containerEl);
           document.body.appendChild(overlay);
           document.body.style.overflow = "hidden";
 
@@ -97,7 +119,7 @@
           overlay.addEventListener("click", function () {
             cleanup(overlay, onKey);
           });
-          container.addEventListener("click", function (ev) {
+          containerEl.addEventListener("click", function (ev) {
             ev.stopPropagation();
           });
           closeBtn.addEventListener("click", function () {
@@ -105,7 +127,7 @@
           });
           document.addEventListener("keydown", onKey);
         });
-      })(originalSrc, img.alt || "");
+      })(fullSrc, fullImg.getAttribute("alt") || "");
     }
   }
 
