@@ -1,4 +1,5 @@
-import { Image, mergeAttributes, type Editor } from '@tiptap/core'
+import { Image } from '@tiptap/extension-image'
+import { mergeAttributes, type Editor } from '@tiptap/core'
 import type { Node as PMNode } from '@tiptap/pm/model'
 
 /** NodeView 按钮点击回调注入接口。 */

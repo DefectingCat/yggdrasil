@@ -2,10 +2,11 @@ import { Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from '@tiptap/markdown'
 import { TableKit } from '@tiptap/extension-table'
-import { Image } from '@tiptap/extension-image'
 import { TaskList, TaskItem } from '@tiptap/extension-list'
 import { FileHandler } from '@tiptap/extension-file-handler'
 import { SlashCommand } from './slash-command'
+import { UploadCoordinator } from './upload-coordinator'
+import { UploadImage, setUploadCoordinator } from './upload-image'
 import './style.css'
 
 export interface EditorOptions {
@@ -27,6 +28,7 @@ class TiptapEditorInstance {
   private isSourceMode = false
   private sourceTextarea: HTMLTextAreaElement | null = null
   private toggleButton: HTMLButtonElement | null = null
+  private coordinator: UploadCoordinator | null = null
 
   constructor(container: HTMLElement, options: EditorOptions = {}) {
     this.container = container
@@ -81,7 +83,7 @@ class TiptapEditorInstance {
           html: false,
         }),
         TableKit,
-        Image.configure({ allowBase64: true }),
+        UploadImage,
         TaskList,
         TaskItem.configure({ nested: true }),
         // 把宿主注入的图片上传回调透传给斜杠命令扩展，使 /上传图片 命令可用。
@@ -90,35 +92,14 @@ class TiptapEditorInstance {
         }),
         FileHandler.configure({
           allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
-          onPaste: (editor, files) => {
-            if (this.options.onImageUpload) {
-              files.forEach((file) => {
-                this.options.onImageUpload!(file)
-                  .then((url) => {
-                    editor.chain().focus().setImage({ src: url }).run()
-                  })
-                  .catch((err) => {
-                    const msg = err instanceof Error ? err.message : String(err)
-                    console.error('[TiptapEditor] Upload failed:', msg)
-                  })
-              })
+          onPaste: (_editor, files) => {
+            if (this.coordinator) {
+              files.forEach((file) => this.coordinator!.insertUploading(file))
             }
           },
-          onDrop: (editor, files, pos) => {
-            if (this.options.onImageUpload) {
-              files.forEach((file) => {
-                this.options.onImageUpload!(file)
-                  .then((url) => {
-                    editor.chain().focus().insertContentAt(pos, {
-                      type: 'image',
-                      attrs: { src: url }
-                    }).run()
-                  })
-                  .catch((err) => {
-                    const msg = err instanceof Error ? err.message : String(err)
-                    console.error('[TiptapEditor] Upload failed:', msg)
-                  })
-              })
+          onDrop: (_editor, files, pos) => {
+            if (this.coordinator) {
+              files.forEach((file) => this.coordinator!.insertUploading(file, pos))
             }
           },
         }),
@@ -142,6 +123,12 @@ class TiptapEditorInstance {
         }
       },
     })
+
+    // 创建上传协调器，注入给 NodeView 的 onRetry/onRemove
+    if (this.options.onImageUpload) {
+      this.coordinator = new UploadCoordinator(this.editor, this.options.onImageUpload)
+      setUploadCoordinator(this.coordinator)
+    }
   }
 
   getMarkdown(): string {
@@ -235,9 +222,15 @@ class TiptapEditorInstance {
     return this.editor?.isEmpty ?? true
   }
 
+  /** Rust 侧"×关闭"提示时调用（通过 eval）。返回是否成功删除。 */
+  removeUploadByUploadId(uploadId: string): boolean {
+    return this.coordinator?.removeUpload(uploadId) ?? false
+  }
+
   destroy(): void {
     this.editor?.destroy()
     this.editor = null
+    this.coordinator = null
     // 清理源码模式相关引用（容器 innerHTML 已清空，DOM 会随之移除）
     this.sourceTextarea = null
     this.toggleButton = null
