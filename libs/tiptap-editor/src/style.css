@@ -389,6 +389,13 @@
   opacity: 0.5;
   filter: grayscale(0.5);
 }
+/* 上传中：图片高斯模糊，遮罩文字（spinner/"上传中…"）在独立 overlay 层不受影响 */
+.upload-image-container.is-uploading {
+  overflow: hidden;
+}
+.upload-image-container.is-uploading img {
+  filter: blur(8px);
+}
 .upload-image-overlay {
   position: absolute;
   inset: 0;
