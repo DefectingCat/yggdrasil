@@ -214,7 +214,13 @@ fn write_editor(post_id: Option<i32>) -> Element {
                                         })
                                         .then(function(response) {
                                             if (!response.ok) {
-                                                throw new Error('Upload failed: ' + response.status);
+                                                // 读取服务端返回的中文错误（{"success":false,"error":"文件超过大小限制"}）
+                                                return response.json().catch(function() { return null; }).then(function(data) {
+                                                    if (data && data.error) {
+                                                        throw new Error(data.error);
+                                                    }
+                                                    throw new Error('上传失败: ' + response.status);
+                                                });
                                             }
                                             return response.json();
                                         })
@@ -356,6 +362,19 @@ fn write_editor(post_id: Option<i32>) -> Element {
 
     // 提交表单：校验标题与内容，读取 Tiptap 编辑器 Markdown，调用 create_post 或 update_post。
     let on_submit = move |_| {
+        // 上传未完成/失败拦截：有占位符时阻止保存
+        let in_flight = uploads_in_flight.read();
+        if in_flight.uploading > 0 || in_flight.error > 0 {
+            let msg = if in_flight.uploading > 0 {
+                format!("有 {} 张图片正在上传，请等待完成后再保存", in_flight.uploading)
+            } else {
+                format!("有 {} 张图片上传失败，请移除或重试后再保存", in_flight.error)
+            };
+            error.set(Some(msg));
+            return;
+        }
+        drop(in_flight);
+
         if title().trim().is_empty() {
             error.set(Some("标题不能为空".to_string()));
             #[allow(clippy::needless_return)]
@@ -372,6 +391,12 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     return editor ? editor.getMarkdown() : (window.__tiptap_content || '');
                 })()
             "#).ok().and_then(|v| v.as_string()).unwrap_or_default();
+
+            // 兜底：扫描残留的 blob: 或 data-upload-state（轮询窗口期漏判防护）
+            if md.contains("blob:") || md.contains("data-upload-state") {
+                error.set(Some("检测到未完成上传的图片，请处理后保存".to_string()));
+                return;
+            }
 
             if md.trim().is_empty() {
                 error.set(Some("内容不能为空".to_string()));
@@ -576,6 +601,34 @@ fn write_editor(post_id: Option<i32>) -> Element {
             if success() {
                 div { class: "flex-shrink-0 px-4 py-2 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-xl text-sm border border-green-100 dark:border-green-900/30 mb-2",
                     "保存成功"
+                }
+            }
+
+            // 上传失败提示：多条堆叠，×关闭同时删除编辑器内失败占位符（避免孤儿）
+            for err in upload_errors().clone() {
+                div { class: "flex-shrink-0 flex items-center justify-between gap-3 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30 mb-2",
+                    span { "图片上传失败: {err.file_name} — {err.message}" }
+                    button {
+                        class: "shrink-0 text-red-400 hover:text-red-600 cursor-pointer text-lg leading-none",
+                        aria_label: "关闭提示",
+                        onclick: {
+                            // 捕获 owned id，避免借用临时值
+                            let id = err.id.clone();
+                            let mut upload_errors = upload_errors;
+                            move |_| {
+                                // 关闭提示同时删除编辑器内失败占位符（避免孤儿）
+                                #[cfg(target_arch = "wasm32")]
+                                {
+                                    let _ = js_sys::eval(&format!(
+                                        "(function(){{var e=window.TiptapEditor&&window.TiptapEditor._instances&&window.TiptapEditor._instances.get('tiptap-editor');if(e&&e.removeUploadByUploadId){{e.removeUploadByUploadId({:?});}}}})()",
+                                        id
+                                    ));
+                                }
+                                upload_errors.write().retain(|e| e.id != id);
+                            }
+                        },
+                        "×"
+                    }
                 }
             }
 
