@@ -58,6 +58,8 @@ export class UploadCoordinator {
         'data-upload-id': uploadId,
       },
     }).run()
+
+    this.runUpload(uploadId)
   }
 
   /** 按 uploadId 删除节点（revoke blob、清 pending）。NodeView 移除按钮 / Rust ×关闭 共用。 */
@@ -68,6 +70,41 @@ export class UploadCoordinator {
     URL.revokeObjectURL(entry.blobUrl)
     this.pending.delete(uploadId)
     return true
+  }
+
+  /** 核心上传逻辑：成功更新 src + 清上传属性，失败转 error 态。 */
+  private async runUpload(uploadId: string): Promise<void> {
+    const entry = this.pending.get(uploadId)
+    if (!entry) return
+    try {
+      const url = await this.onImageUpload(entry.file)
+      // 成功：替换 src，清除上传状态属性
+      this.updateNodeAttrs(uploadId, {
+        src: url,
+        'data-upload-state': null,
+        'data-upload-id': null,
+        'data-error-msg': null,
+      })
+      URL.revokeObjectURL(entry.blobUrl)
+      this.pending.delete(uploadId)
+    } catch (err) {
+      const msg = this.extractErrorMessage(err)
+      this.updateNodeAttrs(uploadId, {
+        'data-upload-state': 'error',
+        'data-error-msg': msg,
+      })
+    }
+  }
+
+  /** 重试：从 pending 取回原 File，节点转回 uploading，重跑上传。 */
+  retryUpload(uploadId: string): void {
+    const entry = this.pending.get(uploadId)
+    if (!entry) return
+    this.updateNodeAttrs(uploadId, {
+      'data-upload-state': 'uploading',
+      'data-error-msg': null,
+    })
+    this.runUpload(uploadId)
   }
 
   /** 按 uploadId 在文档中定位节点并删除。 */
@@ -108,6 +145,12 @@ export class UploadCoordinator {
       )
       this.editor.view.dispatch(tr)
     }
+  }
+
+  /** 从错误对象提取消息。改造后的 fetch 直接抛服务端中文（如"文件超过大小限制"）。 */
+  private extractErrorMessage(err: unknown): string {
+    if (err instanceof Error) return err.message
+    return String(err)
   }
 
   /** pending Map 查询（供内部/测试）。 */
