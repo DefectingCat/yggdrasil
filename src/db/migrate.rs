@@ -96,26 +96,21 @@ impl std::fmt::Display for MigrateError {
 
 impl std::error::Error for MigrateError {}
 
-/// 执行所有未应用的迁移。
+/// 在**已获取**的连接上执行迁移主体逻辑（咨询锁 + 建表 + 应用迁移 + 解锁）。
 ///
-/// 在 `main.rs` 启动时调用一次。流程：
-/// 1. 获取一个独占连接（咨询锁是 session 级，需在同一连接上 lock/unlock）
-/// 2. 抢咨询锁（多实例启动时串行化）
-/// 3. 确保 `schema_migrations` 表存在
-/// 4. 查询已应用版本集合
-/// 5. 按序应用未应用的迁移（每个一个事务）
-/// 6. 释放咨询锁
+/// 调用方负责自行控制连接获取策略——例如 `main.rs` 启动时用
+/// [`get_conn_for_startup`](crate::db::pool::get_conn_for_startup)（长重试窗口）
+/// 拿到连接后再调用本函数，以应对 DB 尚未就绪的场景。
+///
+/// 流程：
+/// 1. 抢咨询锁（多实例启动时串行化）
+/// 2. 确保 `schema_migrations` 表存在
+/// 3. 查询已应用版本集合
+/// 4. 按序应用未应用的迁移（每个一个事务）
+/// 5. 释放咨询锁
 ///
 /// 失败时返回错误；调用方（`main.rs`）应让进程退出，避免启动半残服务。
-pub async fn run() -> Result<(), MigrateError> {
-    use crate::db::pool::get_conn;
-
-    tracing::info!("running database migrations");
-
-    // 咨询锁是 session 级的，必须在同一连接上 lock/unlock。
-    // 因此整个迁移流程独占一个池连接。
-    let mut conn = get_conn().await?;
-
+pub async fn run_on_conn(conn: &mut deadpool_postgres::Object) -> Result<(), MigrateError> {
     // 抢咨询锁：多实例滚动发布时只有一个进程能进入迁移循环，
     // 其余实例在此等待；锁释放后它们查版本表发现已全部应用，直接返回。
     conn.execute("SELECT pg_advisory_lock($1)", &[&ADVISORY_LOCK_KEY])
@@ -124,12 +119,13 @@ pub async fn run() -> Result<(), MigrateError> {
     // 在已持锁连接上执行迁移主体逻辑。
     // 锁释放策略：
     // - 正常返回 / 返回 Err：下面的显式 pg_advisory_unlock 释放锁。
-    // - panic：panic 会跳过显式 unlock。此时 `conn` 在 unwind 中被 drop，
-    //   但 deadpool 会把连接归还池中复用（不关闭 Postgres 会话），
-    //   所以 session 级咨询锁不会立即释放。安全性依赖调用方（main.rs 的
-    //   `.expect()`）在 panic 时终止进程——进程退出会关闭所有池连接，
-    //   Postgres 检测到会话断开后释放 session 级咨询锁。
-    let result = run_inner(&mut conn).await;
+    // - 进程被强杀（SIGKILL 等）：连接断开，Postgres 在检测到会话断开后释放
+    //   session 级咨询锁。
+    // - `main.rs` 在迁移失败时用 `std::process::exit(1)` 终止进程（不再 panic）：
+    //   `exit(1)` 不会 unwind，但同样会关闭进程持有的所有 socket / 池连接，
+    //   效果等价于会话断开——Postgres 会释放 session 级咨询锁。
+    //   因此把 `.expect()` 改成 `exit(1)` 不破坏原有的锁安全保证。
+    let result = run_inner(conn).await;
 
     // 无论成功失败都尝试显式释放锁；释放失败不应掩盖原始错误，仅记录告警。
     if let Err(unlock_err) = conn

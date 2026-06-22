@@ -203,11 +203,26 @@ fn main() {
         if std::env::var("DATABASE_URL").is_err() {
             tracing::error!("DATABASE_URL environment variable not set. Make sure .env exists or the variable is exported.");
             eprintln!("ERROR: DATABASE_URL environment variable not set");
+            eprintln!("HINT: create a .env file with DATABASE_URL=postgres://user:pass@host:5432/dbname");
+            std::process::exit(1);
+        }
+
+        // 前置校验 DATABASE_URL 格式 + DB_POOL_SIZE，避免触发 DB_POOL LazyLock 闭包里
+        // 不可达的 .expect() panic——让用户可修复的配置错误走统一友好的 exit(1) 路径。
+        // 此处必须在任何 DB_POOL.get() 调用之前执行（即迁移之前）。
+        if let Err(e) = db::pool::validate_database_url() {
+            tracing::error!("{e}");
+            eprintln!("ERROR: {e}");
+            if e.starts_with("DB_POOL_SIZE") {
+                eprintln!("HINT: DB_POOL_SIZE must be a positive integer (e.g. 20).");
+            } else {
+                eprintln!("HINT: expected something like postgres://user:pass@host:5432/dbname");
+            }
             std::process::exit(1);
         }
 
         // 启动前执行数据库迁移。阻塞：完成前不监听端口。
-        // 失败直接 panic（expect），避免启动一个 schema 不一致的半残服务。
+        // 失败用 exit(1) 退出（不 panic），避免启动一个 schema 不一致的半残服务。
         // 多实例滚动发布时由咨询锁串行化，详见 src/db/migrate.rs。
         //
         // main() 是同步函数，这里用一个独立的多线程 runtime 驱动迁移的异步逻辑，
@@ -218,9 +233,32 @@ fn main() {
             .build()
             .expect("failed to build migration runtime");
         migrate_rt.block_on(async {
-            db::migrate::run()
-                .await
-                .expect("Database migration failed on startup");
+            tracing::info!("running database migrations");
+
+            // 启动期用长重试窗口拿连接：DB 可能还在初始化（docker-compose 无 healthcheck、
+            // 本机忘启 Postgres 等）。窗口由 MIGRATE_STARTUP_TIMEOUT_SECS 控制，默认 30s。
+            let mut conn = match db::pool::get_conn_for_startup().await {
+                Ok(conn) => conn,
+                Err(e) => {
+                    let secs = std::env::var("MIGRATE_STARTUP_TIMEOUT_SECS")
+                        .ok()
+                        .and_then(|s| s.parse::<u64>().ok())
+                        .unwrap_or(30);
+                    tracing::error!("could not connect to database within {secs}s startup window: {e}");
+                    eprintln!("ERROR: could not connect to database within {secs}s startup window: {e}");
+                    eprintln!("HINT: is PostgreSQL running and reachable at the configured DATABASE_URL?");
+                    eprintln!("HINT: raise MIGRATE_STARTUP_TIMEOUT_SECS if the DB needs longer to start.");
+                    std::process::exit(1);
+                }
+            };
+
+            // 连接拿到后再执行迁移主体（咨询锁 + 建表 + 应用迁移）。
+            if let Err(e) = db::migrate::run_on_conn(&mut conn).await {
+                tracing::error!("database migration failed: {e}");
+                eprintln!("ERROR: database migration failed: {e}");
+                eprintln!("HINT: check the logs above; verify DATABASE_URL and that PostgreSQL is healthy.");
+                std::process::exit(1);
+            }
         });
         // 迁移 runtime 用完即弃，显式 drop 以在 serve() 前释放其线程资源。
         drop(migrate_rt);
