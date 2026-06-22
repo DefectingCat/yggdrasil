@@ -68,6 +68,7 @@ export class UploadCoordinator {
     if (!entry) return false
     this.removeNodeByUploadId(uploadId)
     URL.revokeObjectURL(entry.blobUrl)
+    this.notifyRust({ kind: 'removed', uploadId, fileName: entry.fileName })
     this.pending.delete(uploadId)
     return true
   }
@@ -87,12 +88,14 @@ export class UploadCoordinator {
       })
       URL.revokeObjectURL(entry.blobUrl)
       this.pending.delete(uploadId)
+      this.notifyRust({ kind: 'success', uploadId, fileName: entry.fileName })
     } catch (err) {
       const msg = this.extractErrorMessage(err)
       this.updateNodeAttrs(uploadId, {
         'data-upload-state': 'error',
         'data-error-msg': msg,
       })
+      this.notifyRust({ kind: 'error', uploadId, fileName: entry.fileName, errorMsg: msg })
     }
   }
 
@@ -151,6 +154,29 @@ export class UploadCoordinator {
   private extractErrorMessage(err: unknown): string {
     if (err instanceof Error) return err.message
     return String(err)
+  }
+
+  /**
+   * 追加事件到 window.__tiptap_uploads.events，并重算 counts。
+   * Rust 侧 500ms 轮询消费 events 并读取 counts。
+   */
+  private notifyRust(event: Omit<UploadEvent, 'ts'>): void {
+    const w = window as unknown as { __tiptap_uploads?: { events: UploadEvent[]; counts: { uploading: number; error: number } } }
+    if (!w.__tiptap_uploads) {
+      w.__tiptap_uploads = { events: [], counts: { uploading: 0, error: 0 } }
+    }
+    w.__tiptap_uploads.events.push({ ...event, ts: Date.now() })
+
+    // 重算 counts：遍历文档统计当前 uploading/error 占位符
+    let uploading = 0
+    let error = 0
+    this.editor.state.doc.descendants((node) => {
+      const state = node.attrs['data-upload-state']
+      if (state === 'uploading') uploading++
+      else if (state === 'error') error++
+      return true
+    })
+    w.__tiptap_uploads.counts = { uploading, error }
   }
 
   /** pending Map 查询（供内部/测试）。 */
