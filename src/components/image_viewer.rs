@@ -23,6 +23,7 @@ use dioxus::prelude::*;
 pub fn ImageViewer(
     src: String,
     #[props(default = "?w=800".to_string())] thumb_params: String,
+    #[props(default = "?w=20".to_string())] placeholder_params: String,
     #[props(default = "图片".to_string())] alt: String,
     #[props(default = false)] lazy_load: bool,
 ) -> Element {
@@ -65,8 +66,35 @@ pub fn ImageViewer(
         });
     }
 
-    // 拼接缩略图 URL：保留原 URL 的 query 参数并追加 thumb_params
-    let thumb_src = if src.contains('?') {
+    // 计算 aspect-ratio：SSR 时读图片真实尺寸。WASM 端不读（--ar 已在 SSR 写入 HTML）。
+    // 非 /uploads/ 的外链图或读不到尺寸时不设 --ar。
+    let ar_style = {
+        let mut s = String::new();
+        #[cfg(feature = "server")]
+        {
+            if let Some(rel) = src
+                .strip_prefix("/uploads/")
+                .map(|p| p.split('?').next().unwrap_or(p))
+            {
+                if let Some((w, h)) = crate::api::image::get_image_dimensions(rel) {
+                    s = format!("--ar:{}:{};", w, h);
+                }
+            }
+        }
+        s
+    };
+
+    // 拼接占位图 URL 和高清图 URL
+    let placeholder_src = if src.contains('?') {
+        format!(
+            "{}&{}",
+            src.split('?').next().unwrap_or(&src),
+            placeholder_params.trim_start_matches('?')
+        )
+    } else {
+        format!("{}{}", src, placeholder_params)
+    };
+    let full_src = if src.contains('?') {
         format!(
             "{}&{}",
             src.split('?').next().unwrap_or(&src),
@@ -77,13 +105,22 @@ pub fn ImageViewer(
     };
 
     rsx! {
-        // 缩略图
-        img {
-            class: "cursor-pointer transition-opacity hover:opacity-90",
-            src: "{thumb_src}",
-            alt: "{alt}",
-            loading: if lazy_load { "lazy" } else { "eager" },
+        // blur-up 双层：底层占位图 + 上层高清图（data-src 由前端 JS 懒加载）
+        span {
+            class: "blur-img",
+            style: "{ar_style}",
             onclick: move |_| is_open.set(true),
+            img {
+                class: "blur-img-placeholder",
+                src: "{placeholder_src}",
+                alt: "{alt}",
+                loading: if lazy_load { "lazy" } else { "eager" },
+            }
+            img {
+                class: "blur-img-full",
+                "data-src": "{full_src}",
+                alt: "{alt}",
+            }
         }
 
         // 全屏灯箱
