@@ -18,6 +18,21 @@ use crate::components::write_skeleton::WriteSkeleton;
 use crate::models::post::Post;
 use crate::router::Route;
 
+/// 当前编辑器内进行中的上传计数（来自轮询 window.__tiptap_uploads.counts）。
+#[derive(Clone, Copy, Default)]
+struct UploadsInFlight {
+    uploading: u32,
+    error: u32,
+}
+
+/// 顶部堆叠的上传失败提示条目。
+#[derive(Clone, PartialEq)]
+struct UploadErrorEntry {
+    id: String,
+    file_name: String,
+    message: String,
+}
+
 /// 新建文章页面组件。
 ///
 /// 内部委托给 `write_editor`，以 `None` 表示新建模式。
@@ -67,6 +82,10 @@ fn write_editor(post_id: Option<i32>) -> Element {
 
     // 编辑模式：用于暂存从服务端加载的文章数据。
     let mut edit_post = use_signal(|| None::<Post>);
+
+    // 上传状态：当前进行中计数（保存拦截）+ 顶部失败提示堆叠（用户手动关闭）
+    let mut uploads_in_flight = use_signal(UploadsInFlight::default);
+    let mut upload_errors: Signal<Vec<UploadErrorEntry>> = use_signal(Vec::new);
 
     // 编辑模式：文章数据加载完成后，将字段回填到表单信号。
     use_effect(move || {
