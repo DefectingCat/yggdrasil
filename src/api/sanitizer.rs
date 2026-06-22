@@ -344,7 +344,8 @@ pub fn clean_html(input: &str) -> String {
         ],
         extra_tag_attrs: vec![
             ("a", vec!["class", "aria-hidden", "aria-label"]),
-            ("span", vec!["class"]),
+            ("img", vec!["data-src", "class", "style"]),
+            ("span", vec!["class", "style"]),
             ("h1", vec!["id", "class"]),
             ("h2", vec!["id", "class"]),
             ("h3", vec!["id", "class"]),
@@ -388,6 +389,15 @@ pub fn clean_comment_html(input: &str) -> String {
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clean_html_allows_blur_img_attributes() {
+        let input = r#"<span class="blur-img" style="--ar:16/9"><img class="blur-img-placeholder" src="/uploads/x.webp?w=20" alt="t"><img class="blur-img-full" data-src="/uploads/x.webp?w=800" alt="t"></span>"#;
+        let result = clean_html(input);
+        assert!(result.contains("data-src"), "data-src should be allowed");
+        assert!(result.contains("blur-img-placeholder"), "class should be allowed");
+        assert!(result.contains("--ar"), "style should be allowed");
+    }
 
     #[test]
     fn safe_tags_preserved() {
