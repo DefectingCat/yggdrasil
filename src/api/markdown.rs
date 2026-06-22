@@ -232,8 +232,9 @@ fn wrap_images_with_blur(html: &str) -> String {
                 .unwrap_or("");
 
             // 查 dimensions，算 aspect-ratio
+            // 注意：CSS aspect-ratio 用斜杠分隔（width / height），不是冒号
             let ar_style = crate::api::image::get_image_dimensions(rel_path)
-                .map(|(w, h)| format!(" style=\"--ar:{}:{};\"", w, h))
+                .map(|(w, h)| format!(" style=\"--ar:{} / {};\"", w, h))
                 .unwrap_or_default();
 
             // alt 转义（src/alt 来自 markdown，pulldown-cmark 已转义过，这里直接用）

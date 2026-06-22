@@ -77,7 +77,8 @@ pub fn ImageViewer(
                 .map(|p| p.split('?').next().unwrap_or(p))
             {
                 if let Some((w, h)) = crate::api::image::get_image_dimensions(rel) {
-                    s = format!("--ar:{}:{};", w, h);
+                    // 注意：CSS aspect-ratio 用斜杠分隔（width / height），不是冒号
+                    s = format!("--ar:{} / {};", w, h);
                 }
             }
         }
