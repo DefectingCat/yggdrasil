@@ -104,7 +104,7 @@ pub fn CommentItem(comment: PublicComment, post_id: i32) -> Element {
                     }
 
                     if is_replying {
-                        CommentForm { post_id, parent_id: Some(comment.id) }
+                        CommentForm { post_id, parent_id: Some(comment.id), parent_indent: Some(indent) }
                     }
                 }
             }

@@ -158,6 +158,19 @@ pub fn validate_comment_content(content: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// 校验蜜罐字段：正常用户蜜罐为空，机器人可能填入任意内容。
+///
+/// 为空视为通过；一旦被填入内容即判定为机器人提交并拒绝。
+/// 这是禁用 JS / 无视前端校验的机器人也能在服务端被拦下的防线。
+#[cfg(feature = "server")]
+pub fn validate_comment_honeypot(value: &str) -> Result<(), String> {
+    if value.is_empty() {
+        Ok(())
+    } else {
+        Err("评论提交异常".to_string())
+    }
+}
+
 /// 计算评论内容哈希，用于检测短时间内的重复提交。
 #[cfg(feature = "server")]
 pub fn compute_content_hash(
@@ -399,5 +412,16 @@ mod tests {
         let h = compute_content_hash(1, None, "Alice", "Hello");
         assert_eq!(h.len(), 64);
         assert!(h.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn validate_comment_honeypot_empty_is_ok() {
+        assert!(validate_comment_honeypot("").is_ok());
+    }
+
+    #[test]
+    fn validate_comment_honeypot_filled_is_err() {
+        assert!(validate_comment_honeypot("anything").is_err());
+        assert!(validate_comment_honeypot(" ").is_err());
     }
 }

@@ -21,12 +21,13 @@ pub async fn create_comment(
     author_email: String,
     author_url: Option<String>,
     content_md: String,
+    honeypot: String,
 ) -> Result<CommentResponse, ServerFnError> {
     #[cfg(feature = "server")]
     {
         use crate::api::comments::helpers::{
             compute_content_hash, validate_comment_content, validate_comment_email,
-            validate_comment_name, validate_comment_url,
+            validate_comment_honeypot, validate_comment_name, validate_comment_url,
         };
         use crate::api::error::AppError;
         use crate::cache;
@@ -46,6 +47,18 @@ pub async fn create_comment(
                     depth: None,
                 });
             }
+        }
+
+        // 蜜罐字段二次校验：禁用 JS 的机器人可能绕过前端拦截，这里作为服务端防线。
+        if let Err(e) = validate_comment_honeypot(&honeypot) {
+            return Ok(CommentResponse {
+                success: false,
+                message: e,
+                error_code: Some("spam_detected".into()),
+                comment_id: None,
+                avatar_url: None,
+                depth: None,
+            });
         }
 
         // 依次校验昵称、邮箱、网址与评论内容。

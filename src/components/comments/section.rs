@@ -98,7 +98,7 @@ pub fn CommentSection(post_id: i32) -> Element {
                         "评论区 ({total_count})"
                     }
 
-                    CommentForm { post_id, parent_id: None }
+                    CommentForm { post_id, parent_id: None, parent_indent: None }
 
                     if !has_any {
                         p { class: "text-paper-tertiary text-center py-8",

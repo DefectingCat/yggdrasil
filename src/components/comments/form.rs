@@ -6,21 +6,32 @@ use dioxus::prelude::*;
 
 use crate::api::comments::create_comment;
 use crate::components::comments::section::CommentContext;
-use crate::components::forms::{AlertBox, BUTTON_PRIMARY_CLASS, INPUT_CLASS};
+use crate::components::forms::{AlertBox, INPUT_CLASS};
 use crate::hooks::comment_storage::{self, PendingComment};
+
+/// 评论提交按钮样式：去掉全宽，改为内联宽度并右对齐。
+///
+/// 与 `BUTTON_PRIMARY_CLASS` 视觉一致，但不含 `w-full`，并把 `px-4` 加宽为 `px-6`，
+/// 使按钮宽度跟随文字、更适合文章页内联场景。
+const COMMENT_SUBMIT_CLASS: &str = "py-2.5 px-6 bg-paper-accent text-white font-medium rounded-full hover:brightness-110 active:scale-[0.98] transition-all duration-200 cursor-pointer";
 
 /// 评论表单组件，用于顶层评论或回复评论。
 ///
 /// Props：
 /// - `post_id`：所属文章 ID
 /// - `parent_id`：回复目标评论 ID，`None` 表示顶层评论
+/// - `parent_indent`：回复时父评论的缩进像素值，用于用负 margin 把表单拉回内容区左边缘
 ///
 /// 关键事件：
 /// - 挂载时从本地存储恢复上次填写的作者信息
 /// - 提交时校验必填项与蜜罐字段
 /// - 提交成功后清空内容、保存作者信息、添加待审核评论并触发列表刷新
 #[component]
-pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
+pub fn CommentForm(
+    post_id: i32,
+    parent_id: Option<i64>,
+    parent_indent: Option<i32>,
+) -> Element {
     let ctx: CommentContext = use_context();
     let mut active_reply = ctx.active_reply;
     let mut refresh_trigger = ctx.refresh_trigger;
@@ -57,9 +68,22 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
 
     let is_reply = parent_id.is_some();
 
+    // 用于区分顶层表单与多个回复表单的 id 后缀，保证页面内 label/for 关联唯一。
+    let id_suffix = match parent_id {
+        Some(pid) => pid.to_string(),
+        None => "root".to_string(),
+    };
+
+    // 回复表单抵消父评论缩进，让表单回到内容区左边缘，避免深层回复时被越挤越右。
+    let negative_margin = match (is_reply, parent_indent) {
+        (true, Some(px)) if px > 0 => format!("margin-left: -{px}px;"),
+        _ => String::new(),
+    };
+
     rsx! {
         div {
             class: if is_reply { "mt-3 pt-3 border-t border-gray-100 dark:border-[#333]" } else { "" },
+            style: "{negative_margin}",
             role: "form",
             aria_label: if is_reply { "回复评论" } else { "发表评论" },
 
@@ -72,10 +96,13 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
             div { class: "space-y-3",
                 div { class: "grid grid-cols-1 sm:grid-cols-2 gap-3",
                     div {
-                        label { class: "block text-sm font-medium text-paper-secondary mb-1",
+                        label {
+                            r#for: "comment-name-{id_suffix}",
+                            class: "block text-sm font-medium text-paper-secondary mb-1",
                             "昵称 *"
                         }
                         input {
+                            id: "comment-name-{id_suffix}",
                             class: INPUT_CLASS,
                             r#type: "text",
                             placeholder: "你的昵称",
@@ -85,10 +112,13 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
                         }
                     }
                     div {
-                        label { class: "block text-sm font-medium text-paper-secondary mb-1",
+                        label {
+                            r#for: "comment-email-{id_suffix}",
+                            class: "block text-sm font-medium text-paper-secondary mb-1",
                             "邮箱 *"
                         }
                         input {
+                            id: "comment-email-{id_suffix}",
                             class: INPUT_CLASS,
                             r#type: "email",
                             placeholder: "your@email.com",
@@ -99,10 +129,13 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
                     }
                 }
                 div {
-                    label { class: "block text-sm font-medium text-paper-secondary mb-1",
+                    label {
+                        r#for: "comment-url-{id_suffix}",
+                        class: "block text-sm font-medium text-paper-secondary mb-1",
                         "网站"
                     }
                     input {
+                        id: "comment-url-{id_suffix}",
                         class: INPUT_CLASS,
                         r#type: "url",
                         placeholder: "https://example.com（可选）",
@@ -112,11 +145,19 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
                     }
                 }
 
-                textarea {
-                    class: "{INPUT_CLASS} min-h-[100px] resize-y",
-                    value: "{content_md}",
-                    disabled: submitting(),
-                    oninput: move |e| content_md.set(e.value()),
+                div {
+                    label {
+                        r#for: "comment-content-{id_suffix}",
+                        class: "block text-sm font-medium text-paper-secondary mb-1",
+                        "内容 *"
+                    }
+                    textarea {
+                        id: "comment-content-{id_suffix}",
+                        class: "{INPUT_CLASS} min-h-[100px] resize-y",
+                        value: "{content_md}",
+                        disabled: submitting(),
+                        oninput: move |e| content_md.set(e.value()),
+                    }
                 }
 
                 p { class: "text-xs text-paper-tertiary",
@@ -132,100 +173,103 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>) -> Element {
                     oninput: move |e| honeypot.set(e.value()),
                 }
 
-                button {
-                    class: BUTTON_PRIMARY_CLASS,
-                    disabled: submitting(),
-                    onclick: move |_| {
-                        if submitting() {
-                            return;
-                        }
+                div { class: "flex justify-end",
+                    button {
+                        class: COMMENT_SUBMIT_CLASS,
+                        disabled: submitting(),
+                        onclick: move |_| {
+                            if submitting() {
+                                return;
+                            }
 
-                        let post_id = post_id;
-                        let parent_id = parent_id;
-                        let name = author_name();
-                        let email = author_email();
-                        let url_val = author_url();
-                        let content = content_md();
-                        let hp = honeypot();
+                            let post_id = post_id;
+                            let parent_id = parent_id;
+                            let name = author_name();
+                            let email = author_email();
+                            let url_val = author_url();
+                            let content = content_md();
+                            let hp = honeypot();
 
-                        // 蜜罐被填充则直接丢弃
-                        if !hp.is_empty() {
-                            return;
-                        }
+                            // 蜜罐被填充则直接丢弃
+                            if !hp.is_empty() {
+                                return;
+                            }
 
-                        if name.trim().is_empty() || email.trim().is_empty() || content.trim().is_empty() {
-                            message.set(Some(("请填写所有必填项".to_string(), "error")));
-                            return;
-                        }
+                            if name.trim().is_empty() || email.trim().is_empty() || content.trim().is_empty() {
+                                message.set(Some(("请填写所有必填项".to_string(), "error")));
+                                return;
+                            }
 
-                        submitting.set(true);
-                        message.set(None);
+                            submitting.set(true);
+                            message.set(None);
 
-                        spawn(async move {
-                            let result = create_comment(
-                                post_id,
-                                parent_id,
-                                name.clone(),
-                                email.clone(),
-                                if url_val.trim().is_empty() { None } else { Some(url_val.clone()) },
-                                content.clone(),
-                            ).await;
+                            spawn(async move {
+                                let result = create_comment(
+                                    post_id,
+                                    parent_id,
+                                    name.clone(),
+                                    email.clone(),
+                                    if url_val.trim().is_empty() { None } else { Some(url_val.clone()) },
+                                    content.clone(),
+                                    hp.clone(),
+                                ).await;
 
-                            submitting.set(false);
+                                submitting.set(false);
 
-                            match result {
-                                Ok(resp) => {
-                                    if resp.success {
-                                        comment_storage::save_author(
-                                            &name,
-                                            &email,
-                                            &url_val,
-                                        );
+                                match result {
+                                    Ok(resp) => {
+                                        if resp.success {
+                                            comment_storage::save_author(
+                                                &name,
+                                                &email,
+                                                &url_val,
+                                            );
 
-                                        if let Some(comment_id) = resp.comment_id {
-                                            let avatar_url = resp.avatar_url.unwrap_or_default();
-                                            let depth = resp.depth.unwrap_or(0);
+                                            if let Some(comment_id) = resp.comment_id {
+                                                let avatar_url = resp.avatar_url.unwrap_or_default();
+                                                let depth = resp.depth.unwrap_or(0);
 
-                                            let now = chrono::Utc::now().to_rfc3339();
-                                            let pending = PendingComment {
-                                                id: comment_id,
-                                                parent_id,
-                                                depth,
-                                                author_name: name.clone(),
-                                                author_url: if url_val.trim().is_empty() { None } else { Some(url_val) },
-                                                avatar_url,
-                                                content_md: content,
-                                                created_at: now.clone(),
-                                                stored_at: now,
-                                            };
+                                                let now = chrono::Utc::now().to_rfc3339();
+                                                let pending = PendingComment {
+                                                    id: comment_id,
+                                                    parent_id,
+                                                    depth,
+                                                    author_name: name.clone(),
+                                                    author_url: if url_val.trim().is_empty() { None } else { Some(url_val) },
+                                                    avatar_url,
+                                                    content_md: content,
+                                                    created_at: now.clone(),
+                                                    stored_at: now,
+                                                };
 
-                                            comment_storage::save_pending_comment(post_id, pending.clone());
-                                            pending_comments.write().push(pending);
+                                                comment_storage::save_pending_comment(post_id, pending.clone());
+                                                pending_comments.write().push(pending);
+                                            }
+
+                                            content_md.set(String::new());
+                                            message.set(Some((resp.message, "success")));
+                                            if parent_id.is_some() {
+                                                active_reply.set(None);
+                                            }
+                                            refresh_trigger.set(!refresh_trigger());
+                                        } else {
+                                            message.set(Some((resp.message, "error")));
                                         }
-
-                                        content_md.set(String::new());
-                                        message.set(Some((resp.message, "success")));
-                                        if parent_id.is_some() {
-                                            active_reply.set(None);
-                                        }
-                                        refresh_trigger.set(!refresh_trigger());
-                                    } else {
-                                        message.set(Some((resp.message, "error")));
+                                    }
+                                    Err(_) => {
+                                        message.set(Some(("提交失败，请稍后重试".to_string(), "error")));
                                     }
                                 }
-                                Err(_) => {
-                                    message.set(Some(("提交失败，请稍后重试".to_string(), "error")));
-                                }
-                            }
-                        });
-                    },
+                            });
+                        },
 
-                    if submitting() {
-                        "提交中…"
-                    } else if is_reply {
-                        "回复"
-                    } else {
-                        "发表评论"
+                        if submitting() {
+                            "提交中…"
+                        } else if is_reply {
+                            "回复"
+                        } else {
+                            "发表评论"
+                        }
                     }
                 }
             }
