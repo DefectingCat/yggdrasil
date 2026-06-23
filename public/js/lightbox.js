@@ -11,8 +11,17 @@
   }
 
   // 读取元素当前在视口里的 rect（用于飞行起点/终点）。
+  // 统一映射成 {x,y,w,h}：getBoundingClientRect 返回的 DOMRect 用
+  // left/top/width/height，而 fitCentered/transformFor 用 x/y/w/h，
+  // 这里转成一致格式，避免 .w 读到 undefined。
   function rectOf(el) {
-    return el.getBoundingClientRect();
+    var r = el.getBoundingClientRect();
+    return {
+      x: r.left,
+      y: r.top,
+      w: r.width,
+      h: r.height,
+    };
   }
 
   // 计算图片在视口居中、contain 适配后的目标 rect。
@@ -31,11 +40,14 @@
     };
   }
 
-  // 把目标 rect 转成 transform 字符串（基于 naturalW/H 做缩放）。
+  // 把目标 rect 转成 transform 字符串。
+  // baseW/baseH 是 img 元素的布局尺寸（=居中目标尺寸），scale 相对它缩放。
   // transform-origin 为 top left（见 CSS），translate 到 rect 左上角后 scale。
-  function transformFor(rect, naturalW, naturalH) {
-    var sx = rect.w / naturalW;
-    var sy = rect.h / naturalH;
+  // - 居中态：scale=1（base 就是居中尺寸）
+  // - originRect 态：scale = originRect.w / base.w（缩小）
+  function transformFor(rect, baseW, baseH) {
+    var sx = baseW > 0 ? rect.w / baseW : 1;
+    var sy = baseH > 0 ? rect.h / baseH : 1;
     return (
       "translate(" +
       rect.x +
@@ -67,9 +79,21 @@
     var fullSrc = fullImg.getAttribute("data-src");
     if (!fullSrc) return;
 
-    fullImg.addEventListener("load", function () {
-      this.classList.add("is-loaded");
-    });
+    var onFullLoaded = function () {
+      // 给容器加 is-loaded，CSS 据此显式隐藏 placeholder。
+      // 直接把 full 层 opacity 设为 1（清掉 transition），不依赖 CSS 的 opacity
+      // 过渡：合成层重绘时机不稳定，可能导致 full 层卡在 opacity:0，直到一次
+      // 强制重排才更新。
+      container.classList.add("is-loaded");
+      fullImg.style.transition = "none";
+      fullImg.style.opacity = "1";
+    };
+    fullImg.addEventListener("load", onFullLoaded);
+    // 缓存兜底：若设 src 时图片已在缓存（load 几乎立即触发，可能早于监听注册），
+    // 用 complete 补一次。注意无 src 的 img complete 也为 true，故先判 src。
+    if (fullImg.getAttribute("src") && fullImg.complete) {
+      onFullLoaded();
+    }
 
     if ("IntersectionObserver" in window) {
       var io = new IntersectionObserver(
@@ -141,6 +165,10 @@
     var img = document.createElement("img");
     img.className = "lightbox-img";
     img.setAttribute("alt", altText);
+    // 加载前先占 0 尺寸，避免原图（可能数千 px）在加载期间撑大文档
+    // 可滚动区、触发非预期的 scroll 事件。start() 拿到 natural 尺寸后再设真实值。
+    img.style.width = "0px";
+    img.style.height = "0px";
 
     var caption = document.createElement("figcaption");
     caption.className = "lightbox-caption";
@@ -211,11 +239,25 @@
       var naturalH = img.naturalHeight || img.clientHeight || 1;
       var originRect = rectOf(originNode);
 
+      // 基准 = originRect（文章里图片的实际尺寸）。
+      // img 的布局尺寸固定为 originRect，transform 的 scale 相对它缩放：
+      // 首帧（文章位置）scale=1，居中态 scale=target.w/originRect.w。
+      // 这样无论 target 比 originRect 大或小，动画都是「从文章图原样连续缩放」，
+      // 视觉上是原地展开，不会像「从外面飞来」。灯箱图尺寸恒为视口最大（fitCentered）。
+      var target = fitCentered(naturalW, naturalH, vw, vh);
+      var baseW = originRect.w;
+      var baseH = originRect.h;
+      // 存基准与目标，供关闭/滚动关闭复用同一对（保证 scale 连续）。
+      state.target = target;
+      state.baseW = baseW;
+      state.baseH = baseH;
+      img.style.width = baseW + "px";
+      img.style.height = baseH + "px";
+
       // reduced-motion：直接淡入居中
       if (state.reduced) {
         img.style.opacity = "0";
-        var target = fitCentered(naturalW, naturalH, vw, vh);
-        img.style.transform = transformFor(target, naturalW, naturalH);
+        img.style.transform = transformFor(target, baseW, baseH);
         img.style.left = "0";
         img.style.top = "0";
         overlay.style.opacity = "0";
@@ -230,24 +272,29 @@
         return;
       }
 
-      // 首帧：放到 originRect 位置与尺寸，透明
+      // 首帧：文章位置 + 原尺寸（scale=1），透明，且关闭 transition
       img.style.transition = "none";
       img.style.left = "0";
       img.style.top = "0";
-      img.style.transform = transformFor(originRect, naturalW, naturalH);
+      img.style.transform = transformFor(originRect, baseW, baseH);
       img.style.opacity = "0";
       overlay.style.opacity = "0";
+      // 强制 reflow，确保首帧的 transform 已提交到渲染层。
+      // 否则单层 rAF 里浏览器可能合并首帧与目标帧，动画从错误位置起跳。
+      void img.offsetHeight;
 
-      // 下一帧：飞到居中
+      // double-rAF：第一帧绘制首帧（无动画），第二帧才启动 transition 到居中。
       requestAnimationFrame(function () {
         if (!state) return;
-        var tgt = fitCentered(naturalW, naturalH, vw, vh);
-        img.style.transition =
-          "transform 250ms ease-out, opacity 250ms ease-out";
-        overlay.style.transition = "opacity 250ms ease-out";
-        img.style.transform = transformFor(tgt, naturalW, naturalH);
-        img.style.opacity = "1";
-        overlay.style.opacity = "1";
+        requestAnimationFrame(function () {
+          if (!state) return;
+          img.style.transition =
+            "transform 250ms ease-out, opacity 250ms ease-out";
+          overlay.style.transition = "opacity 250ms ease-out";
+          img.style.transform = transformFor(target, baseW, baseH);
+          img.style.opacity = "1";
+          overlay.style.opacity = "1";
+        });
       });
     };
 
@@ -266,8 +313,9 @@
 
     var s = state;
 
-    var naturalW = s.img.naturalWidth || s.img.clientWidth || 1;
-    var naturalH = s.img.naturalHeight || s.img.clientHeight || 1;
+    // 基准 = originRect 尺寸（与打开时一致），scale 相对它缩放。
+    var baseW = s.baseW || (s.target ? s.target.w : 1);
+    var baseH = s.baseH || (s.target ? s.target.h : 1);
     var originRect = rectOf(s.originNode); // 实时读，处理期间滚动过的情况
 
     if (s.reduced || immediate) {
@@ -275,11 +323,11 @@
       return;
     }
 
-    // 飞回 originRect
+    // 飞回 originRect：scale 从 1 缩到 originRect.w/baseW
     s.img.style.transition =
       "transform 250ms ease-out, opacity 250ms ease-out";
     s.overlay.style.transition = "opacity 250ms ease-out";
-    s.img.style.transform = transformFor(originRect, naturalW, naturalH);
+    s.img.style.transform = transformFor(originRect, baseW, baseH);
     s.img.style.opacity = "0";
     s.overlay.style.opacity = "0";
 
@@ -287,8 +335,8 @@
       removeOverlay();
     };
     // 250ms 兜底，避免 transitionend 不触发
-    setTimeout(done, 280);
-    s.img.addEventListener("transitionend", done, { once: true });
+    var timer = setTimeout(done, 280);
+    s.img.addEventListener("transitionend", function () { clearTimeout(timer); done(); }, { once: true });
   }
 
   function removeOverlay() {
@@ -380,15 +428,10 @@
         return;
       }
       var progress = Math.min(dy / 120, 1);
-      var naturalW = st.img.naturalWidth || st.img.clientWidth || 1;
-      var naturalH = st.img.naturalHeight || st.img.clientHeight || 1;
+      var target = st.target;
+      var baseW = st.baseW || (target ? target.w : 1);
+      var baseH = st.baseH || (target ? target.h : 1);
       var originRect = rectOf(st.originNode);
-      var target = fitCentered(
-        naturalW,
-        naturalH,
-        window.innerWidth,
-        window.innerHeight
-      );
       // 在 originRect 与居中 target 之间按 progress 线性插值
       var cur = {
         x: target.x + (originRect.x - target.x) * progress,
@@ -397,7 +440,7 @@
         h: target.h + (originRect.h - target.h) * progress,
       };
       st.img.style.transition = "none";
-      st.img.style.transform = transformFor(cur, naturalW, naturalH);
+      st.img.style.transform = transformFor(cur, baseW, baseH);
       st.img.style.opacity = String(1 - progress);
       st.overlay.style.opacity = String(1 - progress);
       if (progress >= 1) {

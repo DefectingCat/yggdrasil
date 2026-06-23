@@ -531,12 +531,17 @@
     position: fixed;
     inset: 0;
     z-index: 50;
+    /* overflow:hidden 裁剪超大的 absolute img，防止原图（可能数千 px）
+       撑大文档可滚动区，否则会触发非预期的 scroll 事件。 */
+    overflow: hidden;
     background: rgba(0, 0, 0, 0.92);
     opacity: 1;
   }
 
   /* 灯箱图片：绝对定位，尺寸/位置由 JS 的 transform 控制。
-     transform-origin 为 top left，配合 translate+scale 实现原地缩放。 */
+     transform-origin 为 top left，配合 translate+scale 实现原地缩放。
+     显式 width/height 由 JS 设置为原图尺寸，确保布局尺寸确定，
+     transform 只做视觉缩放，不改变占位。 */
   .lightbox-img {
     position: absolute;
     left: 0;
@@ -722,9 +727,13 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* 重置 .md-content img 的 margin/max-width/height，避免把 absolute 图层推偏 */
+  margin: 0;
+  max-width: none;
   /* 20px 占位图放大后模糊，scale 遮边缘 */
   filter: blur(20px) saturate(1.2);
   transform: scale(1.1);
+  transition: opacity 0.4s ease;
 }
 .blur-img-full {
   position: absolute;
@@ -732,12 +741,24 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* 重置 .md-content img 的 margin/max-width/height，避免把 absolute 图层推偏 */
+  margin: 0;
+  max-width: none;
   opacity: 0;
-  transition: opacity 0.4s ease;
   z-index: 1;
 }
-.blur-img-full.is-loaded {
+/* full 加载完成后由 JS 直接设 opacity:1（不依赖 CSS transition，
+   避免合成层重绘时机导致 opacity 卡在 0）。 */
+.blur-img-full.is-loaded,
+.blur-img.is-loaded .blur-img-full {
   opacity: 1;
+}
+/* 容器标记 loaded 后：显式隐藏占位图 + 去掉灰底，避免重绘时机导致残留/灰边 */
+.blur-img.is-loaded .blur-img-placeholder {
+  opacity: 0;
+}
+.blur-img.is-loaded {
+  background: transparent;
 }
 
 /* 暗色模式灰底 */
