@@ -4,6 +4,9 @@
 //! 编辑器通过 [`crate::tiptap_bridge`] 的 wasm-bindgen 绑定在 WASM 前端初始化，
 //! 并与 `window.TiptapEditor` 实例交互，实现 Markdown 内容回填、图片上传与组件卸载时的清理。
 
+// prelude 在 WASM 构建里直接使用（use_signal/Signal/Element 等）；
+// server 构建里 #[component] 宏会重新导出这些符号导致 native 报 unused，故 allow。
+#[allow(unused_imports)]
 use dioxus::prelude::*;
 
 // 仅在 WASM 前端使用的类型转换与文章 API。
@@ -20,9 +23,6 @@ use crate::models::post::Post;
 use crate::router::Route;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::closure::Closure;
-
-#[allow(unused_imports)]
-use dioxus::prelude::*;
 
 /// 新建文章页面组件。
 ///
@@ -46,10 +46,10 @@ pub fn WriteEdit(id: i32) -> Element {
 ///
 /// 负责：
 /// - 编辑模式下通过 server function 拉取文章数据；
-/// - 在 WASM 前端初始化 Tiptap 富文本编辑器并轮询就绪状态；
+/// - 在 WASM 前端通过 tiptap_bridge 的 closure 回调初始化 Tiptap 富文本编辑器；
 /// - 编辑模式下将 Markdown 内容回填到编辑器；
 /// - 提交时读取编辑器 Markdown、校验并调用 create_post / update_post；
-/// - 组件卸载时销毁 Tiptap 实例并清理全局状态。
+/// - 组件卸载时销毁 Tiptap 实例（EditorHandle::drop 自动 destroy + 释放 closure）。
 #[allow(unused_mut, unused_variables)]
 fn write_editor(post_id: Option<i32>) -> Element {
     let is_edit = post_id.is_some();

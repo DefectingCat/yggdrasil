@@ -281,8 +281,13 @@ pub mod wasm {
                     serde_json::from_str(&text).unwrap_or(serde_json::Value::Null);
 
                 if data["success"].as_bool() == Some(true) {
-                    let url = data["url"].as_str().unwrap_or("").to_string();
-                    Ok(js_sys::JsString::from(url).into())
+                    let url = data["url"].as_str().unwrap_or("");
+                    if !url.is_empty() {
+                        Ok(js_sys::JsString::from(url).into())
+                    } else {
+                        // success=true 但 url 为空：服务端契约异常，按失败处理
+                        Err(js_sys::Error::new("上传成功但未返回图片地址").into())
+                    }
                 } else {
                     // 失败：优先用服务端中文 error，兜底用状态码
                     let msg = data["error"]

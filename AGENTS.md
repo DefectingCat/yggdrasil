@@ -122,7 +122,7 @@ Rich-text editor in `libs/tiptap-editor/`, built as an IIFE library exposing `wi
 
 - Output: `public/tiptap/`
 - `make build` runs `npm install && npx vite build` inside `libs/tiptap-editor`
-- `src/pages/admin/write.rs` initializes via `js_sys::eval`, polls `window.__tiptap_ready`
+- `src/pages/admin/write.rs` initializes via `src/tiptap_bridge.rs` (wasm-bindgen bindings): injects `Closure` callbacks (`onUpdate`/`onReady`/`onUploadEvent`/`onImageUpload`) into `TiptapEditor.create`, holds the instance + closures in `EditorHandle` (Drop calls `destroy()`). No `js_sys::eval`, no `window` globals, no polling.
 
 Do not edit `public/tiptap/` — they are build artifacts.
 
