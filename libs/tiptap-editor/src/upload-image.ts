@@ -1,5 +1,4 @@
 import { Image } from '@tiptap/extension-image'
-import { mergeAttributes } from '@tiptap/core'
 import type { Node as PMNode } from '@tiptap/pm/model'
 import type { UploadCoordinator } from './upload-coordinator'
 
@@ -41,8 +40,7 @@ class UploadImageNodeView {
 
     this.img = document.createElement('img')
     this.img.draggable = false
-    const merged = mergeAttributes(opts.HTMLAttributes)
-    Object.entries(merged).forEach(([k, v]) => {
+    Object.entries(opts.HTMLAttributes).forEach(([k, v]) => {
       if (v != null) this.img.setAttribute(k, String(v))
     })
     const src = this.node.attrs.src
