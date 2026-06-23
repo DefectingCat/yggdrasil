@@ -28,6 +28,9 @@ mod router;
 mod ssr_cache;
 mod tasks;
 mod theme;
+// tiptap_bridge 仅在 WASM 前端编译；封装与 TiptapEditor 的 wasm-bindgen 绑定。
+#[cfg(target_arch = "wasm32")]
+mod tiptap_bridge;
 mod utils;
 mod webp;
 
