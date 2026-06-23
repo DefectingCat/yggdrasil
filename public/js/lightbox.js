@@ -154,9 +154,28 @@
       counter.textContent = index + 1 + " / " + gallery.length;
     }
 
+    // 图集模式（>1 张）才加左右导航箭头；单张不显示。
+    var prevBtn = null;
+    var nextBtn = null;
+    if (!isSingle && gallery.length > 1) {
+      prevBtn = document.createElement("button");
+      prevBtn.className = "lightbox-nav lightbox-prev";
+      prevBtn.setAttribute("type", "button");
+      prevBtn.setAttribute("aria-label", "上一张");
+      prevBtn.textContent = "\u2039";
+
+      nextBtn = document.createElement("button");
+      nextBtn.className = "lightbox-nav lightbox-next";
+      nextBtn.setAttribute("type", "button");
+      nextBtn.setAttribute("aria-label", "下一张");
+      nextBtn.textContent = "\u203a";
+    }
+
     overlay.appendChild(img);
     overlay.appendChild(caption);
     overlay.appendChild(counter);
+    if (prevBtn) overlay.appendChild(prevBtn);
+    if (nextBtn) overlay.appendChild(nextBtn);
     document.body.appendChild(overlay);
 
     state = {
@@ -164,6 +183,8 @@
       img: img,
       caption: caption,
       counter: counter,
+      prevBtn: prevBtn,
+      nextBtn: nextBtn,
       originNode: originNode,
       gallery: gallery,
       index: index,
@@ -286,6 +307,54 @@
     }
   }
 
+  // ============ 图集切换 ============
+
+  // 图集切换：淡入淡出，不飞行。newIndex 循环（首尾衔接）。
+  function gotoIndex(newIndex) {
+    if (!state || state.isSingle) return;
+    var s = state;
+    if (!s.gallery || s.gallery.length === 0) return;
+    if (newIndex < 0) newIndex = s.gallery.length - 1;
+    if (newIndex >= s.gallery.length) newIndex = 0;
+    if (newIndex === s.index) return;
+
+    var newNode = s.gallery[newIndex];
+    var fullImg = newNode.querySelector(".blur-img-full");
+    if (!fullImg) return;
+    var origSrc = originalUrl(fullImg.getAttribute("data-src") || "");
+    var altText = fullImg.getAttribute("alt") || "";
+
+    // 淡出当前图
+    s.img.style.transition = "opacity 150ms ease-out";
+    s.img.style.opacity = "0";
+
+    // 150ms 后换图淡入
+    var swap = function () {
+      if (!state) return; // 切换中可能已关闭
+      var fade = function () {
+        if (!state) return;
+        s.img.style.transition = "opacity 150ms ease-out";
+        s.img.style.opacity = "1";
+      };
+      if (s.img.complete && s.img.naturalWidth) {
+        // 缓存命中，直接淡入
+        s.img.src = origSrc;
+        fade();
+      } else {
+        s.img.addEventListener("load", fade, { once: true });
+        s.img.src = origSrc;
+      }
+      s.caption.textContent = altText;
+      s.caption.style.display = altText ? "" : "none";
+      s.counter.textContent = newIndex + 1 + " / " + s.gallery.length;
+      // 更新 originNode 为新图，使后续关闭/滚动关闭飞回新图位置
+      s.originNode = newNode;
+      s.index = newIndex;
+      s.openScrollY = window.scrollY; // 重置滚动关闭基线
+    };
+    setTimeout(swap, 150);
+  }
+
   // ============ 交互绑定 ============
 
   function bindInteractions() {
@@ -339,14 +408,36 @@
     };
     window.addEventListener("scroll", s.scrollHandler, { passive: true });
 
-    // 键盘：Esc 关；图集 ←→ 在 Task 3 接入
+    // 键盘：Esc 关；图集模式 ←→ 切换
     s.keyHandler = function (ev) {
       if (!state) return;
       if (ev.key === "Escape") {
         closeLightbox(false);
+      } else if (!state.isSingle && state.gallery.length > 1) {
+        if (ev.key === "ArrowLeft") {
+          ev.preventDefault();
+          gotoIndex(state.index - 1);
+        } else if (ev.key === "ArrowRight") {
+          ev.preventDefault();
+          gotoIndex(state.index + 1);
+        }
       }
     };
     document.addEventListener("keydown", s.keyHandler);
+
+    // 图集导航箭头点击（stopPropagation 防止冒泡到 overlay 触发关闭）
+    if (s.prevBtn) {
+      s.prevBtn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        if (state) gotoIndex(state.index - 1);
+      });
+    }
+    if (s.nextBtn) {
+      s.nextBtn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        if (state) gotoIndex(state.index + 1);
+      });
+    }
   }
 
   function cleanupInteractions() {
