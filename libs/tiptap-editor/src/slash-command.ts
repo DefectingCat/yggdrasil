@@ -167,7 +167,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         icon: '🖼',
         command: ({ editor, range }) => {
           const url = window.prompt('输入图片 URL')
-          if (url) {
+          if (url && isValidUrl(url)) {
             editor.chain().focus().deleteRange(range).setImage({ src: url }).run()
           }
         },
@@ -178,9 +178,17 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         icon: '🔗',
         command: ({ editor, range }) => {
           const url = window.prompt('输入链接 URL')
-          if (url) {
-            editor.chain().focus().deleteRange(range).setLink({ href: url }).insertContent(url).run()
-          }
+          if (!url || !isValidUrl(url)) return
+          // deleteRange 后光标停在 range.to；先插入 URL 文本，再选中刚插入的范围设 link
+          // （setLink 需要非空选区才生效，原顺序 setLink 在空选区无效）。
+          const insertFrom = range.to
+          editor.chain()
+            .focus()
+            .deleteRange(range)
+            .insertContent(url)
+            .setTextSelection({ from: insertFrom, to: insertFrom + url.length })
+            .setLink({ href: url })
+            .run()
         },
       },
     )
@@ -236,6 +244,11 @@ interface SlashPopup {
   updatePosition(): void
   onKeyDown(props: SuggestionKeyDownProps): boolean
   destroy(): void
+}
+
+/** 校验图片/链接 URL:只允许 http(s) 和 data:image。拒绝 javascript: 等。 */
+function isValidUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url) || /^data:image\//i.test(url)
 }
 
 function createPopup(props: SuggestionProps<CommandItem>): SlashPopup {
