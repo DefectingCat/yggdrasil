@@ -161,6 +161,9 @@
     overlay.setAttribute("aria-modal", "true");
     overlay.setAttribute("aria-label", "图片预览");
     overlay.setAttribute("tabindex", "-1");
+    // 创建后立即设 opacity 0：append 到 DOM 时是透明的，避免在图片加载期间
+    // （start() 执行前）显示全黑背景造成闪烁。start() 的渐变会把 opacity 升到 1。
+    overlay.style.opacity = "0";
 
     var img = document.createElement("img");
     img.className = "lightbox-img";
