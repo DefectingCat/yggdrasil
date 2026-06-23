@@ -73,6 +73,9 @@ pub fn ImageViewer(
     // 计算 aspect-ratio：SSR 时读图片真实尺寸。WASM 端不读（--ar 已在 SSR 写入 HTML）。
     // 非 /uploads/ 的外链图或读不到尺寸时不设 --ar。
     let ar_style = {
+        // `mut` 仅 server 构建需要：WASM 构建剥离 #[cfg(feature = "server")] 块后，
+        // s 从未被重新赋值，故对 WASM 抑制 unused_mut。
+        #[cfg_attr(not(feature = "server"), allow(unused_mut))]
         let mut s = String::new();
         #[cfg(feature = "server")]
         {

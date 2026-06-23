@@ -29,8 +29,8 @@ pub struct UploadErrorEntry {
 #[cfg(target_arch = "wasm32")]
 pub mod wasm {
     use super::{UploadErrorEntry, UploadsInFlight};
-    // WritableExt 提供 .write()；Writable 提供 .set()。Signal 方法需 trait 在作用域内。
-    use dioxus::prelude::{Readable, Writable, WritableExt};
+    // WritableExt 提供 .write()（Signal 在 Copy 语义下不需要 mut 绑定）。
+    use dioxus::prelude::WritableExt;
     use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;
 
@@ -251,10 +251,11 @@ pub mod wasm {
                     .map_err(|_| js_sys::Error::new("无法附加文件"))?;
 
                 // 构造 POST 请求，credentials same-origin 携带 session cookie
-                let mut init = web_sys::RequestInit::new();
-                init.method("POST");
-                init.body(Some(&form));
-                init.credentials(web_sys::RequestCredentials::SameOrigin);
+                let init = web_sys::RequestInit::new();
+                init.set_method("POST");
+                // set_body 接收 &JsValue（非 Option）；FormData: AsRef<JsValue>。
+                init.set_body(form.as_ref());
+                init.set_credentials(web_sys::RequestCredentials::SameOrigin);
 
                 let request = web_sys::Request::new_with_str_and_init("/api/upload", &init)
                     .map_err(|_| js_sys::Error::new("无法构造上传请求"))?;
@@ -300,6 +301,6 @@ pub mod wasm {
 
 #[cfg(target_arch = "wasm32")]
 pub use wasm::{
-    consume_upload_event, make_upload_closure, EditorHandle, EditorInstance, EditorOptions,
-    TiptapEditorModule, UploadEventJs, get_module,
+    consume_upload_event, make_upload_closure, EditorHandle, EditorOptions, UploadEventJs,
+    get_module,
 };

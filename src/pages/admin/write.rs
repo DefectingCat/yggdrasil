@@ -78,11 +78,11 @@ fn write_editor(post_id: Option<i32>) -> Element {
     let mut editor: Signal<Option<EditorHandle>> = use_signal(|| None);
     // WASM 前端：编辑器就绪标志（onReady 回调驱动，替代 __tiptap_ready 轮询）。
     #[cfg(target_arch = "wasm32")]
-    let mut ready = use_signal(|| false);
+    let ready = use_signal(|| false);
 
     // 上传状态：当前进行中计数（保存拦截）+ 顶部失败提示堆叠（用户手动关闭）
-    let mut uploads_in_flight = use_signal(UploadsInFlight::default);
-    let mut upload_errors: Signal<Vec<UploadErrorEntry>> = use_signal(Vec::new);
+    let uploads_in_flight = use_signal(UploadsInFlight::default);
+    let upload_errors: Signal<Vec<UploadErrorEntry>> = use_signal(Vec::new);
 
     // 编辑模式：文章数据加载完成后，将字段回填到表单信号。
     use_effect(move || {
@@ -261,7 +261,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
             // 将逗号分隔的标签字符串转换为列表。
             // 同时支持半角/全角逗号与分号，避免中文输入法下的全角标点被误并入单个标签。
             let tags_list: Vec<String> = tags()
-                .split(|c| matches!(c, ',' | ',' | ';' | ';'))
+                .split(|c| matches!(c, ',' | '，' | ';' | '；'))
                 .map(|t| t.trim().to_string())
                 .filter(|t| !t.is_empty())
                 .collect();
