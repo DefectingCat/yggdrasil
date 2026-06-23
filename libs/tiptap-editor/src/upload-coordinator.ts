@@ -1,10 +1,12 @@
 import type { Editor } from '@tiptap/core'
 
-/** pending 上传条目：保留 File 供重试，blobUrl 供本地预览。 */
+/** pending 上传条目：保留 File 供重试，blobUrl 供本地预览，state 跟踪当前态。 */
 interface UploadEntry {
   file: File
   blobUrl: string
   fileName: string
+  /** 当前态：uploading（进行中）或 error（失败待重试）。成功后整个 entry 删除。 */
+  state: 'uploading' | 'error'
 }
 
 /** counts 快照：随事件一起传给宿主，替代 window 全局。 */
@@ -42,6 +44,9 @@ function genUploadId(): string {
  */
 export class UploadCoordinator {
   private pending = new Map<string, UploadEntry>()
+  /** 内部计数：替代每次事件全量遍历文档。 */
+  private uploadingCount = 0
+  private errorCount = 0
 
   constructor(
     private editor: Editor,
@@ -57,7 +62,8 @@ export class UploadCoordinator {
   insertUploading(file: File, pos?: number): void {
     const uploadId = genUploadId()
     const blobUrl = URL.createObjectURL(file)
-    this.pending.set(uploadId, { file, blobUrl, fileName: file.name })
+    this.pending.set(uploadId, { file, blobUrl, fileName: file.name, state: 'uploading' })
+    this.uploadingCount++
 
     this.editor.chain().focus().insertContentAt(pos ?? this.editor.state.selection.head, {
       type: 'image',
@@ -77,9 +83,30 @@ export class UploadCoordinator {
     if (!entry) return false
     this.removeNodeByUploadId(uploadId)
     URL.revokeObjectURL(entry.blobUrl)
-    this.notifyRust({ kind: 'removed', uploadId, fileName: entry.fileName })
+    // 按当前态减对应计数
+    if (entry.state === 'uploading') this.uploadingCount--
+    else this.errorCount--
     this.pending.delete(uploadId)
+    this.notifyRust({ kind: 'removed', uploadId, fileName: entry.fileName })
     return true
+  }
+
+  /**
+   * NodeView.destroy 兜底：节点被 ProseMirror 删除（如退格）时调用。
+   * 与 removeUpload 区别：节点已被 PM 删，这里只清 pending + revoke + 减计数，
+   * 不再调 removeNodeByUploadId，也不 emit 'removed'（节点已不在文档，counts 即时反映）。
+   *
+   * 成功态的 entry 不在 pending 里（已 delete），此方法对它们是 no-op。
+   */
+  handleNodeDestroyed(uploadId: string): void {
+    const entry = this.pending.get(uploadId)
+    if (!entry) return
+    URL.revokeObjectURL(entry.blobUrl)
+    if (entry.state === 'uploading') this.uploadingCount--
+    else this.errorCount--
+    this.pending.delete(uploadId)
+    // emit removed 让宿主顶部提示同步移除该 id
+    this.notifyRust({ kind: 'removed', uploadId, fileName: entry.fileName })
   }
 
   /** 核心上传逻辑：成功更新 src + 清上传属性，失败转 error 态。 */
@@ -97,6 +124,7 @@ export class UploadCoordinator {
       })
       URL.revokeObjectURL(entry.blobUrl)
       this.pending.delete(uploadId)
+      this.uploadingCount--
       this.notifyRust({ kind: 'success', uploadId, fileName: entry.fileName })
     } catch (err) {
       const msg = this.extractErrorMessage(err)
@@ -104,6 +132,10 @@ export class UploadCoordinator {
         'data-upload-state': 'error',
         'data-error-msg': msg,
       })
+      // 失败：从 uploading 转 error 态
+      entry.state = 'error'
+      this.uploadingCount--
+      this.errorCount++
       this.notifyRust({ kind: 'error', uploadId, fileName: entry.fileName, errorMsg: msg })
     }
   }
@@ -112,6 +144,9 @@ export class UploadCoordinator {
   retryUpload(uploadId: string): void {
     const entry = this.pending.get(uploadId)
     if (!entry) return
+    // 重试前节点处于 error 态，转回 uploading
+    this.errorCount--
+    this.uploadingCount++
     this.updateNodeAttrs(uploadId, {
       'data-upload-state': 'uploading',
       'data-error-msg': null,
@@ -167,18 +202,14 @@ export class UploadCoordinator {
 
   /**
    * 通过注入的 emit 回调把事件（含 counts 快照）输出给宿主，
-   * 替代原先写 window.__tiptap_uploads 全局供 Rust 轮询。
+   * counts 直接读内部维护的计数，不再每次遍历文档。
    */
   private notifyRust(event: Omit<UploadEvent, 'ts' | 'counts'>): void {
-    let uploading = 0
-    let error = 0
-    this.editor.state.doc.descendants((node) => {
-      const state = node.attrs['data-upload-state']
-      if (state === 'uploading') uploading++
-      else if (state === 'error') error++
-      return true
+    this.emit({
+      ...event,
+      ts: Date.now(),
+      counts: { uploading: this.uploadingCount, error: this.errorCount },
     })
-    this.emit({ ...event, ts: Date.now(), counts: { uploading, error } })
   }
 
   /** pending Map 查询（供内部/测试）。 */
