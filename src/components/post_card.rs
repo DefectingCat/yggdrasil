@@ -5,7 +5,6 @@
 use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
-use crate::components::image_viewer::ImageViewer;
 use crate::models::post::PostListItem;
 use crate::router::Route;
 
@@ -24,11 +23,12 @@ use crate::router::Route;
 /// - 整张卡片可点击跳转到文章详情：通过末尾一个绝对定位、铺满卡片的覆盖层 `Link` 实现。
 /// - 标签是独立的 `Link`，通过 `relative z-10` 叠在覆盖层之上，并 `stop_propagation`，
 ///   点击标签进入标签详情页而不触发卡片跳转。
-/// - 封面 `ImageViewer` 关闭灯箱（`lightbox: false`），点击封面走卡片跳转，避免交互歧义。
+/// - 封面用裸 `.blur-img`（纯展示，无灯箱），点击走卡片跳转，避免交互歧义。
 #[component]
 pub fn PostCard(post: PostListItem) -> Element {
     let post_slug = post.slug.clone();
     let date_str = post.formatted_date();
+    let cover_src = post.cover_image.clone().unwrap_or_default();
     let has_cover = post.cover_image.is_some();
 
     rsx! {
@@ -37,12 +37,19 @@ pub fn PostCard(post: PostListItem) -> Element {
             if has_cover {
                 div {
                     class: "mb-4 -mx-6 -mt-6 overflow-hidden rounded-t-lg",
-                    ImageViewer {
-                        src: post.cover_image.clone().unwrap_or_default(),
-                        thumb_params: "?thumb=400x300",
-                        alt: post.title.clone(),
-                        lazy_load: true,
-                        lightbox: false,
+                    div {
+                        class: "blur-img post-card-cover-blur",
+                        img {
+                            class: "blur-img-placeholder",
+                            src: "{cover_src}?w=20",
+                            alt: "{post.title}",
+                            loading: "lazy",
+                        }
+                        img {
+                            class: "blur-img-full is-loaded",
+                            src: "{cover_src}?thumb=400x300",
+                            alt: "{post.title}",
+                        }
                     }
                 }
             }
