@@ -1,6 +1,7 @@
 import { Image } from '@tiptap/extension-image'
 import { mergeAttributes } from '@tiptap/core'
 import type { Node as PMNode } from '@tiptap/pm/model'
+import type { UploadCoordinator } from './upload-coordinator'
 
 /** NodeView 按钮点击回调注入接口。 */
 export interface UploadNodeViewCallbacks {
@@ -138,7 +139,7 @@ class UploadImageNodeView {
 }
 
 /** coordinator 引用（由 index.ts 在创建 editor 前注入）。 */
-let coordinatorRef: { retryUpload: (id: string) => void; removeUpload: (id: string) => boolean } | null = null
+let coordinatorRef: Pick<UploadCoordinator, 'retryUpload' | 'removeUpload'> | null = null
 
 /** index.ts 注入 coordinator，供 NodeView 的 onRetry/onRemove 调用。 */
 export function setUploadCoordinator(c: typeof coordinatorRef): void {
