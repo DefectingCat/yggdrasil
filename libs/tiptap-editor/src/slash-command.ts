@@ -1,4 +1,4 @@
-import { Extension, type Range } from '@tiptap/core'
+import { Extension, type Editor, type Range } from '@tiptap/core'
 import { Suggestion, type SuggestionProps, type SuggestionKeyDownProps } from '@tiptap/suggestion'
 import { PluginKey } from '@tiptap/pm/state'
 
@@ -6,7 +6,7 @@ interface CommandItem {
   title: string
   description: string
   icon: string
-  command: (props: { editor: any; range: Range }) => void
+  command: (props: { editor: Editor; range: Range }) => void
 }
 
 /**
@@ -198,7 +198,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
           )
         },
         render() {
-          let popup: ReturnType<typeof createPopup> | null = null
+          let popup: SlashPopup | null = null
 
           return {
             onStart(props) {
@@ -229,7 +229,16 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
   },
 })
 
-function createPopup(props: SuggestionProps<CommandItem>) {
+/** 斜杠命令浮层实例:供 Suggestion render 生命周期驱动。 */
+interface SlashPopup {
+  component: HTMLElement
+  updateItems(items: CommandItem[]): void
+  updatePosition(): void
+  onKeyDown(props: SuggestionKeyDownProps): boolean
+  destroy(): void
+}
+
+function createPopup(props: SuggestionProps<CommandItem>): SlashPopup {
   const component = document.createElement('div')
   component.classList.add('slash-command')
 
