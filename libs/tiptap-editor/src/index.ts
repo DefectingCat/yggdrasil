@@ -61,8 +61,7 @@ class TiptapEditorInstance {
     this.sourceTextarea.placeholder = '在此输入 Markdown 源码...'
     this.sourceTextarea.spellcheck = false
     this.sourceTextarea.addEventListener('input', () => {
-      // 保持全局缓存与 onUpdate 回调一致
-      window.__tiptap_content = this.sourceTextarea!.value
+      // 源码模式下通过 onUpdate 回调同步内容（替代旧版 window.__tiptap_content 缓存）
       if (this.options.onUpdate) {
         this.options.onUpdate(this.sourceTextarea!.value)
       }
