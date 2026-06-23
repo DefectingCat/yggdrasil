@@ -32,7 +32,7 @@ dev: build-editor-incremental
 	@tailwindcss -i input.css -o public/style.css --watch & \
 	TAILWIND_PID=$$!; \
 	trap 'kill $$TAILWIND_PID 2>/dev/null; exit' INT TERM EXIT; \
-	dx serve --addr 0.0.0.0
+	SSR_CACHE_SECS=0 dx serve --addr 0.0.0.0
 
 css:
 	@tailwindcss -i input.css -o public/style.css
