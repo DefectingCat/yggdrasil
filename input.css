@@ -198,10 +198,15 @@
     margin-bottom: var(--content-gap-paper);
   }
 
-  .entry-cover img {
+  /* 封面用 blur-img 结构：去 margin、保持圆角，内层 img cover 填充 */
+  .entry-cover .blur-img {
+    margin: 0;
     border-radius: var(--radius-paper);
+  }
+  .entry-cover img {
     width: 100%;
-    height: auto;
+    height: 100%;
+    object-fit: cover;
   }
 
   .post-content {
@@ -521,113 +526,85 @@
     text-underline-offset: 0.3rem;
   }
 
-  .image-viewer-overlay {
+  /* ========== 统一灯箱（Medium 风格） ========== */
+  .lightbox-overlay {
     position: fixed;
     inset: 0;
     z-index: 50;
     background: rgba(0, 0, 0, 0.92);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 2rem;
-    animation: fadeIn 0.2s ease-out;
+    opacity: 1;
   }
 
-  .image-viewer-content {
-    position: relative;
-    max-width: 90vw;
-    max-height: 90vh;
-  }
-
-  .image-viewer-img {
-    max-width: 100%;
-    max-height: 90vh;
-    object-fit: contain;
-    border-radius: var(--radius-paper);
-  }
-
-  .image-viewer-close {
+  /* 灯箱图片：绝对定位，尺寸/位置由 JS 的 transform 控制。
+     transform-origin 为 top left，配合 translate+scale 实现原地缩放。 */
+  .lightbox-img {
     position: absolute;
-    top: -2.5rem;
-    right: 0;
-    background: rgba(255, 255, 255, 0.2);
-    border: none;
-    color: white;
-    font-size: 1.5rem;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 50%;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s ease-out;
+    left: 0;
+    top: 0;
+    transform-origin: top left;
+    max-width: none;
+    max-height: none;
+    object-fit: contain;
+    opacity: 1;
   }
 
-  .image-viewer-close:hover {
-    background: rgba(255, 255, 255, 0.4);
-  }
-
-  .md-image-lightbox-overlay {
+  .lightbox-caption {
     position: fixed;
-    inset: 0;
-    z-index: 50;
-    background: rgba(0, 0, 0, 0.92);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 2rem;
-    animation: fadeIn 0.2s ease-out;
-  }
-
-  .md-image-lightbox-content {
-    position: relative;
-    max-width: 90vw;
-    max-height: 90vh;
-  }
-
-  .md-image-lightbox-content img {
-    max-width: 100%;
-    max-height: 90vh;
-    object-fit: contain;
-    border-radius: var(--radius-paper);
-  }
-
-  .md-image-lightbox-close {
-    position: absolute;
-    top: -2.5rem;
+    left: 0;
     right: 0;
-    background: rgba(255, 255, 255, 0.2);
+    bottom: 2rem;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.95rem;
+    padding: 0 2rem;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  .lightbox-counter {
+    position: fixed;
+    right: 1.5rem;
+    bottom: 1.5rem;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.85rem;
+    z-index: 2;
+  }
+
+  .lightbox-nav {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
     border: none;
-    color: white;
-    font-size: 1.5rem;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 50%;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 3rem;
+    line-height: 1;
+    width: 3rem;
+    height: 5rem;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s ease-out;
+    z-index: 2;
+    border-radius: 0.5rem;
+    transition: color 0.2s ease-out, background 0.2s ease-out;
   }
-
-  .md-image-lightbox-close:hover {
-    background: rgba(255, 255, 255, 0.4);
+  .lightbox-nav:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
   }
+  .lightbox-prev { left: 1rem; }
+  .lightbox-next { right: 1rem; }
 
-  .post-card-cover {
-    overflow: hidden;
-    border-radius: var(--radius-paper);
+  /* 卡片封面：blur-img 结构，固定 4:3 比例，hover 缩放 */
+  .post-card-cover-blur {
+    margin: 0;
+    aspect-ratio: 4 / 3;
   }
-
-  .post-card-cover img {
+  .post-card-cover-blur img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     transition: transform 0.3s ease-out;
   }
-
-  .post-card-cover:hover img {
+  .group:hover .post-card-cover-blur img {
     transform: scale(1.05);
   }
 
