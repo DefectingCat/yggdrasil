@@ -10,14 +10,17 @@ use dioxus::prelude::*;
 /// - `content_html`：服务端渲染的文章 HTML 字符串
 ///
 /// 关键行为：
-/// - 在 `target_arch = "wasm32"` 环境下执行 `post-content.js` 并调用初始化函数，
-///   用于处理代码块、图片点击等前端交互
+/// - 在 `target_arch = "wasm32"` 环境下执行 `post-content.js`（代码块复制）与
+///   `lightbox.js`（图片灯箱 + 懒加载），并调用各自的初始化函数。
 #[component]
 pub fn PostContent(content_html: String) -> Element {
     #[cfg(target_arch = "wasm32")]
     use_effect(move || {
         let _ = js_sys::eval(include_str!("../../../public/js/post-content.js"));
+        let _ = js_sys::eval(include_str!("../../../public/js/lightbox.js"));
         let _ = js_sys::eval("window.__initPostContent('.post-content')");
+        // 正文图组成图集；封面（.entry-cover）单张模式，由 PostCover 标记 data-single。
+        let _ = js_sys::eval("window.__initLightbox(['.post-content', '.entry-cover'])");
     });
 
     rsx! {
