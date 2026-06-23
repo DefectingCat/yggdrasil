@@ -16,6 +16,10 @@
 //! - 深色主题：`.dark {base} { ... }` 与 `.dark {base} .kw { ... }`；
 //! - 其中 `{base}` 为 `.md-content pre code`，保证只影响正文代码块；
 //! - `.code` 是 syntect 的根作用域特殊类，只映射到 base 容器本身。
+//!
+//! 背景色策略：syntect 输出的 `background-color` 会被剥离，代码块背景统一由
+//! `input.css` 中的 `--color-paper-code-block` 变量提供（亮色浅、暗色深），
+//! 避免 `.code` span 与外层 `pre` 双层背景叠加导致的边缘色差。
 
 use syntect::highlighting::ThemeSet;
 use syntect::html::{css_for_theme_with_class_style, ClassStyle};
@@ -100,6 +104,38 @@ fn minify_css(css: &str) -> String {
     out.trim().to_string()
 }
 
+/// 从 CSS 规则体中移除 `background-color` 声明。
+///
+/// syntect 会为根作用域 `.code` 注入主题底色（如 Latte `#eff1f5`），这与
+/// 外层 `pre` 的 `--color-paper-code-block` 背景叠加会形成色差。这里只保留
+/// 前景色相关声明，让背景由单一来源控制。
+fn strip_background_color(body: &str) -> String {
+    body.split(';')
+        .filter(|decl| {
+            let trimmed = decl.trim();
+            !trimmed.is_empty()
+                && !trimmed
+                    .to_ascii_lowercase()
+                    .starts_with("background-color")
+        })
+        .collect::<Vec<_>>()
+        .join(";")
+}
+
+/// 剥离 CSS 字符串开头的 `/* ... */` 注释块（含其后的空白）。
+///
+/// syntect 输出的第一条规则选择器前会带主题头注释，这里在 `.code` 特判前
+/// 先清掉它，使根作用域类能被正确识别并映射到 base 容器本身。
+fn strip_leading_comment(s: &str) -> &str {
+    let trimmed = s.trim_start();
+    if trimmed.starts_with("/*") {
+        if let Some(end) = trimmed.find("*/") {
+            return trimmed[end + 2..].trim_start();
+        }
+    }
+    s
+}
+
 /// 将 syntect 生成的 CSS 选择器包装到指定的 base 选择器下，并可附加前缀。
 ///
 /// syntect 原始输出形如：
@@ -133,6 +169,10 @@ fn rewrite_rules(css: &str, base: &str, prefix: &str) -> String {
             pos += open + 1;
             continue;
         }
+        // syntect 会把主题头注释（/* theme ... */）粘在第一条规则的选择器前。
+        // 注释虽在后续 minify 阶段会去除，但此处的 .code 特判发生在 minify 之前，
+        // 所以这里先剥掉前导注释块，避免根作用域类匹配失败。
+        let selector = strip_leading_comment(selector);
 
         // 查找配对的右大括号，处理可能的嵌套 {}
         let after_open = pos + open + 1;
@@ -150,6 +190,13 @@ fn rewrite_rules(css: &str, base: &str, prefix: &str) -> String {
         let body = css[after_open..close - 1].trim();
         pos = close;
 
+        if body.is_empty() {
+            continue;
+        }
+
+        // 剥离 syntect 注入的 background-color，代码块背景改由
+        // `--color-paper-code-block` 变量统一提供（见 input.css）。
+        let body = strip_background_color(body);
         if body.is_empty() {
             continue;
         }
