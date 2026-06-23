@@ -3,7 +3,7 @@
 //! 提供 Dioxus UI 组件，供前端页面（`src/pages/`）使用。
 //! 包括布局（`frontend_layout`、`admin_layout`）、导航（`header`、`nav`、`footer`）、
 //! 文章展示（`post`、`post_card`）、评论（`comments`）、骨架屏（`skeletons`）、
-//! 表单控件（`forms`）以及图片查看器（`image_viewer`）等共享组件。
+//! 表单控件（`forms`）等共享组件。
 
 /// 后台布局组件。
 pub mod admin_layout;
@@ -19,8 +19,6 @@ pub mod forms;
 pub mod frontend_layout;
 /// 顶部导航栏组件。
 pub mod header;
-/// 图片查看器组件。
-pub mod image_viewer;
 /// 导航组件。
 pub mod nav;
 /// 文章详情组件。
