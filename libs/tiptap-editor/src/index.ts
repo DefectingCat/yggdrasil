@@ -5,7 +5,7 @@ import { TableKit } from '@tiptap/extension-table'
 import { TaskList, TaskItem } from '@tiptap/extension-list'
 import { FileHandler } from '@tiptap/extension-file-handler'
 import { SlashCommand } from './slash-command'
-import { UploadCoordinator } from './upload-coordinator'
+import { UploadCoordinator, type UploadEvent } from './upload-coordinator'
 import { UploadImage, setUploadCoordinator } from './upload-image'
 import './style.css'
 
@@ -16,8 +16,12 @@ export interface EditorOptions {
   onFocus?: () => void
   onBlur?: () => void
   editable?: boolean
-  // 新增：图片上传回调
+  // 图片上传回调
   onImageUpload?: (file: File) => Promise<string>
+  // 编辑器实例创建完成（含 coordinator）后同步触发一次，替代 window.__tiptap_ready 轮询
+  onReady?: () => void
+  // 上传状态事件（error/success/removed + counts），替代 window.__tiptap_uploads 轮询
+  onUploadEvent?: (event: UploadEvent) => void
 }
 
 class TiptapEditorInstance {
@@ -129,10 +133,18 @@ class TiptapEditorInstance {
     })
 
     // 创建上传协调器，注入给 NodeView 的 onRetry/onRemove
+    // onUploadEvent 透传给 coordinator.emit，未提供时空操作兜底
     if (this.options.onImageUpload) {
-      this.coordinator = new UploadCoordinator(this.editor, this.options.onImageUpload)
+      this.coordinator = new UploadCoordinator(
+        this.editor,
+        this.options.onImageUpload,
+        this.options.onUploadEvent ?? (() => {}),
+      )
       setUploadCoordinator(this.coordinator)
     }
+
+    // 通知宿主编辑器已就绪（替代 window.__tiptap_ready 轮询）
+    this.options.onReady?.()
   }
 
   getMarkdown(): string {
