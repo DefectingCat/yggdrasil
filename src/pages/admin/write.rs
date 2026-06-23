@@ -1,64 +1,28 @@
 //! 文章编辑器页面。
 //!
 //! 提供新建文章与编辑文章两种模式，使用基于 Tiptap 的富文本编辑器。
-//! 编辑器通过 `js_sys::eval` 在 WASM 前端初始化，并与 `window.TiptapEditor` 实例交互，
-//! 实现 Markdown 内容回填、图片上传与组件卸载时的清理。
+//! 编辑器通过 [`crate::tiptap_bridge`] 的 wasm-bindgen 绑定在 WASM 前端初始化，
+//! 并与 `window.TiptapEditor` 实例交互，实现 Markdown 内容回填、图片上传与组件卸载时的清理。
 
+// prelude 在 WASM 构建里直接使用（use_signal/Signal/Element 等）；
+// server 构建里 #[component] 宏会重新导出这些符号导致 native 报 unused，故 allow。
+#[allow(unused_imports)]
 use dioxus::prelude::*;
 
 // 仅在 WASM 前端使用的类型转换与文章 API。
 #[cfg(target_arch = "wasm32")]
-use wasm_bindgen::JsCast;
-
-#[cfg(target_arch = "wasm32")]
 use crate::api::posts::{
     create_post, get_post_by_id, update_post, CreatePostResponse, SinglePostResponse,
 };
+#[cfg(target_arch = "wasm32")]
+use crate::tiptap_bridge::{consume_upload_event, EditorHandle};
+// 共享上传状态类型：两端都编译（rsx 在 server SSR 时也要渲染这些结构）。
+use crate::tiptap_bridge::{UploadErrorEntry, UploadsInFlight};
 use crate::components::write_skeleton::WriteSkeleton;
 use crate::models::post::Post;
 use crate::router::Route;
-
-/// 当前编辑器内进行中的上传计数（来自轮询 window.__tiptap_uploads.counts）。
-#[derive(Clone, Copy, Default)]
-struct UploadsInFlight {
-    uploading: u32,
-    error: u32,
-}
-
-/// 顶部堆叠的上传失败提示条目。
-#[derive(Clone, PartialEq)]
-struct UploadErrorEntry {
-    id: String,
-    file_name: String,
-    message: String,
-}
-
-/// window.__tiptap_uploads 快照（轮询消费用）。
 #[cfg(target_arch = "wasm32")]
-#[derive(serde::Deserialize)]
-struct UploadSnapshot {
-    events: Vec<UploadSnapshotEvent>,
-    counts: UploadSnapshotCounts,
-}
-
-#[cfg(target_arch = "wasm32")]
-#[derive(serde::Deserialize)]
-struct UploadSnapshotEvent {
-    kind: String,
-    #[serde(rename = "uploadId")]
-    upload_id: String,
-    #[serde(rename = "fileName")]
-    file_name: String,
-    #[serde(rename = "errorMsg")]
-    error_msg: Option<String>,
-}
-
-#[cfg(target_arch = "wasm32")]
-#[derive(serde::Deserialize, Default, Clone, Copy)]
-struct UploadSnapshotCounts {
-    uploading: u32,
-    error: u32,
-}
+use wasm_bindgen::closure::Closure;
 
 /// 新建文章页面组件。
 ///
@@ -82,10 +46,10 @@ pub fn WriteEdit(id: i32) -> Element {
 ///
 /// 负责：
 /// - 编辑模式下通过 server function 拉取文章数据；
-/// - 在 WASM 前端初始化 Tiptap 富文本编辑器并轮询就绪状态；
+/// - 在 WASM 前端通过 tiptap_bridge 的 closure 回调初始化 Tiptap 富文本编辑器；
 /// - 编辑模式下将 Markdown 内容回填到编辑器；
 /// - 提交时读取编辑器 Markdown、校验并调用 create_post / update_post；
-/// - 组件卸载时销毁 Tiptap 实例并清理全局状态。
+/// - 组件卸载时销毁 Tiptap 实例（EditorHandle::drop 自动 destroy + 释放 closure）。
 #[allow(unused_mut, unused_variables)]
 fn write_editor(post_id: Option<i32>) -> Element {
     let is_edit = post_id.is_some();
@@ -110,12 +74,19 @@ fn write_editor(post_id: Option<i32>) -> Element {
     // 编辑模式：用于暂存从服务端加载的文章数据。
     let mut edit_post = use_signal(|| None::<Post>);
 
+    // WASM 前端：编辑器实例句柄（持有实例 + closure，统一生命周期）。
+    #[cfg(target_arch = "wasm32")]
+    let mut editor: Signal<Option<EditorHandle>> = use_signal(|| None);
+    // WASM 前端：编辑器就绪标志（onReady 回调驱动，替代 __tiptap_ready 轮询）。
+    #[cfg(target_arch = "wasm32")]
+    let mut ready = use_signal(|| false);
+
     // 上传状态：当前进行中计数（保存拦截）+ 顶部失败提示堆叠（用户手动关闭）
     let mut uploads_in_flight = use_signal(UploadsInFlight::default);
     let mut upload_errors: Signal<Vec<UploadErrorEntry>> = use_signal(Vec::new);
     // 已展示过错误的上传 id（去重 + 重试后再失败时原地更新）。
-    // 用 signal 而非局部变量：use_future 的 FnMut 闭包要求可重复调用，
-    // signal 是 Copy 可被多次 move 进 async。
+    // 用 signal 而非局部变量：closure 的 FnMut 闭包要求可重复调用，
+    // signal 是 Copy 可被多次 move。
     let mut seen_error_ids: Signal<std::collections::HashSet<String>> =
         use_signal(std::collections::HashSet::new);
 
@@ -158,218 +129,99 @@ fn write_editor(post_id: Option<i32>) -> Element {
         }
     });
 
-    // 组件卸载时清理 Tiptap 实例：销毁编辑器、删除实例映射、重置全局就绪标志与内容缓存。
+    // 组件卸载时清理 Tiptap 实例：EditorHandle::drop 会 destroy 编辑器并释放全部 closure。
     #[cfg(target_arch = "wasm32")]
     use_drop(move || {
-        let _ = js_sys::eval(
-            r#"
-            (function() {
-                var editor = window.TiptapEditor && window.TiptapEditor._instances && window.TiptapEditor._instances.get('tiptap-editor');
-                if (editor && typeof editor.destroy === 'function') {
-                    editor.destroy();
-                }
-                if (window.TiptapEditor && window.TiptapEditor._instances) {
-                    window.TiptapEditor._instances.delete('tiptap-editor');
-                }
-                window.__tiptap_ready = false;
-                window.__tiptap_content = '';
-            })();
-            "#,
-        );
+        editor.set(None);
     });
 
-    // Tiptap 编辑器初始化：在 WASM 前端通过 js_sys::eval 调用 public/tiptap/ 构建产物暴露的 window.TiptapEditor。
-    // 编辑模式需等待文章数据加载完成，避免空内容覆盖后续回填。
+    // Tiptap 编辑器初始化：构造 closure + EditorOptions，调用 bridge.create。
+    // 替代旧版 eval initEditor 脚本 + 100ms 就绪轮询。
+    // use_effect 在首次渲染后跑，此时 #tiptap-editor 容器已挂载。
+    #[cfg(target_arch = "wasm32")]
     use_effect(move || {
-        #[cfg(target_arch = "wasm32")]
-        {
-            // 编辑模式：等数据加载完再初始化。
-            if is_edit && edit_post().is_none() {
-                return;
-            }
-
-            // 执行 JS 初始化脚本：查找 DOM 容器，调用 TiptapEditor.create，并注册 onUpdate / onImageUpload 回调。
-            let _ = js_sys::eval(
-                r#"
-                (function initEditor() {
-                    if (window.__tiptap_ready) return;
-
-                    var container = document.getElementById('tiptap-editor');
-                    if (!container) {
-                        setTimeout(initEditor, 50);
-                        return;
-                    }
-                    if (typeof window.TiptapEditor !== 'undefined' && window.TiptapEditor) {
-                        try {
-                            window.TiptapEditor.create('tiptap-editor', {
-                                content: '',
-                                placeholder: '在此输入内容...',
-                                onUpdate: function(markdown) {
-                                    window.__tiptap_content = markdown;
-                                },
-                                onImageUpload: function(file) {
-                                    return new Promise(function(resolve, reject) {
-                                        var formData = new FormData();
-                                        formData.append('image', file);
-
-                                        fetch('/api/upload', {
-                                            method: 'POST',
-                                            body: formData,
-                                            credentials: 'same-origin'
-                                        })
-                                        .then(function(response) {
-                                            if (!response.ok) {
-                                                // 读取服务端返回的中文错误（{"success":false,"error":"文件超过大小限制"}）
-                                                return response.json().catch(function() { return null; }).then(function(data) {
-                                                    if (data && data.error) {
-                                                        throw new Error(data.error);
-                                                    }
-                                                    throw new Error('上传失败: ' + response.status);
-                                                });
-                                            }
-                                            return response.json();
-                                        })
-                                        .then(function(data) {
-                                            if (data.success && data.url) {
-                                                resolve(data.url);
-                                            } else {
-                                                reject(new Error(data.error || 'Upload failed'));
-                                            }
-                                        })
-                                        .catch(function(err) {
-                                            reject(err);
-                                        });
-                                    });
-                                }
-                            });
-                            window.__tiptap_ready = true;
-                        } catch(e) {
-                            console.error('[tiptap] create error: ' + e.message);
-                        }
-                        return;
-                    }
-                    setTimeout(initEditor, 50);
-                })();
-                "#,
-            );
+        // 编辑模式：等数据加载完再初始化（避免空内容覆盖回填）
+        if is_edit && edit_post().is_none() {
+            return;
         }
-    });
+        // 防重复 init（effect 可能多次触发）
+        if editor.read().is_some() {
+            return;
+        }
 
-    // 轮询 Tiptap 编辑器就绪状态：最多等待约 10 秒，就绪后编辑模式回填 Markdown，最后结束加载。
-    use_effect(move || {
-        #[cfg(target_arch = "wasm32")]
-        {
-            // 编辑模式：等数据加载完再开始轮询。
-            if is_edit && edit_post().is_none() {
-                return;
+        // —— 构造 closure ——
+        // 用 FnMut：Dioxus Signal 的 write/set 接收 &mut self，回调需可变借用捕获的 signal。
+        let on_update = Closure::new({
+            let mut content = content;
+            move |md: String| content.set(md)
+        });
+        let on_ready = Closure::new({
+            let mut ready = ready;
+            move || ready.set(true)
+        });
+        let on_image_upload = crate::tiptap_bridge::make_upload_closure();
+        let on_upload_event = Closure::new({
+            let mut uploads_in_flight = uploads_in_flight;
+            let mut upload_errors = upload_errors;
+            let mut seen_error_ids = seen_error_ids;
+            move |ev: crate::tiptap_bridge::UploadEventJs| {
+                consume_upload_event(&ev, &mut uploads_in_flight, &mut upload_errors, &mut seen_error_ids);
             }
+        });
 
-            wasm_bindgen_futures::spawn_local(async move {
-                for i in 0..100 {
-                    if let Ok(promise_val) = js_sys::eval("new Promise(r => setTimeout(r, 100))") {
-                        if let Ok(promise) = promise_val.dyn_into::<js_sys::Promise>() {
-                            let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
-                        }
+        // —— 构造 options ——
+        let opts = crate::tiptap_bridge::EditorOptions::new();
+        opts.set_placeholder("在此输入内容...");
+        opts.set_on_update(&on_update);
+        opts.set_on_ready(&on_ready);
+        opts.set_on_image_upload(&on_image_upload);
+        opts.set_on_upload_event(&on_upload_event);
+
+        // —— create（同步返回；找不到容器返回 None，构造失败抛异常）——
+        match crate::tiptap_bridge::get_module().create("tiptap-editor", &opts) {
+            Ok(Some(inst)) => {
+                // 编辑模式回填：create 成功立即回填（实例已创建，时机确定）
+                if is_edit && !editor_content_set() {
+                    let md = content();
+                    if !md.is_empty() {
+                        inst.set_markdown(&md);
                     }
-                    if let Ok(ready) = js_sys::eval("window.__tiptap_ready") {
-                        if ready.as_bool().unwrap_or(false) {
-                            // 编辑模式：通过 window.TiptapEditor 实例的 setMarkdown 回填已有内容。
-                            if is_edit && !editor_content_set() {
-                                let md = content();
-                                if !md.is_empty() {
-                                    let md_json = serde_json::to_string(&md).unwrap_or_default();
-                                    let script = format!(
-                                        "(function() {{ var editor = window.TiptapEditor && window.TiptapEditor._instances && window.TiptapEditor._instances.get('tiptap-editor'); if (editor) {{ editor.setMarkdown({}); }} }})()",
-                                        md_json
-                                    );
-                                    let _ = js_sys::eval(&script);
-                                }
-                                editor_content_set.set(true);
-                            }
-                            loading.set(false);
-                            return;
-                        }
-                    }
+                    editor_content_set.set(true);
                 }
+                let handle = EditorHandle::new(
+                    inst,
+                    on_update,
+                    on_image_upload,
+                    on_ready,
+                    on_upload_event,
+                );
+                editor.set(Some(handle));
+            }
+            Ok(None) => {
+                load_error.set(Some("编辑器容器未就绪".to_string()));
                 loading.set(false);
-            });
+            }
+            Err(e) => {
+                load_error.set(Some(format!("编辑器初始化错误: {:?}", e)));
+                loading.set(false);
+            }
         }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
+    });
+
+    // 编辑器就绪后解除 loading（onReady 回调设 ready=true）。
+    // 独立 effect 避免 on_ready 闭包与 loading 写权限在同一作用域冲突。
+    #[cfg(target_arch = "wasm32")]
+    use_effect(move || {
+        if ready() {
             loading.set(false);
         }
     });
 
-    // 轮询 window.__tiptap_uploads，消费上传事件并更新 signal（仅 WASM）
-    #[cfg(target_arch = "wasm32")]
-    {
-        use_future(move || {
-            let mut uploads_in_flight = uploads_in_flight;
-            let mut upload_errors = upload_errors;
-            let mut seen_error_ids = seen_error_ids;
-            async move {
-                loop {
-                    // 500ms 间隔
-                    if let Ok(promise_val) = js_sys::eval("new Promise(r => setTimeout(r, 500))") {
-                        if let Ok(promise) = promise_val.dyn_into::<js_sys::Promise>() {
-                            let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
-                        }
-                    }
-
-                    // 读取并清空 events，读取 counts
-                    let snapshot = js_sys::eval(
-                        r#"
-                        (function() {
-                            var u = window.__tiptap_uploads;
-                            if (!u) return null;
-                            var events = u.events || [];
-                            u.events = [];
-                            return JSON.stringify({ events: events, counts: u.counts || {uploading:0,error:0} });
-                        })()
-                        "#,
-                    )
-                    .ok()
-                    .and_then(|v| v.as_string());
-
-                    if let Some(json) = snapshot {
-                        if let Ok(parsed) = serde_json::from_str::<UploadSnapshot>(&json) {
-                            for ev in parsed.events {
-                                match ev.kind.as_str() {
-                                    "error" => {
-                                        let msg = ev.error_msg.unwrap_or_else(|| "上传失败".to_string());
-                                        if seen_error_ids.write().insert(ev.upload_id.clone()) {
-                                            // 新失败：追加提示
-                                            upload_errors.write().push(UploadErrorEntry {
-                                                id: ev.upload_id,
-                                                file_name: ev.file_name,
-                                                message: msg,
-                                            });
-                                        } else {
-                                            // 已存在的 id（重试后再失败）：原地更新消息，
-                                            // 避免顶部提示停留在旧错误文案。
-                                            let mut errors = upload_errors.write();
-                                            if let Some(entry) = errors.iter_mut().find(|e| e.id == ev.upload_id) {
-                                                entry.message = msg;
-                                            }
-                                        }
-                                    }
-                                    "success" | "removed" => {
-                                        seen_error_ids.write().remove(&ev.upload_id);
-                                        upload_errors.write().retain(|e| e.id != ev.upload_id);
-                                    }
-                                    _ => {}
-                                }
-                            }
-                            uploads_in_flight.set(UploadsInFlight {
-                                uploading: parsed.counts.uploading,
-                                error: parsed.counts.error,
-                            });
-                        }
-                    }
-                }
-            }
-        });
-    }
+    // 非 WASM（server SSR）：无编辑器，直接解除 loading。
+    #[cfg(not(target_arch = "wasm32"))]
+    use_effect(move || {
+        loading.set(false);
+    });
 
     // 提交表单：校验标题与内容，读取 Tiptap 编辑器 Markdown，调用 create_post 或 update_post。
     let on_submit = move |_| {
@@ -395,13 +247,12 @@ fn write_editor(post_id: Option<i32>) -> Element {
         // 仅在 WASM 前端读取编辑器内容并发起保存请求。
         #[cfg(target_arch = "wasm32")]
         {
-            // 优先通过 window.TiptapEditor 实例读取 Markdown，否则退回到全局缓存。
-            let md = js_sys::eval(r#"
-                (function() {
-                    var editor = window.TiptapEditor && window.TiptapEditor._instances && window.TiptapEditor._instances.get('tiptap-editor');
-                    return editor ? editor.getMarkdown() : (window.__tiptap_content || '');
-                })()
-            "#).ok().and_then(|v| v.as_string()).unwrap_or_default();
+            // 通过 EditorHandle 实例读取 Markdown；句柄未就绪时退回 content signal。
+            let md = if let Some(handle) = &*editor.read() {
+                handle.instance().get_markdown()
+            } else {
+                content()
+            };
 
             // 兜底：扫描残留的上传占位符标记（轮询窗口期漏判防护）
             // 检测 ![](blob:...) 形式的泄漏图片 src，而非裸 "blob:" 字符串，
@@ -631,11 +482,8 @@ fn write_editor(post_id: Option<i32>) -> Element {
                             move |_| {
                                 // 关闭提示同时删除编辑器内失败占位符（避免孤儿）
                                 #[cfg(target_arch = "wasm32")]
-                                {
-                                    let _ = js_sys::eval(&format!(
-                                        "(function(){{var e=window.TiptapEditor&&window.TiptapEditor._instances&&window.TiptapEditor._instances.get('tiptap-editor');if(e&&e.removeUploadByUploadId){{e.removeUploadByUploadId({:?});}}}})()",
-                                        id
-                                    ));
+                                if let Some(handle) = &*editor.read() {
+                                    handle.instance().remove_upload_by_upload_id(&id);
                                 }
                                 upload_errors.write().retain(|e| e.id != id);
                             }

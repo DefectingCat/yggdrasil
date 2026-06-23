@@ -28,6 +28,9 @@ mod router;
 mod ssr_cache;
 mod tasks;
 mod theme;
+// tiptap_bridge：共享类型（UploadsInFlight/UploadErrorEntry）两端都编译；
+// wasm-bindgen extern 与 EditorHandle 在内部的 #[cfg(wasm32)] 子模块里。
+mod tiptap_bridge;
 mod utils;
 mod webp;
 
