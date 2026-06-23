@@ -376,6 +376,18 @@ mod tests {
     }
 
     #[test]
+    fn full_pipeline_wrap_then_clean_preserves_slash() {
+        // 模拟完整渲染管线：wrap_images_with_blur → clean_html
+        // 验证 sanitizer 不把斜杠转义或删掉
+        let html = r#"<img src="/uploads/2026/06/18/090402.21c4f0b6-6d5a-49ee-bc79-99cb557ff385.webp" alt="t">"#;
+        let wrapped = wrap_images_with_blur(html);
+        let cleaned = clean_html(&wrapped);
+        println!("WRAPPED:  {}", wrapped);
+        println!("CLEANED:  {}", cleaned);
+        assert!(cleaned.contains(" / "), "clean_html must preserve slash in --ar, got: {}", cleaned);
+    }
+
+    #[test]
     fn slugify_heading_simple() {
         assert_eq!(slugify_heading("Hello World"), "hello-world");
     }
