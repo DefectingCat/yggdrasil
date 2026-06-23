@@ -92,7 +92,7 @@
   // ============ 图像收集 ============
 
   // 收集所有 selectors命中的 .blur-img 节点。
-  // gallery: 正文图（组成图集）；singles: 带 data-single 的单张图（如封面）。
+  // gallery: 正文图（组成图集）；singles: 带 lightbox-single class 的单张图（如封面）。
   function collectImages(roots) {
     var gallery = [];
     var singles = [];
@@ -100,7 +100,7 @@
       var nodes = roots[i].querySelectorAll(".blur-img");
       for (var j = 0; j < nodes.length; j++) {
         var n = nodes[j];
-        if (n.getAttribute("data-single")) {
+        if (n.classList.contains("lightbox-single")) {
           singles.push(n);
         } else {
           gallery.push(n);
@@ -124,7 +124,8 @@
     var origSrc = originalUrl(dataSrc);
     var altText = fullImg.getAttribute("alt") || "";
     var isSingle =
-      originNode.getAttribute("data-single") === "true" || gallery.length === 0;
+      originNode.classList.contains("lightbox-single") ||
+      gallery.length === 0;
 
     var vw = window.innerWidth;
     var vh = window.innerHeight;

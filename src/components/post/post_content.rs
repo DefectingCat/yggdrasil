@@ -19,7 +19,7 @@ pub fn PostContent(content_html: String) -> Element {
         let _ = js_sys::eval(include_str!("../../../public/js/post-content.js"));
         let _ = js_sys::eval(include_str!("../../../public/js/lightbox.js"));
         let _ = js_sys::eval("window.__initPostContent('.post-content')");
-        // 正文图组成图集；封面（.entry-cover）单张模式，由 PostCover 标记 data-single。
+        // 正文图组成图集；封面（.entry-cover，带 lightbox-single class）单张模式。
         let _ = js_sys::eval("window.__initLightbox(['.post-content', '.entry-cover'])");
     });
 
