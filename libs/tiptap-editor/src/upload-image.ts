@@ -1,6 +1,6 @@
 import { Image } from '@tiptap/extension-image'
 import type { Node as PMNode } from '@tiptap/pm/model'
-import type { UploadCoordinator } from './upload-coordinator'
+import { UPLOAD_COORDINATOR_STORAGE_KEY, type UploadCoordinator } from './upload-coordinator'
 
 /** NodeView 按钮点击 / destroy 回调注入接口。 */
 export interface UploadNodeViewCallbacks {
@@ -146,14 +146,6 @@ class UploadImageNodeView {
   }
 }
 
-/** coordinator 引用（由 index.ts 在创建 editor 前注入）。 */
-let coordinatorRef: Pick<UploadCoordinator, 'retryUpload' | 'removeUpload'> | null = null
-
-/** index.ts 注入 coordinator，供 NodeView 的 onRetry/onRemove 调用。 */
-export function setUploadCoordinator(c: typeof coordinatorRef): void {
-  coordinatorRef = c
-}
-
 /**
  * 自定义 Image 扩展：继承父类属性，加三个上传状态属性，用自定义 NodeView。
  */
@@ -189,13 +181,15 @@ export const UploadImage = Image.configure({ allowBase64: true }).extend({
   },
 
   addNodeView() {
-    return ({ node, HTMLAttributes }) => {
+    return ({ node, HTMLAttributes, editor }) => {
+      const coordinator = (editor.storage as unknown as Record<string, unknown>)[UPLOAD_COORDINATOR_STORAGE_KEY] as UploadCoordinator | undefined
       return new UploadImageNodeView({
         node,
         HTMLAttributes,
         callbacks: {
-          onRetry: (id) => coordinatorRef?.retryUpload(id),
-          onRemove: (id) => coordinatorRef?.removeUpload(id),
+          onRetry: (id) => coordinator?.retryUpload(id),
+          onRemove: (id) => coordinator?.removeUpload(id),
+          onDestroyed: (id) => coordinator?.handleNodeDestroyed(id),
         },
       })
     }

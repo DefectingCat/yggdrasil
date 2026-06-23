@@ -5,8 +5,8 @@ import { TableKit } from '@tiptap/extension-table'
 import { TaskList, TaskItem } from '@tiptap/extension-list'
 import { FileHandler } from '@tiptap/extension-file-handler'
 import { SlashCommand } from './slash-command'
-import { UploadCoordinator, type UploadEvent } from './upload-coordinator'
-import { UploadImage, setUploadCoordinator } from './upload-image'
+import { UploadCoordinator, UPLOAD_COORDINATOR_STORAGE_KEY, type UploadEvent } from './upload-coordinator'
+import { UploadImage } from './upload-image'
 import './style.css'
 
 export interface EditorOptions {
@@ -82,9 +82,7 @@ class TiptapEditorInstance {
             HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
           },
         }),
-        Markdown.configure({
-          html: false,
-        }),
+        Markdown,
         TableKit,
         UploadImage,
         TaskList,
@@ -131,15 +129,16 @@ class TiptapEditorInstance {
       },
     })
 
-    // 创建上传协调器，注入给 NodeView 的 onRetry/onRemove
-    // onUploadEvent 透传给 coordinator.emit，未提供时空操作兜底
+    // 创建上传协调器，挂到 editor.storage 供 NodeView 按实例读取（支持多编辑器实例）。
+    // onUploadEvent 透传给 coordinator.emit，未提供时空操作兜底。
     if (this.options.onImageUpload) {
       this.coordinator = new UploadCoordinator(
         this.editor,
         this.options.onImageUpload,
         this.options.onUploadEvent ?? (() => {}),
       )
-      setUploadCoordinator(this.coordinator)
+      // editor.storage 是开放式索引签名；自定义 key 需绕过严格检查（Tiptap 官方扩展 storage 模式）。
+      ;(this.editor.storage as unknown as Record<string, unknown>)[UPLOAD_COORDINATOR_STORAGE_KEY] = this.coordinator
     }
 
     // 通知宿主编辑器已就绪（替代 window.__tiptap_ready 轮询）
@@ -245,9 +244,8 @@ class TiptapEditorInstance {
   destroy(): void {
     this.editor?.destroy()
     this.editor = null
+    // coordinator 通过 editor.storage 访问，随 editor 实例一同回收，无需显式清除引用。
     this.coordinator = null
-    // 清除 NodeView 的 coordinator 引用，避免指向已销毁的实例
-    setUploadCoordinator(null)
     // 清理源码模式相关引用（容器 innerHTML 已清空，DOM 会随之移除）
     this.sourceTextarea = null
     this.toggleButton = null

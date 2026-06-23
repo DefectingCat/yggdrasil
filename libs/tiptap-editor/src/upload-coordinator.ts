@@ -1,5 +1,8 @@
 import type { Editor } from '@tiptap/core'
 
+/** editor.storage 上挂载 coordinator 的 key。NodeView 通过此 key 拿到当前编辑器实例的 coordinator。 */
+export const UPLOAD_COORDINATOR_STORAGE_KEY = 'uploadCoordinator'
+
 /** pending 上传条目：保留 File 供重试，blobUrl 供本地预览，state 跟踪当前态。 */
 interface UploadEntry {
   file: File
