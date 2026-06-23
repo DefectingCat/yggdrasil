@@ -3,6 +3,14 @@ import type { Editor } from '@tiptap/core'
 /** editor.storage 上挂载 coordinator 的 key。NodeView 通过此 key 拿到当前编辑器实例的 coordinator。 */
 export const UPLOAD_COORDINATOR_STORAGE_KEY = 'uploadCoordinator'
 
+/** 可更新的上传相关节点属性。收窄类型，拼写错误可被 TS 捕获。 */
+type UploadNodeAttrs = Partial<{
+  src: string | null
+  'data-upload-state': 'uploading' | 'error' | null
+  'data-upload-id': string | null
+  'data-error-msg': string | null
+}>
+
 /** pending 上传条目：保留 File 供重试，blobUrl 供本地预览，state 跟踪当前态。 */
 interface UploadEntry {
   file: File
@@ -176,25 +184,30 @@ export class UploadCoordinator {
   }
 
   /** 按 uploadId 定位节点并合并更新属性。 */
-  private updateNodeAttrs(uploadId: string, attrs: Record<string, unknown>): void {
-    let targetPos: number | null = null
-    let oldAttrs: Record<string, unknown> | null = null
+  private updateNodeAttrs(uploadId: string, attrs: UploadNodeAttrs): void {
+    const found = this.findImageNodeByUploadId(uploadId)
+    if (!found) return
+    const merged: Record<string, unknown> = { ...found.attrs, ...(attrs as Record<string, unknown>) }
+    const tr = this.editor.state.tr.setNodeMarkup(
+      found.pos,
+      undefined,
+      merged,
+    )
+    this.editor.view.dispatch(tr)
+  }
+
+  /** 按 uploadId 查找 image 节点，返回其位置与属性快照（已断言为可 spread 的 plain object）。 */
+  private findImageNodeByUploadId(uploadId: string): { pos: number; attrs: Record<string, unknown> } | null {
+    let result: { pos: number; attrs: Record<string, unknown> } | null = null
     this.editor.state.doc.descendants((node, pos) => {
       if (node.type.name === 'image' && node.attrs['data-upload-id'] === uploadId) {
-        targetPos = pos
-        oldAttrs = node.attrs
+        // 就地 spread：node.attrs 在此作用域内，TS 接受；产出 plain object 供后续合并。
+        result = { pos, attrs: { ...(node.attrs as Record<string, unknown>) } }
         return false
       }
       return true
     })
-    if (targetPos !== null && oldAttrs) {
-      const tr = this.editor.state.tr.setNodeMarkup(
-        targetPos,
-        undefined,
-        { ...oldAttrs, ...attrs },
-      )
-      this.editor.view.dispatch(tr)
-    }
+    return result
   }
 
   /** 从错误对象提取消息。改造后的 fetch 直接抛服务端中文（如"文件超过大小限制"）。 */
