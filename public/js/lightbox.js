@@ -179,6 +179,8 @@
 
     // 焦点移入灯箱
     overlay.focus();
+    // 立即绑定交互（不等图片加载）：加载期间 Esc/滚动/点背景也须可关闭。
+    bindInteractions();
 
     // 图片加载后再做动画（naturalW/H 要等加载）
     var start = function () {
@@ -203,7 +205,6 @@
           overlay.style.opacity = "1";
           img.style.opacity = "1";
         });
-        bindInteractions();
         return;
       }
 
@@ -226,8 +227,6 @@
         img.style.opacity = "1";
         overlay.style.opacity = "1";
       });
-
-      bindInteractions();
     };
 
     if (img.complete && img.naturalWidth) {
