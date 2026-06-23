@@ -7,13 +7,21 @@ interface UploadEntry {
   fileName: string
 }
 
-/** coordinator 推给 Rust 的事件（通过 window.__tiptap_uploads.events）。 */
+/** counts 快照：随事件一起传给宿主，替代 window 全局。 */
+export interface UploadCounts {
+  uploading: number
+  error: number
+}
+
+/** coordinator 推给宿主的事件（通过 emit 回调，替代 window 全局轮询）。 */
 export interface UploadEvent {
   kind: 'error' | 'success' | 'removed'
   uploadId: string
   fileName: string
   errorMsg?: string
   ts: number
+  /** 当前编辑器内 uploading/error 占位符计数（emit 时由 JS 遍历文档算出）。 */
+  counts: UploadCounts
 }
 
 /** 生成 uploadId，兼容非安全上下文（无 crypto.randomUUID 时）。 */
@@ -28,7 +36,7 @@ function genUploadId(): string {
  * - 生成 uploadId、创建 blob URL、插入占位符节点
  * - 发起上传，成功更新节点 src、失败转 error 态
  * - 按 upload-id 定位节点更新/删除（上传完成时光标早已移走）
- * - 维护 window.__tiptap_uploads 供 Rust 轮询
+ * - 通过 emit 回调把事件推给宿主（替代旧版 window 全局轮询）
  *
  * pending Map 保留 File 对象直到上传成功或显式移除，支持无限重试。
  */
@@ -38,6 +46,7 @@ export class UploadCoordinator {
   constructor(
     private editor: Editor,
     private onImageUpload: (file: File) => Promise<string>,
+    private emit: (event: UploadEvent) => void,
   ) {}
 
   /**
@@ -157,17 +166,10 @@ export class UploadCoordinator {
   }
 
   /**
-   * 追加事件到 window.__tiptap_uploads.events，并重算 counts。
-   * Rust 侧 500ms 轮询消费 events 并读取 counts。
+   * 通过注入的 emit 回调把事件（含 counts 快照）输出给宿主，
+   * 替代原先写 window.__tiptap_uploads 全局供 Rust 轮询。
    */
-  private notifyRust(event: Omit<UploadEvent, 'ts'>): void {
-    const w = window as unknown as { __tiptap_uploads?: { events: UploadEvent[]; counts: { uploading: number; error: number } } }
-    if (!w.__tiptap_uploads) {
-      w.__tiptap_uploads = { events: [], counts: { uploading: 0, error: 0 } }
-    }
-    w.__tiptap_uploads.events.push({ ...event, ts: Date.now() })
-
-    // 重算 counts：遍历文档统计当前 uploading/error 占位符
+  private notifyRust(event: Omit<UploadEvent, 'ts' | 'counts'>): void {
     let uploading = 0
     let error = 0
     this.editor.state.doc.descendants((node) => {
@@ -176,7 +178,7 @@ export class UploadCoordinator {
       else if (state === 'error') error++
       return true
     })
-    w.__tiptap_uploads.counts = { uploading, error }
+    this.emit({ ...event, ts: Date.now(), counts: { uploading, error } })
   }
 
   /** pending Map 查询（供内部/测试）。 */
