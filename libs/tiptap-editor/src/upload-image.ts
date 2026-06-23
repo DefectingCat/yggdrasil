@@ -2,10 +2,12 @@ import { Image } from '@tiptap/extension-image'
 import type { Node as PMNode } from '@tiptap/pm/model'
 import type { UploadCoordinator } from './upload-coordinator'
 
-/** NodeView 按钮点击回调注入接口。 */
+/** NodeView 按钮点击 / destroy 回调注入接口。 */
 export interface UploadNodeViewCallbacks {
   onRetry: (uploadId: string) => void
   onRemove: (uploadId: string) => void
+  /** NodeView.destroy 兜底：节点被 PM 删除时清理 pending + revoke blob。 */
+  onDestroyed: (uploadId: string) => void
 }
 
 /**
@@ -22,6 +24,7 @@ export interface UploadNodeViewCallbacks {
 class UploadImageNodeView {
   private node: PMNode
   private callbacks: UploadNodeViewCallbacks
+  private uploadId: string | null
 
   private container: HTMLDivElement
   private img: HTMLImageElement
@@ -34,6 +37,7 @@ class UploadImageNodeView {
   }) {
     this.node = opts.node
     this.callbacks = opts.callbacks
+    this.uploadId = (this.node.attrs['data-upload-id'] as string | null) ?? null
 
     this.container = document.createElement('div')
     this.container.classList.add('upload-image-container')
@@ -66,6 +70,7 @@ class UploadImageNodeView {
     const oldSrc = this.node.attrs.src
     const newSrc = node.attrs.src
     this.node = node
+    this.uploadId = (node.attrs['data-upload-id'] as string | null) ?? null
     if (oldSrc !== newSrc && newSrc != null) {
       this.img.src = newSrc
     }
@@ -130,6 +135,11 @@ class UploadImageNodeView {
   }
 
   destroy(): void {
+    // 节点被 ProseMirror 删除（退格/剪切等）：兜底清理 pending + revoke blob，
+    // 避免 upload-coordinator 的 pending Map 和 blob URL 泄漏（尤其 error 态节点）。
+    if (this.uploadId) {
+      this.callbacks.onDestroyed(this.uploadId)
+    }
     this.overlay?.remove()
     this.overlay = null
     this.container.remove()
