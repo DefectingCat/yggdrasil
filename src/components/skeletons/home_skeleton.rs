@@ -9,13 +9,14 @@ use crate::components::skeletons::post_card_skeleton::PostCardSkeleton;
 
 /// 首页骨架屏组件。
 ///
-/// 显示 5 个文章卡片骨架与分页按钮占位。
+/// 显示与 `POSTS_PER_PAGE` 等量的文章卡片骨架与分页按钮占位，
+/// 使骨架屏与加载完成后的实际列表长度一致，避免内容跳变。
 #[component]
 pub fn HomeSkeleton() -> Element {
     rsx! {
         div {
-            // 5 个文章卡片骨架
-            for _ in 0..5 {
+            // 10 个文章卡片骨架，对齐首页 POSTS_PER_PAGE。
+            for _ in 0..10 {
                 PostCardSkeleton {}
             }
             // 分页按钮占位

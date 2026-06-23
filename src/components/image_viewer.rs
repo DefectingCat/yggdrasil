@@ -13,8 +13,10 @@ use dioxus::prelude::*;
 /// - `thumb_params`：缩略图 URL 参数，默认 `"?w=800"`
 /// - `alt`：图片替代文本，默认 `"图片"`
 /// - `lazy_load`：是否启用懒加载，默认 `false`
+/// - `lightbox`：是否启用点击放大灯箱，默认 `true`。卡片等场景设为 `false`
+///   以禁用灯箱交互，使整张卡片归一为单一跳转行为（避免嵌套交互）。
 ///
-/// 关键事件：
+/// 关键事件（仅在 `lightbox == true` 时生效）：
 /// - 点击缩略图：打开全屏灯箱
 /// - 点击遮罩或关闭按钮：关闭灯箱
 /// - 点击灯箱内容区：阻止事件冒泡，避免误关闭
@@ -26,16 +28,18 @@ pub fn ImageViewer(
     #[props(default = "?w=20".to_string())] placeholder_params: String,
     #[props(default = "图片".to_string())] alt: String,
     #[props(default = false)] lazy_load: bool,
+    #[props(default = true)] lightbox: bool,
 ) -> Element {
     let mut is_open = use_signal(|| false);
 
     // 打开灯箱时聚焦关闭按钮，并监听 Escape 键关闭。
+    // 灯箱禁用时跳过键盘监听与焦点管理，避免无谓的 DOM 操作。
     #[cfg(target_arch = "wasm32")]
     {
         use wasm_bindgen::{closure::Closure, JsCast};
 
         use_effect(move || {
-            if !is_open() {
+            if !lightbox || !is_open() {
                 return;
             }
 
@@ -107,10 +111,11 @@ pub fn ImageViewer(
 
     rsx! {
         // blur-up 双层：底层占位图 + 上层高清图（data-src 由前端 JS 懒加载）
+        // 灯箱禁用时不绑定 onclick，使缩略图成为纯展示元素（卡片由外层覆盖链接接管跳转）。
         span {
             class: "blur-img",
             style: "{ar_style}",
-            onclick: move |_| is_open.set(true),
+            onclick: move |_| if lightbox { is_open.set(true) },
             img {
                 class: "blur-img-placeholder",
                 src: "{placeholder_src}",
@@ -124,8 +129,8 @@ pub fn ImageViewer(
             }
         }
 
-        // 全屏灯箱
-        if is_open() {
+        // 全屏灯箱（仅 lightbox 启用时可能打开）
+        if lightbox && is_open() {
             div {
                 class: "image-viewer-overlay",
                 role: "dialog",

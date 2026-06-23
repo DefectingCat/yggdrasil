@@ -144,12 +144,9 @@ pub mod wasm {
 
     /// 持有编辑器实例 + 其全部 closure，统一生命周期。
     ///
-    /// drop 时先 destroy JS 实例（释放 ProseMirror 资源），再 drop closure
-    /// （释放 wasm-bindgen 回调表）。比 `Closure::forget`（永久泄漏）干净——
-    /// closure 严格随编辑器实例同生共死。
-    ///
-    /// 字段顺序：`instance` 在前仅表示逻辑主从；Drop::drop 里显式调 destroy，
-    /// 之后 closure 字段按声明逆序自动 drop，无顺序敏感问题。
+    /// drop 时先 destroy JS 实例（释放 ProseMirror 资源），随后 closure 字段
+    /// 按声明逆序自动 drop（释放 wasm-bindgen 回调表）。比 `Closure::forget`
+    /// （永久泄漏）干净——closure 严格随编辑器实例同生共死。
     pub struct EditorHandle {
         instance: EditorInstance,
         _on_update: Closure<dyn FnMut(String)>,
@@ -184,7 +181,6 @@ pub mod wasm {
     impl Drop for EditorHandle {
         fn drop(&mut self) {
             self.instance.destroy();
-            // closure 字段随后自动 drop（逆序：on_upload_event → on_ready → on_image_upload → on_update）
         }
     }
 
@@ -194,35 +190,33 @@ pub mod wasm {
     ///
     /// 逻辑与旧轮询 body 一致：
     /// - error：新 id 追加提示，已存在 id 原地更新消息（重试后再失败）
-    /// - success/removed：移除对应提示 + 清 seen
+    /// - success/removed：移除对应提示
     /// - counts：直接从事件读（JS 已遍历文档算好）
+    ///
+    /// 去重以 `upload_errors` Vec 自身为唯一数据源（用 iter().any 判重），
+    /// 不再额外维护 seen_error_ids，避免两份状态需手动同步。
     pub fn consume_upload_event(
         ev: &UploadEventJs,
-        uploads_in_flight: &mut dioxus::prelude::Signal<UploadsInFlight>,
-        upload_errors: &mut dioxus::prelude::Signal<Vec<UploadErrorEntry>>,
-        seen_error_ids: &mut dioxus::prelude::Signal<std::collections::HashSet<String>>,
+        mut uploads_in_flight: dioxus::prelude::Signal<UploadsInFlight>,
+        mut upload_errors: dioxus::prelude::Signal<Vec<UploadErrorEntry>>,
     ) {
         let id = ev.upload_id();
         match ev.kind().as_str() {
             "error" => {
                 let msg = ev.error_msg().unwrap_or_else(|| "上传失败".to_string());
-                if seen_error_ids.write().insert(id.clone()) {
-                    // 新失败：追加提示
-                    upload_errors.write().push(UploadErrorEntry {
+                // 已存在同 id（重试后再失败）：原地更新消息；否则追加。
+                let mut errors = upload_errors.write();
+                if let Some(entry) = errors.iter_mut().find(|e| e.id == id) {
+                    entry.message = msg;
+                } else {
+                    errors.push(UploadErrorEntry {
                         id: id.clone(),
                         file_name: ev.file_name(),
                         message: msg,
                     });
-                } else {
-                    // 已存在的 id（重试后再失败）：原地更新消息
-                    let mut errors = upload_errors.write();
-                    if let Some(entry) = errors.iter_mut().find(|e| e.id == id) {
-                        entry.message = msg;
-                    }
                 }
             }
             "success" | "removed" => {
-                seen_error_ids.write().remove(&id);
                 upload_errors.write().retain(|e| e.id != id);
             }
             _ => {}
@@ -245,27 +239,30 @@ pub mod wasm {
     /// - 成功 → resolve(url)；失败 → reject(Error(服务端中文 error))
     ///
     /// 返回的 closure 签名 `(File) -> Promise` 对应 JS `onImageUpload`。
+    /// 构造阶段的错误（FormData/Request 等）以 rejected Promise 返回，
+    /// 而非 panic —— 单张坏文件不应导致整个编辑器崩溃。
     pub fn make_upload_closure() -> Closure<dyn Fn(web_sys::File) -> js_sys::Promise> {
         Closure::new(move |file: web_sys::File| -> js_sys::Promise {
-            // 构造 FormData：字段名 'image' 与服务端 upload.rs 对齐
-            let form = web_sys::FormData::new().expect("FormData::new failed");
-            form.append_with_blob("image", &file)
-                .expect("FormData.append failed");
-
-            // 构造 POST 请求，credentials same-origin 携带 session cookie
-            let mut init = web_sys::RequestInit::new();
-            init.method("POST");
-            init.body(Some(&form));
-            init.credentials(web_sys::RequestCredentials::SameOrigin);
-
-            let request = web_sys::Request::new_with_str_and_init("/api/upload", &init)
-                .expect("Request::new failed");
-
-            let window = web_sys::window().expect("no window");
-            let promise = window.fetch_with_request(&request);
-
-            // 把 fetch Promise → Future → 解析响应体 → 再包回 Promise
             wasm_bindgen_futures::future_to_promise(async move {
+                // 构造 FormData：字段名 'image' 与服务端 upload.rs 对齐
+                let form = web_sys::FormData::new()
+                    .map_err(|_| js_sys::Error::new("无法构造上传表单"))?;
+                form.append_with_blob("image", &file)
+                    .map_err(|_| js_sys::Error::new("无法附加文件"))?;
+
+                // 构造 POST 请求，credentials same-origin 携带 session cookie
+                let mut init = web_sys::RequestInit::new();
+                init.method("POST");
+                init.body(Some(&form));
+                init.credentials(web_sys::RequestCredentials::SameOrigin);
+
+                let request = web_sys::Request::new_with_str_and_init("/api/upload", &init)
+                    .map_err(|_| js_sys::Error::new("无法构造上传请求"))?;
+
+                let window = web_sys::window().expect("no window");
+                let promise = window.fetch_with_request(&request);
+
+                // 把 fetch Promise → Future → 解析响应体 → 再包回 Promise
                 let resp_val = wasm_bindgen_futures::JsFuture::from(promise).await?;
                 let resp: web_sys::Response = resp_val.dyn_into()?;
 

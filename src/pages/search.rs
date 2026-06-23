@@ -78,9 +78,13 @@ pub fn Search() -> Element {
                     PostCard { post: post.clone() }
                 }
             }
-        } else if let Some(Err(e)) = search_res() {
+        } else if search_res()
+            .as_ref()
+            .map(|r| r.is_err())
+            .unwrap_or(false)
+        {
             div { class: "text-center text-red-500 dark:text-red-400 py-20",
-                "搜索失败: {e}"
+                "搜索失败"
             }
         }
     }

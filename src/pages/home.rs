@@ -63,33 +63,38 @@ fn HomePosts(current_page: i32) -> Element {
                 for post in posts.iter() {
                     PostCard { post: post.clone() }
                 }
-                // 如果当前页没有任何文章，显示空状态提示。
-                if posts.is_empty() {
+                // total == 0 表示站点确实无文章：显示空状态，且不渲染分页。
+                // 注意：total > 0 但 posts 为空（如越界页码 /page/9999）也不显示空状态，
+                // 避免误导用户以为站点无内容；此时仅靠下方的分页导航引导回有效页。
+                if total == 0 {
                     div { class: "text-center text-paper-secondary py-20",
                         "暂无文章"
                     }
                 }
-                // 在列表底部渲染分页导航。
+                // 仅在有文章时渲染分页导航，避免越界页码下出现孤立的空分页。
                 // frontend variant 不渲染页码计数，unit 不显示（仅满足必填 prop）。
-                Pagination {
-                    variant: "frontend",
-                    current_page,
-                    total,
-                    per_page: POSTS_PER_PAGE,
-                    prev_route: if current_page - 1 <= 1 {
-                        Route::Home {}
-                    } else {
-                        Route::HomePage { page: current_page - 1 }
-                    },
-                    next_route: Route::HomePage { page: current_page + 1 },
-                    unit: "篇",
+                if total > 0 {
+                    Pagination {
+                        variant: "frontend",
+                        current_page,
+                        total,
+                        per_page: POSTS_PER_PAGE,
+                        prev_route: if current_page - 1 <= 1 {
+                            Route::Home {}
+                        } else {
+                            Route::HomePage { page: current_page - 1 }
+                        },
+                        next_route: Route::HomePage { page: current_page + 1 },
+                        unit: "篇",
+                    }
                 }
             }
         }
-        Some(Err(e)) => {
+        // 不透传内部错误细节，统一展示通用文案（与标签页等其它页面一致）。
+        Some(Err(_)) => {
             rsx! {
                 div { class: "text-center text-red-500 dark:text-red-400 py-20",
-                    "加载失败: {e}"
+                    "加载失败"
                 }
             }
         }

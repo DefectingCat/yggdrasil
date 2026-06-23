@@ -28,7 +28,7 @@ use wasm_bindgen::closure::Closure;
 ///
 /// 内部委托给 `write_editor`，以 `None` 表示新建模式。
 #[component]
-#[allow(unused_mut, unused_variables)]
+#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
 pub fn Write() -> Element {
     write_editor(None)
 }
@@ -37,7 +37,7 @@ pub fn Write() -> Element {
 ///
 /// `id` 为要编辑的文章 ID，内部委托给 `write_editor` 加载现有数据。
 #[component]
-#[allow(unused_mut, unused_variables)]
+#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
 pub fn WriteEdit(id: i32) -> Element {
     write_editor(Some(id))
 }
@@ -50,7 +50,7 @@ pub fn WriteEdit(id: i32) -> Element {
 /// - 编辑模式下将 Markdown 内容回填到编辑器；
 /// - 提交时读取编辑器 Markdown、校验并调用 create_post / update_post；
 /// - 组件卸载时销毁 Tiptap 实例（EditorHandle::drop 自动 destroy + 释放 closure）。
-#[allow(unused_mut, unused_variables)]
+#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
 fn write_editor(post_id: Option<i32>) -> Element {
     let is_edit = post_id.is_some();
 
@@ -66,7 +66,6 @@ fn write_editor(post_id: Option<i32>) -> Element {
     let mut loading = use_signal(|| true);
     let mut saving = use_signal(|| false);
     let mut error = use_signal(|| None::<String>);
-    let mut success = use_signal(|| false);
     let mut editor_content_set = use_signal(|| false);
     let mut has_backfilled = use_signal(|| false);
     let mut load_error = use_signal(|| None::<String>);
@@ -84,11 +83,6 @@ fn write_editor(post_id: Option<i32>) -> Element {
     // 上传状态：当前进行中计数（保存拦截）+ 顶部失败提示堆叠（用户手动关闭）
     let mut uploads_in_flight = use_signal(UploadsInFlight::default);
     let mut upload_errors: Signal<Vec<UploadErrorEntry>> = use_signal(Vec::new);
-    // 已展示过错误的上传 id（去重 + 重试后再失败时原地更新）。
-    // 用 signal 而非局部变量：closure 的 FnMut 闭包要求可重复调用，
-    // signal 是 Copy 可被多次 move。
-    let mut seen_error_ids: Signal<std::collections::HashSet<String>> =
-        use_signal(std::collections::HashSet::new);
 
     // 编辑模式：文章数据加载完成后，将字段回填到表单信号。
     use_effect(move || {
@@ -161,11 +155,10 @@ fn write_editor(post_id: Option<i32>) -> Element {
         });
         let on_image_upload = crate::tiptap_bridge::make_upload_closure();
         let on_upload_event = Closure::new({
-            let mut uploads_in_flight = uploads_in_flight;
-            let mut upload_errors = upload_errors;
-            let mut seen_error_ids = seen_error_ids;
+            let uploads_in_flight = uploads_in_flight;
+            let upload_errors = upload_errors;
             move |ev: crate::tiptap_bridge::UploadEventJs| {
-                consume_upload_event(&ev, &mut uploads_in_flight, &mut upload_errors, &mut seen_error_ids);
+                consume_upload_event(&ev, uploads_in_flight, upload_errors);
             }
         });
 
@@ -240,13 +233,11 @@ fn write_editor(post_id: Option<i32>) -> Element {
 
         if title().trim().is_empty() {
             error.set(Some("标题不能为空".to_string()));
-            #[allow(clippy::needless_return)]
-            return;
         }
 
         // 仅在 WASM 前端读取编辑器内容并发起保存请求。
         #[cfg(target_arch = "wasm32")]
-        {
+        if !title().trim().is_empty() {
             // 通过 EditorHandle 实例读取 Markdown；句柄未就绪时退回 content signal。
             let md = if let Some(handle) = &*editor.read() {
                 handle.instance().get_markdown()
@@ -268,8 +259,9 @@ fn write_editor(post_id: Option<i32>) -> Element {
             }
 
             // 将逗号分隔的标签字符串转换为列表。
+            // 同时支持半角/全角逗号与分号，避免中文输入法下的全角标点被误并入单个标签。
             let tags_list: Vec<String> = tags()
-                .split(',')
+                .split(|c| matches!(c, ',' | ',' | ';' | ';'))
                 .map(|t| t.trim().to_string())
                 .filter(|t| !t.is_empty())
                 .collect();
@@ -312,7 +304,6 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     {
                         Ok(CreatePostResponse { success: true, .. }) => {
                             saving.set(false);
-                            success.set(true);
                             let _ = dioxus::router::navigator().push(Route::Posts {});
                         }
                         Ok(CreatePostResponse {
@@ -345,8 +336,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     {
                         Ok(CreatePostResponse { success: true, .. }) => {
                             saving.set(false);
-                            success.set(true);
-                            let _ = dioxus::router::navigator().push(Route::Admin {});
+                            let _ = dioxus::router::navigator().push(Route::Posts {});
                         }
                         Ok(CreatePostResponse {
                             success: false,
@@ -364,6 +354,12 @@ fn write_editor(post_id: Option<i32>) -> Element {
                 });
             }
         }
+
+        // 非 WASM（SSR hydration 前等场景）：明确提示无法保存，而非静默无反应。
+        #[cfg(not(target_arch = "wasm32"))]
+        if !title().trim().is_empty() {
+            error.set(Some("此页面需要 JavaScript 才能保存".to_string()));
+        }
     };
 
     let save_button_text = if saving() {
@@ -373,6 +369,12 @@ fn write_editor(post_id: Option<i32>) -> Element {
     } else {
         "保存"
     };
+
+    // 元信息表单复用的样式：label 与 input 各一份，避免三处重复粘贴。
+    const META_LABEL_CLASS: &str =
+        "block text-[11px] font-medium text-[var(--color-paper-secondary)] tracking-wider mb-2";
+    const META_INPUT_CLASS: &str =
+        "w-full text-sm bg-transparent text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border-b border-[var(--color-paper-tertiary)] focus:border-[var(--color-paper-primary)] transition-colors pb-1.5";
 
     rsx! {
         div { class: "relative flex flex-col flex-1 min-h-0 overflow-hidden",
@@ -406,33 +408,33 @@ fn write_editor(post_id: Option<i32>) -> Element {
                 // 元数据行 - 紧凑精致
                 div { class: "flex flex-wrap items-end gap-x-8 gap-y-4 text-sm",
                     div { class: "flex-1 min-w-[140px]",
-                        label { class: "block text-[11px] font-medium text-[var(--color-paper-secondary)] tracking-wider mb-2",
+                        label { class: "{META_LABEL_CLASS}",
                             "Slug"
                         }
                         input {
-                            class: "w-full text-sm bg-transparent text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border-b border-[var(--color-paper-tertiary)] focus:border-[var(--color-paper-primary)] transition-colors pb-1.5",
+                            class: "{META_INPUT_CLASS}",
                             placeholder: "自动生成",
                             value: "{slug}",
                             oninput: move |evt| slug.set(evt.value()),
                         }
                     }
                     div { class: "flex-1 min-w-[140px]",
-                        label { class: "block text-[11px] font-medium text-[var(--color-paper-secondary)] tracking-wider mb-2",
+                        label { class: "{META_LABEL_CLASS}",
                             "标签"
                         }
                         input {
-                            class: "w-full text-sm bg-transparent text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border-b border-[var(--color-paper-tertiary)] focus:border-[var(--color-paper-primary)] transition-colors pb-1.5",
+                            class: "{META_INPUT_CLASS}",
                             placeholder: "逗号分隔",
                             value: "{tags}",
                             oninput: move |evt| tags.set(evt.value()),
                         }
                     }
                     div { class: "flex-1 min-w-[140px]",
-                        label { class: "block text-[11px] font-medium text-[var(--color-paper-secondary)] tracking-wider mb-2",
+                        label { class: "{META_LABEL_CLASS}",
                             "封面图"
                         }
                         input {
-                            class: "w-full text-sm bg-transparent text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border-b border-[var(--color-paper-tertiary)] focus:border-[var(--color-paper-primary)] transition-colors pb-1.5",
+                            class: "{META_INPUT_CLASS}",
                             placeholder: "URL（可选）",
                             value: "{cover_image}",
                             oninput: move |evt| cover_image.set(evt.value()),
@@ -459,12 +461,6 @@ fn write_editor(post_id: Option<i32>) -> Element {
             if let Some(err) = error() {
                 div { class: "flex-shrink-0 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30 mb-2",
                     "{err}"
-                }
-            }
-
-            if success() {
-                div { class: "flex-shrink-0 px-4 py-2 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-xl text-sm border border-green-100 dark:border-green-900/30 mb-2",
-                    "保存成功"
                 }
             }
 

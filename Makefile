@@ -27,6 +27,8 @@ build-editor-incremental:
 	@cd libs/tiptap-editor && npm run build
 
 dev: build-editor-incremental
+	@echo "Cleaning static/..."
+	@rm -rf static/
 	@echo "Building Tiptap editor (incremental)..."
 	@echo "Starting tailwindcss watch and dx serve..."
 	@tailwindcss -i input.css -o public/style.css --watch & \
