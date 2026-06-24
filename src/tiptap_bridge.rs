@@ -244,69 +244,85 @@ pub mod wasm {
 
     // —— make_upload_closure：Rust fetch 上传 ——
 
-    /// 创建图片上传 closure：FormData POST /api/upload，解析 {success, url, error}。
+    /// 通用图片上传：FormData POST /api/upload，解析 {success, url, error}。
     ///
-    /// 行为与旧版 write.rs eval 注入的 JS fetch 等价：
+    /// 由封面图上传（spawn 直接 await）与 Tiptap 编辑器上传（make_upload_closure 包 Promise）共用，
+    /// 避免两处重复同一份 fetch + 解析逻辑。
+    ///
+    /// 行为：
     /// - credentials: same-origin（携带 session cookie）
     /// - 字段名 'image'（与服务端 upload.rs 对齐）
-    /// - 成功 → resolve(url)；失败 → reject(Error(服务端中文 error))
+    /// - 成功 → Ok(url)；失败 → Err(服务端中文 error，或状态码兜底)
+    ///
+    /// 构造阶段的错误（FormData/Request 等）以 Err 返回，而非 panic，
+    /// 单张坏文件不应导致整个上传流程崩溃。
+    pub async fn upload_image_file(file: web_sys::File) -> Result<String, String> {
+        // 构造 FormData：字段名 'image' 与服务端 upload.rs 对齐
+        let form = web_sys::FormData::new().map_err(|_| "无法构造上传表单".to_string())?;
+        form.append_with_blob("image", &file)
+            .map_err(|_| "无法附加文件".to_string())?;
+
+        // 构造 POST 请求，credentials same-origin 携带 session cookie
+        let init = web_sys::RequestInit::new();
+        init.set_method("POST");
+        // set_body 接收 &JsValue（非 Option）；FormData: AsRef<JsValue>。
+        init.set_body(form.as_ref());
+        init.set_credentials(web_sys::RequestCredentials::SameOrigin);
+
+        let request = web_sys::Request::new_with_str_and_init("/api/upload", &init)
+            .map_err(|_| "无法构造上传请求".to_string())?;
+
+        let window = web_sys::window().expect("no window");
+        let promise = window.fetch_with_request(&request);
+
+        // fetch Promise → Future → 解析响应体
+        let resp_val = wasm_bindgen_futures::JsFuture::from(promise)
+            .await
+            .map_err(|e| format!("上传请求失败: {:?}", e))?;
+        let resp: web_sys::Response = resp_val
+            .dyn_into()
+            .map_err(|_| "上传响应类型异常".to_string())?;
+
+        // 读响应体文本（无论 2xx 与否，服务端都返回 JSON）
+        let text_promise = resp
+            .text()
+            .map_err(|e| format!("读取响应失败: {:?}", e))?;
+        let text_val = wasm_bindgen_futures::JsFuture::from(text_promise)
+            .await
+            .map_err(|e| format!("读取响应失败: {:?}", e))?;
+        let text = text_val.as_string().unwrap_or_default();
+
+        // 解析 {success, url, error}
+        let data: serde_json::Value =
+            serde_json::from_str(&text).unwrap_or(serde_json::Value::Null);
+
+        if data["success"].as_bool() == Some(true) {
+            let url = data["url"].as_str().unwrap_or("");
+            if !url.is_empty() {
+                Ok(url.to_string())
+            } else {
+                // success=true 但 url 为空：服务端契约异常，按失败处理
+                Err("上传成功但未返回图片地址".to_string())
+            }
+        } else {
+            // 失败：优先用服务端中文 error，兜底用状态码
+            Err(data["error"]
+                .as_str()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| format!("上传失败: {}", resp.status())))
+        }
+    }
+
+    /// 创建 Tiptap 图片上传 closure：内部复用 [`upload_image_file`]，包装成 JS Promise。
     ///
     /// 返回的 closure 签名 `(File) -> Promise` 对应 JS `onImageUpload`。
-    /// 构造阶段的错误（FormData/Request 等）以 rejected Promise 返回，
-    /// 而非 panic —— 单张坏文件不应导致整个编辑器崩溃。
     pub fn make_upload_closure() -> Closure<dyn Fn(web_sys::File) -> js_sys::Promise> {
         Closure::new(move |file: web_sys::File| -> js_sys::Promise {
             wasm_bindgen_futures::future_to_promise(async move {
-                // 构造 FormData：字段名 'image' 与服务端 upload.rs 对齐
-                let form = web_sys::FormData::new()
-                    .map_err(|_| js_sys::Error::new("无法构造上传表单"))?;
-                form.append_with_blob("image", &file)
-                    .map_err(|_| js_sys::Error::new("无法附加文件"))?;
-
-                // 构造 POST 请求，credentials same-origin 携带 session cookie
-                let init = web_sys::RequestInit::new();
-                init.set_method("POST");
-                // set_body 接收 &JsValue（非 Option）；FormData: AsRef<JsValue>。
-                init.set_body(form.as_ref());
-                init.set_credentials(web_sys::RequestCredentials::SameOrigin);
-
-                let request = web_sys::Request::new_with_str_and_init("/api/upload", &init)
-                    .map_err(|_| js_sys::Error::new("无法构造上传请求"))?;
-
-                let window = web_sys::window().expect("no window");
-                let promise = window.fetch_with_request(&request);
-
-                // 把 fetch Promise → Future → 解析响应体 → 再包回 Promise
-                let resp_val = wasm_bindgen_futures::JsFuture::from(promise).await?;
-                let resp: web_sys::Response = resp_val.dyn_into()?;
-
-                // 读响应体文本（无论 2xx 与否，服务端都返回 JSON）
-                let text_promise = resp
-                    .text()
-                    .map_err(|e| js_sys::Error::new(&format!("读取响应失败: {:?}", e)))?;
-                let text_val = wasm_bindgen_futures::JsFuture::from(text_promise).await?;
-                let text = text_val.as_string().unwrap_or_default();
-
-                // 解析 {success, url, error}
-                let data: serde_json::Value =
-                    serde_json::from_str(&text).unwrap_or(serde_json::Value::Null);
-
-                if data["success"].as_bool() == Some(true) {
-                    let url = data["url"].as_str().unwrap_or("");
-                    if !url.is_empty() {
-                        Ok(js_sys::JsString::from(url).into())
-                    } else {
-                        // success=true 但 url 为空：服务端契约异常，按失败处理
-                        Err(js_sys::Error::new("上传成功但未返回图片地址").into())
-                    }
-                } else {
-                    // 失败：优先用服务端中文 error，兜底用状态码
-                    let msg = data["error"]
-                        .as_str()
-                        .map(|s| s.to_string())
-                        .unwrap_or_else(|| format!("上传失败: {}", resp.status()));
-                    Err(js_sys::Error::new(&msg).into())
-                }
+                upload_image_file(file)
+                    .await
+                    .map(|url| js_sys::JsString::from(url).into())
+                    .map_err(|msg| js_sys::Error::new(&msg).into())
             })
         })
     }
@@ -314,6 +330,6 @@ pub mod wasm {
 
 #[cfg(target_arch = "wasm32")]
 pub use wasm::{
-    consume_upload_event, make_upload_closure, EditorHandle, EditorOptions, UploadEventJs,
-    get_module,
+    consume_upload_event, make_upload_closure, upload_image_file, EditorHandle, EditorOptions,
+    UploadEventJs, get_module,
 };
