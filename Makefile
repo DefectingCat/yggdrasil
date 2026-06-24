@@ -1,13 +1,15 @@
-.PHONY: dev build build-linux css css-watch clean build-editor build-editor-incremental highlight-css test
+.PHONY: dev build build-linux css css-watch clean build-editor build-editor-incremental build-lightbox build-lightbox-incremental highlight-css test
 
 build:
 	@$(MAKE) build-editor
+	@$(MAKE) build-lightbox
 	@$(MAKE) highlight-css
 	@tailwindcss -i input.css -o public/style.css --minify
 	@dx build --release --debug-symbols=false
 
 build-linux:
 	@$(MAKE) build-editor
+	@$(MAKE) build-lightbox
 	@$(MAKE) highlight-css
 	@tailwindcss -i input.css -o public/style.css --minify
 	@dx build @client --release --debug-symbols=false --wasm-js-cfg false
@@ -26,7 +28,16 @@ build-editor:
 build-editor-incremental:
 	@cd libs/tiptap-editor && npm run build
 
-dev: build-editor-incremental
+build-lightbox:
+	@echo "Building Lightbox..."
+	@cd libs/lightbox && npm install && npm run build
+	@echo "Lightbox built."
+
+# dev 用的增量构建：跳过 npm ci（假设 node_modules 已存在），仅 vite build。
+build-lightbox-incremental:
+	@cd libs/lightbox && npm run build
+
+dev: build-editor-incremental build-lightbox-incremental
 	@echo "Cleaning static/..."
 	@rm -rf static/
 	@echo "Building Tiptap editor (incremental)..."
@@ -45,6 +56,7 @@ css-watch:
 test:
 	@cargo test
 	@cd libs/tiptap-editor && npm test
+	@cd libs/lightbox && npm test
 
 clean:
 	@cargo clean

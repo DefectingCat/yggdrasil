@@ -10,17 +10,22 @@ use dioxus::prelude::*;
 /// - `content_html`：服务端渲染的文章 HTML 字符串
 ///
 /// 关键行为：
-/// - 在 `target_arch = "wasm32"` 环境下执行 `post-content.js`（代码块复制）与
-///   `lightbox.js`（图片灯箱 + 懒加载），并调用各自的初始化函数。
+/// - 在 `target_arch = "wasm32"` 环境下执行 `post-content.js`（代码块复制）。
+///   灯箱（图片灯箱 + 懒加载）改由 `Dioxus.toml` 全局注入 `lightbox.js`，
+///   这里仅设置其初始化配置 `__lightboxSelectors` 并兜底调用。
 #[component]
 pub fn PostContent(content_html: String) -> Element {
     #[cfg(target_arch = "wasm32")]
     use_effect(move || {
         let _ = js_sys::eval(include_str!("../../../public/js/post-content.js"));
-        let _ = js_sys::eval(include_str!("../../../public/js/lightbox.js"));
         let _ = js_sys::eval("window.__initPostContent('.post-content')");
-        // 正文图组成图集；封面（.entry-cover，带 lightbox-single class）单张模式。
-        let _ = js_sys::eval("window.__initLightbox(['.post-content', '.entry-cover'])");
+        // lightbox 改由 Dioxus.toml 全局 <script src> 加载（不再 include_str!）。
+        // 双保险契约：先设配置，若 lightbox.js 已加载则立即调用；
+        // 否则 lightbox.js 加载完后其 IIFE 尾部读到配置自启动。
+        let _ = js_sys::eval(
+            "window.__lightboxSelectors = ['.post-content', '.entry-cover']; \
+             if (window.__initLightbox) window.__initLightbox(window.__lightboxSelectors);"
+        );
     });
 
     rsx! {
