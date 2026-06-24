@@ -150,10 +150,9 @@ Do not edit `public/tiptap/` — they are build artifacts.
 ## Testing
 
 ```bash
-cargo test        # standard Rust test suite
+make test          # cargo test (Rust, 392 tests) + vitest (editor lib, 46 tests)
 dx check          # Dioxus type-check (catches component/Router issues)
 cargo clippy      # lint
-cd libs/tiptap-editor && npm test   # Vitest unit tests for the editor lib
 ```
 
 Most tests use `#[cfg(all(test, feature = "server"))]` — they only run when the server feature is active (which is the default). No integration tests requiring a database connection.

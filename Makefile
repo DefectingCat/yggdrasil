@@ -44,6 +44,7 @@ css-watch:
 
 test:
 	@cargo test
+	@cd libs/tiptap-editor && npm test
 
 clean:
 	@cargo clean
