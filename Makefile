@@ -30,7 +30,7 @@ build-editor-incremental:
 
 build-lightbox:
 	@echo "Building Lightbox..."
-	@cd libs/lightbox && npm ci --include=dev && npm run build
+	@cd libs/lightbox && npm install && npm run build
 	@echo "Lightbox built."
 
 # dev 用的增量构建：跳过 npm ci（假设 node_modules 已存在），仅 vite build。
