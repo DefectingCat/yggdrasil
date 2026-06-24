@@ -56,11 +56,14 @@ pub mod wasm {
 
     /// 读取 `window.TiptapEditor`（IIFE 默认导出，顶层 var 即 window 属性）。
     /// 用 Reflect::get 做属性访问——extern fn 形式会被 wasm-bindgen 编成函数调用。
+    ///
+    /// 用 unchecked_into 而非 dyn_into：TiptapEditor 是 JS 对象字面量，
+    /// 不是 wasm-bindgen 注册的构造函数实例，dyn_into 的 instanceof 检查必然失败。
+    /// unchecked_into 只做编译期类型标注，不做运行时校验（Reflect.get 已保证拿到的是目标对象）。
     pub fn get_module() -> TiptapEditorModule {
         let window = web_sys::window().expect("no window");
         let val = js_sys::Reflect::get(&window, &"TiptapEditor".into()).expect("window.TiptapEditor missing");
-        val.dyn_into::<TiptapEditorModule>()
-            .expect("window.TiptapEditor is not TiptapEditorModule")
+        val.unchecked_into::<TiptapEditorModule>()
     }
 
     // —— 编辑器实例（TiptapEditorInstance）——
