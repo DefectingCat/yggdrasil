@@ -350,12 +350,14 @@ export {};
       state.overlay.parentNode.removeChild(state.overlay);
     }
     state = null;
-    // 焦点归还：.blur-img 是 span 不可聚焦，让其内部 full img 获得焦点
+    // 焦点归还：.blur-img 是 span 不可聚焦，让其内部 full img 获得焦点。
+    // 用 preventScroll 抑制 focus() 默认的 scrollIntoView 行为——否则关闭灯箱后
+    // 页面会自动滚动把原图完整纳入视口（用户只点了一半露出的图时尤其明显）。
     if (prev) {
       var f = prev.querySelector(".blur-img-full");
       if (f instanceof HTMLImageElement) {
         f.setAttribute("tabindex", "-1");
-        f.focus();
+        f.focus({ preventScroll: true });
       }
     }
   }
