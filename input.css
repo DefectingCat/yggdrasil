@@ -526,8 +526,10 @@
     text-underline-offset: 0.3rem;
   }
 
-  /* 卡片封面：blur-img 结构，固定 4:3 比例，hover 缩放 */
-  .post-card-cover-blur {
+  /* 卡片封面：blur-img 结构，固定 4:3 比例，hover 缩放。
+     用属性选择器提升特异性，可靠覆盖 .blur-img 的 aspect-ratio: var(--ar)
+     （卡片不写 --ar，var(--ar) 解析为空会导致高度塌陷）。 */
+  .blur-img.post-card-cover-blur {
     margin: 0;
     aspect-ratio: 4 / 3;
   }
