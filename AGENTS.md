@@ -121,7 +121,8 @@ src/webp.rs       — zenwebp encode/decode (image crate has no WebP)
 Rich-text editor in `libs/tiptap-editor/`, built as an IIFE library exposing `window.TiptapEditor`.
 
 - Output: `public/tiptap/`
-- `make build` runs `npm install && npx vite build` inside `libs/tiptap-editor`
+- `make build` runs `npm ci --include=dev && npm run build` inside `libs/tiptap-editor`; the `build` script is `tsc --noEmit && vite build` (Vite 8 / Rolldown, type-check before bundle)
+- Unit tests: `npm test` (Vitest 4 + happy-dom), covering `UploadCoordinator` counts/lifecycle, `UploadImageNodeView` rendering/callbacks, and `isValidUrl`
 - `src/pages/admin/write.rs` initializes via `src/tiptap_bridge.rs` (wasm-bindgen bindings): injects `Closure` callbacks (`onUpdate`/`onReady`/`onUploadEvent`/`onImageUpload`) into `TiptapEditor.create`, holds the instance + closures in `EditorHandle` (Drop calls `destroy()`). No `js_sys::eval`, no `window` globals, no polling.
 
 Do not edit `public/tiptap/` — they are build artifacts.
@@ -152,6 +153,7 @@ Do not edit `public/tiptap/` — they are build artifacts.
 cargo test        # standard Rust test suite
 dx check          # Dioxus type-check (catches component/Router issues)
 cargo clippy      # lint
+cd libs/tiptap-editor && npm test   # Vitest unit tests for the editor lib
 ```
 
 Most tests use `#[cfg(all(test, feature = "server"))]` — they only run when the server feature is active (which is the default). No integration tests requiring a database connection.
