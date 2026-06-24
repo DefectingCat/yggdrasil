@@ -208,6 +208,19 @@ pub async fn upload_image(
         ));
     }
 
+    // 仅读 header 统一校验尺寸/像素上限。三种格式走同一路径:
+    // JPEG/PNG/GIF 用 image crate 的 into_dimensions,WebP 用 zenwebp header。
+    // 超限直接拒绝,避免大图走 decode 后被静默降级(原 fallback 存原图)。
+    if let Err(msg) = crate::api::image::check_upload_dimensions(&data, mime_type.as_str()) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "success": false,
+                "error": msg
+            })),
+        ));
+    }
+
     let is_gif = mime_type.as_str() == "image/gif";
     let is_webp = mime_type.as_str() == "image/webp";
 
@@ -299,8 +312,9 @@ pub async fn upload_image(
                     };
                     result
                 }
-                Err(_) => {
-                    tracing::warn!("Failed to decode image, keeping original format");
+                Err(e) => {
+                    // 到这里尺寸校验已通过(超限在 header 阶段被拒),decode 失败只能是真损坏。
+                    tracing::warn!("Failed to decode image ({}), keeping original format", e);
                     (original_data, mime_to_ext(&mime).to_string(), false)
                 }
             }

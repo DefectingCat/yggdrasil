@@ -255,6 +255,72 @@ fn check_image_dimensions(width: u32, height: u32) -> Result<(), StatusCode> {
 }
 
 #[cfg(feature = "server")]
+/// 仅读取 header 校验上传图片的尺寸/像素是否超限。
+///
+/// 与 `check_image_dimensions` 的区别:
+/// - 输入是原始字节 + MIME,内部按 MIME 分发只解析 header 拿尺寸(不解码像素)
+/// - 返回带友好中文提示的 `&'static str`(供上传接口直接回给用户)
+///
+/// 上传入口三种格式在此统一拦截至尺寸上限;WebP 走 `zenwebp` header,
+/// JPEG/PNG/GIF 走 `image` crate 的 `into_dimensions`(均只读 header)。
+pub fn check_upload_dimensions(data: &[u8], mime_type: &str) -> Result<(), &'static str> {
+    let dims = read_dimensions_by_mime(data, mime_type)?;
+    let (width, height) = dims;
+    if width == 0 || height == 0 {
+        return Err("图片文件损坏或格式不正确");
+    }
+    let pixels = u64::from(width) * u64::from(height);
+    if width > MAX_IMAGE_DIMENSION
+        || height > MAX_IMAGE_DIMENSION
+        || pixels > u64::from(MAX_IMAGE_PIXELS)
+    {
+        tracing::warn!(
+            "Uploaded image too large: {}x{} ({} pixels, max {}x{} / {} pixels)",
+            width,
+            height,
+            pixels,
+            MAX_IMAGE_DIMENSION,
+            MAX_IMAGE_DIMENSION,
+            MAX_IMAGE_PIXELS
+        );
+        return Err(
+            "图片尺寸过大,请压缩到 4096×4096 以内或单图不超过约 5000 万像素后再上传",
+        );
+    }
+    Ok(())
+}
+
+#[cfg(feature = "server")]
+/// 按 MIME 只读 header 拿 (width, height)。失败返回损坏错误。
+fn read_dimensions_by_mime(
+    data: &[u8],
+    mime_type: &str,
+) -> Result<(u32, u32), &'static str> {
+    match mime_type {
+        "image/webp" => {
+            // zenwebp 的 WebPDecoder::build 只解析 RIFF header,不解码像素(与 webp::decode 同源)。
+            let decoder = zenwebp::WebPDecoder::build(data)
+                .map_err(|_| "图片文件损坏或格式不正确")?;
+            let info = decoder.info();
+            Ok((info.width, info.height))
+        }
+        "image/jpeg" | "image/png" | "image/gif" => {
+            let format = match mime_type {
+                "image/jpeg" => image::ImageFormat::Jpeg,
+                "image/png" => image::ImageFormat::Png,
+                _ => image::ImageFormat::Gif,
+            };
+            let reader = image::ImageReader::with_format(std::io::Cursor::new(data), format);
+            reader
+                .into_dimensions()
+                .map_err(|_| "图片文件损坏或格式不正确")
+        }
+        // 上游已用 ALLOWED_MIME_TYPES 白名单拦截,理论不到这里
+        _ => Err("图片文件损坏或格式不正确"),
+    }
+}
+
+#[cfg(feature = "server")]
 fn image_reader_limits() -> image::Limits {
     let mut limits = image::Limits::default();
     limits.max_image_width = Some(MAX_IMAGE_DIMENSION);
@@ -642,6 +708,77 @@ mod tests {
     fn read_dimensions_unknown_extension_returns_none() {
         let dims = read_dimensions_from_bytes(b"not an image", "test.xyz");
         assert_eq!(dims, None);
+    }
+
+    // —— check_upload_dimensions:统一上传尺寸/像素上限校验 ——
+
+    /// 构造指定尺寸的 PNG 字节(内存占用 = 尺寸,仅用于 header 校验测试)。
+    fn make_png_bytes(w: u32, h: u32) -> Vec<u8> {
+        let img = image::DynamicImage::new_rgb8(w, h);
+        let mut buf = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut buf, image::ImageFormat::Png).unwrap();
+        buf.into_inner()
+    }
+
+    #[test]
+    fn check_upload_dimensions_accepts_small_png() {
+        let data = make_png_bytes(100, 100);
+        assert!(check_upload_dimensions(&data, "image/png").is_ok());
+    }
+
+    #[test]
+    fn check_upload_dimensions_accepts_boundary_png() {
+        // 恰好 4096×4096(约 16.7M 像素,低于 25M 上限)应放行
+        let data = make_png_bytes(MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION);
+        assert!(check_upload_dimensions(&data, "image/png").is_ok());
+    }
+
+    #[test]
+    fn check_upload_dimensions_rejects_oversized_width() {
+        // 单边超限:5000×1(像素仅 5000,远低于 25M,但单边 >4096)
+        let data = make_png_bytes(MAX_IMAGE_DIMENSION + 1, 1);
+        let err = check_upload_dimensions(&data, "image/png").unwrap_err();
+        assert!(err.contains("尺寸过大"));
+    }
+
+    #[test]
+    fn check_upload_dimensions_rejects_oversized_height() {
+        let data = make_png_bytes(1, MAX_IMAGE_DIMENSION + 1);
+        let err = check_upload_dimensions(&data, "image/png").unwrap_err();
+        assert!(err.contains("尺寸过大"));
+    }
+
+    #[test]
+    fn check_upload_dimensions_accepts_small_webp() {
+        let img = image::DynamicImage::new_rgb8(64, 48);
+        let webp_bytes = crate::webp::encode(&img, 85.0, 2).unwrap();
+        assert!(check_upload_dimensions(&webp_bytes, "image/webp").is_ok());
+    }
+
+    #[test]
+    fn check_upload_dimensions_accepts_gif() {
+        // image crate 默认启用 gif feature,into_dimensions 可读 GIF header
+        let img = image::DynamicImage::new_rgb8(32, 32);
+        let mut buf = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut buf, image::ImageFormat::Gif).unwrap();
+        assert!(check_upload_dimensions(&buf.into_inner(), "image/gif").is_ok());
+    }
+
+    #[test]
+    fn check_upload_dimensions_rejects_corrupt_bytes() {
+        // 非 magic bytes,与现有损坏文件校验文案对齐
+        let err = check_upload_dimensions(b"not an image at all", "image/png").unwrap_err();
+        assert_eq!(err, "图片文件损坏或格式不正确");
+    }
+
+    #[test]
+    fn read_dimensions_by_mime_dispatches_webp() {
+        let img = image::DynamicImage::new_rgb8(16, 9);
+        let webp_bytes = crate::webp::encode(&img, 85.0, 2).unwrap();
+        assert_eq!(
+            read_dimensions_by_mime(&webp_bytes, "image/webp").unwrap(),
+            (16, 9)
+        );
     }
 
     #[test]
