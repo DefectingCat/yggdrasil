@@ -47,7 +47,7 @@ pub fn PostCard(post: PostListItem) -> Element {
                         }
                         img {
                             class: "blur-img-full is-loaded",
-                            src: "{cover_src}?thumb=400x225",
+                            src: "{cover_src}?thumb=420x180",
                             alt: "{post.title}",
                         }
                     }

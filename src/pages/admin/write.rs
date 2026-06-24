@@ -480,15 +480,16 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     }
                 }
 
-                // 封面图上传区：空态矮横条（不挤压编辑器），有图时展开 16:9 预览。
+                // 封面图上传区：空态矮横条（不挤压编辑器），有图时展开成 21:9 超宽预览。
+                // 21:9 与首页卡片封面统一比例，比 16:9 更扁，适合宽屏横幅式封面。
                 // 容器统一绑定拖拽与粘贴事件；内部按 cover_image / cover_uploading 切换空态、上传中、预览。
                 div {
                     class: "relative w-full rounded-xl border border-dashed overflow-hidden transition-all duration-200 group/cover",
-                    // 空态矮横条；有图/上传中展开成 16:9。
+                    // 空态矮横条；有图/上传中展开成 21:9。
                     class: if cover_image().is_empty() && !cover_uploading() {
                         "h-14"
                     } else {
-                        "aspect-video"
+                        "aspect-[21/9]"
                     },
                     class: if cover_drag_active() {
                         "border-[var(--color-paper-accent)] bg-[var(--color-paper-accent-soft)]"

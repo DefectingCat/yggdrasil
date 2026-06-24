@@ -526,12 +526,13 @@
     text-underline-offset: 0.3rem;
   }
 
-  /* 卡片封面：blur-img 结构，固定 16:9 比例，hover 缩放。
+  /* 卡片封面：blur-img 结构，固定 21:9 比例，hover 缩放。
      双类选择器提升特异性，可靠覆盖 .blur-img 的 aspect-ratio: var(--ar)
-     （卡片不写 --ar，var(--ar) 解析为空会导致高度塌陷）。 */
+     （卡片不写 --ar，var(--ar) 解析为空会导致高度塌陷）。
+     21:9 与后台编辑器封面区统一比例，宽屏横幅式。 */
   .blur-img.post-card-cover-blur {
     margin: 0;
-    aspect-ratio: 16 / 9;
+    aspect-ratio: 21 / 9;
   }
   .post-card-cover-blur img {
     width: 100%;
