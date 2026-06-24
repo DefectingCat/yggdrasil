@@ -11,11 +11,10 @@ export default defineConfig({
       fileName: () => 'editor.js',
       formats: ['iife'],
     },
-    rollupOptions: {
+    rolldownOptions: {
       output: {
         exports: 'default',
         assetFileNames: 'editor.[ext]',
-        inlineDynamicImports: true,
       },
     },
     cssCodeSplit: false,

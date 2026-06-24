@@ -6,22 +6,26 @@
   "scripts": {
     "build": "tsc --noEmit && vite build",
     "dev": "vite",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "@tiptap/core": "^3.25.0",
-    "@tiptap/extension-file-handler": "^3.25.0",
-    "@tiptap/extension-image": "^3.25.0",
-    "@tiptap/extension-link": "^3.25.0",
-    "@tiptap/extension-list": "^3.25.0",
-    "@tiptap/extension-table": "^3.25.0",
-    "@tiptap/markdown": "^3.25.0",
-    "@tiptap/pm": "^3.25.0",
-    "@tiptap/starter-kit": "^3.25.0",
-    "@tiptap/suggestion": "^3.25.0"
+    "@tiptap/core": "^3.27.1",
+    "@tiptap/extension-file-handler": "^3.27.1",
+    "@tiptap/extension-image": "^3.27.1",
+    "@tiptap/extension-link": "^3.27.1",
+    "@tiptap/extension-list": "^3.27.1",
+    "@tiptap/extension-table": "^3.27.1",
+    "@tiptap/markdown": "^3.27.1",
+    "@tiptap/pm": "^3.27.1",
+    "@tiptap/starter-kit": "^3.27.1",
+    "@tiptap/suggestion": "^3.27.1"
   },
   "devDependencies": {
-    "typescript": "^5.4.5",
-    "vite": "^5.4.20"
+    "happy-dom": "^20.10.6",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.0",
+    "vitest": "^4.1.9"
   }
 }
