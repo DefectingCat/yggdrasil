@@ -17,10 +17,10 @@ use crate::api::posts::{
 #[cfg(target_arch = "wasm32")]
 use crate::tiptap_bridge::{consume_upload_event, upload_image_file, EditorHandle};
 // 共享上传状态类型：两端都编译（rsx 在 server SSR 时也要渲染这些结构）。
-use crate::tiptap_bridge::{UploadErrorEntry, UploadsInFlight};
 use crate::components::write_skeleton::WriteSkeleton;
 use crate::models::post::Post;
 use crate::router::Route;
+use crate::tiptap_bridge::{UploadErrorEntry, UploadsInFlight};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::closure::Closure;
 // 封面图上传：从 Dioxus 事件拿底层 web_sys::File，以及 paste 事件的原始 web 事件。
@@ -197,13 +197,8 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     }
                     editor_content_set.set(true);
                 }
-                let handle = EditorHandle::new(
-                    inst,
-                    on_update,
-                    on_image_upload,
-                    on_ready,
-                    on_upload_event,
-                );
+                let handle =
+                    EditorHandle::new(inst, on_update, on_image_upload, on_ready, on_upload_event);
                 editor.set(Some(handle));
             }
             Ok(None) => {
@@ -259,9 +254,15 @@ fn write_editor(post_id: Option<i32>) -> Element {
         let in_flight = uploads_in_flight.read();
         if in_flight.uploading > 0 || in_flight.error > 0 {
             let msg = if in_flight.uploading > 0 {
-                format!("有 {} 张图片正在上传，请等待完成后再保存", in_flight.uploading)
+                format!(
+                    "有 {} 张图片正在上传，请等待完成后再保存",
+                    in_flight.uploading
+                )
             } else {
-                format!("有 {} 张图片上传失败，请移除或重试后再保存", in_flight.error)
+                format!(
+                    "有 {} 张图片上传失败，请移除或重试后再保存",
+                    in_flight.error
+                )
             };
             error.set(Some(msg));
             return;
@@ -429,7 +430,9 @@ fn write_editor(post_id: Option<i32>) -> Element {
 
             // 可滚动主体：元信息 + 编辑器 + 内联错误提示。
             // 底部操作栏留在此容器外（固定吸底），保证保存/状态按钮始终可见。
-            div { class: "flex-1 min-h-0 overflow-y-auto",
+            // flex flex-col：让内部 flex-1 编辑器能撑满剩余高度；
+            // overflow-y-auto：内容超出时滚动（min-h-0 允许 flex 子项收缩触发滚动）。
+            div { class: "flex-1 min-h-0 overflow-y-auto flex flex-col",
                 // 顶部元信息区域 - 固定高度，不滚动
                 div { class: "flex-shrink-0 space-y-5 pt-8",
                 // 标题区域 - 大字号无框输入
@@ -444,11 +447,37 @@ fn write_editor(post_id: Option<i32>) -> Element {
 
                 // 摘要
                 textarea {
-                    class: "w-full text-base bg-transparent text-[var(--color-paper-secondary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none resize-none leading-relaxed",
+                    class: "w-full text-base bg-transparent text-[var(--color-paper-secondary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none resize-none leading-relaxed mb-0",
                     placeholder: "摘要（留空则自动生成）",
                     rows: "2",
                     value: "{summary}",
                     oninput: move |evt| summary.set(evt.value()),
+                }
+
+                // 元数据行 - 紧凑精致
+                div { class: "flex flex-wrap items-end gap-x-8 gap-y-4 text-sm",
+                    div { class: "flex-1 min-w-[140px]",
+                        label { class: "{META_LABEL_CLASS}",
+                            "Slug"
+                        }
+                        input {
+                            class: "{META_INPUT_CLASS}",
+                            placeholder: "自动生成",
+                            value: "{slug}",
+                            oninput: move |evt| slug.set(evt.value()),
+                        }
+                    }
+                    div { class: "flex-1 min-w-[140px]",
+                        label { class: "{META_LABEL_CLASS}",
+                            "标签"
+                        }
+                        input {
+                            class: "{META_INPUT_CLASS}",
+                            placeholder: "逗号分隔",
+                            value: "{tags}",
+                            oninput: move |evt| tags.set(evt.value()),
+                        }
+                    }
                 }
 
                 // 封面图上传区：空态矮横条（不挤压编辑器），有图时展开 16:9 预览。
@@ -688,32 +717,6 @@ fn write_editor(post_id: Option<i32>) -> Element {
                             aria_label: "关闭提示",
                             onclick: move |_| cover_error.set(None),
                             "×"
-                        }
-                    }
-                }
-
-                // 元数据行 - 紧凑精致
-                div { class: "flex flex-wrap items-end gap-x-8 gap-y-4 text-sm",
-                    div { class: "flex-1 min-w-[140px]",
-                        label { class: "{META_LABEL_CLASS}",
-                            "Slug"
-                        }
-                        input {
-                            class: "{META_INPUT_CLASS}",
-                            placeholder: "自动生成",
-                            value: "{slug}",
-                            oninput: move |evt| slug.set(evt.value()),
-                        }
-                    }
-                    div { class: "flex-1 min-w-[140px]",
-                        label { class: "{META_LABEL_CLASS}",
-                            "标签"
-                        }
-                        input {
-                            class: "{META_INPUT_CLASS}",
-                            placeholder: "逗号分隔",
-                            value: "{tags}",
-                            oninput: move |evt| tags.set(evt.value()),
                         }
                     }
                 }
