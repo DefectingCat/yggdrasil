@@ -1,0 +1,266 @@
+/**
+ * Lightbox 行为回归测试（happy-dom 真实 DOM，黑盒驱动）。
+ *
+ * 通过唯一公开入口 window.__initLightbox 驱动，构造 .blur-img DOM，
+ * 模拟点击/键盘/滚动，断言 overlay 出现/消失、counter 文本、originNode 捕获。
+ *
+ * 目的：钉住高风险路径（循环闭包捕获 idx、图集 gotoIndex 循环边界、
+ * 关闭清理），供后续现代化重构（var→const、拆 IIFE、for→for..of）做回归防线。
+ *
+ * 不覆盖：飞行动画的几何计算（依赖 img naturalWidth + load 事件，happy-dom
+ * 不真实加载图片），那部分由 geometry.test.ts 的纯函数测试覆盖。
+ */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import './index';
+
+// ============ 测试夹具 ============
+
+/**
+ * 构造一个 .blur-img 容器（图集成员）。
+ * full img 带 data-src + alt，模拟文章正文图结构。
+ */
+function makeGalleryImage(dataSrc: string, alt: string): HTMLElement {
+  const container = document.createElement('div');
+  container.className = 'blur-img';
+  container.innerHTML = `
+    <img class="blur-img-placeholder" src="${dataSrc}?w=20" alt="${alt}">
+    <img class="blur-img-full" data-src="${dataSrc}" alt="${alt}">
+  `;
+  return container;
+}
+
+/** 构造单张图（封面，带 lightbox-single）。 */
+function makeSingleImage(dataSrc: string, alt: string): HTMLElement {
+  const container = makeGalleryImage(dataSrc, alt);
+  container.classList.add('lightbox-single');
+  return container;
+}
+
+/**
+ * 把若干图片挂到一个 root 容器下，再挂到 document.body。
+ * 返回 root 以便选择器命中。
+ */
+function mountRoot(images: HTMLElement[]): HTMLElement {
+  const root = document.createElement('div');
+  root.className = 'post-content';
+  for (const img of images) root.appendChild(img);
+  document.body.appendChild(root);
+  return root;
+}
+
+/** 取当前 overlay（灯箱打开时存在）。 */
+function getOverlay(): HTMLElement | null {
+  return document.querySelector('.lightbox-overlay');
+}
+
+/** 取灯箱图（.lightbox-img）。 */
+function getLightboxImg(): HTMLImageElement | null {
+  return document.querySelector('.lightbox-img');
+}
+
+/** 取计数器。 */
+function getCounter(): HTMLElement | null {
+  return document.querySelector('.lightbox-counter');
+}
+
+/** 模拟元素 click（真实事件派发，触发 addEventListener('click')）。 */
+function clickEl(el: Element): void {
+  el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+}
+
+/** 模拟 keydown。 */
+function pressKey(key: string): void {
+  document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+}
+
+// ============ 测试 ============
+
+describe('lightbox 黑盒行为', () => {
+  beforeEach(() => {
+    // 每个测试干净的 DOM + matchMedia（prefersReducedMotion 读它）
+    document.body.innerHTML = '';
+    // happy-dom 的 matchMedia 返回值默认 matches=false，reduced-motion 关闭，
+    // 这样打开走 double-rAF 动画路径（更接近真实）。但我们用 fake timers 跳过动画。
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    document.body.innerHTML = '';
+  });
+
+  describe('循环闭包捕获 idx（gallery 绑定）', () => {
+    it('点击第 1/2/3 张图，counter 分别显示 1/3、2/3、3/3', () => {
+      const imgs = [
+        makeGalleryImage('/a.webp', '图A'),
+        makeGalleryImage('/b.webp', '图B'),
+        makeGalleryImage('/c.webp', '图C'),
+      ];
+      mountRoot(imgs);
+      window.__initLightbox('.post-content');
+
+      // 逐张点击，验证捕获的 idx 正确（这是 var g + IIFE 的核心风险点）
+      clickEl(imgs[0]);
+      expect(getCounter()?.textContent).toBe('1 / 3');
+      pressKey('Escape'); // 关闭
+      vi.advanceTimersByTime(300); // 等 close 的 280ms 兜底
+
+      clickEl(imgs[1]);
+      expect(getCounter()?.textContent).toBe('2 / 3');
+      pressKey('Escape');
+      vi.advanceTimersByTime(300);
+
+      clickEl(imgs[2]);
+      expect(getCounter()?.textContent).toBe('3 / 3');
+    });
+
+    it('点图片时 preventDefault（阻止默认导航/拖拽）', () => {
+      const img = makeGalleryImage('/a.webp', '图A');
+      mountRoot([img]);
+      window.__initLightbox('.post-content');
+
+      const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+      img.dispatchEvent(ev);
+      expect(ev.defaultPrevented).toBe(true);
+    });
+  });
+
+  describe('点击打开灯箱（overlay 创建 + originNode 捕获）', () => {
+    it('点击 gallery 图后出现 overlay，img src 为原图（去 query）', () => {
+      const img = makeGalleryImage('/uploads/x.webp?w=800', '描述');
+      mountRoot([img]);
+      window.__initLightbox('.post-content');
+
+      expect(getOverlay()).toBeNull(); // 打开前无 overlay
+      clickEl(img);
+      expect(getOverlay()).not.toBeNull(); // 打开后有 overlay
+      // origSrc = data-src 去 query
+      expect(getLightboxImg()?.getAttribute('src')).toBe('/uploads/x.webp');
+    });
+
+    it('caption 显示 alt 文本', () => {
+      const img = makeGalleryImage('/a.webp', '我的描述文字');
+      mountRoot([img]);
+      window.__initLightbox('.post-content');
+
+      clickEl(img);
+      const caption = document.querySelector('.lightbox-caption');
+      expect(caption?.textContent).toBe('我的描述文字');
+    });
+
+    it('单张图（lightbox-single）打开时 counter 隐藏', () => {
+      const img = makeSingleImage('/cover.webp', '封面');
+      mountRoot([img]);
+      window.__initLightbox('.post-content');
+
+      clickEl(img);
+      expect(getCounter()?.style.display).toBe('none');
+    });
+  });
+
+  describe('关闭灯箱', () => {
+    it('Esc 关闭后 overlay 从 DOM 移除', () => {
+      const img = makeGalleryImage('/a.webp', 'A');
+      mountRoot([img]);
+      window.__initLightbox('.post-content');
+
+      clickEl(img);
+      expect(getOverlay()).not.toBeNull();
+      pressKey('Escape');
+      // closeLightbox 走 transitionend（happy-dom 不触发）+ 280ms 兜底
+      vi.advanceTimersByTime(300);
+      expect(getOverlay()).toBeNull();
+    });
+
+    it('点 overlay 背景关闭（点图片本身不关）', () => {
+      const img = makeGalleryImage('/a.webp', 'A');
+      mountRoot([img]);
+      window.__initLightbox('.post-content');
+
+      clickEl(img);
+      const overlay = getOverlay()!;
+      const lbImg = getLightboxImg()!;
+
+      // 点图片本身 → 不关闭（箭头在图上，避免误关）
+      clickEl(lbImg);
+      expect(getOverlay()).not.toBeNull();
+
+      // 点背景 → 关闭
+      clickEl(overlay);
+      vi.advanceTimersByTime(300);
+      expect(getOverlay()).toBeNull();
+    });
+  });
+
+  describe('图集 gotoIndex 循环边界', () => {
+    it('第 1 张按 ← 跳到最后一张（循环）', () => {
+      const imgs = [
+        makeGalleryImage('/a.webp', 'A'),
+        makeGalleryImage('/b.webp', 'B'),
+      ];
+      mountRoot(imgs);
+      window.__initLightbox('.post-content');
+
+      clickEl(imgs[0]);
+      expect(getCounter()?.textContent).toBe('1 / 2');
+
+      pressKey('ArrowLeft'); // 从第 1 张往左 → 循环到最后
+      vi.advanceTimersByTime(200); // gotoIndex 的 150ms 淡出 + 淡入
+      expect(getCounter()?.textContent).toBe('2 / 2');
+    });
+
+    it('最后一张按 → 跳到第 1 张（循环）', () => {
+      const imgs = [
+        makeGalleryImage('/a.webp', 'A'),
+        makeGalleryImage('/b.webp', 'B'),
+      ];
+      mountRoot(imgs);
+      window.__initLightbox('.post-content');
+
+      clickEl(imgs[1]); // 最后一张
+      expect(getCounter()?.textContent).toBe('2 / 2');
+
+      pressKey('ArrowRight'); // 循环到第 1 张
+      vi.advanceTimersByTime(200);
+      expect(getCounter()?.textContent).toBe('1 / 2');
+    });
+
+    it('切换后 originNode 更新：关闭后焦点归还到新图', () => {
+      const imgs = [
+        makeGalleryImage('/a.webp', 'A'),
+        makeGalleryImage('/b.webp', 'B'),
+      ];
+      mountRoot(imgs);
+      window.__initLightbox('.post-content');
+
+      clickEl(imgs[0]);
+      pressKey('ArrowRight'); // 切到 imgs[1]
+      vi.advanceTimersByTime(200);
+
+      // originNode 应已更新为 imgs[1]，关闭后焦点归还给 imgs[1] 的 full img
+      pressKey('Escape');
+      vi.advanceTimersByTime(300);
+
+      const fullB = imgs[1].querySelector('.blur-img-full');
+      expect(document.activeElement).toBe(fullB);
+    });
+  });
+
+  describe('单张图不参与图集切换', () => {
+    it('单张图打开后按 ←/→ 不切换（无 counter、无箭头）', () => {
+      const img = makeSingleImage('/cover.webp', '封面');
+      mountRoot([img]);
+      window.__initLightbox('.post-content');
+
+      clickEl(img);
+      // 单张模式无导航箭头
+      expect(document.querySelector('.lightbox-prev')).toBeNull();
+      expect(document.querySelector('.lightbox-next')).toBeNull();
+
+      // 按 ← 不报错也不改变状态（gotoIndex 早返）
+      pressKey('ArrowLeft');
+      vi.advanceTimersByTime(200);
+      expect(getOverlay()).not.toBeNull(); // 仍打开
+    });
+  });
+});

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from 'vitest';
 import { fitCentered, transformFor, originalUrl, type Rect } from './geometry';
 
