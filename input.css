@@ -568,6 +568,65 @@
   .post-card-accent:hover::after {
     width: 100%;
   }
+
+  /* ========== Blur-up 渐进图片加载 ==========
+     放在 @layer components 内，与 .blur-img.post-card-cover-blur 同层，
+     这样特异性能正常生效（layer 外规则会无条件覆盖 layer 内规则，
+     导致卡片的 aspect-ratio:4/3 败给全局 var(--ar)）。 */
+  .blur-img {
+    position: relative;
+    display: block;
+    overflow: hidden;
+    aspect-ratio: var(--ar);
+    /* 加载中灰底（占位图未加载完时） */
+    background: var(--color-paper-code-bg, #f5f5f5);
+    border-radius: 6px;
+    margin: 1em 0;
+  }
+  .blur-img-placeholder {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    /* 重置 .md-content img 的 margin/max-width/height，避免把 absolute 图层推偏 */
+    margin: 0;
+    max-width: none;
+    /* 20px 占位图放大后模糊，scale 遮边缘 */
+    filter: blur(20px) saturate(1.2);
+    transform: scale(1.1);
+    transition: opacity 0.4s ease;
+  }
+  .blur-img-full {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    /* 重置 .md-content img 的 margin/max-width/height，避免把 absolute 图层推偏 */
+    margin: 0;
+    max-width: none;
+    opacity: 0;
+    z-index: 1;
+  }
+  /* full 加载完成后由 JS 直接设 opacity:1（不依赖 CSS transition，
+     避免合成层重绘时机导致 opacity 卡在 0）。 */
+  .blur-img-full.is-loaded,
+  .blur-img.is-loaded .blur-img-full {
+    opacity: 1;
+  }
+  /* 容器标记 loaded 后：显式隐藏占位图 + 去掉灰底，避免重绘时机导致残留/灰边 */
+  .blur-img.is-loaded .blur-img-placeholder {
+    opacity: 0;
+  }
+  .blur-img.is-loaded {
+    background: transparent;
+  }
+
+  /* 暗色模式灰底 */
+  .dark .blur-img {
+    background: var(--color-paper-code-bg, #2a2a2a);
+  }
 }
 
 @keyframes fadeIn {
@@ -640,58 +699,4 @@
   }
 }
 
-/* ========== Blur-up 渐进图片加载 ========== */
-.blur-img {
-  position: relative;
-  display: block;
-  overflow: hidden;
-  aspect-ratio: var(--ar);
-  /* 加载中灰底（占位图未加载完时） */
-  background: var(--color-paper-code-bg, #f5f5f5);
-  border-radius: 6px;
-  margin: 1em 0;
-}
-.blur-img-placeholder {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  /* 重置 .md-content img 的 margin/max-width/height，避免把 absolute 图层推偏 */
-  margin: 0;
-  max-width: none;
-  /* 20px 占位图放大后模糊，scale 遮边缘 */
-  filter: blur(20px) saturate(1.2);
-  transform: scale(1.1);
-  transition: opacity 0.4s ease;
-}
-.blur-img-full {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  /* 重置 .md-content img 的 margin/max-width/height，避免把 absolute 图层推偏 */
-  margin: 0;
-  max-width: none;
-  opacity: 0;
-  z-index: 1;
-}
-/* full 加载完成后由 JS 直接设 opacity:1（不依赖 CSS transition，
-   避免合成层重绘时机导致 opacity 卡在 0）。 */
-.blur-img-full.is-loaded,
-.blur-img.is-loaded .blur-img-full {
-  opacity: 1;
-}
-/* 容器标记 loaded 后：显式隐藏占位图 + 去掉灰底，避免重绘时机导致残留/灰边 */
-.blur-img.is-loaded .blur-img-placeholder {
-  opacity: 0;
-}
-.blur-img.is-loaded {
-  background: transparent;
-}
-
-/* 暗色模式灰底 */
-.dark .blur-img {
-  background: var(--color-paper-code-bg, #2a2a2a);
-}
+/* ========== Blur-up 渐进图片加载（已移入 @layer components） ========== */
