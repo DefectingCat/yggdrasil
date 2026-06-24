@@ -35,13 +35,14 @@ pub mod wasm {
     use wasm_bindgen::JsCast;
 
     // —— window.TiptapEditor 模块对象 ——
+    //
+    // TiptapEditor 是 IIFE 产物挂在 window 上的模块对象（含 create 等方法），
+    // 不是函数。wasm-bindgen 对 `fn get_module() -> T` 形式的 extern 会生成
+    // `window.TiptapEditor()`（函数调用），会因"not a function"失败。
+    // 因此用 js_sys::Reflect::get 做属性访问拿到模块对象，再 dyn_into。
     #[wasm_bindgen]
     extern "C" {
         pub type TiptapEditorModule;
-
-        /// 读取 `window.TiptapEditor`（IIFE 默认导出，顶层 var 即 window 属性）。
-        #[wasm_bindgen(js_namespace = window, js_name = TiptapEditor)]
-        pub fn get_module() -> TiptapEditorModule;
 
         /// 调用 `TiptapEditor.create(containerId, options)`。
         /// 找不到容器返回 null（被 Option 捕获）；构造失败抛异常（被 catch 捕获）。
@@ -51,6 +52,15 @@ pub mod wasm {
             container_id: &str,
             opts: &EditorOptions,
         ) -> Result<Option<EditorInstance>, JsValue>;
+    }
+
+    /// 读取 `window.TiptapEditor`（IIFE 默认导出，顶层 var 即 window 属性）。
+    /// 用 Reflect::get 做属性访问——extern fn 形式会被 wasm-bindgen 编成函数调用。
+    pub fn get_module() -> TiptapEditorModule {
+        let window = web_sys::window().expect("no window");
+        let val = js_sys::Reflect::get(&window, &"TiptapEditor".into()).expect("window.TiptapEditor missing");
+        val.dyn_into::<TiptapEditorModule>()
+            .expect("window.TiptapEditor is not TiptapEditorModule")
     }
 
     // —— 编辑器实例（TiptapEditorInstance）——
