@@ -273,9 +273,9 @@ pub async fn upload_image(
             };
             let mut reader = image::ImageReader::with_format(cursor, format);
             let mut limits = image::Limits::default();
-            limits.max_image_width = Some(crate::api::image::MAX_IMAGE_DIMENSION);
-            limits.max_image_height = Some(crate::api::image::MAX_IMAGE_DIMENSION);
-            limits.max_alloc = Some(crate::api::image::MAX_IMAGE_PIXELS as u64 * 4 + 1024 * 1024);
+            limits.max_image_width = Some(*crate::api::image::MAX_IMAGE_DIMENSION);
+            limits.max_image_height = Some(*crate::api::image::MAX_IMAGE_DIMENSION);
+            limits.max_alloc = Some(*crate::api::image::MAX_IMAGE_PIXELS as u64 * 4 + 1024 * 1024);
             reader.limits(limits);
 
             match reader.decode() {

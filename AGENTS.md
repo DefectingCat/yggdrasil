@@ -35,6 +35,8 @@ Optional tuning via env vars (all have sane defaults):
 ```
 WEBP_QUALITY=85.0           # 0.0–100.0, clamped
 WEBP_METHOD=2               # 0–6, clamped
+MAX_IMAGE_DIMENSION=8192     # max single side in px, min 512, no upper limit
+MAX_IMAGE_PIXELS=50000000   # max total pixels (~7k×7k), min 1M, no upper limit
 RATE_LIMIT_STRICT_PER_SEC=1
 RATE_LIMIT_STRICT_BURST=5
 RATE_LIMIT_UPLOAD_PER_SEC=2

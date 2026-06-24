@@ -44,12 +44,70 @@ fn etag_matches(if_none_match: &str, etag: &str) -> bool {
 }
 
 #[cfg(feature = "server")]
-pub const MAX_IMAGE_DIMENSION: u32 = 4096;
+/// 图片单边（宽或高）尺寸上限，单位像素。
+///
+/// 启动时从 `MAX_IMAGE_DIMENSION` 环境变量读取，默认 8192。
+/// 只设下限 512（防误调到危险小值导致正常图都传不上），无上限（完全信任运维）。
+/// 低于下限时 clamp 回 512 并打 WARN。
+pub static MAX_IMAGE_DIMENSION: LazyLock<u32> = LazyLock::new(|| {
+    const DEFAULT: u32 = 8192;
+    const MIN: u32 = 512;
+    let (val, clamped) = std::env::var("MAX_IMAGE_DIMENSION")
+        .ok()
+        .and_then(|s| s.parse::<u32>().ok())
+        .map(|v| {
+            if v < MIN {
+                (MIN, true)
+            } else {
+                (v, false)
+            }
+        })
+        .unwrap_or((DEFAULT, false));
+    if clamped {
+        tracing::warn!(
+            "MAX_IMAGE_DIMENSION was clamped from {} to {} (minimum {})",
+            std::env::var("MAX_IMAGE_DIMENSION").unwrap_or_default(),
+            val,
+            MIN
+        );
+    }
+    tracing::info!("Image dimension limit loaded: {}", val);
+    val
+});
 #[cfg(feature = "server")]
 const DEFAULT_JPEG_QUALITY: u8 = 85;
 #[cfg(feature = "server")]
-/// 允许处理的最大图片像素数（约 5k x 5k）。
-pub const MAX_IMAGE_PIXELS: u32 = 25_000_000; // ~5k x 5k
+/// 允许处理的最大图片像素数（默认约 7k x 7k）。
+///
+/// 启动时从 `MAX_IMAGE_PIXELS` 环境变量读取，默认 50_000_000。
+/// 只设下限 1_000_000（防误调），无上限。
+/// ⚠️ 此值同时决定单图解码内存缓冲（max_alloc = pixels × 4 + 1MB），
+///    默认 50M 像素对应约 200MB/图，上调前确认部署环境内存。
+pub static MAX_IMAGE_PIXELS: LazyLock<u32> = LazyLock::new(|| {
+    const DEFAULT: u32 = 50_000_000;
+    const MIN: u32 = 1_000_000;
+    let (val, clamped) = std::env::var("MAX_IMAGE_PIXELS")
+        .ok()
+        .and_then(|s| s.parse::<u32>().ok())
+        .map(|v| {
+            if v < MIN {
+                (MIN, true)
+            } else {
+                (v, false)
+            }
+        })
+        .unwrap_or((DEFAULT, false));
+    if clamped {
+        tracing::warn!(
+            "MAX_IMAGE_PIXELS was clamped from {} to {} (minimum {})",
+            std::env::var("MAX_IMAGE_PIXELS").unwrap_or_default(),
+            val,
+            MIN
+        );
+    }
+    tracing::info!("Image pixel limit loaded: {}", val);
+    val
+});
 
 #[cfg(feature = "server")]
 #[derive(Debug, Clone)]
@@ -122,12 +180,12 @@ impl ImageParams {
     /// 校验参数合法性，返回 HTTP 400 状态码表示非法。
     fn validate(&self) -> Result<(), StatusCode> {
         if let Some(dim) = self.w {
-            if dim == 0 || dim > MAX_IMAGE_DIMENSION {
+            if dim == 0 || dim > *MAX_IMAGE_DIMENSION {
                 return Err(StatusCode::BAD_REQUEST);
             }
         }
         if let Some(dim) = self.h {
-            if dim == 0 || dim > MAX_IMAGE_DIMENSION {
+            if dim == 0 || dim > *MAX_IMAGE_DIMENSION {
                 return Err(StatusCode::BAD_REQUEST);
             }
         }
@@ -148,7 +206,7 @@ impl ImageParams {
             }
             let tw: u32 = parts[0].parse().map_err(|_| StatusCode::BAD_REQUEST)?;
             let th: u32 = parts[1].parse().map_err(|_| StatusCode::BAD_REQUEST)?;
-            if tw == 0 || th == 0 || tw > MAX_IMAGE_DIMENSION || th > MAX_IMAGE_DIMENSION {
+            if tw == 0 || th == 0 || tw > *MAX_IMAGE_DIMENSION || th > *MAX_IMAGE_DIMENSION {
                 return Err(StatusCode::BAD_REQUEST);
             }
         }
@@ -241,13 +299,13 @@ fn check_image_dimensions(width: u32, height: u32) -> Result<(), StatusCode> {
         return Err(StatusCode::BAD_REQUEST);
     }
     let pixels = u64::from(width) * u64::from(height);
-    if pixels > u64::from(MAX_IMAGE_PIXELS) {
+    if pixels > u64::from(*MAX_IMAGE_PIXELS) {
         tracing::warn!(
             "Image dimensions too large: {}x{} ({} pixels, max {})",
             width,
             height,
             pixels,
-            MAX_IMAGE_PIXELS
+            *MAX_IMAGE_PIXELS
         );
         return Err(StatusCode::PAYLOAD_TOO_LARGE);
     }
@@ -270,22 +328,19 @@ pub fn check_upload_dimensions(data: &[u8], mime_type: &str) -> Result<(), &'sta
         return Err("图片文件损坏或格式不正确");
     }
     let pixels = u64::from(width) * u64::from(height);
-    if width > MAX_IMAGE_DIMENSION
-        || height > MAX_IMAGE_DIMENSION
-        || pixels > u64::from(MAX_IMAGE_PIXELS)
-    {
+    let max_dim = *MAX_IMAGE_DIMENSION;
+    let max_pixels = *MAX_IMAGE_PIXELS;
+    if width > max_dim || height > max_dim || pixels > u64::from(max_pixels) {
         tracing::warn!(
             "Uploaded image too large: {}x{} ({} pixels, max {}x{} / {} pixels)",
             width,
             height,
             pixels,
-            MAX_IMAGE_DIMENSION,
-            MAX_IMAGE_DIMENSION,
-            MAX_IMAGE_PIXELS
+            max_dim,
+            max_dim,
+            max_pixels
         );
-        return Err(
-            "图片尺寸过大,请压缩到 4096×4096 以内或单图不超过约 5000 万像素后再上传",
-        );
+        return Err("图片尺寸过大,请压缩后再上传");
     }
     Ok(())
 }
@@ -323,9 +378,9 @@ fn read_dimensions_by_mime(
 #[cfg(feature = "server")]
 fn image_reader_limits() -> image::Limits {
     let mut limits = image::Limits::default();
-    limits.max_image_width = Some(MAX_IMAGE_DIMENSION);
-    limits.max_image_height = Some(MAX_IMAGE_DIMENSION);
-    limits.max_alloc = Some(MAX_IMAGE_PIXELS as u64 * 4 + 1024 * 1024);
+    limits.max_image_width = Some(*MAX_IMAGE_DIMENSION);
+    limits.max_image_height = Some(*MAX_IMAGE_DIMENSION);
+    limits.max_alloc = Some(*MAX_IMAGE_PIXELS as u64 * 4 + 1024 * 1024);
     limits
 }
 
@@ -363,7 +418,7 @@ fn process_image(
         if parts.len() == 2 {
             let tw: u32 = parts[0].parse().map_err(|_| StatusCode::BAD_REQUEST)?;
             let th: u32 = parts[1].parse().map_err(|_| StatusCode::BAD_REQUEST)?;
-            if tw > 0 && th > 0 && tw <= MAX_IMAGE_DIMENSION && th <= MAX_IMAGE_DIMENSION {
+            if tw > 0 && th > 0 && tw <= *MAX_IMAGE_DIMENSION && th <= *MAX_IMAGE_DIMENSION {
                 img = img.thumbnail(tw, th);
             }
         }
@@ -728,22 +783,23 @@ mod tests {
 
     #[test]
     fn check_upload_dimensions_accepts_boundary_png() {
-        // 恰好 4096×4096(约 16.7M 像素,低于 25M 上限)应放行
-        let data = make_png_bytes(MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION);
+        // 用 7000×7000(≈49M 像素):单边 7000 < 默认 8192 上限,且总像素 < 默认 50M 上限,应放行。
+        // 注意不能直接用 *MAX_IMAGE_DIMENSION 做正方形边——8192²≈67M 会触发像素上限拒绝。
+        let data = make_png_bytes(7000, 7000);
         assert!(check_upload_dimensions(&data, "image/png").is_ok());
     }
 
     #[test]
     fn check_upload_dimensions_rejects_oversized_width() {
-        // 单边超限:5000×1(像素仅 5000,远低于 25M,但单边 >4096)
-        let data = make_png_bytes(MAX_IMAGE_DIMENSION + 1, 1);
+        // 单边超限:(上限+1)×1,像素远低于上限,但单边越界
+        let data = make_png_bytes(*MAX_IMAGE_DIMENSION + 1, 1);
         let err = check_upload_dimensions(&data, "image/png").unwrap_err();
         assert!(err.contains("尺寸过大"));
     }
 
     #[test]
     fn check_upload_dimensions_rejects_oversized_height() {
-        let data = make_png_bytes(1, MAX_IMAGE_DIMENSION + 1);
+        let data = make_png_bytes(1, *MAX_IMAGE_DIMENSION + 1);
         let err = check_upload_dimensions(&data, "image/png").unwrap_err();
         assert!(err.contains("尺寸过大"));
     }
@@ -808,7 +864,7 @@ mod tests {
     #[test]
     fn image_params_validate_oversized_width_rejected() {
         let params = ImageParams {
-            w: Some(5000),
+            w: Some(*MAX_IMAGE_DIMENSION + 1),
             ..Default::default()
         };
         assert!(params.validate().is_err());
