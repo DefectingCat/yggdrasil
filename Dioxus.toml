@@ -10,9 +10,9 @@ title = "Yggdrasil - Dioxus SSR"
 watch_path = ["src", "Cargo.toml"]
 
 [web.resource]
-style = ["/style.css", "/highlight.css", "/tiptap/editor.css"]
-script = ["/tiptap/editor.js"]
+style = ["/style.css", "/highlight.css", "/tiptap/editor.css", "/lightbox/lightbox.css"]
+script = ["/tiptap/editor.js", "/lightbox/lightbox.js"]
 
 [web.resource.dev]
-style = ["/style.css", "/highlight.css", "/tiptap/editor.css"]
-script = ["/tiptap/editor.js"]
+style = ["/style.css", "/highlight.css", "/tiptap/editor.css", "/lightbox/lightbox.css"]
+script = ["/tiptap/editor.js", "/lightbox/lightbox.js"]
