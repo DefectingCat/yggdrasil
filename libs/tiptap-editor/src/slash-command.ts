@@ -247,7 +247,7 @@ interface SlashPopup {
 }
 
 /** 校验图片/链接 URL:只允许 http(s) 和 data:image。拒绝 javascript: 等。 */
-function isValidUrl(url: string): boolean {
+export function isValidUrl(url: string): boolean {
   return /^https?:\/\//i.test(url) || /^data:image\//i.test(url)
 }
 

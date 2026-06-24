@@ -21,7 +21,7 @@ export interface UploadNodeViewCallbacks {
  * NodeView 纯渲染，不发起上传——按钮点击转发给注入的 callbacks（实际是 coordinator）。
  * 属性变化时 ProseMirror 调 update(node)，NodeView 比较新旧 data-upload-state 重渲染遮罩。
  */
-class UploadImageNodeView {
+export class UploadImageNodeView {
   private node: PMNode
   private callbacks: UploadNodeViewCallbacks
   private uploadId: string | null
