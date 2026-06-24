@@ -1,4 +1,5 @@
 import { fitCentered, transformFor, originalUrl, type Rect } from "./geometry";
+import "./style.css";
 
 interface LightboxState {
   overlay: HTMLDivElement;
