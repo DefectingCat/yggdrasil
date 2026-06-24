@@ -427,8 +427,11 @@ fn write_editor(post_id: Option<i32>) -> Element {
                 }
             }
 
-            // 顶部元信息区域 - 固定高度，不滚动
-            div { class: "flex-shrink-0 space-y-5 pt-8",
+            // 可滚动主体：元信息 + 编辑器 + 内联错误提示。
+            // 底部操作栏留在此容器外（固定吸底），保证保存/状态按钮始终可见。
+            div { class: "flex-1 min-h-0 overflow-y-auto",
+                // 顶部元信息区域 - 固定高度，不滚动
+                div { class: "flex-shrink-0 space-y-5 pt-8",
                 // 标题区域 - 大字号无框输入
                 div {
                     input {
@@ -448,10 +451,16 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     oninput: move |evt| summary.set(evt.value()),
                 }
 
-                // 封面图上传区：16:9 拖拽/点击/粘贴三合一，保留外链 URL 输入。
+                // 封面图上传区：空态矮横条（不挤压编辑器），有图时展开 16:9 预览。
                 // 容器统一绑定拖拽与粘贴事件；内部按 cover_image / cover_uploading 切换空态、上传中、预览。
                 div {
-                    class: "relative aspect-video w-full rounded-xl border border-dashed overflow-hidden transition-all duration-200 group/cover",
+                    class: "relative w-full rounded-xl border border-dashed overflow-hidden transition-all duration-200 group/cover",
+                    // 空态矮横条；有图/上传中展开成 16:9。
+                    class: if cover_image().is_empty() && !cover_uploading() {
+                        "h-14"
+                    } else {
+                        "aspect-video"
+                    },
                     class: if cover_drag_active() {
                         "border-[var(--color-paper-accent)] bg-[var(--color-paper-accent-soft)]"
                     } else if cover_image().is_empty() {
@@ -569,13 +578,13 @@ fn write_editor(post_id: Option<i32>) -> Element {
                         }
                     }
 
-                    // —— 空态：图标 + 三入口提示 + URL 文字链 ——
+                    // —— 空态：横向矮横条，图标+提示+URL 链 ——
                     if cover_image().is_empty() && !cover_uploading() {
                         // label 包裹整个空态：点击天然触发隐藏的 file input，无需 JS。
-                        label { class: "absolute inset-0 flex flex-col items-center justify-center gap-2 cursor-pointer px-4 text-center",
+                        label { class: "absolute inset-0 flex flex-row items-center gap-3 cursor-pointer px-4 text-left",
                             // 上传图标（Feather 风格线框，与项目现有图标体系一致）。
                             svg {
-                                class: "w-8 h-8 text-[var(--color-paper-secondary)]",
+                                class: "w-5 h-5 shrink-0 text-[var(--color-paper-secondary)]",
                                 xmlns: "http://www.w3.org/2000/svg",
                                 view_box: "0 0 24 24",
                                 fill: "none",
@@ -592,12 +601,12 @@ fn write_editor(post_id: Option<i32>) -> Element {
                                     y2: "15",
                                 }
                             }
-                            span { class: "text-sm text-[var(--color-paper-secondary)]",
-                                "拖拽图片到此 · 点击选择 · 粘贴"
+                            span { class: "text-sm text-[var(--color-paper-secondary)] shrink-0",
+                                "拖拽 · 点击 · 粘贴封面图"
                             }
                             // URL 文字链：阻止 label 的默认 file 触发，切换到 URL 输入模式。
                             span {
-                                class: "text-[11px] font-medium tracking-wider text-[var(--color-paper-tertiary)] hover:text-[var(--color-paper-accent)] transition-colors",
+                                class: "text-[11px] font-medium tracking-wider text-[var(--color-paper-tertiary)] hover:text-[var(--color-paper-accent)] transition-colors ml-auto shrink-0",
                                 onclick: move |evt| {
                                     evt.prevent_default();
                                     evt.stop_propagation();
@@ -710,8 +719,9 @@ fn write_editor(post_id: Option<i32>) -> Element {
                 }
             }
 
-            // 编辑器区域 - 沾满剩余高度
-            div { class: "flex-1 min-h-0 flex flex-col my-4",
+            // 编辑器区域 - 沾满剩余高度，但保证最小编辑空间。
+            // min-h-[400px]：窗口过矮时不被元信息挤压到不可用；flex-1：窗口充裕时填充。
+            div { class: "flex-1 min-h-[400px] flex flex-col my-4",
                 div {
                     class: "flex-1 min-h-0 w-full border border-[var(--color-paper-border)] rounded-xl overflow-hidden bg-[var(--color-paper-entry)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none",
                     id: "tiptap-editor",
@@ -755,9 +765,10 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     }
                 }
             }
+            } // 滚动主体容器闭合
 
-            // 底部操作栏 - 在编辑器下方，左对齐
-            div { class: "flex-shrink-0 flex items-center gap-2 pt-2 pb-4",
+            // 底部操作栏 - 固定吸底，不在滚动区域内
+            div { class: "flex-shrink-0 flex items-center gap-2 pt-2 pb-4 border-t border-[var(--color-paper-border)]",
                 button {
                     class: "px-4 py-1.5 text-sm text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors cursor-pointer",
                     onclick: move |_| {
