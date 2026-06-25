@@ -238,6 +238,15 @@ fn main() {
         migrate_rt.block_on(async {
             tracing::info!("running database migrations");
 
+            // 连接池指向目标库，但目标库可能尚不存在（全新部署）。
+            // 先连 postgres 维护库确保目标库存在，复用启动超时窗口应对 DB 起得慢。
+            if let Err(e) = db::pool::ensure_database().await {
+                tracing::error!("failed to ensure target database exists: {e}");
+                eprintln!("ERROR: failed to ensure target database exists: {e}");
+                eprintln!("HINT: verify DATABASE_URL; the role needs CREATEDB (or CREATE privilege on the 'postgres' DB) to auto-create the target database.");
+                std::process::exit(1);
+            }
+
             // 启动期用长重试窗口拿连接：DB 可能还在初始化（docker-compose 无 healthcheck、
             // 本机忘启 Postgres 等）。窗口由 MIGRATE_STARTUP_TIMEOUT_SECS 控制，默认 30s。
             let mut conn = match db::pool::get_conn_for_startup().await {

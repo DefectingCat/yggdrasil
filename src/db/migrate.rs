@@ -7,6 +7,10 @@
 //! - 每个迁移在独立事务里执行，失败自动回滚，版本行不会写入。
 //! - 咨询锁（`pg_advisory_lock`）保证多实例启动时只有一个进程执行迁移。
 //!
+//! 前置条件：目标数据库的存在性由 [`crate::db::pool::ensure_database`] 在本模块
+//! 被调用前保证（它先连 `postgres` 维护库做 `CREATE DATABASE IF NOT EXISTS` 等价逻辑）。
+//! 本模块只负责 schema，不再关心"库不存在"。
+//!
 //! 仅在 `feature = "server"` 时编译。
 
 use std::collections::HashSet;

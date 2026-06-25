@@ -11,7 +11,8 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod, Runtime};
-use tokio_postgres::NoTls;
+use tokio_postgres::config::Host;
+use tokio_postgres::{Config, NoTls};
 
 /// 解析 `DATABASE_URL` 并注入 `statement_timeout`，返回配置好的 `tokio_postgres::Config`。
 ///
@@ -188,5 +189,185 @@ pub async fn get_conn_for_startup(
                 tokio::time::sleep(sleep).await;
             }
         }
+    }
+}
+
+/// 启动期自举：连接 `postgres` 维护库，确保目标数据库存在（不存在则创建）。
+///
+/// 解决"全新部署没有目标库"的缺口——`get_conn_for_startup` 连的是 `DATABASE_URL`
+/// 里指定的目标库，库不存在时只会反复重试到超时退出。本函数在连接池首次被触碰
+/// **之前**运行，把 `scripts/migrate.sh` 里那段 `CREATE DATABASE` 逻辑内置进二进制，
+/// 让首次启动真正零手动。
+///
+/// 与 `get_conn_for_startup` 共享同一套语义：
+/// - 复用 `MIGRATE_STARTUP_TIMEOUT_SECS` 窗口（默认 30s）应对"DB 起得比 app 慢"；
+/// - 固定 500ms 轮询连接 `postgres` 维护库；连上后 `EXISTS` 查询 + `CREATE` 只跑一次。
+/// - 目标库已存在是常态，此时仅一次快速往返。
+///
+/// 返回 `Result<(), String>`（而非 `MigrateError`），与 `validate_database_url` 的
+/// 报错风格一致，便于 `main.rs` 走统一的 `tracing::error!` + `exit(1)` 路径。
+///
+/// 跳过自动创建（返回 `Ok(())`）的安全场景：
+/// - 目标库名无法从 URL/用户名推断；
+/// - 目标库名不是简单标识符（含 `-`、引号等），避免拼到 `CREATE DATABASE` 后面
+///   产生 SQL 注入风险——此时把"库不存在"的错误留给后续正常连接路径去报告。
+pub async fn ensure_database() -> Result<(), String> {
+    // 1. 推断目标库名：优先 URL 里的 dbname，回退到用户名（Postgres 自身的默认行为）。
+    let pg_cfg = build_pg_config()?;
+    let db_name = pg_cfg
+        .get_dbname()
+        .or_else(|| pg_cfg.get_user())
+        .map(|s| s.to_string());
+
+    let db_name = match db_name {
+        Some(name) => name,
+        None => {
+            tracing::warn!(
+                "could not determine target database name from DATABASE_URL; \
+                 skipping auto-create (letting normal connect path surface any error)"
+            );
+            return Ok(());
+        }
+    };
+
+    // 2. 标识符安全校验：`CREATE DATABASE` 后面只能跟裸标识符（无法用 $1 参数化），
+    //    含特殊字符的库名直接跳过，避免注入。
+    if !is_simple_ident(&db_name) {
+        tracing::warn!(
+            "target database name {:?} is not a simple identifier; \
+             skipping auto-create (letting normal connect path surface any error)",
+            db_name
+        );
+        return Ok(());
+    }
+
+    // 3. 在启动超时窗口内反复尝试连接 `postgres` 维护库。
+    let timeout_secs = std::env::var("MIGRATE_STARTUP_TIMEOUT_SECS")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(30);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(timeout_secs);
+    let retry_interval = Duration::from_millis(500);
+
+    let (client, connection) = loop {
+        let admin_cfg = build_admin_config()?;
+        match admin_cfg.connect(NoTls).await {
+            Ok(joined) => break joined,
+            Err(e) => {
+                let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+                if remaining.is_zero() {
+                    return Err(format!(
+                        "could not connect to 'postgres' maintenance database within {timeout_secs}s: {e}"
+                    ));
+                }
+                tracing::warn!(
+                    "ensure_database: connect to 'postgres' failed, ~{}s remaining: {e}",
+                    remaining.as_secs()
+                );
+                tokio::time::sleep(std::cmp::min(retry_interval, remaining)).await;
+            }
+        }
+    };
+    // 连接的后台驱动任务：出错时仅记录，连接随即作废。
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            tracing::warn!("postgres maintenance connection ended: {e}");
+        }
+    });
+
+    // 4. 查询目标库是否已存在。
+    let exists: bool = client
+        .query_one(
+            "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)",
+            &[&db_name],
+        )
+        .await
+        .map_err(|e| format!("failed to query pg_database: {e}"))?
+        .get(0);
+
+    if exists {
+        tracing::info!("target database {:?} already exists", db_name);
+        return Ok(());
+    }
+
+    // 5. 不存在则创建。db_name 已通过 is_simple_ident 校验，可安全拼到 SQL。
+    tracing::info!("target database {:?} does not exist, creating", db_name);
+    let stmt = format!("CREATE DATABASE {db_name}");
+    client
+        .batch_execute(&stmt)
+        .await
+        .map_err(|e| format!("failed to create database {db_name:?}: {e}"))?;
+    tracing::info!("created database {:?}", db_name);
+    Ok(())
+}
+
+/// 构建 `postgres` 维护库的连接配置：复用目标 URL 的 host/port/user/password，
+/// 仅把 dbname 换成 `postgres`。
+///
+/// `tokio_postgres::Config` 未实现 `Clone`，故逐字段拷贝到新的 `Config::new()`。
+/// `host()`/`port()` 是 `&mut self` 的借用式 builder，故按 host 逐个追加并配对端口。
+fn build_admin_config() -> Result<Config, String> {
+    let src = build_pg_config()?;
+    let mut dst = Config::new();
+
+    if let Some(user) = src.get_user() {
+        dst.user(user);
+    }
+    if let Some(password) = src.get_password() {
+        dst.password(password);
+    }
+    let hosts = src.get_hosts();
+    let ports = src.get_ports();
+    for (i, host) in hosts.iter().enumerate() {
+        // 端口与 host 按 tokio-postgres 内部配对规则取第 i 个端口，缺省回退 5432。
+        let port = ports.get(i).copied().unwrap_or(5432);
+        match host {
+            Host::Tcp(h) => {
+                dst.host(h);
+                dst.port(port);
+            }
+            Host::Unix(p) => {
+                dst.host_path(p);
+            }
+        };
+    }
+    // get_hosts()/get_ports() 为空时退回 libpq 默认（localhost:5432），与原 URL 解析一致。
+    dst.dbname("postgres");
+    Ok(dst)
+}
+
+/// 判断字符串是否为 PostgreSQL 简单标识符：`^[A-Za-z_][A-Za-z0-9_]*$`。
+///
+/// 用于在把目标库名拼进 `CREATE DATABASE <name>` 前做安全校验——SQL 里库名无法参数化，
+/// 非简单标识符（如 `my-db`、含引号）一律跳过自动创建。
+fn is_simple_ident(s: &str) -> bool {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_alphabetic() || c == '_' => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_simple_ident;
+
+    #[test]
+    fn simple_ident_accepts_valid_names() {
+        assert!(is_simple_ident("yggdrasil"));
+        assert!(is_simple_ident("_ygg"));
+        assert!(is_simple_ident("db_1"));
+        assert!(is_simple_ident("YggDrasil09"));
+    }
+
+    #[test]
+    fn simple_ident_rejects_invalid_names() {
+        assert!(!is_simple_ident(""));
+        assert!(!is_simple_ident("my-db")); // 连字符
+        assert!(!is_simple_ident("9db")); // 数字开头
+        assert!(!is_simple_ident("db name")); // 空格
+        assert!(!is_simple_ident("db\"; --")); // 引号 / 注入
+        assert!(!is_simple_ident("db.name")); // 点
     }
 }
