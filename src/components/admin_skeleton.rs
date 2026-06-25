@@ -17,7 +17,7 @@ pub fn AdminDashboardSkeleton() -> Element {
             // 统计卡片骨架
             div { class: "grid grid-cols-1 md:grid-cols-3 gap-6",
                 for _ in 0..3 {
-                    div { class: "rounded-xl bg-white dark:bg-[#2e2e33] border border-gray-200 dark:border-[#333] p-6 text-center space-y-3",
+                    div { class: "rounded-xl bg-paper-entry border border-paper-border p-6 text-center space-y-3",
                         SkeletonBox { class: "h-9 w-16 mx-auto rounded" }
                         SkeletonBox { class: "h-4 w-20 mx-auto rounded" }
                     }
@@ -35,7 +35,7 @@ pub fn AdminDashboardSkeleton() -> Element {
                 SkeletonBox { class: "h-6 w-24 rounded" }
                 div { class: "space-y-0",
                     for _ in 0..5 {
-                        div { class: "flex justify-between items-center py-3 border-b border-gray-100 dark:border-[#333]",
+                        div { class: "flex justify-between items-center py-3 border-b border-paper-border",
                             SkeletonBox { class: "h-4 w-[45%] rounded" }
                             SkeletonBox { class: "h-3 w-20 rounded" }
                         }

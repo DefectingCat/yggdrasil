@@ -14,10 +14,12 @@ use crate::api::comments::trash_comment;
 use crate::api::comments::{approve_comment, batch_update_comment_status, spam_comment};
 #[cfg(target_arch = "wasm32")]
 use crate::api::comments::{get_all_comments, AllCommentsResponse};
+use crate::components::skeletons::atoms::SkeletonBox;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::ui::{
-    EmptyState, Pagination, StatusBadge, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_TEXT_AMBER,
-    BTN_TEXT_GREEN, BTN_TEXT_RED, BTN_SOLID_AMBER, BTN_SOLID_GREEN, BTN_SOLID_RED, CHECKBOX_CLASS,
+    EmptyState, Pagination, StatusBadge, ADMIN_CARD_CLASS, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS,
+    BTN_TEXT_AMBER, BTN_TEXT_GREEN, BTN_TEXT_RED, BTN_SOLID_AMBER, BTN_SOLID_GREEN, BTN_SOLID_RED,
+    CHECKBOX_CLASS,
 };
 use crate::models::comment::{AdminComment, CommentStatus};
 use crate::router::Route;
@@ -122,17 +124,17 @@ pub fn AdminCommentsPage(page: i32) -> Element {
 
     rsx! {
         div { class: "space-y-6",
-            h1 { class: "text-2xl font-bold text-gray-900 dark:text-[#dadadb]",
+            h1 { class: "text-2xl font-bold text-paper-primary",
                 "评论管理"
             }
 
-            div { class: "flex gap-1 border-b border-gray-200 dark:border-[#333]",
+            div { class: "flex gap-1 border-b border-paper-border",
                 for (status, label) in [("", "全部"), ("pending", "待审核"), ("approved", "已通过"), ("spam", "垃圾箱")] {
                     button {
                         class: if active_filter() == status {
-                            "px-4 py-2 text-sm font-medium border-b-2 border-gray-900 dark:border-[#dadadb] text-gray-900 dark:text-[#dadadb]"
+                            "px-4 py-2 text-sm font-medium border-b-2 border-paper-accent text-paper-primary"
                         } else {
-                            "px-4 py-2 text-sm font-medium text-gray-500 dark:text-[#9b9c9d] hover:text-gray-700 dark:hover:text-[#dadadb] transition-colors"
+                            "px-4 py-2 text-sm font-medium text-paper-secondary hover:text-paper-primary transition-colors"
                         },
                         onclick: move |_| active_filter.set(status.to_string()),
                         "{label}"
@@ -142,8 +144,8 @@ pub fn AdminCommentsPage(page: i32) -> Element {
 
             if !selected_ids().is_empty() {
                 { rsx! {
-                    div { class: "flex items-center gap-3 p-3 bg-gray-50 dark:bg-[#2a2a2a] rounded-lg",
-                        span { class: "text-sm text-gray-600 dark:text-[#9b9c9d]",
+                    div { class: "flex items-center gap-3 p-3 bg-paper-theme rounded-lg",
+                        span { class: "text-sm text-paper-secondary",
                             "已选择 {selected_ids().len()} 条"
                         }
                         button {
@@ -203,13 +205,13 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                 } else if loading() && comments().is_empty() {
                     rsx! {
                         DelayedSkeleton {
-                            div { class: "bg-white dark:bg-[#2e2e33] rounded-xl border border-gray-200 dark:border-[#333] p-6 space-y-4",
+                            div { class: "{ADMIN_CARD_CLASS} p-6 space-y-4",
                                 for _ in 0..5 {
                                     div { class: "flex items-center gap-4",
-                                        div { class: "h-4 w-4 bg-gray-200 dark:bg-[#2a2a2a] rounded" }
-                                        div { class: "h-8 w-8 bg-gray-200 dark:bg-[#2a2a2a] rounded-full" }
-                                        div { class: "h-4 w-32 bg-gray-200 dark:bg-[#2a2a2a] rounded" }
-                                        div { class: "h-4 flex-1 bg-gray-200 dark:bg-[#2a2a2a] rounded" }
+                                        SkeletonBox { class: "h-4 w-4 rounded" }
+                                        SkeletonBox { class: "h-8 w-8 rounded-full" }
+                                        SkeletonBox { class: "h-4 w-32 rounded" }
+                                        SkeletonBox { class: "h-4 flex-1 rounded" }
                                     }
                                 }
                             }
@@ -226,7 +228,7 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                             div { class: "overflow-x-auto",
                                 table { class: "w-full text-sm",
                                     thead {
-                                        tr { class: "border-b border-gray-200 dark:border-[#333] text-left text-gray-500 dark:text-[#9b9c9d]",
+                                        tr { class: "border-b border-paper-border text-left text-paper-secondary",
                                             th { class: "px-4 py-3 font-medium w-10",
                                                 input {
                                                     r#type: "checkbox",
@@ -372,23 +374,23 @@ fn CommentRow(
                         alt: "{comment.author_name}",
                     }
                     div { class: "min-w-0",
-                        div { class: "text-sm font-medium text-gray-900 dark:text-[#dadadb] truncate",
+                        div { class: "text-sm font-medium text-paper-primary truncate",
                             "{comment.author_name}"
                         }
-                        div { class: "text-xs text-gray-400 dark:text-[#666] truncate",
+                        div { class: "text-xs text-paper-secondary truncate",
                             "{comment.author_email}"
                         }
                     }
                 }
             }
             td { class: "px-4 py-3 max-w-xs",
-                p { class: "text-sm text-gray-600 dark:text-[#9b9c9d] truncate",
+                p { class: "text-sm text-paper-secondary truncate",
                     "{preview}"
                 }
             }
             td { class: "px-4 py-3",
                 Link {
-                    class: "text-sm text-gray-700 dark:text-[#dadadb] hover:opacity-80 transition-opacity",
+                    class: "text-sm text-paper-primary hover:text-paper-accent transition-colors",
                     to: Route::PostDetail { slug: comment.post_slug.clone() },
                     "{comment.post_title}"
                 }
@@ -405,7 +407,7 @@ fn CommentRow(
                     label: status_label,
                 }
             }
-            td { class: "px-4 py-3 text-sm text-gray-500 dark:text-[#9b9c9d]",
+            td { class: "px-4 py-3 text-sm text-paper-secondary",
                 "{date_str}"
             }
             td { class: "px-4 py-3 text-right",

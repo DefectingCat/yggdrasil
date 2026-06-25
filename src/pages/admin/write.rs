@@ -423,7 +423,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
     rsx! {
         div { class: "relative flex flex-col flex-1 min-h-0 overflow-hidden",
             if loading() {
-                div { class: "absolute inset-0 z-10 bg-white dark:bg-[#1d1e20]",
+                div { class: "absolute inset-0 z-10 bg-paper-theme",
                     WriteSkeleton {}
                 }
             }

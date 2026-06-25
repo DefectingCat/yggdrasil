@@ -79,7 +79,7 @@ pub fn AdminLayout() -> Element {
         div { class: "flex items-center gap-3",
             ThemeToggle {}
             button {
-                class: "text-sm text-gray-600 dark:text-[#9b9c9d] hover:text-gray-900 dark:hover:text-[#dadadb] transition-colors",
+                class: "text-sm text-paper-secondary hover:text-paper-primary transition-colors",
                 onclick: move |_| {
                     spawn(async move {
                         let _ = logout().await;
@@ -103,9 +103,9 @@ pub fn AdminLayout() -> Element {
 
     // Write 路由：页面固定高度，不滚动，由编辑器内部处理滚动
     let root_class = if is_write_route {
-        "h-dvh flex flex-col overflow-hidden bg-white dark:bg-[#1d1e20]"
+        "h-dvh flex flex-col overflow-hidden bg-paper-theme"
     } else {
-        "min-h-screen flex flex-col bg-white dark:bg-[#1d1e20]"
+        "min-h-screen flex flex-col bg-paper-theme"
     };
 
     // 根据校验状态与用户状态渲染真实布局、跳转提示或骨架屏
@@ -125,7 +125,7 @@ pub fn AdminLayout() -> Element {
             rsx! {
                 div { class: "{root_class}",
                     div { class: "flex-1 flex items-center justify-center",
-                        p { class: "text-gray-600 dark:text-[#9b9c9d]", "未登录，正在跳转..." }
+                        p { class: "text-paper-secondary", "未登录，正在跳转..." }
                     }
                 }
             }

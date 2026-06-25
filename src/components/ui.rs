@@ -17,18 +17,18 @@ use crate::router::Route;
 
 /// Admin 卡片容器：白底圆角描边，亮/暗双模式。用于 stat 卡片、面板等。
 pub const ADMIN_CARD_CLASS: &str =
-    "bg-white dark:bg-[#2e2e33] rounded-xl border border-gray-200 dark:border-[#333]";
+    "bg-paper-entry rounded-xl border border-paper-border";
 
 /// Admin 表格容器：在卡片基础上加 `overflow-hidden`，圆角裁剪表格。
 pub const ADMIN_TABLE_CLASS: &str =
-    "bg-white dark:bg-[#2e2e33] rounded-xl border border-gray-200 dark:border-[#333] overflow-hidden";
+    "bg-paper-entry rounded-xl border border-paper-border overflow-hidden";
 
 /// Admin 表格行 hover 态：底部分割线 + 悬停背景。
 pub const ADMIN_ROW_HOVER: &str =
-    "border-b border-gray-100 dark:border-[#333] last:border-0 hover:bg-gray-50 dark:hover:bg-[#2a2a2a] transition-colors";
+    "border-b border-paper-border last:border-0 hover:bg-paper-entry transition-colors";
 
 /// 列表复选框统一样式（全选表头 + 行内）。
-pub const CHECKBOX_CLASS: &str = "rounded border-gray-300 dark:border-[#555]";
+pub const CHECKBOX_CLASS: &str = "rounded border-paper-border";
 
 /// 状态徽章外层：小号圆角胶囊。
 pub const BADGE_BASE: &str =
@@ -56,7 +56,7 @@ pub const BTN_TEXT_AMBER: &str = "text-xs text-amber-600 hover:text-amber-800 da
 pub const BTN_TEXT_RED: &str =
     "text-xs text-red-500 hover:text-red-700 dark:hover:text-red-300 transition-colors cursor-pointer";
 /// 主题绿（鼠尾草）文字小按钮（行内恢复）。
-pub const BTN_TEXT_ACCENT: &str = "text-xs text-[#5c7a5e] hover:text-[#3d5a3f] dark:text-[#7da97f] dark:hover:text-[#9dc79f] transition-colors cursor-pointer";
+pub const BTN_TEXT_ACCENT: &str = "text-xs text-paper-accent hover:text-paper-primary transition-colors cursor-pointer";
 
 // ===========================================================================
 // 组件
@@ -95,7 +95,7 @@ pub fn Pagination(
     let is_admin = variant == "admin";
     let (link_class, link_extra_next) = if is_admin {
         (
-            "inline-flex items-center px-4 py-2 text-sm text-white bg-gray-900 dark:bg-[#dadadb] dark:text-gray-900 rounded-full hover:opacity-80 transition-opacity cursor-pointer",
+            "inline-flex items-center px-4 py-2 text-sm text-paper-theme bg-paper-accent rounded-full hover:brightness-110 active:scale-[0.98] transition-all duration-200 cursor-pointer",
             "",
         )
     } else {
@@ -105,7 +105,7 @@ pub fn Pagination(
         )
     };
     let disabled_class =
-        "inline-flex items-center px-4 py-2 text-sm text-gray-400 bg-gray-100 dark:bg-[#2a2a2a] rounded-full cursor-not-allowed";
+        "inline-flex items-center px-4 py-2 text-sm text-paper-secondary bg-paper-tertiary rounded-full cursor-not-allowed";
 
     // admin 首尾页渲染禁用态；frontend 首尾页直接不渲染。
     rsx! {
@@ -126,7 +126,7 @@ pub fn Pagination(
 
             // admin 显示页码计数。
             if is_admin {
-                span { class: "text-sm text-gray-500 dark:text-[#9b9c9d] self-center",
+                span { class: "text-sm text-paper-secondary self-center",
                     "{current_page} / {total_pages} 页 (共 {total} {unit})"
                 }
             }
@@ -177,7 +177,7 @@ pub fn StatusBadge(color_class: &'static str, label: String) -> Element {
 pub fn EmptyState(message: &'static str, variant: &'static str) -> Element {
     let class = match variant {
         "error" => "text-center text-red-500 dark:text-red-400 py-20",
-        _ => "text-center py-20 text-gray-500 dark:text-[#9b9c9d]",
+        _ => "text-center py-20 text-paper-secondary",
     };
     rsx! {
         div { class: "{class}", "{message}" }

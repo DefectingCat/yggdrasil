@@ -101,42 +101,42 @@ pub fn PostsPage(page: i32) -> Element {
     rsx! {
         div { class: "space-y-6",
             div { class: "flex items-center justify-between",
-                h1 { class: "text-2xl font-bold text-gray-900 dark:text-[#dadadb]",
+                h1 { class: "text-2xl font-bold text-paper-primary",
                     "文章管理"
                 }
                 div { class: "flex items-center gap-3",
                     div { class: "group relative",
                         button {
                             class: if rebuilding() {
-                                "px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-gray-400 dark:text-[#666] border border-gray-300 dark:border-[#444]"
+                                "px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border"
                             } else {
-                                "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-gray-700 dark:text-[#b0b0b1] border border-gray-300 dark:border-[#444] hover:border-gray-900 dark:hover:border-[#dadadb] hover:text-gray-900 dark:hover:text-[#dadadb] transition-all"
+                                "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all"
                             },
                             disabled: rebuilding(),
                             onclick: move |_| do_rebuild(false),
                             if rebuilding() { "重建中..." } else { "重建内容" }
                         }
-                        div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gray-900 dark:bg-[#dadadb] text-white dark:text-[#1a1a1a] shadow-lg z-50",
+                        div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-paper-primary text-paper-theme shadow-lg z-50",
                             "重建 content_html 为空的文章渲染缓存"
                         }
                     }
                     div { class: "group relative",
                         button {
                             class: if rebuilding() {
-                                "px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-gray-400 dark:text-[#666] border border-gray-300 dark:border-[#444]"
+                                "px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border"
                             } else {
-                                "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-gray-700 dark:text-[#b0b0b1] border border-gray-300 dark:border-[#444] hover:border-gray-900 dark:hover:border-[#dadadb] hover:text-gray-900 dark:hover:text-[#dadadb] transition-all"
+                                "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all"
                             },
                             disabled: rebuilding(),
                             onclick: move |_| do_rebuild(true),
                             if rebuilding() { "重建中..." } else { "重建全部" }
                         }
-                        div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gray-900 dark:bg-[#dadadb] text-white dark:text-[#1a1a1a] shadow-lg z-50",
+                        div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-paper-primary text-paper-theme shadow-lg z-50",
                             "重建所有文章的渲染缓存（含已有内容）"
                         }
                     }
                     Link {
-                        class: "px-4 py-2 bg-gray-900 dark:bg-[#dadadb] text-white dark:text-gray-900 rounded-full text-sm font-medium hover:opacity-80 transition-opacity cursor-pointer",
+                        class: "px-4 py-2 bg-paper-accent text-paper-theme rounded-full text-sm font-medium hover:brightness-110 active:scale-[0.98] transition-all duration-200 cursor-pointer",
                         to: Route::Write {},
                         "+ 写文章"
                     }
@@ -144,7 +144,7 @@ pub fn PostsPage(page: i32) -> Element {
             }
 
             if let Some(msg) = rebuild_result() {
-                div { class: "text-sm text-gray-600 dark:text-[#9b9c9d] px-1",
+                div { class: "text-sm text-paper-secondary px-1",
                     "{msg}"
                 }
             }
@@ -157,7 +157,7 @@ pub fn PostsPage(page: i32) -> Element {
                 div { class: "{ADMIN_TABLE_CLASS}",
                         table { class: "w-full text-sm",
                             thead {
-                                tr { class: "border-b border-gray-200 dark:border-[#333] text-left text-gray-500 dark:text-[#9b9c9d]",
+                                tr { class: "border-b border-paper-border text-left text-paper-secondary",
                                     th { class: "px-4 py-3 font-medium", "标题" }
                                     th { class: "px-4 py-3 font-medium w-24 text-center", "状态" }
                                     th { class: "px-4 py-3 font-medium w-32", "日期" }
@@ -222,7 +222,7 @@ fn PostRow(post: PostListItem, deleting: bool, on_delete: EventHandler<i32>) -> 
         tr { class: "{ADMIN_ROW_HOVER}",
             td { class: "px-4 py-3",
                 Link {
-                    class: "text-gray-900 dark:text-[#dadadb] hover:opacity-80 transition-opacity",
+                    class: "text-paper-primary hover:text-paper-accent transition-colors cursor-pointer",
                     to: Route::PostDetail { slug: post.slug.clone() },
                     "{post.title}"
                 }
@@ -233,19 +233,19 @@ fn PostRow(post: PostListItem, deleting: bool, on_delete: EventHandler<i32>) -> 
                     label: post.status_label().to_string(),
                 }
             }
-            td { class: "px-4 py-3 text-gray-500 dark:text-[#9b9c9d]",
+            td { class: "px-4 py-3 text-paper-secondary",
                 "{date_str}"
             }
             td { class: "px-4 py-3 text-right",
                 div { class: "flex justify-end gap-3",
                     Link {
-                        class: "text-xs text-gray-600 dark:text-[#9b9c9d] hover:text-gray-900 dark:hover:text-[#dadadb] transition-colors cursor-pointer",
+                        class: "text-xs text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer",
                         to: Route::WriteEdit { id: post.id },
                         "编辑"
                     }
                     button {
                         class: if deleting {
-                            "text-xs text-gray-400 cursor-not-allowed"
+                            "text-xs text-paper-secondary cursor-not-allowed"
                         } else {
                             BTN_TEXT_RED
                         },

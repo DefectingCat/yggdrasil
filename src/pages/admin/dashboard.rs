@@ -13,6 +13,7 @@ use crate::api::posts::{get_post_stats, list_posts};
 #[cfg(target_arch = "wasm32")]
 use crate::api::posts::{PostListResponse, PostStatsResponse};
 use crate::components::ui::ADMIN_CARD_CLASS;
+use crate::components::skeletons::atoms::SkeletonBox;
 use crate::models::post::{PostListItem, PostStats};
 use crate::router::Route;
 
@@ -70,9 +71,9 @@ pub fn Admin() -> Element {
                     None => {
                         rsx! {
                             for _ in 0..3 {
-                                div { class: "rounded-xl bg-white dark:bg-[#2e2e33] border border-gray-200 dark:border-[#333] p-6 text-center space-y-3 animate-pulse",
-                                    div { class: "h-9 w-16 mx-auto bg-gray-200 dark:bg-[#2a2a2a] rounded" }
-                                    div { class: "h-4 w-20 mx-auto bg-gray-200 dark:bg-[#2a2a2a] rounded" }
+                                div { class: "{ADMIN_CARD_CLASS} p-6 text-center space-y-3 animate-pulse",
+                                    SkeletonBox { class: "h-9 w-16 mx-auto rounded" }
+                                    SkeletonBox { class: "h-4 w-20 mx-auto rounded" }
                                 }
                             }
                         }
@@ -81,7 +82,7 @@ pub fn Admin() -> Element {
             }
 
             Link {
-                class: "block rounded-xl bg-white dark:bg-[#2e2e33] border border-gray-200 dark:border-[#333] p-6 text-center hover:border-gray-300 dark:hover:border-[#555] transition-colors",
+                class: "block {ADMIN_CARD_CLASS} p-6 text-center hover:border-paper-accent transition-colors",
                 to: Route::AdminComments {},
                 match pending_count() {
                     Some(count) => {
@@ -89,15 +90,15 @@ pub fn Admin() -> Element {
                             div { class: "text-3xl font-bold text-amber-600 dark:text-amber-400",
                                 "{count}"
                             }
-                            div { class: "text-sm text-gray-500 dark:text-[#9b9c9d] mt-2",
+                            div { class: "text-sm text-paper-secondary mt-2",
                                 "待审核评论"
                             }
                         }
                     }
                     None => {
                         rsx! {
-                            div { class: "h-9 w-16 mx-auto bg-gray-200 dark:bg-[#2a2a2a] rounded animate-pulse" }
-                            div { class: "h-4 w-20 mx-auto bg-gray-200 dark:bg-[#2a2a2a] rounded mt-3 animate-pulse" }
+                            SkeletonBox { class: "h-9 w-16 mx-auto rounded" }
+                            SkeletonBox { class: "h-4 w-20 mx-auto rounded mt-3" }
                         }
                     }
                 }
@@ -105,19 +106,19 @@ pub fn Admin() -> Element {
 
             div { class: "grid grid-cols-1 md:grid-cols-2 gap-4",
                 Link {
-                    class: "bg-gray-900 dark:bg-[#dadadb] text-white dark:text-gray-900 rounded-full px-6 py-3 text-center font-medium hover:opacity-80 transition-opacity cursor-pointer",
+                    class: "bg-paper-accent text-paper-theme rounded-full px-6 py-3 text-center font-medium hover:brightness-110 active:scale-[0.98] transition-all duration-200 cursor-pointer",
                     to: Route::Write {},
                     "写文章"
                 }
                 Link {
-                    class: "bg-gray-200 dark:bg-[#333] text-gray-700 dark:text-[#dadadb] rounded-full px-6 py-3 text-center font-medium hover:opacity-80 transition-opacity cursor-pointer",
+                    class: "bg-paper-tertiary text-paper-primary rounded-full px-6 py-3 text-center font-medium hover:opacity-80 transition-opacity cursor-pointer",
                     to: Route::Posts {},
                     "管理文章"
                 }
             }
 
             div { class: "mb-8",
-                h2 { class: "text-xl font-bold text-gray-900 dark:text-[#dadadb] mb-4",
+                h2 { class: "text-xl font-bold text-paper-primary mb-4",
                     "最近文章"
                 }
                 match recent_posts() {
@@ -134,9 +135,9 @@ pub fn Admin() -> Element {
                         rsx! {
                             div { class: "space-y-4 animate-pulse",
                                 for _ in 0..5 {
-                                    div { class: "flex justify-between items-center py-3 border-b border-gray-100 dark:border-[#333]",
-                                        div { class: "h-4 w-[45%] bg-gray-200 dark:bg-[#2a2a2a] rounded" }
-                                        div { class: "h-3 w-20 bg-gray-200 dark:bg-[#2a2a2a] rounded" }
+                                    div { class: "flex justify-between items-center py-3 border-b border-paper-border",
+                                        SkeletonBox { class: "h-4 w-[45%] rounded" }
+                                        SkeletonBox { class: "h-3 w-20 rounded" }
                                     }
                                 }
                             }
@@ -153,10 +154,10 @@ pub fn Admin() -> Element {
 fn StatCard(value: String, label: String) -> Element {
     rsx! {
         div { class: "{ADMIN_CARD_CLASS} p-6 text-center",
-            div { class: "text-3xl font-bold text-gray-900 dark:text-[#dadadb]",
+            div { class: "text-3xl font-bold text-paper-primary",
                 "{value}"
             }
-            div { class: "text-sm text-gray-500 dark:text-[#9b9c9d] mt-2",
+            div { class: "text-sm text-paper-secondary mt-2",
                 "{label}"
             }
         }
@@ -171,16 +172,16 @@ fn RecentPostItem(post: PostListItem) -> Element {
     let status_class = post.status_class();
 
     rsx! {
-        div { class: "flex justify-between items-center py-3 border-b border-gray-100 dark:border-[#333]",
+        div { class: "flex justify-between items-center py-3 border-b border-paper-border",
             div { class: "flex items-center gap-3",
-                span { class: "text-gray-700 dark:text-[#dadadb]",
+                span { class: "text-paper-primary",
                     "{post.title}"
                 }
                 span { class: "text-xs {status_class}",
                     "{status_label}"
                 }
             }
-            span { class: "text-sm text-gray-400 dark:text-[#9b9c9d]",
+            span { class: "text-sm text-paper-secondary",
                 "{date_str}"
             }
         }

@@ -18,10 +18,11 @@ use crate::api::posts::{
 use crate::api::posts::{list_deleted_posts, PostListResponse};
 #[allow(unused_imports)]
 use crate::api::settings::{get_trash_settings, update_trash_settings};
+use crate::components::skeletons::atoms::SkeletonBox;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::ui::{
-    EmptyState, Pagination, StatusBadge, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_SOLID_GREEN,
-    BTN_SOLID_RED, BTN_TEXT_ACCENT, BTN_TEXT_RED, CHECKBOX_CLASS,
+    EmptyState, Pagination, StatusBadge, ADMIN_CARD_CLASS, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS,
+    BTN_SOLID_GREEN, BTN_SOLID_RED, BTN_TEXT_ACCENT, BTN_TEXT_RED, CHECKBOX_CLASS,
 };
 use crate::models::post::PostListItem;
 use crate::models::settings::TrashSettings;
@@ -124,27 +125,27 @@ pub fn TrashPage(page: i32) -> Element {
         div { class: "space-y-6",
             // 页面标题
             div { class: "flex items-center gap-3",
-                h1 { class: "text-2xl font-bold text-gray-900 dark:text-[#dadadb]", "回收站" }
-                span { class: "text-sm text-gray-500 dark:text-[#9b9c9d]",
+                h1 { class: "text-2xl font-bold text-paper-primary", "回收站" }
+                span { class: "text-sm text-paper-secondary",
                     "共 {total()} 篇"
                 }
             }
 
             // 自动清理配置卡片：可折叠的设置面板，顶部始终显示当前状态摘要
             div {
-                class: "rounded-xl border border-gray-200 dark:border-[#333] overflow-hidden bg-white dark:bg-[#2e2e33]",
+                class: "rounded-xl border border-paper-border overflow-hidden bg-paper-entry",
                 // 顶部可点击摘要条：状态指示灯 + 标题 + 展开箭头
                 button {
-                    class: "w-full flex items-center gap-3 px-5 py-4 text-left cursor-pointer hover:bg-gray-50 dark:hover:bg-[#34343a] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5c7a5e]/40 dark:focus-visible:ring-[#7da97f]/40",
+                    class: "w-full flex items-center gap-3 px-5 py-4 text-left cursor-pointer hover:bg-paper-theme focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40",
                     onclick: move |_| {
                         settings_panel_open.set(!settings_panel_open());
                         just_saved.set(false);
                     },
                     // 状态指示灯
                     {let dot_class = if settings().auto_purge_enabled {
-                        "w-2 h-2 rounded-full bg-[#5c7a5e] dark:bg-[#7da97f] shadow-[0_0_0_3px_rgba(92,122,94,0.15)]"
+                        "w-2 h-2 rounded-full bg-paper-accent shadow-[0_0_0_3px_rgba(92,122,94,0.15)]"
                     } else {
-                        "w-2 h-2 rounded-full bg-gray-300 dark:bg-[#666]"
+                        "w-2 h-2 rounded-full bg-paper-tertiary"
                     };
                     rsx! {
                         div { class: "w-2 flex-shrink-0 flex items-center justify-center",
@@ -153,10 +154,10 @@ pub fn TrashPage(page: i32) -> Element {
                     }}
                     // 标题 + 当前状态描述
                     div { class: "flex-1 min-w-0",
-                        div { class: "text-sm font-medium text-gray-900 dark:text-[#dadadb]",
+                        div { class: "text-sm font-medium text-paper-primary",
                             "自动清理"
                         }
-                        div { class: "text-xs text-gray-500 dark:text-[#9b9c9d] mt-0.5 truncate",
+                        div { class: "text-xs text-paper-secondary mt-0.5 truncate",
                             if settings().auto_purge_enabled {
                                 "已开启 · 超过 {settings().retention_days} 天的文章将被自动删除"
                             } else {
@@ -166,7 +167,7 @@ pub fn TrashPage(page: i32) -> Element {
                     }
                     // 展开箭头（旋转动画）
                     svg {
-                        class: "w-4 h-4 text-gray-400 dark:text-[#9b9c9d] transition-transform duration-200 flex-shrink-0 {chevron_rotate}",
+                        class: "w-4 h-4 text-paper-secondary transition-transform duration-200 flex-shrink-0 {chevron_rotate}",
                         view_box: "0 0 24 24",
                         fill: "none",
                         stroke: "currentColor",
@@ -177,15 +178,15 @@ pub fn TrashPage(page: i32) -> Element {
 
                 // 设置面板（可折叠）
                 if settings_panel_open() {
-                    div { class: "border-t border-gray-100 dark:border-[#3a3a3e] p-5 space-y-6",
+                    div { class: "border-t border-paper-border p-5 space-y-6",
                         // 开关行：启用自动清理
                         div {
                             class: "flex items-center justify-between gap-4",
                             div { class: "min-w-0",
-                                div { class: "text-sm font-medium text-gray-900 dark:text-[#dadadb]",
+                                div { class: "text-sm font-medium text-paper-primary",
                                     "启用自动清理"
                                 }
-                                div { class: "text-xs text-gray-500 dark:text-[#9b9c9d] mt-1",
+                                div { class: "text-xs text-paper-secondary mt-1",
                                     "后台任务定期彻底删除超过保留期的文章"
                                 }
                             }
@@ -194,9 +195,9 @@ pub fn TrashPage(page: i32) -> Element {
                                 role: "switch",
                                 aria_checked: "{settings_draft_enabled()}",
                                 class: if settings_draft_enabled() {
-                                    "relative w-11 h-6 flex-shrink-0 rounded-full bg-[#5c7a5e] dark:bg-[#7da97f] cursor-pointer transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5c7a5e]/40 dark:focus-visible:ring-[#7da97f]/40"
+                                    "relative w-11 h-6 flex-shrink-0 rounded-full bg-paper-accent cursor-pointer transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40"
                                 } else {
-                                    "relative w-11 h-6 flex-shrink-0 rounded-full bg-gray-300 dark:bg-[#555] cursor-pointer transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5c7a5e]/40 dark:focus-visible:ring-[#7da97f]/40"
+                                    "relative w-11 h-6 flex-shrink-0 rounded-full bg-paper-tertiary cursor-pointer transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40"
                                 },
                                 onclick: move |_| {
                                     settings_draft_enabled.set(!settings_draft_enabled());
@@ -216,19 +217,19 @@ pub fn TrashPage(page: i32) -> Element {
                         // 保留天数行
                         div { class: "space-y-3",
                             div { class: "min-w-0",
-                                div { class: "text-sm font-medium text-gray-900 dark:text-[#dadadb]",
+                                div { class: "text-sm font-medium text-paper-primary",
                                     "保留天数"
                                 }
-                                div { class: "text-xs text-gray-500 dark:text-[#9b9c9d] mt-1",
+                                div { class: "text-xs text-paper-secondary mt-1",
                                     "文章删除后保留的时长，到期后自动彻底清除（1–365）"
                                 }
                             }
                             // 数字输入 + 步进按钮 + 单位后缀
                             div { class: "flex items-center gap-3",
-                                div { class: "flex items-center rounded-lg border border-gray-300 dark:border-[#444] bg-white dark:bg-[#1d1e20] overflow-hidden",
+                                div { class: "flex items-center rounded-lg border border-paper-border bg-paper-entry overflow-hidden",
                                     // 减号
                                     button {
-                                        class: "w-9 h-9 flex items-center justify-center text-sm text-gray-500 dark:text-[#9b9c9d] hover:text-gray-900 dark:hover:text-[#dadadb] hover:bg-gray-50 dark:hover:bg-[#2a2a2a] cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5c7a5e]/40 dark:focus-visible:ring-[#7da97f]/40",
+                                        class: "w-9 h-9 flex items-center justify-center text-sm text-paper-secondary hover:text-paper-primary hover:bg-paper-theme cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40",
                                         r#type: "button",
                                         aria_label: "减少保留天数",
                                         onclick: move |_| {
@@ -244,7 +245,7 @@ pub fn TrashPage(page: i32) -> Element {
                                         r#type: "number",
                                         min: "1",
                                         max: "365",
-                                        class: "w-14 h-9 px-1 text-center text-sm tabular-nums text-gray-900 dark:text-[#dadadb] bg-transparent border-0 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+                                        class: "w-14 h-9 px-1 text-center text-sm tabular-nums text-paper-primary bg-transparent border-0 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
                                         value: "{settings_draft_days()}",
                                         oninput: move |e| {
                                             settings_draft_days.set(e.value());
@@ -253,7 +254,7 @@ pub fn TrashPage(page: i32) -> Element {
                                     }
                                     // 加号
                                     button {
-                                        class: "w-9 h-9 flex items-center justify-center text-sm text-gray-500 dark:text-[#9b9c9d] hover:text-gray-900 dark:hover:text-[#dadadb] hover:bg-gray-50 dark:hover:bg-[#2a2a2a] cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5c7a5e]/40 dark:focus-visible:ring-[#7da97f]/40",
+                                        class: "w-9 h-9 flex items-center justify-center text-sm text-paper-secondary hover:text-paper-primary hover:bg-paper-theme cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40",
                                         r#type: "button",
                                         aria_label: "增加保留天数",
                                         onclick: move |_| {
@@ -265,7 +266,7 @@ pub fn TrashPage(page: i32) -> Element {
                                         "+"
                                     }
                                 }
-                                span { class: "text-xs text-gray-400 dark:text-[#666]", "天" }
+                                span { class: "text-xs text-paper-secondary", "天" }
                             }
                         }
 
@@ -273,14 +274,14 @@ pub fn TrashPage(page: i32) -> Element {
                         div { class: "flex items-center justify-between gap-4 pt-1",
                             // 草稿状态提示
                             if just_saved() {
-                                span { class: "inline-flex items-center gap-1.5 text-xs text-[#5c7a5e] dark:text-[#7da97f]",
+                                span { class: "inline-flex items-center gap-1.5 text-xs text-paper-accent",
                                     svg { class: "w-3.5 h-3.5", view_box: "0 0 24 24", fill: "none", stroke: "currentColor", stroke_width: "2.5",
                                         path { stroke_linecap: "round", stroke_linejoin: "round", d: "M5 13l4 4L19 7" }
                                     }
                                     "已保存"
                                 }
                             } else if dirty {
-                                span { class: "text-xs text-gray-400 dark:text-[#666]",
+                                span { class: "text-xs text-paper-secondary",
                                     "有未保存的更改"
                                 }
                             } else {
@@ -289,11 +290,11 @@ pub fn TrashPage(page: i32) -> Element {
                             // 保存按钮：启用主题色，禁用/保存中态灰化
                             button {
                                 class: if saving_settings() {
-                                    "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium cursor-not-allowed text-gray-400 dark:text-[#666] bg-gray-100 dark:bg-[#2a2a2a] rounded-full"
+                                    "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium cursor-not-allowed text-paper-secondary bg-paper-tertiary rounded-full"
                                 } else if just_saved() {
-                                    "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium cursor-not-allowed text-gray-400 dark:text-[#666] bg-gray-100 dark:bg-[#2a2a2a] rounded-full"
+                                    "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium cursor-not-allowed text-paper-secondary bg-paper-tertiary rounded-full"
                                 } else {
-                                    "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-white bg-[#5c7a5e] dark:bg-[#7da97f] dark:text-[#1d1e20] rounded-full hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5c7a5e]/40 dark:focus-visible:ring-[#7da97f]/40"
+                                    "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-paper-theme bg-paper-accent rounded-full hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40"
                                 },
                                 disabled: saving_settings() || just_saved() || !dirty,
                                 onclick: move |_| {
@@ -317,8 +318,8 @@ pub fn TrashPage(page: i32) -> Element {
 
             // 批量操作栏（选中时显示）
             if !selected_ids().is_empty() {
-                div { class: "flex items-center gap-3 p-3 bg-gray-50 dark:bg-[#2a2a2a] rounded-lg",
-                    span { class: "text-sm text-gray-600 dark:text-[#9b9c9d]",
+                div { class: "flex items-center gap-3 p-3 bg-paper-theme rounded-lg",
+                    span { class: "text-sm text-paper-secondary",
                         "已选择 {selected_ids().len()} 条"
                     }
                     button {
@@ -363,9 +364,9 @@ pub fn TrashPage(page: i32) -> Element {
                 } else if loading() && posts().is_empty() {
                     rsx! {
                         DelayedSkeleton {
-                            div { class: "bg-white dark:bg-[#2e2e33] rounded-xl border border-gray-200 dark:border-[#333] p-6 space-y-4",
+                            div { class: "{ADMIN_CARD_CLASS} p-6 space-y-4",
                                 for _ in 0..5 {
-                                    div { class: "h-10 bg-gray-200 dark:bg-[#2a2a2a] rounded" }
+                                    SkeletonBox { class: "h-10 rounded" }
                                 }
                             }
                         }
@@ -381,7 +382,7 @@ pub fn TrashPage(page: i32) -> Element {
                             div { class: "overflow-x-auto",
                                 table { class: "w-full text-sm",
                                     thead {
-                                        tr { class: "border-b border-gray-200 dark:border-[#333] text-left text-gray-500 dark:text-[#9b9c9d]",
+                                        tr { class: "border-b border-paper-border text-left text-paper-secondary",
                                             th { class: "px-4 py-3 font-medium w-10",
                                                 input {
                                                     r#type: "checkbox",
@@ -535,9 +536,9 @@ fn TrashRow(
     let badge_class = if expired {
         "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
     } else if remaining <= 7 {
-        "bg-[#e8f0e8] text-[#5c7a5e] dark:bg-[#1e2e1e] dark:text-[#7da97f]"
+        "bg-paper-accent-soft text-paper-accent"
     } else {
-        "bg-gray-100 text-gray-600 dark:bg-[#333] dark:text-[#9b9c9d]"
+        "bg-paper-tertiary text-paper-secondary"
     };
     let badge_text = if expired { "待清理".to_string() } else { format!("{remaining}天") };
     let deleted_str = post
@@ -556,7 +557,7 @@ fn TrashRow(
                 }
             }
             td { class: "px-4 py-3",
-                div { class: "text-sm font-medium text-gray-900 dark:text-[#dadadb] truncate max-w-xs",
+                div { class: "text-sm font-medium text-paper-primary truncate max-w-xs",
                     "{post.title}"
                 }
             }
@@ -566,7 +567,7 @@ fn TrashRow(
                     label: post.status_label().to_string(),
                 }
             }
-            td { class: "px-4 py-3 text-sm text-gray-500 dark:text-[#9b9c9d]",
+            td { class: "px-4 py-3 text-sm text-paper-secondary",
                 "{deleted_str}"
             }
             td { class: "px-4 py-3 text-center",
