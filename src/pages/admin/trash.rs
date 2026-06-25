@@ -340,12 +340,11 @@ pub fn TrashPage(page: i32) -> Element {
                             {
                                 if web_sys::window()
                                     .and_then(|w| {
-                                        w
-                                            .confirm_with_message(
-                                                "确定要彻底删除选中的文章吗？此操作不可恢复。",
-                                            )
-                                            .ok()
-                                    }
+                                        w.confirm_with_message(
+                                            "确定要彻底删除选中的文章吗？此操作不可恢复。",
+                                        )
+                                        .ok()
+                                    })
                                     .unwrap_or(false)
                                 {
                                     let ids: Vec<i32> = selected_ids().iter().copied().collect();
@@ -436,7 +435,7 @@ pub fn TrashPage(page: i32) -> Element {
                                                         let mut s = selected_ids();
                                                         if checked {
                                                             s.insert(id);
-                                                        }
+                                                        } else {
                                                             s.remove(&id);
                                                         }
                                                         selected_ids.set(s);
@@ -489,12 +488,11 @@ pub fn TrashPage(page: i32) -> Element {
                                     {
                                         if web_sys::window()
                                             .and_then(|w| {
-                                                w
-                                                    .confirm_with_message(
-                                                        "确定要清空回收站吗？所有已删除文章将被彻底移除，此操作不可恢复。",
-                                                    )
-                                                    .ok()
-                                            }
+                                                w.confirm_with_message(
+                                                    "确定要清空回收站吗？所有已删除文章将被彻底移除，此操作不可恢复。",
+                                                )
+                                                .ok()
+                                            })
                                             .unwrap_or(false)
                                         {
                                             spawn(async move {

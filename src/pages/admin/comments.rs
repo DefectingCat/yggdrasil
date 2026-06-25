@@ -287,7 +287,7 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                                                         let mut s = selected_ids();
                                                         if checked {
                                                             s.insert(id);
-                                                        }
+                                                        } else {
                                                             s.remove(&id);
                                                         }
                                                         selected_ids.set(s);

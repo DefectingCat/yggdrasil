@@ -549,8 +549,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
                                         let base = cv.split('?').next().unwrap_or(&cv);
                                         if cv.contains('?') {
                                             format!("{}&w=600", base)
-                                        }
-                                        }
+                                        } else {
                                             format!("{}?w=600", base)
                                         }
                                     } else {
