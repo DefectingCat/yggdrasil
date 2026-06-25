@@ -42,6 +42,8 @@ pub mod wasm {
     // 因此用 js_sys::Reflect::get 做属性访问拿到模块对象，再 dyn_into。
     #[wasm_bindgen]
     extern "C" {
+        /// `window.TiptapEditor` 模块对象的 Rust 映射（IIFE 产物挂在 window 上的对象字面量）。
+        /// 不是函数——通过 [`get_module`] 用 Reflect::get 取属性而非 extern fn 调用拿到。
         pub type TiptapEditorModule;
 
         /// 调用 `TiptapEditor.create(containerId, options)`。
@@ -69,6 +71,7 @@ pub mod wasm {
     // —— 编辑器实例（TiptapEditorInstance）——
     #[wasm_bindgen]
     extern "C" {
+        /// `TiptapEditor.create` 返回的编辑器实例对象，承载 ProseMirror 编辑器与上传协调器。
         pub type EditorInstance;
 
         /// 富文本模式下返回 ProseMirror 的 Markdown；源码模式下返回 textarea 内容。
@@ -91,14 +94,19 @@ pub mod wasm {
     // —— EditorOptions：用 builder 模式（setter）构造 JS 对象 ——
     #[wasm_bindgen]
     extern "C" {
+        /// 传给 `TiptapEditor.create` 的配置对象，对应 JS 侧的 EditorOptions。
+        /// 用 `new()` 创建空对象后通过 setter 链式设置字段。
         pub type EditorOptions;
 
+        /// 构造一个空的 EditorOptions，随后用各 setter 填充回调与占位文案。
         #[wasm_bindgen(constructor)]
         pub fn new() -> EditorOptions;
 
+        /// 编辑器无内容时的占位文案。
         #[wasm_bindgen(method, setter, js_name = placeholder)]
         pub fn set_placeholder(this: &EditorOptions, v: &str);
 
+    /// 文档变更回调（ProseMirror transaction 提交时触发，参数为最新 Markdown）。
     #[wasm_bindgen(method, setter, js_name = onUpdate)]
     pub fn set_on_update(this: &EditorOptions, cb: &Closure<dyn FnMut(String)>);
 
@@ -122,33 +130,43 @@ pub mod wasm {
     // —— 上传事件（JS UploadEvent 的 Rust 映射）——
     #[wasm_bindgen]
     extern "C" {
+        /// 上传协调器 emit 的事件对象，对应 JS 侧 UploadCoordinator 发出的事件。
+        /// 由 `onUploadEvent` 回调回传 Rust，[`consume_upload_event`] 据其更新 UI 状态。
         #[derive(Clone)]
         pub type UploadEventJs;
 
+        /// 事件种类：`"uploading"` / `"success"` / `"error"` / `"removed"`。
         #[wasm_bindgen(method, getter)]
         pub fn kind(this: &UploadEventJs) -> String;
 
+        /// 本次上传的唯一标识（前端生成，用于关联上传节点与失败提示条目）。
         #[wasm_bindgen(method, getter, js_name = uploadId)]
         pub fn upload_id(this: &UploadEventJs) -> String;
 
+        /// 上传文件名（用于失败提示展示）。
         #[wasm_bindgen(method, getter, js_name = fileName)]
         pub fn file_name(this: &UploadEventJs) -> String;
 
+        /// 失败原因（仅 `error` 事件有值，成功/移除事件为 None）。
         #[wasm_bindgen(method, getter, js_name = errorMsg)]
         pub fn error_msg(this: &UploadEventJs) -> Option<String>;
 
+        /// 当前文档内全部上传节点的实时计数快照。
         #[wasm_bindgen(method, getter)]
         pub fn counts(this: &UploadEventJs) -> UploadCountsJs;
     }
 
     #[wasm_bindgen]
     extern "C" {
+        /// 上传计数快照（JS 侧遍历文档节点统计后随事件下发）。
         #[derive(Clone)]
         pub type UploadCountsJs;
 
+        /// 进行中的上传数量。
         #[wasm_bindgen(method, getter)]
         pub fn uploading(this: &UploadCountsJs) -> u32;
 
+        /// 失败的上传数量。
         #[wasm_bindgen(method, getter)]
         pub fn error(this: &UploadCountsJs) -> u32;
     }
@@ -169,6 +187,11 @@ pub mod wasm {
     }
 
     impl EditorHandle {
+        /// 聚合编辑器实例与四个回调 closure，使其共用同一生命周期。
+        ///
+        /// 调用方负责先用各 setter 把 closure 装进 [`EditorOptions`]、`create` 出实例后，
+        /// 再把实例与这四个 closure 一并交由本函数持有。返回的 [`EditorHandle`] 一旦
+        /// drop，会先 `destroy` 实例、再按字段逆序 drop closure。
         pub fn new(
             instance: EditorInstance,
             on_update: Closure<dyn FnMut(String)>,
@@ -328,6 +351,8 @@ pub mod wasm {
     }
 }
 
+/// 将 WASM 子模块中的桥接类型与函数重导出到 crate 根，供 `write.rs` 直接引用。
+/// server 构建剥离该子模块，故此重导出仅对 WASM 前端生效。
 #[cfg(target_arch = "wasm32")]
 pub use wasm::{
     consume_upload_event, make_upload_closure, upload_image_file, EditorHandle, EditorOptions,

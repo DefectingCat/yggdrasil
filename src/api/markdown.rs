@@ -206,7 +206,7 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
 /// 对每个匹配的 img：
 /// 1. 提取 src，解析出 rel_path（去 /uploads/ 前缀和 query）
 /// 2. 查 get_image_dimensions 拿真实宽高，算 --ar（如 "16:9"）
-/// 3. 生成 <span class="blur-img" style="--ar:.."> 包裹两层 img
+/// 3. 生成 `<span class="blur-img" style="--ar:..">` 包裹两层 img
 #[cfg(feature = "server")]
 fn wrap_images_with_blur(html: &str) -> String {
     use regex::Regex;
