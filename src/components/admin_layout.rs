@@ -96,14 +96,14 @@ pub fn AdminLayout() -> Element {
     let is_write_route =
         matches!(route, Route::Write {}) || matches!(route, Route::WriteEdit { .. });
     let main_class = if is_write_route {
-        "flex-1 w-full max-w-5xl mx-auto px-6 flex flex-col overflow-hidden"
+        "flex-1 w-full max-w-5xl mx-auto px-6 flex flex-col"
     } else {
         "flex-1 w-full max-w-5xl mx-auto px-6 py-8"
     };
 
-    // Write 路由：页面固定高度，不滚动，由编辑器内部处理滚动
+    // 所有路由统一自然文档流：浏览器右侧滚动条，整页滚动。
     let root_class = if is_write_route {
-        "h-dvh flex flex-col overflow-hidden bg-paper-theme"
+        "min-h-dvh flex flex-col bg-paper-theme"
     } else {
         "min-h-screen flex flex-col bg-paper-theme"
     };

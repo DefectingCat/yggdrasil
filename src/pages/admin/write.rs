@@ -421,19 +421,16 @@ fn write_editor(post_id: Option<i32>) -> Element {
         "w-full text-sm bg-transparent text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border-b border-[var(--color-paper-tertiary)] focus:border-[var(--color-paper-primary)] transition-colors pb-1.5";
 
     rsx! {
-        div { class: "relative flex flex-col flex-1 min-h-0 overflow-hidden",
+        div { class: "relative flex flex-col",
             if loading() {
                 div { class: "absolute inset-0 z-10 bg-paper-theme",
                     WriteSkeleton {}
                 }
             }
 
-            // 可滚动主体：元信息 + 编辑器 + 内联错误提示。
-            // 底部操作栏留在此容器外（固定吸底），保证保存/状态按钮始终可见。
-            // flex flex-col：让内部 flex-1 编辑器能撑满剩余高度；
-            // overflow-y-auto：内容超出时滚动（min-h-0 允许 flex 子项收缩触发滚动）。
-            div { class: "flex-1 min-h-0 overflow-y-auto flex flex-col",
-                // 顶部元信息区域 - 固定高度，不滚动
+            // 整页自然滚动：元信息 + 编辑器 + 错误提示 + 底部操作栏一起随浏览器滚动。
+            div { class: "flex flex-col",
+                // 顶部元信息区域
                 div { class: "flex-shrink-0 space-y-5 pt-8",
                 // 标题区域 - 大字号无框输入
                 div {
@@ -723,9 +720,9 @@ fn write_editor(post_id: Option<i32>) -> Element {
                 }
             }
 
-            // 编辑器区域 - 沾满剩余高度，但保证最小编辑空间。
-            // min-h-[400px]：窗口过矮时不被元信息挤压到不可用；flex-1：窗口充裕时填充。
-            div { class: "flex-1 min-h-[400px] flex flex-col my-4",
+            // 编辑器区域 - 整页滚动下用视口高度，保证充裕的编辑空间。
+            // h-[60vh]：随窗口高度自适应；min-h-[400px]：窗口过矮时仍可用。
+            div { class: "h-[60vh] min-h-[400px] flex flex-col my-4",
                 div {
                     class: "flex-1 min-h-0 w-full border border-[var(--color-paper-border)] rounded-xl overflow-hidden bg-[var(--color-paper-entry)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none",
                     id: "tiptap-editor",
@@ -769,10 +766,10 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     }
                 }
             }
-            } // 滚动主体容器闭合
+            } // 内容区闭合
 
-            // 底部操作栏 - 固定吸底，不在滚动区域内
-            div { class: "flex-shrink-0 flex items-center gap-2 pt-2 pb-4 border-t border-[var(--color-paper-border)]",
+            // 底部操作栏 - 跟随页面滚动
+            div { class: "flex items-center gap-2 pt-2 pb-4 border-t border-[var(--color-paper-border)]",
                 button {
                     class: "px-4 py-1.5 text-sm text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors cursor-pointer",
                     onclick: move |_| {
