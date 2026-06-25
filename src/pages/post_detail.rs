@@ -4,8 +4,7 @@
 //!
 //! 数据获取：通过 `use_server_future` 调用 `get_post_by_slug` server function，
 //! 根据 URL 中的 slug 获取单篇文章详情（含正文 HTML、目录、封面及上下篇导航）。
-//! 由于 Dioxus 组件参数在路由切换时可能复用同一组件实例，
-//! 这里使用 `use_signal` 保存当前 slug，并在参数变化时更新信号以触发重新取数。
+//! 路由参数 slug 变化时，Dioxus 会自动重跑该 future，无需镜像成 signal 再手动同步。
 //! 在 `wasm32` 目标下，server function 的函数体被替换为向服务端端点发起 HTTP POST 请求的客户端存根；
 //! 实际的数据库访问逻辑仅在 `feature = "server"` 启用时运行。
 
@@ -28,17 +27,9 @@ use crate::router::Route;
 /// 若文章不存在或加载失败，则展示对应的提示页面。
 #[component]
 pub fn PostDetail(slug: String) -> Element {
-    // 使用信号保存当前 slug，以便在路由参数变化时重新触发 server future。
-    let mut slug_signal = use_signal(|| slug.clone());
-    if slug_signal() != slug {
-        slug_signal.set(slug.clone());
-    }
-
-    // 当 slug 信号变化时，自动重新调用 server function 获取文章详情。
-    let post = use_server_future(move || {
-        let s = slug_signal();
-        get_post_by_slug(s)
-    })?;
+    // 直接读取 slug prop：路由参数变化时 Dioxus 会自动重跑该 server future，
+    // 无需镜像成 signal 再手动 set（render 期 set signal 是 Dioxus 反模式）。
+    let post = use_server_future(move || get_post_by_slug(slug.clone()))?;
 
     // 将结果映射为更直观的 Ok(post) / Err("not_found") / Err("error") 三种状态。
     let post_data = post.read().as_ref().map(|r| match r {
@@ -50,7 +41,7 @@ pub fn PostDetail(slug: String) -> Element {
     match post_data {
         Some(Ok(post)) => {
             rsx! {
-                article { class: "post-single", key: "{slug}",
+                article { class: "post-single", key: "{post.slug}",
                     PostHeader { post: post.clone() }
 
                     // 如果文章设置了封面图，则渲染封面组件。
