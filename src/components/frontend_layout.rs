@@ -20,12 +20,24 @@ use crate::theme::ThemeToggle;
 /// 根据当前前台路由选择对应的骨架屏组件。
 fn route_skeleton(route: &Route) -> Element {
     match route {
-        Route::Archives {} => rsx! { DelayedSkeleton { ArchiveSkeleton {} } },
-        Route::Tags {} | Route::TagDetail { .. } => rsx! { DelayedSkeleton { TagsSkeleton {} } },
-        Route::Search {} => rsx! { DelayedSkeleton { SearchSkeleton {} } },
-        Route::PostDetail { .. } => rsx! { DelayedSkeleton { PostDetailSkeleton {} } },
-        Route::NotFound { .. } => rsx! { div { class: "py-20 md:py-28" } },
-        _ => rsx! { DelayedSkeleton { HomeSkeleton {} } },
+        Route::Archives {} => rsx! {
+            DelayedSkeleton { ArchiveSkeleton {} }
+        },
+        Route::Tags {} | Route::TagDetail { .. } => rsx! {
+            DelayedSkeleton { TagsSkeleton {} }
+        },
+        Route::Search {} => rsx! {
+            DelayedSkeleton { SearchSkeleton {} }
+        },
+        Route::PostDetail { .. } => rsx! {
+            DelayedSkeleton { PostDetailSkeleton {} }
+        },
+        Route::NotFound { .. } => rsx! {
+            div { class: "py-20 md:py-28" }
+        },
+        _ => rsx! {
+            DelayedSkeleton { HomeSkeleton {} }
+        },
     }
 }
 
@@ -40,12 +52,14 @@ pub fn FrontendLayout() -> Element {
 
     rsx! {
         div { class: "min-h-screen flex flex-col bg-paper-theme",
-            Header { nav_items, right_content: rsx! { ThemeToggle {} } }
+            Header {
+                nav_items,
+                right_content: rsx! {
+                    ThemeToggle {}
+                },
+            }
             main { class: "flex-1 w-full max-w-3xl mx-auto px-6 py-6",
-                SuspenseBoundary {
-                    fallback: move |_| route_skeleton(&route),
-                    Outlet::<Route> {}
-                }
+                SuspenseBoundary { fallback: move |_| route_skeleton(&route), Outlet::<Route> {} }
             }
             Footer {}
         }

@@ -87,12 +87,8 @@ pub fn Admin() -> Element {
                 match pending_count() {
                     Some(count) => {
                         rsx! {
-                            div { class: "text-3xl font-bold text-amber-600 dark:text-amber-400",
-                                "{count}"
-                            }
-                            div { class: "text-sm text-paper-secondary mt-2",
-                                "待审核评论"
-                            }
+                            div { class: "text-3xl font-bold text-amber-600 dark:text-amber-400", "{count}" }
+                            div { class: "text-sm text-paper-secondary mt-2", "待审核评论" }
                         }
                     }
                     None => {
@@ -118,15 +114,13 @@ pub fn Admin() -> Element {
             }
 
             div { class: "mb-8",
-                h2 { class: "text-xl font-bold text-paper-primary mb-4",
-                    "最近文章"
-                }
+                h2 { class: "text-xl font-bold text-paper-primary mb-4", "最近文章" }
                 match recent_posts() {
                     Some(posts) => {
                         rsx! {
                             div { class: "space-y-0",
                                 for post in posts.iter().take(5) {
-                                    RecentPostItem { post: post.clone() }
+                                    RecentPostItem { key: "{post.id}", post: post.clone() }
                                 }
                             }
                         }
@@ -154,12 +148,8 @@ pub fn Admin() -> Element {
 fn StatCard(value: String, label: String) -> Element {
     rsx! {
         div { class: "{ADMIN_CARD_CLASS} p-6 text-center",
-            div { class: "text-3xl font-bold text-paper-primary",
-                "{value}"
-            }
-            div { class: "text-sm text-paper-secondary mt-2",
-                "{label}"
-            }
+            div { class: "text-3xl font-bold text-paper-primary", "{value}" }
+            div { class: "text-sm text-paper-secondary mt-2", "{label}" }
         }
     }
 }
@@ -174,16 +164,10 @@ fn RecentPostItem(post: PostListItem) -> Element {
     rsx! {
         div { class: "flex justify-between items-center py-3 border-b border-paper-border",
             div { class: "flex items-center gap-3",
-                span { class: "text-paper-primary",
-                    "{post.title}"
-                }
-                span { class: "text-xs {status_class}",
-                    "{status_label}"
-                }
+                span { class: "text-paper-primary", "{post.title}" }
+                span { class: "text-xs {status_class}", "{status_label}" }
             }
-            span { class: "text-sm text-paper-secondary",
-                "{date_str}"
-            }
+            span { class: "text-sm text-paper-secondary", "{date_str}" }
         }
     }
 }

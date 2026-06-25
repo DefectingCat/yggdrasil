@@ -72,7 +72,10 @@ pub fn Login() -> Element {
 
                 div { class: "space-y-4",
                     div {
-                        FormLabel { label: "用户名 / 邮箱", html_for: Some("login-username".to_string()) }
+                        FormLabel {
+                            label: "用户名 / 邮箱",
+                            html_for: Some("login-username".to_string()),
+                        }
                         FormInput {
                             id: Some("login-username".to_string()),
                             r#type: "text",
@@ -81,11 +84,20 @@ pub fn Login() -> Element {
                             disabled: is_loading,
                             oninput: move |v: String| username.set(v),
                             // 回车键触发提交
-                            onkeydown: Some(EventHandler::new(move |e: KeyboardEvent| if e.key() == Key::Enter { on_submit(()) })),
+                            onkeydown: Some(
+                                EventHandler::new(move |e: KeyboardEvent| {
+                                    if e.key() == Key::Enter {
+                                        on_submit(())
+                                    }
+                                }),
+                            ),
                         }
                     }
                     div {
-                        FormLabel { label: "密码", html_for: Some("login-password".to_string()) }
+                        FormLabel {
+                            label: "密码",
+                            html_for: Some("login-password".to_string()),
+                        }
                         FormInput {
                             id: Some("login-password".to_string()),
                             r#type: "password",
@@ -93,7 +105,13 @@ pub fn Login() -> Element {
                             value: password(),
                             disabled: is_loading,
                             oninput: move |v: String| password.set(v),
-                            onkeydown: Some(EventHandler::new(move |e: KeyboardEvent| if e.key() == Key::Enter { on_submit(()) })),
+                            onkeydown: Some(
+                                EventHandler::new(move |e: KeyboardEvent| {
+                                    if e.key() == Key::Enter {
+                                        on_submit(())
+                                    }
+                                }),
+                            ),
                         }
                     }
                     button {
@@ -101,7 +119,11 @@ pub fn Login() -> Element {
                         class: if is_loading { "opacity-60 cursor-not-allowed" },
                         disabled: is_loading,
                         onclick: move |_| on_submit(()),
-                        if is_loading { "登录中..." } else { "登录" }
+                        if is_loading {
+                            "登录中..."
+                        } else {
+                            "登录"
+                        }
                     }
                     Link {
                         class: "block w-full py-2 px-4 text-center text-paper-secondary hover:text-paper-accent font-medium rounded-lg transition-all duration-200 cursor-pointer",

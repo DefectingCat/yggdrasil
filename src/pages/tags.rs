@@ -27,9 +27,7 @@ use crate::router::Route;
 pub fn Tags() -> Element {
     rsx! {
         header { class: "page-header mb-6",
-            h1 { class: "text-4xl font-bold text-paper-primary tracking-tight",
-                "标签"
-            }
+            h1 { class: "text-4xl font-bold text-paper-primary tracking-tight", "标签" }
         }
         TagsContent {}
     }
@@ -62,10 +60,12 @@ fn TagsContent() -> Element {
                 }
                 ul { class: "flex flex-wrap gap-4 mt-6",
                     for tag in tags {
-                        li {
+                        li { key: "{tag.name}",
                             Link {
                                 class: "inline-flex items-center px-3 py-1.5 text-base font-medium bg-paper-accent-soft text-paper-accent rounded-lg hover:bg-paper-accent hover:text-white transition-all duration-200",
-                                to: Route::TagDetail { tag: tag.name.clone() },
+                                to: Route::TagDetail {
+                                    tag: tag.name.clone(),
+                                },
                                 "{tag.name}"
                                 sup { class: "ml-1 text-sm text-paper-secondary", "{tag.post_count}" }
                             }
@@ -76,9 +76,7 @@ fn TagsContent() -> Element {
         }
         Some(Err(_)) => {
             rsx! {
-                div { class: "text-center text-red-500 dark:text-red-400 py-20",
-                    "加载失败"
-                }
+                div { class: "text-center text-red-500 dark:text-red-400 py-20", "加载失败" }
             }
         }
         _ => {
@@ -96,9 +94,7 @@ fn TagsContent() -> Element {
 pub fn TagDetail(tag: String) -> Element {
     rsx! {
         header { class: "page-header mb-6",
-            h1 { class: "text-4xl font-bold text-paper-primary tracking-tight",
-                "{tag}"
-            }
+            h1 { class: "text-4xl font-bold text-paper-primary tracking-tight", "{tag}" }
         }
         TagDetailContent { tag: tag.clone() }
     }
@@ -127,15 +123,13 @@ fn TagDetailContent(tag: String) -> Element {
                     " 篇文章"
                 }
                 for post in posts.iter() {
-                    PostCard { post: post.clone() }
+                    PostCard { key: "{post.id}", post: post.clone() }
                 }
             }
         }
         Some(Err(_)) => {
             rsx! {
-                div { class: "text-center text-red-500 dark:text-red-400 py-20",
-                    "加载失败"
-                }
+                div { class: "text-center text-red-500 dark:text-red-400 py-20", "加载失败" }
             }
         }
         _ => {

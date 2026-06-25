@@ -47,6 +47,7 @@ pub fn Header(nav_items: Vec<NavItemConfig>, right_content: Element) -> Element 
                     ul { class: "hidden md:flex items-center gap-1",
                         for item in nav_items.iter().cloned() {
                             NavItem {
+                                key: "{item.label}",
                                 route: item.route,
                                 label: item.label,
                                 is_active: item.is_active,
@@ -75,7 +76,7 @@ pub fn Header(nav_items: Vec<NavItemConfig>, right_content: Element) -> Element 
                                     stroke_linecap: "round",
                                     stroke_linejoin: "round",
                                     stroke_width: "2",
-                                    d: "M6 18L18 6M6 6l12 12"
+                                    d: "M6 18L18 6M6 6l12 12",
                                 }
                             }
                         } else {
@@ -89,7 +90,7 @@ pub fn Header(nav_items: Vec<NavItemConfig>, right_content: Element) -> Element 
                                     stroke_linecap: "round",
                                     stroke_linejoin: "round",
                                     stroke_width: "2",
-                                    d: "M4 6h16M4 12h16M4 18h16"
+                                    d: "M4 6h16M4 12h16M4 18h16",
                                 }
                             }
                         }
@@ -104,7 +105,7 @@ pub fn Header(nav_items: Vec<NavItemConfig>, right_content: Element) -> Element 
                     class: "md:hidden border-t border-paper-border bg-paper-theme/95 backdrop-blur-sm",
                     ul { class: "py-2 px-6 space-y-1",
                         for item in nav_items.iter().cloned() {
-                            li {
+                            li { key: "{item.label}",
                                 MobileNavItem {
                                     route: item.route,
                                     label: item.label,
@@ -135,11 +136,7 @@ fn NavItem(route: Route, label: &'static str, is_active: bool) -> Element {
 
     rsx! {
         li {
-            Link {
-                class: "{class_str}",
-                to: route,
-                "{label}"
-            }
+            Link { class: "{class_str}", to: route, "{label}" }
         }
     }
 }

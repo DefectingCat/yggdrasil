@@ -83,7 +83,8 @@ pub fn Register() -> Element {
                 if success() {
                     div { class: "mb-4 p-3 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg text-center",
                         "注册成功！"
-                        Link { class: "block mt-2 text-paper-accent hover:underline cursor-pointer",
+                        Link {
+                            class: "block mt-2 text-paper-accent hover:underline cursor-pointer",
                             to: Route::Login {},
                             "去登录"
                         }
@@ -96,7 +97,10 @@ pub fn Register() -> Element {
 
                 div { class: "space-y-4",
                     div {
-                        FormLabel { label: "用户名", html_for: Some("register-username".to_string()) }
+                        FormLabel {
+                            label: "用户名",
+                            html_for: Some("register-username".to_string()),
+                        }
                         FormInput {
                             id: Some("register-username".to_string()),
                             r#type: "text",
@@ -108,7 +112,10 @@ pub fn Register() -> Element {
                         }
                     }
                     div {
-                        FormLabel { label: "邮箱", html_for: Some("register-email".to_string()) }
+                        FormLabel {
+                            label: "邮箱",
+                            html_for: Some("register-email".to_string()),
+                        }
                         FormInput {
                             id: Some("register-email".to_string()),
                             r#type: "email",
@@ -120,7 +127,10 @@ pub fn Register() -> Element {
                         }
                     }
                     div {
-                        FormLabel { label: "密码", html_for: Some("register-password".to_string()) }
+                        FormLabel {
+                            label: "密码",
+                            html_for: Some("register-password".to_string()),
+                        }
                         FormInput {
                             id: Some("register-password".to_string()),
                             r#type: "password",
@@ -132,7 +142,10 @@ pub fn Register() -> Element {
                         }
                     }
                     div {
-                        FormLabel { label: "确认密码", html_for: Some("register-confirm-password".to_string()) }
+                        FormLabel {
+                            label: "确认密码",
+                            html_for: Some("register-confirm-password".to_string()),
+                        }
                         FormInput {
                             id: Some("register-confirm-password".to_string()),
                             r#type: "password",
@@ -148,12 +161,17 @@ pub fn Register() -> Element {
                         class: if is_loading { "opacity-60 cursor-not-allowed" },
                         disabled: is_loading,
                         onclick: move |_| on_submit(()),
-                        if is_loading { "注册中..." } else { "注册" }
+                        if is_loading {
+                            "注册中..."
+                        } else {
+                            "注册"
+                        }
                     }
                 }
                 p { class: "mt-4 text-center text-sm text-paper-secondary",
                     "已有账号？"
-                    Link { class: "text-paper-accent hover:underline cursor-pointer",
+                    Link {
+                        class: "text-paper-accent hover:underline cursor-pointer",
                         to: Route::Login {},
                         "去登录"
                     }

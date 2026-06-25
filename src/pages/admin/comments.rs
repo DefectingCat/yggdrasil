@@ -30,7 +30,9 @@ const COMMENTS_PER_PAGE: i32 = 20;
 /// 评论管理入口组件，默认展示第 1 页。
 #[component]
 pub fn AdminComments() -> Element {
-    rsx! { AdminCommentsPage { page: 1 } }
+    rsx! {
+        AdminCommentsPage { page: 1 }
+    }
 }
 
 /// 评论管理分页组件。
@@ -124,18 +126,18 @@ pub fn AdminCommentsPage(page: i32) -> Element {
 
     rsx! {
         div { class: "space-y-6",
-            h1 { class: "text-2xl font-bold text-paper-primary",
-                "评论管理"
-            }
+            h1 { class: "text-2xl font-bold text-paper-primary", "评论管理" }
 
             div { class: "flex gap-1 border-b border-paper-border",
-                for (status, label) in [("", "全部"), ("pending", "待审核"), ("approved", "已通过"), ("spam", "垃圾箱")] {
+                for (status, label) in [
+                    ("", "全部"),
+                    ("pending", "待审核"),
+                    ("approved", "已通过"),
+                    ("spam", "垃圾箱"),
+                ]
+                {
                     button {
-                        class: if active_filter() == status {
-                            "px-4 py-2 text-sm font-medium border-b-2 border-paper-accent text-paper-primary"
-                        } else {
-                            "px-4 py-2 text-sm font-medium text-paper-secondary hover:text-paper-primary transition-colors"
-                        },
+                        class: if active_filter() == status { "px-4 py-2 text-sm font-medium border-b-2 border-paper-accent text-paper-primary" } else { "px-4 py-2 text-sm font-medium text-paper-secondary hover:text-paper-primary transition-colors" },
                         onclick: move |_| active_filter.set(status.to_string()),
                         "{label}"
                     }
@@ -143,65 +145,77 @@ pub fn AdminCommentsPage(page: i32) -> Element {
             }
 
             if !selected_ids().is_empty() {
-                { rsx! {
-                    div { class: "flex items-center gap-3 p-3 bg-paper-theme rounded-lg",
-                        span { class: "text-sm text-paper-secondary",
-                            "已选择 {selected_ids().len()} 条"
-                        }
-                        button {
-                            class: "{BTN_SOLID_GREEN}",
-                            onclick: move |_| {
-                                let ids: Vec<i64> = selected_ids().iter().copied().collect();
-                                let ids_for_api = ids.clone();
-                                spawn(async move {
-                                    let _ = batch_update_comment_status(ids_for_api, "approved".to_string()).await;
-                                });
-                                for id in &ids { set_comment_status(*id, CommentStatus::Approved); }
-                                selected_ids.set(HashSet::new());
-                            },
-                            "批量通过"
-                        }
-                        button {
-                            class: "{BTN_SOLID_AMBER}",
-                            onclick: move |_| {
-                                let ids: Vec<i64> = selected_ids().iter().copied().collect();
-                                let ids_for_api = ids.clone();
-                                spawn(async move {
-                                    let _ = batch_update_comment_status(ids_for_api, "spam".to_string()).await;
-                                });
-                                for id in &ids { set_comment_status(*id, CommentStatus::Spam); }
-                                selected_ids.set(HashSet::new());
-                            },
-                            "批量垃圾"
-                        }
-                        button {
-                            class: "{BTN_SOLID_RED}",
-                            onclick: move |_| {
-                                #[cfg(target_arch = "wasm32")]
-                                {
-                                    if web_sys::window()
-                                        .and_then(|w| w.confirm_with_message("确定要删除这些评论吗？").ok())
-                                        .unwrap_or(false)
-                                    {
-                                        let ids: Vec<i64> = selected_ids().iter().copied().collect();
-                                        let ids_for_api = ids.clone();
-                                        spawn(async move {
-                                            let _ = batch_update_comment_status(ids_for_api, "trash".to_string()).await;
-                                        });
-                                        for id in &ids { remove_comment(*id); }
-                                        selected_ids.set(HashSet::new());
+                {
+                    rsx! {
+                        div { class: "flex items-center gap-3 p-3 bg-paper-theme rounded-lg",
+                            span { class: "text-sm text-paper-secondary", "已选择 {selected_ids().len()} 条" }
+                            button {
+                                class: "{BTN_SOLID_GREEN}",
+                                onclick: move |_| {
+                                    let ids: Vec<i64> = selected_ids().iter().copied().collect();
+                                    let ids_for_api = ids.clone();
+                                    spawn(async move {
+                                        let _ = batch_update_comment_status(ids_for_api, "approved".to_string())
+                                            .await;
+                                    });
+                                    for id in &ids {
+                                        set_comment_status(*id, CommentStatus::Approved);
                                     }
-                                }
-                            },
-                            "批量删除"
+                                    selected_ids.set(HashSet::new());
+                                },
+                                "批量通过"
+                            }
+                            button {
+                                class: "{BTN_SOLID_AMBER}",
+                                onclick: move |_| {
+                                    let ids: Vec<i64> = selected_ids().iter().copied().collect();
+                                    let ids_for_api = ids.clone();
+                                    spawn(async move {
+                                        let _ = batch_update_comment_status(ids_for_api, "spam".to_string()).await;
+                                    });
+                                    for id in &ids {
+                                        set_comment_status(*id, CommentStatus::Spam);
+                                    }
+                                    selected_ids.set(HashSet::new());
+                                },
+                                "批量垃圾"
+                            }
+                            button {
+                                class: "{BTN_SOLID_RED}",
+                                onclick: move |_| {
+                                    #[cfg(target_arch = "wasm32")]
+                                    {
+                                        if web_sys::window()
+                                            .and_then(|w| {
+                                                w.confirm_with_message("确定要删除这些评论吗？").ok()
+                                            })
+                                            .unwrap_or(false)
+                                        {
+                                            let ids: Vec<i64> = selected_ids().iter().copied().collect();
+                                            let ids_for_api = ids.clone();
+                                            spawn(async move {
+                                                let _ = batch_update_comment_status(ids_for_api, "trash".to_string())
+                                                    .await;
+                                            });
+                                            for id in &ids {
+                                                remove_comment(*id);
+                                            }
+                                            selected_ids.set(HashSet::new());
+                                        }
+                                    }
+                                },
+                                "批量删除"
+                            }
                         }
                     }
-                } }
+                }
             }
 
             {
                 if error().is_some() {
-                    rsx! { EmptyState { message: "加载失败", variant: "error" } }
+                    rsx! {
+                        EmptyState { message: "加载失败", variant: "error" }
+                    }
                 } else if loading() && comments().is_empty() {
                     rsx! {
                         DelayedSkeleton {
@@ -218,7 +232,9 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                         }
                     }
                 } else if comments().is_empty() {
-                    rsx! { EmptyState { message: "暂无评论", variant: "default" } }
+                    rsx! {
+                        EmptyState { message: "暂无评论", variant: "default" }
+                    }
                 } else {
                     let list = comments();
                     let all_selected = list.iter().all(|c| selected_ids().contains(&c.id));
@@ -238,13 +254,17 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                                                         move |_| {
                                                             let mut s = selected_ids();
                                                             if all_selected {
-                                                                for id in &all_ids { s.remove(id); }
+                                                                for id in &all_ids {
+                                                                    s.remove(id);
+                                                                }
                                                             } else {
-                                                                for id in &all_ids { s.insert(*id); }
+                                                                for id in &all_ids {
+                                                                    s.insert(*id);
+                                                                }
                                                             }
                                                             selected_ids.set(s);
                                                         }
-                                                    }
+                                                    },
                                                 }
                                             }
                                             th { class: "px-4 py-3 font-medium", "作者" }
@@ -265,7 +285,11 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                                                     let id = comment.id;
                                                     move |checked: bool| {
                                                         let mut s = selected_ids();
-                                                        if checked { s.insert(id); } else { s.remove(&id); }
+                                                        if checked {
+                                                            s.insert(id);
+                                                        }
+                                                            s.remove(&id);
+                                                        }
                                                         selected_ids.set(s);
                                                     }
                                                 },
@@ -293,7 +317,9 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                                                         #[cfg(target_arch = "wasm32")]
                                                         {
                                                             if web_sys::window()
-                                                                .and_then(|w| w.confirm_with_message("确定要删除这条评论吗？").ok())
+                                                                .and_then(|w| {
+                                                                    w.confirm_with_message("确定要删除这条评论吗？").ok()
+                                                                })
                                                                 .unwrap_or(false)
                                                             {
                                                                 spawn(async move {
@@ -315,12 +341,12 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                             current_page,
                             total: total(),
                             per_page: COMMENTS_PER_PAGE,
-                            prev_route: if current_page - 1 <= 1 {
-                                Route::AdminComments {}
-                            } else {
-                                Route::AdminCommentsPage { page: current_page - 1 }
+                            prev_route: if current_page - 1 <= 1 { Route::AdminComments {} } else { Route::AdminCommentsPage {
+                                page: current_page - 1,
+                            } },
+                            next_route: Route::AdminCommentsPage {
+                                page: current_page + 1,
                             },
-                            next_route: Route::AdminCommentsPage { page: current_page + 1 },
                             unit: "条",
                         }
                     }
@@ -377,21 +403,19 @@ fn CommentRow(
                         div { class: "text-sm font-medium text-paper-primary truncate",
                             "{comment.author_name}"
                         }
-                        div { class: "text-xs text-paper-secondary truncate",
-                            "{comment.author_email}"
-                        }
+                        div { class: "text-xs text-paper-secondary truncate", "{comment.author_email}" }
                     }
                 }
             }
             td { class: "px-4 py-3 max-w-xs",
-                p { class: "text-sm text-paper-secondary truncate",
-                    "{preview}"
-                }
+                p { class: "text-sm text-paper-secondary truncate", "{preview}" }
             }
             td { class: "px-4 py-3",
                 Link {
                     class: "text-sm text-paper-primary hover:text-paper-accent transition-colors",
-                    to: Route::PostDetail { slug: comment.post_slug.clone() },
+                    to: Route::PostDetail {
+                        slug: comment.post_slug.clone(),
+                    },
                     "{comment.post_title}"
                 }
             }
@@ -399,17 +423,23 @@ fn CommentRow(
                 StatusBadge {
                     // badge_class 是 &'static str 字面量匹配，转为静态生命周期。
                     color_class: match &comment.status {
-                        CommentStatus::Pending => "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-                        CommentStatus::Approved => "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-                        CommentStatus::Spam => "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-                        CommentStatus::Trash => "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400",
+                        CommentStatus::Pending => {
+                            "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                        }
+                        CommentStatus::Approved => {
+                            "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                        }
+                        CommentStatus::Spam => {
+                            "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                        }
+                        CommentStatus::Trash => {
+                            "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400"
+                        }
                     },
                     label: status_label,
                 }
             }
-            td { class: "px-4 py-3 text-sm text-paper-secondary",
-                "{date_str}"
-            }
+            td { class: "px-4 py-3 text-sm text-paper-secondary", "{date_str}" }
             td { class: "px-4 py-3 text-right",
                 div { class: "flex justify-end gap-2",
                     if !matches!(comment.status, CommentStatus::Approved) {

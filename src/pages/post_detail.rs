@@ -63,9 +63,7 @@ pub fn PostDetail(slug: String) -> Element {
                         PostToc { toc_html: toc.clone() }
                     }
 
-                    PostContent {
-                        content_html: post.content_html.clone().unwrap_or_default()
-                    }
+                    PostContent { content_html: post.content_html.clone().unwrap_or_default() }
 
                     PostFooter { post: post.clone() }
 
@@ -86,9 +84,7 @@ pub fn PostDetail(slug: String) -> Element {
         Some(Err("not_found")) => {
             rsx! {
                 div { class: "text-center py-20",
-                    h2 { class: "text-2xl font-bold text-paper-primary mb-4",
-                        "文章不存在"
-                    }
+                    h2 { class: "text-2xl font-bold text-paper-primary mb-4", "文章不存在" }
                     p { class: "text-paper-secondary mb-6",
                         "这篇文章可能已被删除或移动。"
                     }
@@ -102,9 +98,7 @@ pub fn PostDetail(slug: String) -> Element {
         }
         Some(Err("error")) => {
             rsx! {
-                div { class: "text-center text-red-500 dark:text-red-400 py-20",
-                    "加载失败"
-                }
+                div { class: "text-center text-red-500 dark:text-red-400 py-20", "加载失败" }
             }
         }
         _ => {

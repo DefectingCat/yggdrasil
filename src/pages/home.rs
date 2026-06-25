@@ -27,7 +27,9 @@ const POSTS_PER_PAGE: i32 = 10;
 /// 直接委托给 `HomePage` 并固定页码为 1。
 #[component]
 pub fn Home() -> Element {
-    rsx! { HomePage { page: 1 } }
+    rsx! {
+        HomePage { page: 1 }
+    }
 }
 
 /// 首页分页组件，对应路由 `/page/:page`。
@@ -62,7 +64,7 @@ fn HomePosts(current_page: i32) -> Element {
         Some(Ok((posts, total))) => {
             rsx! {
                 for post in posts.iter() {
-                    PostCard { post: post.clone() }
+                    PostCard { key: "{post.id}", post: post.clone() }
                 }
                 // total == 0 表示站点确实无文章：显示空状态，且不渲染分页。
                 // 注意：total > 0 但 posts 为空（如越界页码 /page/9999）也不显示空状态，
@@ -81,12 +83,12 @@ fn HomePosts(current_page: i32) -> Element {
                         current_page,
                         total,
                         per_page: POSTS_PER_PAGE,
-                        prev_route: if current_page - 1 <= 1 {
-                            Route::Home {}
-                        } else {
-                            Route::HomePage { page: current_page - 1 }
+                        prev_route: if current_page - 1 <= 1 { Route::Home {} } else { Route::HomePage {
+                            page: current_page - 1,
+                        } },
+                        next_route: Route::HomePage {
+                            page: current_page + 1,
                         },
-                        next_route: Route::HomePage { page: current_page + 1 },
                         unit: "篇",
                     }
                 }
@@ -95,9 +97,7 @@ fn HomePosts(current_page: i32) -> Element {
         // 不透传内部错误细节，统一展示通用文案（与标签页等其它页面一致）。
         Some(Err(_)) => {
             rsx! {
-                div { class: "text-center text-red-500 dark:text-red-400 py-20",
-                    "加载失败"
-                }
+                div { class: "text-center text-red-500 dark:text-red-400 py-20", "加载失败" }
             }
         }
         _ => {

@@ -34,7 +34,9 @@ const TRASH_PER_PAGE: i32 = 20;
 /// 回收站入口组件，默认展示第 1 页。
 #[component]
 pub fn Trash() -> Element {
-    rsx! { TrashPage { page: 1 } }
+    rsx! {
+        TrashPage { page: 1 }
+    }
 }
 
 /// 回收站分页组件。
@@ -126,14 +128,11 @@ pub fn TrashPage(page: i32) -> Element {
             // 页面标题
             div { class: "flex items-center gap-3",
                 h1 { class: "text-2xl font-bold text-paper-primary", "回收站" }
-                span { class: "text-sm text-paper-secondary",
-                    "共 {total()} 篇"
-                }
+                span { class: "text-sm text-paper-secondary", "共 {total()} 篇" }
             }
 
             // 自动清理配置卡片：可折叠的设置面板，顶部始终显示当前状态摘要
-            div {
-                class: "rounded-xl border border-paper-border overflow-hidden bg-paper-entry",
+            div { class: "rounded-xl border border-paper-border overflow-hidden bg-paper-entry",
                 // 顶部可点击摘要条：状态指示灯 + 标题 + 展开箭头
                 button {
                     class: "w-full flex items-center gap-3 px-5 py-4 text-left cursor-pointer hover:bg-paper-theme focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40",
@@ -142,21 +141,21 @@ pub fn TrashPage(page: i32) -> Element {
                         just_saved.set(false);
                     },
                     // 状态指示灯
-                    {let dot_class = if settings().auto_purge_enabled {
-                        "w-2 h-2 rounded-full bg-paper-accent shadow-[0_0_0_3px_rgba(92,122,94,0.15)]"
-                    } else {
-                        "w-2 h-2 rounded-full bg-paper-tertiary"
-                    };
-                    rsx! {
-                        div { class: "w-2 flex-shrink-0 flex items-center justify-center",
-                            div { class: "{dot_class}" }
+                    {
+                        let dot_class = if settings().auto_purge_enabled {
+                            "w-2 h-2 rounded-full bg-paper-accent shadow-[0_0_0_3px_rgba(92,122,94,0.15)]"
+                        } else {
+                            "w-2 h-2 rounded-full bg-paper-tertiary"
+                        };
+                        rsx! {
+                            div { class: "w-2 flex-shrink-0 flex items-center justify-center",
+                                div { class: "{dot_class}" }
+                            }
                         }
-                    }}
+                    }
                     // 标题 + 当前状态描述
                     div { class: "flex-1 min-w-0",
-                        div { class: "text-sm font-medium text-paper-primary",
-                            "自动清理"
-                        }
+                        div { class: "text-sm font-medium text-paper-primary", "自动清理" }
                         div { class: "text-xs text-paper-secondary mt-0.5 truncate",
                             if settings().auto_purge_enabled {
                                 "已开启 · 超过 {settings().retention_days} 天的文章将被自动删除"
@@ -172,7 +171,11 @@ pub fn TrashPage(page: i32) -> Element {
                         fill: "none",
                         stroke: "currentColor",
                         stroke_width: "2",
-                        path { stroke_linecap: "round", stroke_linejoin: "round", d: "M19 9l-7 7-7-7" }
+                        path {
+                            stroke_linecap: "round",
+                            stroke_linejoin: "round",
+                            d: "M19 9l-7 7-7-7",
+                        }
                     }
                 }
 
@@ -180,8 +183,7 @@ pub fn TrashPage(page: i32) -> Element {
                 if settings_panel_open() {
                     div { class: "border-t border-paper-border p-5 space-y-6",
                         // 开关行：启用自动清理
-                        div {
-                            class: "flex items-center justify-between gap-4",
+                        div { class: "flex items-center justify-between gap-4",
                             div { class: "min-w-0",
                                 div { class: "text-sm font-medium text-paper-primary",
                                     "启用自动清理"
@@ -194,23 +196,13 @@ pub fn TrashPage(page: i32) -> Element {
                             button {
                                 role: "switch",
                                 aria_checked: "{settings_draft_enabled()}",
-                                class: if settings_draft_enabled() {
-                                    "relative w-11 h-6 flex-shrink-0 rounded-full bg-paper-accent cursor-pointer transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40"
-                                } else {
-                                    "relative w-11 h-6 flex-shrink-0 rounded-full bg-paper-tertiary cursor-pointer transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40"
-                                },
+                                class: if settings_draft_enabled() { "relative w-11 h-6 flex-shrink-0 rounded-full bg-paper-accent cursor-pointer transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40" } else { "relative w-11 h-6 flex-shrink-0 rounded-full bg-paper-tertiary cursor-pointer transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40" },
                                 onclick: move |_| {
                                     settings_draft_enabled.set(!settings_draft_enabled());
                                     just_saved.set(false);
                                 },
                                 // 滑块圆点
-                                span {
-                                    class: if settings_draft_enabled() {
-                                        "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm dark:shadow-black/30 transition-transform duration-200 translate-x-5"
-                                    } else {
-                                        "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm dark:shadow-black/30 transition-transform duration-200"
-                                    },
-                                }
+                                span { class: if settings_draft_enabled() { "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm dark:shadow-black/30 transition-transform duration-200 translate-x-5" } else { "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm dark:shadow-black/30 transition-transform duration-200" } }
                             }
                         }
 
@@ -275,27 +267,30 @@ pub fn TrashPage(page: i32) -> Element {
                             // 草稿状态提示
                             if just_saved() {
                                 span { class: "inline-flex items-center gap-1.5 text-xs text-paper-accent",
-                                    svg { class: "w-3.5 h-3.5", view_box: "0 0 24 24", fill: "none", stroke: "currentColor", stroke_width: "2.5",
-                                        path { stroke_linecap: "round", stroke_linejoin: "round", d: "M5 13l4 4L19 7" }
+                                    svg {
+                                        class: "w-3.5 h-3.5",
+                                        view_box: "0 0 24 24",
+                                        fill: "none",
+                                        stroke: "currentColor",
+                                        stroke_width: "2.5",
+                                        path {
+                                            stroke_linecap: "round",
+                                            stroke_linejoin: "round",
+                                            d: "M5 13l4 4L19 7",
+                                        }
                                     }
                                     "已保存"
                                 }
                             } else if dirty {
-                                span { class: "text-xs text-paper-secondary",
-                                    "有未保存的更改"
-                                }
+                                span { class: "text-xs text-paper-secondary", "有未保存的更改" }
                             } else {
-                                span { class: "text-xs text-transparent select-none", "·" }
+                                span { class: "text-xs text-transparent select-none",
+                                    "·"
+                                }
                             }
                             // 保存按钮：启用主题色，禁用/保存中态灰化
                             button {
-                                class: if saving_settings() {
-                                    "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium cursor-not-allowed text-paper-secondary bg-paper-tertiary rounded-full"
-                                } else if just_saved() {
-                                    "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium cursor-not-allowed text-paper-secondary bg-paper-tertiary rounded-full"
-                                } else {
-                                    "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-paper-theme bg-paper-accent rounded-full hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40"
-                                },
+                                class: if saving_settings() { "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium cursor-not-allowed text-paper-secondary bg-paper-tertiary rounded-full" } else if just_saved() { "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium cursor-not-allowed text-paper-secondary bg-paper-tertiary rounded-full" } else { "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-paper-theme bg-paper-accent rounded-full hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40" },
                                 disabled: saving_settings() || just_saved() || !dirty,
                                 onclick: move |_| {
                                     let days: i32 = settings_draft_days().parse().unwrap_or(30);
@@ -309,7 +304,11 @@ pub fn TrashPage(page: i32) -> Element {
                                         saving_settings.set(false);
                                     });
                                 },
-                                if saving_settings() { "保存中…" } else { "保存设置" }
+                                if saving_settings() {
+                                    "保存中…"
+                                } else {
+                                    "保存设置"
+                                }
                             }
                         }
                     }
@@ -319,9 +318,7 @@ pub fn TrashPage(page: i32) -> Element {
             // 批量操作栏（选中时显示）
             if !selected_ids().is_empty() {
                 div { class: "flex items-center gap-3 p-3 bg-paper-theme rounded-lg",
-                    span { class: "text-sm text-paper-secondary",
-                        "已选择 {selected_ids().len()} 条"
-                    }
+                    span { class: "text-sm text-paper-secondary", "已选择 {selected_ids().len()} 条" }
                     button {
                         class: "{BTN_SOLID_GREEN}",
                         onclick: move |_| {
@@ -329,7 +326,9 @@ pub fn TrashPage(page: i32) -> Element {
                             spawn(async move {
                                 let _ = batch_restore_posts(ids).await;
                             });
-                            for id in selected_ids() { remove_post(id); }
+                            for id in selected_ids() {
+                                remove_post(id);
+                            }
                             selected_ids.set(HashSet::new());
                         },
                         "批量恢复"
@@ -340,14 +339,22 @@ pub fn TrashPage(page: i32) -> Element {
                             #[cfg(target_arch = "wasm32")]
                             {
                                 if web_sys::window()
-                                    .and_then(|w| w.confirm_with_message("确定要彻底删除选中的文章吗？此操作不可恢复。").ok())
+                                    .and_then(|w| {
+                                        w
+                                            .confirm_with_message(
+                                                "确定要彻底删除选中的文章吗？此操作不可恢复。",
+                                            )
+                                            .ok()
+                                    }
                                     .unwrap_or(false)
                                 {
                                     let ids: Vec<i32> = selected_ids().iter().copied().collect();
                                     spawn(async move {
                                         let _ = batch_purge_posts(ids).await;
                                     });
-                                    for id in selected_ids() { remove_post(id); }
+                                    for id in selected_ids() {
+                                        remove_post(id);
+                                    }
                                     selected_ids.set(HashSet::new());
                                 }
                             }
@@ -360,7 +367,9 @@ pub fn TrashPage(page: i32) -> Element {
             // 主内容：错误 / 加载骨架 / 空态 / 列表
             {
                 if error().is_some() {
-                    rsx! { EmptyState { message: "加载失败", variant: "error" } }
+                    rsx! {
+                        EmptyState { message: "加载失败", variant: "error" }
+                    }
                 } else if loading() && posts().is_empty() {
                     rsx! {
                         DelayedSkeleton {
@@ -372,7 +381,9 @@ pub fn TrashPage(page: i32) -> Element {
                         }
                     }
                 } else if posts().is_empty() {
-                    rsx! { EmptyState { message: "回收站为空", variant: "default" } }
+                    rsx! {
+                        EmptyState { message: "回收站为空", variant: "default" }
+                    }
                 } else {
                     let list = posts();
                     let all_selected = list.iter().all(|p| selected_ids().contains(&p.id));
@@ -392,17 +403,21 @@ pub fn TrashPage(page: i32) -> Element {
                                                         move |_| {
                                                             let mut s = selected_ids();
                                                             if all_selected {
-                                                                for id in &all_ids { s.remove(id); }
+                                                                for id in &all_ids {
+                                                                    s.remove(id);
+                                                                }
                                                             } else {
-                                                                for id in &all_ids { s.insert(*id); }
+                                                                for id in &all_ids {
+                                                                    s.insert(*id);
+                                                                }
                                                             }
                                                             selected_ids.set(s);
                                                         }
-                                                    }
+                                                    },
                                                 }
                                             }
                                             th { class: "px-4 py-3 font-medium", "标题" }
-                                            th { class: "px-4 py-3 font-medium", "原状态" }
+                                            th { class: "px-4 py-3 font-medium", "原状态" } // 底部：清空回收站 + 分页
                                             th { class: "px-4 py-3 font-medium w-28", "删除时间" }
                                             th { class: "px-4 py-3 font-medium w-24 text-center", "剩余" }
                                             th { class: "px-4 py-3 font-medium w-32 text-right", "操作" }
@@ -419,7 +434,11 @@ pub fn TrashPage(page: i32) -> Element {
                                                     let id = post.id;
                                                     move |checked: bool| {
                                                         let mut s = selected_ids();
-                                                        if checked { s.insert(id); } else { s.remove(&id); }
+                                                        if checked {
+                                                            s.insert(id);
+                                                        }
+                                                            s.remove(&id);
+                                                        }
                                                         selected_ids.set(s);
                                                     }
                                                 },
@@ -438,7 +457,13 @@ pub fn TrashPage(page: i32) -> Element {
                                                         #[cfg(target_arch = "wasm32")]
                                                         {
                                                             if web_sys::window()
-                                                                .and_then(|w| w.confirm_with_message("确定要彻底删除这篇文章吗？此操作不可恢复。").ok())
+                                                                .and_then(|w| {
+                                                                    w
+                                                                        .confirm_with_message(
+                                                                            "确定要彻底删除这篇文章吗？此操作不可恢复。",
+                                                                        )
+                                                                        .ok()
+                                                                })
                                                                 .unwrap_or(false)
                                                             {
                                                                 spawn(async move {
@@ -463,7 +488,13 @@ pub fn TrashPage(page: i32) -> Element {
                                     #[cfg(target_arch = "wasm32")]
                                     {
                                         if web_sys::window()
-                                            .and_then(|w| w.confirm_with_message("确定要清空回收站吗？所有已删除文章将被彻底移除，此操作不可恢复。").ok())
+                                            .and_then(|w| {
+                                                w
+                                                    .confirm_with_message(
+                                                        "确定要清空回收站吗？所有已删除文章将被彻底移除，此操作不可恢复。",
+                                                    )
+                                                    .ok()
+                                            }
                                             .unwrap_or(false)
                                         {
                                             spawn(async move {
@@ -483,12 +514,12 @@ pub fn TrashPage(page: i32) -> Element {
                             current_page,
                             total: total(),
                             per_page: TRASH_PER_PAGE,
-                            prev_route: if current_page - 1 <= 1 {
-                                Route::Trash {}
-                            } else {
-                                Route::TrashPage { page: current_page - 1 }
+                            prev_route: if current_page - 1 <= 1 { Route::Trash {} } else { Route::TrashPage {
+                                page: current_page - 1,
+                            } },
+                            next_route: Route::TrashPage {
+                                page: current_page + 1,
                             },
-                            next_route: Route::TrashPage { page: current_page + 1 },
                             unit: "篇",
                         }
                     }
@@ -567,14 +598,9 @@ fn TrashRow(
                     label: post.status_label().to_string(),
                 }
             }
-            td { class: "px-4 py-3 text-sm text-paper-secondary",
-                "{deleted_str}"
-            }
+            td { class: "px-4 py-3 text-sm text-paper-secondary", "{deleted_str}" }
             td { class: "px-4 py-3 text-center",
-                StatusBadge {
-                    color_class: badge_class,
-                    label: badge_text,
-                }
+                StatusBadge { color_class: badge_class, label: badge_text }
             }
             td { class: "px-4 py-3 text-right",
                 div { class: "flex justify-end gap-2",

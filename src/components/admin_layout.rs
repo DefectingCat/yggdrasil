@@ -113,10 +113,8 @@ pub fn AdminLayout() -> Element {
         (true, Some(_)) => {
             rsx! {
                 div { class: "{root_class}",
-                    Header { nav_items: admin_nav_items, right_content: right_content }
-                    main { class: "{main_class}",
-                        Outlet::<Route> {}
-                    }
+                    Header { nav_items: admin_nav_items, right_content }
+                    main { class: "{main_class}", Outlet::<Route> {} }
                     Footer {}
                 }
             }
@@ -134,13 +132,19 @@ pub fn AdminLayout() -> Element {
             // 使用与真实布局完全相同的结构包裹内容骨架，避免 checked 变化时的布局闪烁
             rsx! {
                 div { class: "{root_class}",
-                    Header { nav_items: admin_nav_items, right_content: right_content }
+                    Header { nav_items: admin_nav_items, right_content }
                     main { class: "{main_class}",
                         div { class: if show_skeleton() { "" } else { "opacity-0" },
-                            {match route {
-                                Route::Write {} => rsx! { WriteSkeleton {} },
-                                _ => rsx! { AdminDashboardSkeleton {} },
-                            }}
+                            {
+                                match route {
+                                    Route::Write {} => rsx! {
+                                        WriteSkeleton {}
+                                    },
+                                    _ => rsx! {
+                                        AdminDashboardSkeleton {}
+                                    },
+                                }
+                            }
                         }
                     }
                     Footer {}

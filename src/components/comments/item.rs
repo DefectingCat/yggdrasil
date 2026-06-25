@@ -49,16 +49,12 @@ pub fn CommentItem(comment: PublicComment, post_id: i32) -> Element {
             }
         },
         _ => rsx! {
-            span { class: "font-medium text-paper-primary",
-                "{comment.author_name}"
-            }
+            span { class: "font-medium text-paper-primary", "{comment.author_name}" }
         },
     };
 
     rsx! {
-        div {
-            class: "py-4",
-            style: "margin-left: {indent}px",
+        div { class: "py-4", style: "margin-left: {indent}px",
 
             div { class: "flex gap-3",
                 img {
@@ -97,14 +93,22 @@ pub fn CommentItem(comment: PublicComment, post_id: i32) -> Element {
                                         active_reply.set(Some(comment.id));
                                     }
                                 },
-                                if is_replying { "取消回复" } else { "回复" }
+                                if is_replying {
+                                    "取消回复"
+                                } else {
+                                    "回复"
+                                }
                             }
                         }
 
                     }
 
                     if is_replying {
-                        CommentForm { post_id, parent_id: Some(comment.id), parent_indent: Some(indent) }
+                        CommentForm {
+                            post_id,
+                            parent_id: Some(comment.id),
+                            parent_indent: Some(indent),
+                        }
                     }
                 }
             }

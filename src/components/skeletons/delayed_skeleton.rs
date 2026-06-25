@@ -31,9 +31,6 @@ pub fn DelayedSkeleton(children: Element) -> Element {
     });
 
     rsx! {
-        div {
-            class: if pulsing() { "animate-pulse" } else { "" },
-            {children}
-        }
+        div { class: if pulsing() { "animate-pulse" } else { "" }, {children} }
     }
 }

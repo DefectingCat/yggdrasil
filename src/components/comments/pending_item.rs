@@ -44,16 +44,12 @@ pub fn PendingCommentItem(comment: PendingComment, post_id: i32) -> Element {
             }
         },
         _ => rsx! {
-            span { class: "font-medium text-paper-primary",
-                "{comment.author_name}"
-            }
+            span { class: "font-medium text-paper-primary", "{comment.author_name}" }
         },
     };
 
     rsx! {
-        div {
-            class: "py-4 opacity-70",
-            style: "margin-left: {indent}px",
+        div { class: "py-4 opacity-70", style: "margin-left: {indent}px",
 
             div { class: "flex gap-3",
                 img {
@@ -73,8 +69,7 @@ pub fn PendingCommentItem(comment: PendingComment, post_id: i32) -> Element {
                             title: "{comment.created_at}",
                             "{relative_time}"
                         }
-                        span {
-                            class: "inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+                        span { class: "inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
                             "审核中"
                         }
                     }

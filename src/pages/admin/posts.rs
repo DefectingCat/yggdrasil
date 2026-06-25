@@ -24,7 +24,9 @@ const POSTS_PER_PAGE: i32 = 20;
 /// 文章管理入口组件，默认展示第 1 页。
 #[component]
 pub fn Posts() -> Element {
-    rsx! { PostsPage { page: 1 } }
+    rsx! {
+        PostsPage { page: 1 }
+    }
 }
 
 /// 文章管理分页组件。
@@ -101,20 +103,18 @@ pub fn PostsPage(page: i32) -> Element {
     rsx! {
         div { class: "space-y-6",
             div { class: "flex items-center justify-between",
-                h1 { class: "text-2xl font-bold text-paper-primary",
-                    "文章管理"
-                }
+                h1 { class: "text-2xl font-bold text-paper-primary", "文章管理" }
                 div { class: "flex items-center gap-3",
                     div { class: "group relative",
                         button {
-                            class: if rebuilding() {
-                                "px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border"
-                            } else {
-                                "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all"
-                            },
+                            class: if rebuilding() { "px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all" },
                             disabled: rebuilding(),
                             onclick: move |_| do_rebuild(false),
-                            if rebuilding() { "重建中..." } else { "重建内容" }
+                            if rebuilding() {
+                                "重建中..."
+                            } else {
+                                "重建内容"
+                            }
                         }
                         div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-paper-primary text-paper-theme shadow-lg z-50",
                             "重建 content_html 为空的文章渲染缓存"
@@ -122,14 +122,14 @@ pub fn PostsPage(page: i32) -> Element {
                     }
                     div { class: "group relative",
                         button {
-                            class: if rebuilding() {
-                                "px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border"
-                            } else {
-                                "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all"
-                            },
+                            class: if rebuilding() { "px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all" },
                             disabled: rebuilding(),
                             onclick: move |_| do_rebuild(true),
-                            if rebuilding() { "重建中..." } else { "重建全部" }
+                            if rebuilding() {
+                                "重建中..."
+                            } else {
+                                "重建全部"
+                            }
                         }
                         div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-paper-primary text-paper-theme shadow-lg z-50",
                             "重建所有文章的渲染缓存（含已有内容）"
@@ -144,9 +144,7 @@ pub fn PostsPage(page: i32) -> Element {
             }
 
             if let Some(msg) = rebuild_result() {
-                div { class: "text-sm text-paper-secondary px-1",
-                    "{msg}"
-                }
+                div { class: "text-sm text-paper-secondary px-1", "{msg}" }
             }
 
             if loading() && posts().is_empty() {
@@ -155,59 +153,64 @@ pub fn PostsPage(page: i32) -> Element {
                 EmptyState { message: "暂无文章", variant: "default" }
             } else {
                 div { class: "{ADMIN_TABLE_CLASS}",
-                        table { class: "w-full text-sm",
-                            thead {
-                                tr { class: "border-b border-paper-border text-left text-paper-secondary",
-                                    th { class: "px-4 py-3 font-medium", "标题" }
-                                    th { class: "px-4 py-3 font-medium w-24 text-center", "状态" }
-                                    th { class: "px-4 py-3 font-medium w-32", "日期" }
-                                    th { class: "px-4 py-3 font-medium w-24 text-right", "操作" }
+                    table { class: "w-full text-sm",
+                        thead {
+                            tr { class: "border-b border-paper-border text-left text-paper-secondary",
+                                th { class: "px-4 py-3 font-medium", "标题" }
+                                th { class: "px-4 py-3 font-medium w-24 text-center",
+                                    "状态"
+                                }
+                                th { class: "px-4 py-3 font-medium w-32", "日期" }
+                                th { class: "px-4 py-3 font-medium w-24 text-right",
+                                    "操作"
                                 }
                             }
-                            tbody {
-                                for post in get_posts().iter() {
-                                    PostRow {
-                                        post: post.clone(),
-                                        deleting: deleting() == Some(post.id),
-                                        // 删除文章：先乐观更新本地列表，再调用 server function，失败时弹出浏览器提示。
-                                        on_delete: move |id| {
-                                            deleting.set(Some(id));
-                                            let id_for_api = id;
-                                            posts.with_mut(|list| list.retain(|p| p.id != id));
-                                            total.with_mut(|t| *t = t.saturating_sub(1));
-                                            spawn(async move {
-                                                match delete_post(id_for_api).await {
-                                                    Ok(CreatePostResponse { success: false, message: _message, .. }) => {
-                                                        #[cfg(target_arch = "wasm32")]
-                                                        web_sys::window().map(|w| w.alert_with_message(&_message).ok());
-                                                    }
-                                                    Err(_e) => {
-                                                        #[cfg(target_arch = "wasm32")]
-                                                        web_sys::window().map(|w| w.alert_with_message("删除失败").ok());
-                                                    }
-                                                    _ => {}
+                        }
+                        tbody {
+                            for post in get_posts().iter() {
+                                PostRow {
+                                    key: "{post.id}",
+                                    post: post.clone(),
+                                    deleting: deleting() == Some(post.id),
+                                    // 删除文章：先乐观更新本地列表，再调用 server function，失败时弹出浏览器提示。
+                                    on_delete: move |id| {
+                                        deleting.set(Some(id));
+                                        let id_for_api = id;
+                                        posts.with_mut(|list| list.retain(|p| p.id != id));
+                                        total.with_mut(|t| *t = t.saturating_sub(1));
+                                        spawn(async move {
+                                            match delete_post(id_for_api).await {
+                                                Ok(CreatePostResponse { success: false, message: _message, .. }) => {
+                                                    #[cfg(target_arch = "wasm32")]
+                                                    web_sys::window().map(|w| w.alert_with_message(&_message).ok());
                                                 }
-                                                deleting.set(None);
-                                            });
-                                        }
-                                    }
+                                                Err(_e) => {
+                                                    #[cfg(target_arch = "wasm32")]
+                                                    web_sys::window().map(|w| w.alert_with_message("删除失败").ok());
+                                                }
+                                                _ => {}
+                                            }
+                                            deleting.set(None);
+                                        });
+                                    },
                                 }
                             }
                         }
                     }
-                    Pagination {
-                        variant: "admin",
-                        current_page,
-                        total: total(),
-                        per_page: POSTS_PER_PAGE,
-                        prev_route: if current_page - 1 <= 1 {
-                            Route::Posts {}
-                        } else {
-                            Route::PostsPage { page: current_page - 1 }
-                        },
-                        next_route: Route::PostsPage { page: current_page + 1 },
-                        unit: "篇",
-                    }
+                }
+                Pagination {
+                    variant: "admin",
+                    current_page,
+                    total: total(),
+                    per_page: POSTS_PER_PAGE,
+                    prev_route: if current_page - 1 <= 1 { Route::Posts {} } else { Route::PostsPage {
+                        page: current_page - 1,
+                    } },
+                    next_route: Route::PostsPage {
+                        page: current_page + 1,
+                    },
+                    unit: "篇",
+                }
             }
         }
     }
@@ -223,7 +226,9 @@ fn PostRow(post: PostListItem, deleting: bool, on_delete: EventHandler<i32>) -> 
             td { class: "px-4 py-3",
                 Link {
                     class: "text-paper-primary hover:text-paper-accent transition-colors cursor-pointer",
-                    to: Route::PostDetail { slug: post.slug.clone() },
+                    to: Route::PostDetail {
+                        slug: post.slug.clone(),
+                    },
                     "{post.title}"
                 }
             }
@@ -233,9 +238,7 @@ fn PostRow(post: PostListItem, deleting: bool, on_delete: EventHandler<i32>) -> 
                     label: post.status_label().to_string(),
                 }
             }
-            td { class: "px-4 py-3 text-paper-secondary",
-                "{date_str}"
-            }
+            td { class: "px-4 py-3 text-paper-secondary", "{date_str}" }
             td { class: "px-4 py-3 text-right",
                 div { class: "flex justify-end gap-3",
                     Link {
@@ -244,14 +247,14 @@ fn PostRow(post: PostListItem, deleting: bool, on_delete: EventHandler<i32>) -> 
                         "编辑"
                     }
                     button {
-                        class: if deleting {
-                            "text-xs text-paper-secondary cursor-not-allowed"
-                        } else {
-                            BTN_TEXT_RED
-                        },
+                        class: if deleting { "text-xs text-paper-secondary cursor-not-allowed" } else { BTN_TEXT_RED },
                         disabled: deleting,
                         onclick: move |_| on_delete.call(post.id),
-                        if deleting { "删除中..." } else { "删除" }
+                        if deleting {
+                            "删除中..."
+                        } else {
+                            "删除"
+                        }
                     }
                 }
             }

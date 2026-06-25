@@ -31,7 +31,7 @@ pub fn PostContent(content_html: String) -> Element {
     rsx! {
         div {
             class: "post-content md-content",
-            dangerous_inner_html: "{content_html}"
+            dangerous_inner_html: "{content_html}",
         }
     }
 }

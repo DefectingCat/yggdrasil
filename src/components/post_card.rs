@@ -32,13 +32,10 @@ pub fn PostCard(post: PostListItem) -> Element {
     let has_cover = post.cover_image.is_some();
 
     rsx! {
-        article {
-            class: "group relative mb-6 p-6 bg-paper-entry rounded-lg border border-paper-border hover:-translate-y-0.5 hover:border-paper-accent/50 hover:shadow-sm transition-all duration-200",
+        article { class: "group relative mb-6 p-6 bg-paper-entry rounded-lg border border-paper-border hover:-translate-y-0.5 hover:border-paper-accent/50 hover:shadow-sm transition-all duration-200",
             if has_cover {
-                div {
-                    class: "mb-4 -mx-6 -mt-6 overflow-hidden rounded-t-lg",
-                    div {
-                        class: "blur-img post-card-cover-blur",
+                div { class: "mb-4 -mx-6 -mt-6 overflow-hidden rounded-t-lg",
+                    div { class: "blur-img post-card-cover-blur",
                         img {
                             class: "blur-img-placeholder",
                             src: "{cover_src}?w=20",
@@ -53,25 +50,24 @@ pub fn PostCard(post: PostListItem) -> Element {
                     }
                 }
             }
-            h2 {
-                class: "text-2xl font-bold leading-tight text-paper-primary group-hover:text-paper-accent transition-colors duration-200",
+            h2 { class: "text-2xl font-bold leading-tight text-paper-primary group-hover:text-paper-accent transition-colors duration-200",
                 "{post.title}"
             }
-            div {
-                class: "mt-2 text-sm text-paper-secondary leading-relaxed line-clamp-2",
+            div { class: "mt-2 text-sm text-paper-secondary leading-relaxed line-clamp-2",
                 "{post.summary.as_deref().unwrap_or_default()}"
             }
-            div {
-                class: "mt-3 flex items-center gap-3 text-[13px] text-paper-secondary",
+            div { class: "mt-3 flex items-center gap-3 text-[13px] text-paper-secondary",
                 span { "{date_str}" }
                 if !post.tags.is_empty() {
                     span { "·" }
                     for tag in post.tags.clone().into_iter() {
-                        span {
+                        span { key: "{tag}",
                             // 标签叠在覆盖链接之上，点击进入标签详情页而非文章详情。
                             Link {
                                 class: "relative z-10 hover:text-paper-accent transition-colors duration-200",
-                                to: Route::TagDetail { tag: tag.clone() },
+                                to: Route::TagDetail {
+                                    tag: tag.clone(),
+                                },
                                 onclick: move |evt: dioxus::events::MouseEvent| evt.stop_propagation(),
                                 "{tag}"
                             }
@@ -86,7 +82,9 @@ pub fn PostCard(post: PostListItem) -> Element {
             Link {
                 class: "absolute inset-0 z-[2]",
                 aria_label: "post link to {post.title}",
-                to: Route::PostDetail { slug: post_slug },
+                to: Route::PostDetail {
+                    slug: post_slug,
+                },
             }
         }
     }

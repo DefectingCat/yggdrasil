@@ -119,9 +119,7 @@ pub fn Pagination(
     rsx! {
         nav { class: if is_admin { "flex mt-6 justify-between" } else { "flex mt-10 mb-6 justify-between" },
             if has_prev {
-                Link {
-                    class: "{link_class}",
-                    to: prev_route,
+                Link { class: "{link_class}", to: prev_route,
                     span { class: "mr-1", "«" }
                     "上一页"
                 }
@@ -140,9 +138,7 @@ pub fn Pagination(
             }
 
             if has_next {
-                Link {
-                    class: "{link_class} {link_extra_next}",
-                    to: next_route,
+                Link { class: "{link_class} {link_extra_next}", to: next_route,
                     "下一页"
                     span { class: "ml-1", "»" }
                 }
@@ -168,9 +164,7 @@ pub fn Pagination(
 #[component]
 pub fn StatusBadge(color_class: &'static str, label: String) -> Element {
     rsx! {
-        span { class: "{BADGE_BASE} {color_class}",
-            "{label}"
-        }
+        span { class: "{BADGE_BASE} {color_class}", "{label}" }
     }
 }
 

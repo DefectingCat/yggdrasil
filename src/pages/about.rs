@@ -14,13 +14,13 @@ use dioxus::prelude::*;
 pub fn About() -> Element {
     rsx! {
         header { class: "page-header mb-6",
-            h1 { class: "text-4xl font-bold text-paper-primary tracking-tight",
-                "关于"
-            }
+            h1 { class: "text-4xl font-bold text-paper-primary tracking-tight", "关于" }
         }
         article { class: "prose dark:prose-invert max-w-none text-paper-content leading-relaxed",
             p { "Yggdrasil 是一个以文字为主的简约博客系统。" }
-            p { "它使用 Rust + Dioxus 构建，采用 PostgreSQL 作为数据库，支持 Markdown 写作、标签管理和暗色模式。" }
+            p {
+                "它使用 Rust + Dioxus 构建，采用 PostgreSQL 作为数据库，支持 Markdown 写作、标签管理和暗色模式。"
+            }
             h2 { class: "text-xl font-bold text-paper-primary mt-8 mb-4", "技术栈" }
             ul { class: "list-disc pl-5 space-y-1",
                 li { "Rust + Dioxus 0.7 (全栈 Web 框架)" }

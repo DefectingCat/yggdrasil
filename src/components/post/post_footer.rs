@@ -27,9 +27,11 @@ pub fn PostFooter(post: Post) -> Element {
             if !tags.is_empty() {
                 ul { class: "post-tags",
                     for tag in tags.into_iter() {
-                        li {
+                        li { key: "{tag}",
                             Link {
-                                to: Route::TagDetail { tag: tag.clone() },
+                                to: Route::TagDetail {
+                                    tag: tag.clone(),
+                                },
                                 "{tag}"
                             }
                         }
@@ -38,17 +40,11 @@ pub fn PostFooter(post: Post) -> Element {
             }
 
             if post.prev_post.is_some() || post.next_post.is_some() {
-                PostNavLinks {
-                    prev: post.prev_post,
-                    next: post.next_post
-                }
+                PostNavLinks { prev: post.prev_post, next: post.next_post }
             }
 
             div { class: "back-to-home",
-                Link {
-                    to: Route::Home {},
-                    "← 返回首页"
-                }
+                Link { to: Route::Home {}, "← 返回首页" }
             }
         }
     }

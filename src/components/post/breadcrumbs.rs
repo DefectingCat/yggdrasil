@@ -20,10 +20,7 @@ pub fn Breadcrumbs(title: String) -> Element {
             class: "breadcrumbs",
             role: "navigation",
             aria_label: "Breadcrumb",
-            Link {
-                to: Route::Home {},
-                "Home"
-            }
+            Link { to: Route::Home {}, "Home" }
             svg {
                 xmlns: "http://www.w3.org/2000/svg",
                 view_box: "0 0 24 24",

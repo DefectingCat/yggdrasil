@@ -160,9 +160,7 @@ pub fn CommentForm(
                     }
                 }
 
-                p { class: "text-xs text-paper-tertiary",
-                    "支持 Markdown 语法"
-                }
+                p { class: "text-xs text-paper-tertiary", "支持 Markdown 语法" }
 
                 // 蜜罐字段：对普通用户隐藏，用于拦截简单机器人
                 textarea {
@@ -195,57 +193,54 @@ pub fn CommentForm(
                                 return;
                             }
 
-                            if name.trim().is_empty() || email.trim().is_empty() || content.trim().is_empty() {
+                            if name.trim().is_empty() || email.trim().is_empty() || content.trim().is_empty()
+                            {
                                 message.set(Some(("请填写所有必填项".to_string(), "error")));
                                 return;
                             }
-
                             submitting.set(true);
                             message.set(None);
-
                             spawn(async move {
                                 let result = create_comment(
-                                    post_id,
-                                    parent_id,
-                                    name.clone(),
-                                    email.clone(),
-                                    if url_val.trim().is_empty() { None } else { Some(url_val.clone()) },
-                                    content.clone(),
-                                    hp.clone(),
-                                ).await;
-
+                                        post_id,
+                                        parent_id,
+                                        name.clone(),
+                                        email.clone(),
+                                        if url_val.trim().is_empty() { None } else { Some(url_val.clone()) },
+                                        content.clone(),
+                                        hp.clone(),
+                                    )
+                                    .await;
                                 submitting.set(false);
-
                                 match result {
                                     Ok(resp) => {
                                         if resp.success {
-                                            comment_storage::save_author(
-                                                &name,
-                                                &email,
-                                                &url_val,
-                                            );
-
+                                            comment_storage::save_author(&name, &email, &url_val);
                                             if let Some(comment_id) = resp.comment_id {
                                                 let avatar_url = resp.avatar_url.unwrap_or_default();
                                                 let depth = resp.depth.unwrap_or(0);
-
                                                 let now = chrono::Utc::now().to_rfc3339();
                                                 let pending = PendingComment {
                                                     id: comment_id,
                                                     parent_id,
                                                     depth,
                                                     author_name: name.clone(),
-                                                    author_url: if url_val.trim().is_empty() { None } else { Some(url_val) },
+                                                    author_url: if url_val.trim().is_empty() {
+                                                        None
+                                                    } else {
+                                                        Some(url_val)
+                                                    },
                                                     avatar_url,
                                                     content_md: content,
                                                     created_at: now.clone(),
                                                     stored_at: now,
                                                 };
-
-                                                comment_storage::save_pending_comment(post_id, pending.clone());
+                                                comment_storage::save_pending_comment(
+                                                    post_id,
+                                                    pending.clone(),
+                                                );
                                                 pending_comments.write().push(pending);
                                             }
-
                                             content_md.set(String::new());
                                             message.set(Some((resp.message, "success")));
                                             if parent_id.is_some() {
@@ -257,7 +252,10 @@ pub fn CommentForm(
                                         }
                                     }
                                     Err(_) => {
-                                        message.set(Some(("提交失败，请稍后重试".to_string(), "error")));
+                                        message
+                                            .set(
+                                                Some(("提交失败，请稍后重试".to_string(), "error")),
+                                            );
                                     }
                                 }
                             });

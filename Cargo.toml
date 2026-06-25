@@ -55,6 +55,10 @@ opt-level = 3
 lto = "thin"
 codegen-units = 1
 strip = "symbols"
+# panic 直接终止：WASM 去掉 unwind 元数据以减小体积；server 端错误处理走
+# Result + ?（见 src/api/error.rs），不依赖 panic unwind，进程级崩溃由
+# systemd/k8s 拉起。这是 Dioxus 官方 optimizing 指南推荐的 WASM 瘦身项。
+panic = "abort"
 
 [features]
 default = ["web", "server"]

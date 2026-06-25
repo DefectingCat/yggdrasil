@@ -44,9 +44,7 @@ pub fn Search() -> Element {
 
     rsx! {
         header { class: "page-header mb-6",
-            h1 { class: "text-4xl font-bold text-paper-primary tracking-tight",
-                "搜索"
-            }
+            h1 { class: "text-4xl font-bold text-paper-primary tracking-tight", "搜索" }
         }
         div { class: "mb-8",
             div { class: "flex gap-2",
@@ -56,7 +54,11 @@ pub fn Search() -> Element {
                     placeholder: "输入关键词搜索文章...",
                     value: query(),
                     oninput: move |e| query.set(e.value()),
-                    onkeydown: move |e| if e.key() == Key::Enter { on_search() },
+                    onkeydown: move |e| {
+                        if e.key() == Key::Enter {
+                            on_search()
+                        }
+                    },
                 }
                 button {
                     class: "px-6 py-2 bg-paper-accent text-white rounded-full font-medium hover:brightness-110 active:scale-[0.98] transition-all duration-200",
@@ -70,22 +72,14 @@ pub fn Search() -> Element {
             DelayedSkeleton { SearchSkeleton {} }
         } else if let Some(Ok(PostListResponse { posts, total: _ })) = search_res() {
             if posts.is_empty() {
-                div { class: "text-center text-paper-secondary py-20",
-                    "未找到相关文章"
-                }
+                div { class: "text-center text-paper-secondary py-20", "未找到相关文章" }
             } else {
                 for post in posts.iter() {
-                    PostCard { post: post.clone() }
+                    PostCard { key: "{post.id}", post: post.clone() }
                 }
             }
-        } else if search_res()
-            .as_ref()
-            .map(|r| r.is_err())
-            .unwrap_or(false)
-        {
-            div { class: "text-center text-red-500 dark:text-red-400 py-20",
-                "搜索失败"
-            }
+        } else if search_res().as_ref().map(|r| r.is_err()).unwrap_or(false) {
+            div { class: "text-center text-red-500 dark:text-red-400 py-20", "搜索失败" }
         }
     }
 }

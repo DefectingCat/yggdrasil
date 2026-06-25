@@ -94,9 +94,7 @@ pub fn CommentSection(post_id: i32) -> Element {
             let has_any = approved_count > 0 || pending_count > 0;
             rsx! {
                 div { class: "space-y-8",
-                    h2 { class: "text-xl font-bold text-paper-primary",
-                        "评论区 ({total_count})"
-                    }
+                    h2 { class: "text-xl font-bold text-paper-primary", "评论区 ({total_count})" }
 
                     CommentForm { post_id, parent_id: None, parent_indent: None }
 
@@ -116,11 +114,11 @@ pub fn CommentSection(post_id: i32) -> Element {
         }
         Some(Err(_)) => {
             rsx! {
-                div { class: "text-center text-red-500 dark:text-red-400 py-8",
-                    "评论加载失败"
-                }
+                div { class: "text-center text-red-500 dark:text-red-400 py-8", "评论加载失败" }
             }
         }
-        None => rsx! { CommentListSkeleton {} },
+        None => rsx! {
+            CommentListSkeleton {}
+        },
     }
 }

@@ -101,9 +101,7 @@ fn group_posts(posts: &[PostListItem]) -> Vec<YearGroup> {
 pub fn Archives() -> Element {
     rsx! {
         header { class: "page-header mb-6",
-            h1 { class: "text-4xl font-bold text-paper-primary tracking-tight",
-                "归档"
-            }
+            h1 { class: "text-4xl font-bold text-paper-primary tracking-tight", "归档" }
         }
         ArchivesContent {}
     }
@@ -129,15 +127,16 @@ fn ArchivesContent() -> Element {
                     " 篇文章"
                 }
                 for year_group in grouped.iter() {
-                    YearSection { year_group: year_group.clone() }
+                    YearSection {
+                        key: "{year_group.year}",
+                        year_group: year_group.clone(),
+                    }
                 }
             }
         }
         Some(Err(e)) => {
             rsx! {
-                div { class: "text-center text-red-500 dark:text-red-400 py-20",
-                    "加载失败: {e}"
-                }
+                div { class: "text-center text-red-500 dark:text-red-400 py-20", "加载失败: {e}" }
             }
         }
         None => {
@@ -170,7 +169,11 @@ fn YearSection(year_group: YearGroup) -> Element {
                 sup { class: "archive-count text-sm text-paper-secondary ml-1", "{total}" }
             }
             for month_group in year_group.months.iter() {
-                MonthSection { month_group: month_group.clone(), year: year_group.year.clone() }
+                MonthSection {
+                    key: "{month_group.month_en}",
+                    month_group: month_group.clone(),
+                    year: year_group.year.clone(),
+                }
             }
         }
     }
@@ -195,7 +198,7 @@ fn MonthSection(month_group: MonthGroup, year: String) -> Element {
             }
             div { class: "archive-posts flex-1",
                 for post in month_group.posts.iter() {
-                    ArchiveEntry { post: post.clone() }
+                    ArchiveEntry { key: "{post.id}", post: post.clone() }
                 }
             }
         }
@@ -212,13 +215,13 @@ fn ArchiveEntry(post: PostListItem) -> Element {
             h3 { class: "archive-entry-title text-base font-normal text-paper-primary m-0",
                 "{post.title}"
             }
-            div { class: "archive-meta text-sm text-paper-secondary mt-1",
-                "{date_str}"
-            }
+            div { class: "archive-meta text-sm text-paper-secondary mt-1", "{date_str}" }
             Link {
                 class: "entry-link absolute inset-0 z-10",
                 aria_label: "post link to {post.title}",
-                to: Route::PostDetail { slug: post.slug.clone() },
+                to: Route::PostDetail {
+                    slug: post.slug.clone(),
+                },
             }
         }
     }

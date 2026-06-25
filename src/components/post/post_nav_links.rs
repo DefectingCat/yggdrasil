@@ -22,7 +22,9 @@ pub fn PostNavLinks(prev: Option<PostNav>, next: Option<PostNav>) -> Element {
             if let Some(prev_post) = prev {
                 Link {
                     class: "prev",
-                    to: Route::PostDetail { slug: prev_post.slug.clone() },
+                    to: Route::PostDetail {
+                        slug: prev_post.slug.clone(),
+                    },
                     onclick: move |_evt: dioxus::events::MouseEvent| {},
                     span { class: "title", "« Prev" }
                     span { class: "post-title-nav", "{prev_post.title}" }
@@ -34,7 +36,9 @@ pub fn PostNavLinks(prev: Option<PostNav>, next: Option<PostNav>) -> Element {
             if let Some(next_post) = next {
                 Link {
                     class: "next",
-                    to: Route::PostDetail { slug: next_post.slug.clone() },
+                    to: Route::PostDetail {
+                        slug: next_post.slug.clone(),
+                    },
                     onclick: move |_evt: dioxus::events::MouseEvent| {},
                     span { class: "title", "Next »" }
                     span { class: "post-title-nav", "{next_post.title}" }
