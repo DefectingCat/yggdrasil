@@ -12,8 +12,8 @@ use crate::api::comments::get_pending_count;
 use crate::api::posts::{get_post_stats, list_posts};
 #[cfg(target_arch = "wasm32")]
 use crate::api::posts::{PostListResponse, PostStatsResponse};
-use crate::components::ui::ADMIN_CARD_CLASS;
 use crate::components::skeletons::atoms::SkeletonBox;
+use crate::components::ui::{BTN_SECONDARY, ADMIN_CARD_CLASS};
 use crate::models::post::{PostListItem, PostStats};
 use crate::router::Route;
 
@@ -106,12 +106,12 @@ pub fn Admin() -> Element {
 
             div { class: "grid grid-cols-1 md:grid-cols-2 gap-4",
                 Link {
-                    class: "bg-paper-accent text-paper-theme rounded-full px-6 py-3 text-center font-medium hover:brightness-110 active:scale-[0.98] transition-all duration-200 cursor-pointer",
+                    class: "inline-flex items-center justify-center bg-paper-accent text-paper-theme rounded-full px-6 py-3 text-center font-medium hover:brightness-110 active:scale-[0.98] transition-all duration-200 cursor-pointer",
                     to: Route::Write {},
                     "写文章"
                 }
                 Link {
-                    class: "bg-paper-tertiary text-paper-primary rounded-full px-6 py-3 text-center font-medium hover:opacity-80 transition-opacity cursor-pointer",
+                    class: "inline-flex items-center justify-center {BTN_SECONDARY}",
                     to: Route::Posts {},
                     "管理文章"
                 }

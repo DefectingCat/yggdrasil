@@ -16,6 +16,8 @@
   --color-paper-border: #e7e5e0;
   --color-paper-accent: #5c7a5e;
   --color-paper-accent-soft: #e8f0e8;
+  --color-paper-accent-2: #83495b;
+  --color-paper-accent-2-soft: #f3e8eb;
 
   --radius-paper: 8px;
   --gap-paper: 24px;
@@ -50,6 +52,8 @@
     --color-paper-border: #2a2b2e;
     --color-paper-accent: #7da97f;
     --color-paper-accent-soft: #1e2e1e;
+    --color-paper-accent-2: #cca4b0;
+    --color-paper-accent-2-soft: #331f25;
   }
 }
 
