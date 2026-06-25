@@ -12,6 +12,7 @@
 use dioxus::prelude::*;
 
 use crate::api::posts::{list_published_posts, PostListResponse};
+use crate::components::empty_state::EmptyState;
 use crate::components::post_card::PostCard;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::home_skeleton::HomeSkeleton;
@@ -67,8 +68,9 @@ fn HomePosts(current_page: i32) -> Element {
                 // 注意：total > 0 但 posts 为空（如越界页码 /page/9999）也不显示空状态，
                 // 避免误导用户以为站点无内容；此时仅靠下方的分页导航引导回有效页。
                 if total == 0 {
-                    div { class: "text-center text-paper-secondary py-20",
-                        "暂无文章"
+                    EmptyState {
+                        title: "还没有文章",
+                        description: "这里会收集你写下的每一篇文字。",
                     }
                 }
                 // 仅在有文章时渲染分页导航，避免越界页码下出现孤立的空分页。

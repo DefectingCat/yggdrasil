@@ -11,6 +11,8 @@ pub mod admin_layout;
 pub mod admin_skeleton;
 /// 评论相关组件。
 pub mod comments;
+/// 空状态组件（无数据时的插画配图 + 文案）。
+pub mod empty_state;
 /// 页脚组件。
 pub mod footer;
 /// 表单控件组件。
