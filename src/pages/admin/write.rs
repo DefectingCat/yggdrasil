@@ -811,7 +811,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     class: if saving() {
                         "px-5 py-1.5 text-sm bg-[var(--color-paper-tertiary)] text-[var(--color-paper-secondary)] rounded-xl font-medium cursor-not-allowed"
                     } else {
-                        "px-5 py-1.5 text-sm bg-[var(--color-paper-primary)] text-[var(--color-paper-theme)] rounded-xl font-medium hover:opacity-90 transition-opacity cursor-pointer"
+                        "px-5 py-1.5 text-sm bg-[var(--color-paper-accent)] text-[var(--color-paper-theme)] rounded-xl font-medium hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer"
                     },
                     disabled: saving(),
                     onclick: on_submit,
