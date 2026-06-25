@@ -384,6 +384,14 @@ fn main() {
             // 使限流能拿到真实客户端 IP。
             let static_routes = axum::Router::new()
                 .route(
+                    "/healthz",
+                    axum::routing::get(crate::api::health::healthz),
+                )
+                .route(
+                    "/readyz",
+                    axum::routing::get(crate::api::health::readyz),
+                )
+                .route(
                     "/uploads/{*path}",
                     axum::routing::get(crate::api::image::serve_image),
                 )

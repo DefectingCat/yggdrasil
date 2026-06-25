@@ -12,6 +12,8 @@ pub mod csrf;
 pub mod comments;
 /// 应用错误类型与转换。
 pub mod error;
+/// 健康检查端点（liveness / readiness）。
+pub mod health;
 /// 图片服务的 Axum 处理器。
 pub mod image;
 /// Markdown 渲染与 HTML 清理。
