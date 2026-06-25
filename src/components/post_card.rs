@@ -79,9 +79,12 @@ pub fn PostCard(post: PostListItem) -> Element {
                     }
                 }
             }
-            // 覆盖层链接：铺满卡片，承担整卡跳转。z-0 位于标签 (z-10) 之下。
+            // 覆盖层链接：铺满卡片，承担整卡跳转。
+            // z-[2] 高于封面完整图 (.blur-img-full z-index:1, input.css:611)，
+            // 使鼠标 hover 封面时命中本 <a> 而非 <img>：光标变 pointer 且点击可跳转；
+            // 仍低于标签 (z-10)，标签独立点击（stop_propagation）不受影响。
             Link {
-                class: "absolute inset-0 z-0",
+                class: "absolute inset-0 z-[2]",
                 aria_label: "post link to {post.title}",
                 to: Route::PostDetail { slug: post_slug },
             }
