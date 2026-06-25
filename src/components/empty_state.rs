@@ -38,7 +38,7 @@ pub fn EmptyState(
         div { class: "flex flex-col items-center justify-center text-center py-20 px-4 page-enter",
             // 配图：线条小狗（双手持相机，取景器内两只小狗）。
             img {
-                class: "w-48 h-auto select-none",
+                class: "w-48 h-auto rounded-lg select-none dark:brightness-90",
                 src: "/images/xiaotiaoxiaogou_01.webp",
                 alt: "线条小狗插画",
                 draggable: "false",
