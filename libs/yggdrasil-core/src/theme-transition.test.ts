@@ -60,19 +60,22 @@ describe('startThemeTransition', () => {
     window.__startThemeTransition(100, 200);
 
     expect(startVT).toHaveBeenCalledTimes(1);
-    // callback 里根据 DOM 现状(无 dark)切到 dark
-    cbRef.cb!();
-    expect(document.documentElement.classList.contains('dark')).toBe(true);
 
-    // ready 后注入带 keyframes 的 style
-    await readyP;
-    await Promise.resolve();
+    // 样式预注入:在 startViewTransition 之前就已注入 <style>
     const style = document.head.querySelector('style');
     expect(style).not.toBeNull();
     expect(style?.textContent).toContain('circle(0px at 100px 200px)');
     expect(style?.textContent).toMatch(/circle\(\d+(\.\d+)?px at 100px 200px\)/);
     expect(style?.textContent).toContain('::view-transition-old(root)');
     expect(style?.textContent).toContain('::view-transition-new(root)');
+
+    // callback 里根据 DOM 现状(无 dark)切到 dark
+    cbRef.cb!();
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+
+    // ready 后无需注入(已预注入)
+    await readyP;
+    await Promise.resolve();
 
     delete (document as unknown as { startViewTransition?: unknown }).startViewTransition;
   });

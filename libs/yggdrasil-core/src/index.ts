@@ -5,7 +5,7 @@ import './style.css';
 declare global {
   interface Window {
     __initPostContent: (selector: string) => void;
-    __startThemeTransition: (x: number, y: number, isDark: boolean) => void;
+    __startThemeTransition: (x: number, y: number) => void;
   }
 }
 

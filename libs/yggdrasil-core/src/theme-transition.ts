@@ -3,15 +3,14 @@
  *
  * 点击按钮时,新主题页面从点击点 (x,y) 以圆形向外展开覆盖全屏。
  *
- * 实现方式:启动 VT 后,在 vt.ready 注入一段 <style>,用硬编码坐标的
- * @keyframes 驱动 ::view-transition-new(root) 的 clip-path: circle()。
- * 不用 CSS 变量(插值不稳定)、不用 element.animate(方向性 bug)。
- *
- * 关键设计:所有 VT 伪元素样式(animation/mix-blend-mode)都在 JS 中
- * 动态注入,不预设在静态 CSS 里。静态 CSS 里的 animation: none 会让
- * ::view-transition-new 在注入 @keyframes 之前完全不透明地覆盖 old,
- * 导致暗→亮方向看不到动画(亮色 new 瞬间铺满,clip-path 从 0 展开
- * 时已经无区别可展示)。
+ * 设计要点:
+ * 1. 所有 VT 伪元素样式 **在 startViewTransition 之前** 预注入到 <head>,
+ *    确保浏览器创建 ::view-transition-old/new 时样式已就绪,无时序竞态。
+ *    (旧方案在 vt.ready 中才注入,存在一帧 NEW 层无动画全覆盖的间隙。)
+ * 2. VT 回调中 toggle dark class 后, 调用 getComputedStyle 强制同步样式
+ *    重算,确保浏览器截取的 NEW 快照反映最终颜色,不受 CSS transition 影响。
+ * 3. 通过 html.is-theme-transitioning 全局 class 禁用所有 CSS transition,
+ *    防止 body 的 background-color 0.3s 过渡干扰。
  *
  * 降级:无 startViewTransition 或 prefers-reduced-motion 时瞬切 dark class。
  */
@@ -69,50 +68,52 @@ export function startThemeTransition(x: number, y: number): void {
 
   const maxR = maxCornerDistance(x, y);
 
-  // 添加临时类，用于在 CSS 中禁用 transition，确保截图捕获最终状态
+  // ── 1. 预注入 VT 伪元素样式(在 startViewTransition 之前) ──
+  // 移除上一次注入的 style,避免堆积。
+  if (prevStyleEl) {
+    prevStyleEl.remove();
+  }
+  const name = `tt-${Date.now()}`;
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes ${name} {
+      from { clip-path: circle(0px at ${x}px ${y}px); }
+      to   { clip-path: circle(${maxR}px at ${x}px ${y}px); }
+    }
+    ::view-transition-old(root) {
+      animation: none !important;
+      mix-blend-mode: normal;
+    }
+    ::view-transition-new(root) {
+      animation: ${name} 0.4s ease-out !important;
+      mix-blend-mode: normal;
+    }
+  `;
+  document.head.appendChild(style);
+  prevStyleEl = style;
+
+  // ── 2. 禁用所有 CSS transition,确保截图是最终颜色 ──
   html.classList.add('is-theme-transitioning');
 
+  // ── 3. 启动 View Transition ──
   const vt = document.startViewTransition(() => {
     console.log('[tt] CALLBACK set dark=', isDark);
     applyDarkClass(isDark);
+    // 强制同步样式重算:确保浏览器截取 NEW 快照前,
+    // body 的 background-color 已经解析为目标值。
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    getComputedStyle(document.body).backgroundColor;
   });
 
+  // 样式已预注入,vt.ready 不再需要处理
   vt.ready
-    .then(() => {
-      // 移除上一次注入的 style,避免堆积。
-      if (prevStyleEl) {
-        prevStyleEl.remove();
-      }
-      // 注入硬编码坐标的 @keyframes + VT 伪元素样式。
-      // 关键:old 和 new 的 animation/mix-blend-mode 必须在这里设置,
-      // 不能预设在静态 CSS 里,否则会出现 new 在动画注入前完全可见的闪烁。
-      const name = `tt-${Date.now()}`;
-      const style = document.createElement('style');
-      style.textContent = `
-        @keyframes ${name} {
-          from { clip-path: circle(0px at ${x}px ${y}px); }
-          to { clip-path: circle(${maxR}px at ${x}px ${y}px); }
-        }
-        ::view-transition-old(root) {
-          animation: none !important;
-          mix-blend-mode: normal;
-        }
-        ::view-transition-new(root) {
-          animation: ${name} 0.4s ease-out !important;
-          mix-blend-mode: normal;
-        }
-      `;
-      document.head.appendChild(style);
-      prevStyleEl = style;
-      console.log('[tt] ready, injected keyframes:', name);
-    })
+    .then(() => console.log('[tt] ready OK'))
     .catch(() => {});
 
   vt.finished
     .then(() => console.log('[tt] VT finished OK'))
     .catch((e) => console.log('[tt] VT REJECT:', e))
     .finally(() => {
-      // 动画完成后移除临时类
       html.classList.remove('is-theme-transitioning');
     });
 }
