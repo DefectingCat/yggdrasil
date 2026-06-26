@@ -65,15 +65,19 @@ export function startThemeTransition(x: number, y: number, isDark: boolean): voi
   html.style.setProperty('--tt-y', `${y}px`);
   html.style.setProperty('--tt-max-r', `${maxCornerDistance(x, y)}px`);
 
+  // VT 回调里:先冻结所有 CSS 过渡(让 NEW 快照立即拿到新主题配色,
+  // 不被 body 的 background-color .3s 过渡拖慢),再 toggle dark class。
   const vt = document.startViewTransition(() => {
+    html.classList.add('vt-freeze');
     applyDarkClass(isDark);
   });
 
   // vt.finished 在 skipTransition 或页面跳转时会 reject(属预期),用 .catch 吞掉
-  // 以避免 unhandled rejection 刷控制台;无论 resolve/reject 都复位重入标志。
+  // 以避免 unhandled rejection 刷控制台;无论 resolve/reject 都复位重入标志与冻结。
   vt.finished
     .catch(() => {})
     .finally(() => {
+      html.classList.remove('vt-freeze');
       transitioning = false;
     });
 }

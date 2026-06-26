@@ -10,11 +10,13 @@ import './index';
 describe('startThemeTransition', () => {
   beforeEach(() => {
     document.documentElement.classList.remove('dark');
+    document.documentElement.classList.remove('vt-freeze');
     document.documentElement.style.cssText = '';
     vi.restoreAllMocks();
   });
   afterEach(() => {
     document.documentElement.classList.remove('dark');
+    document.documentElement.classList.remove('vt-freeze');
     document.documentElement.style.cssText = '';
   });
 
@@ -66,6 +68,32 @@ describe('startThemeTransition', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(false);
     cbRef.cb!();
     expect(document.documentElement.classList.contains('dark')).toBe(true);
+    // 回调里同时冻结 CSS 过渡,让 NEW 快照立即反映新主题配色
+    expect(document.documentElement.classList.contains('vt-freeze')).toBe(true);
+
+    delete (document as unknown as { startViewTransition?: unknown }).startViewTransition;
+  });
+
+  it('主路径:vt.finished 结束后移除 vt-freeze 并复位重入标志', async () => {
+    const finishedPromise = Promise.resolve();
+    const startVT = vi.fn((cb: () => void) => {
+      cb();
+      return { finished: finishedPromise, skipTransition: () => {} };
+    });
+    Object.defineProperty(document, 'startViewTransition', {
+      value: startVT,
+      configurable: true,
+      writable: true,
+    });
+
+    window.__startThemeTransition(0, 0, true);
+    // 回调执行后 freeze 已加
+    expect(document.documentElement.classList.contains('vt-freeze')).toBe(true);
+
+    await finishedPromise;
+    // 微任务:.finally 在 finished resolve 后于微任务阶段执行,等一轮
+    await Promise.resolve();
+    expect(document.documentElement.classList.contains('vt-freeze')).toBe(false);
 
     delete (document as unknown as { startViewTransition?: unknown }).startViewTransition;
   });
