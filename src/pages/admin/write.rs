@@ -77,7 +77,9 @@ fn write_editor(post_id: Option<i32>) -> Element {
     let mut tags = use_signal(|| "".to_string());
     let mut cover_image = use_signal(|| "".to_string());
     // 封面上传中状态：由子组件 CoverUploader 写入，本组件在 on_submit 读取以拦截保存。
-    let mut cover_uploading = use_signal(|| false);
+    // 无需 mut：本组件只读取（L254）与传递（L452），写入都在 CoverUploader 内部，
+    // 而 Dioxus Signal 是 Copy 类型，.set() 不要求 mut 绑定。
+    let cover_uploading = use_signal(|| false);
     let mut status = use_signal(|| "draft".to_string());
     let mut content = use_signal(|| "".to_string());
     // 页面与编辑器加载、保存、错误、成功等状态。
