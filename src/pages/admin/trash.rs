@@ -109,13 +109,16 @@ pub fn TrashPage(page: i32) -> Element {
     };
 
     // 草稿相对已保存配置是否存在差异：控制保存按钮可用性与“未保存”提示。
-    let dirty = settings_draft_enabled() != settings().auto_purge_enabled
-        || settings_draft_days()
-            .trim()
-            .parse::<i32>()
-            .ok()
-            .map(|d| d != settings().retention_days)
-            .unwrap_or(true);
+    // 派生值用 use_memo：依赖信号不变时不重算（避免每次渲染重复 parse 字符串）。
+    let dirty = use_memo(move || {
+        settings_draft_enabled() != settings().auto_purge_enabled
+            || settings_draft_days()
+                .trim()
+                .parse::<i32>()
+                .ok()
+                .map(|d| d != settings().retention_days)
+                .unwrap_or(true)
+    });
     // 折叠箭头旋转类（展开时翻转 180°）。
     let chevron_rotate = if settings_panel_open() {
         "rotate-180"
@@ -281,7 +284,7 @@ pub fn TrashPage(page: i32) -> Element {
                                     }
                                     "已保存"
                                 }
-                            } else if dirty {
+                            } else if dirty() {
                                 span { class: "text-xs text-paper-secondary", "有未保存的更改" }
                             } else {
                                 span { class: "text-xs text-transparent select-none",
@@ -291,7 +294,7 @@ pub fn TrashPage(page: i32) -> Element {
                             // 保存按钮：启用主题色，禁用/保存中态灰化
                             button {
                                 class: if saving_settings() { "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium cursor-not-allowed text-paper-secondary bg-paper-tertiary rounded-full" } else if just_saved() { "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium cursor-not-allowed text-paper-secondary bg-paper-tertiary rounded-full" } else { "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-paper-theme bg-paper-accent rounded-full hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40" },
-                                disabled: saving_settings() || just_saved() || !dirty,
+                                disabled: saving_settings() || just_saved() || !dirty(),
                                 onclick: move |_| {
                                     let days: i32 = settings_draft_days().parse().unwrap_or(30);
                                     let enabled = settings_draft_enabled();
