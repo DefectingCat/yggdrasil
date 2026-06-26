@@ -13,18 +13,14 @@ import './index';
 describe('startThemeTransition', () => {
   beforeEach(() => {
     document.documentElement.classList.remove('dark');
+    document.documentElement.classList.remove('is-theme-transitioning');
     document.documentElement.style.cssText = '';
-    document.head.querySelectorAll('style').forEach((s) => {
-      if (s.textContent?.includes('tt-')) s.remove();
-    });
     vi.restoreAllMocks();
   });
   afterEach(() => {
     document.documentElement.classList.remove('dark');
+    document.documentElement.classList.remove('is-theme-transitioning');
     document.documentElement.style.cssText = '';
-    document.head.querySelectorAll('style').forEach((s) => {
-      if (s.textContent?.includes('tt-')) s.remove();
-    });
   });
 
   it('降级:无 startViewTransition 时,亮→暗(无 dark class 时 add)', () => {
@@ -43,7 +39,7 @@ describe('startThemeTransition', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(false);
   });
 
-  it('主路径:有 startViewTransition 时调用它,并注入带 keyframes 的 style', async () => {
+  it('主路径:有 startViewTransition 时调用它,callback 切换 dark class', async () => {
     const cbRef: { cb: (() => void) | null } = { cb: null };
     const readyP = Promise.resolve();
     const finishedP = Promise.resolve();
@@ -57,25 +53,38 @@ describe('startThemeTransition', () => {
       writable: true,
     });
 
+    // Mock animate on documentElement (happy-dom 不支持 pseudoElement)
+    const animateSpy = vi.fn(() => ({ finished: Promise.resolve() }));
+    document.documentElement.animate = animateSpy as unknown as typeof document.documentElement.animate;
+
     window.__startThemeTransition(100, 200);
 
     expect(startVT).toHaveBeenCalledTimes(1);
 
-    // 样式预注入:在 startViewTransition 之前就已注入 <style>
-    const style = document.head.querySelector('style');
-    expect(style).not.toBeNull();
-    expect(style?.textContent).toContain('circle(0px at 100px 200px)');
-    expect(style?.textContent).toMatch(/circle\(\d+(\.\d+)?px at 100px 200px\)/);
-    expect(style?.textContent).toContain('::view-transition-old(root)');
-    expect(style?.textContent).toContain('::view-transition-new(root)');
+    // is-theme-transitioning 应在 VT 之前添加
+    expect(document.documentElement.classList.contains('is-theme-transitioning')).toBe(true);
 
     // callback 里根据 DOM 现状(无 dark)切到 dark
     cbRef.cb!();
     expect(document.documentElement.classList.contains('dark')).toBe(true);
 
-    // ready 后无需注入(已预注入)
+    // ready 后通过 Web Animations API 控制动画
     await readyP;
     await Promise.resolve();
+    // animate 应被调用两次:一次 old(opacity),一次 new(clipPath + opacity)
+    expect(animateSpy).toHaveBeenCalledTimes(2);
+    // 第二次调用(new)应包含 clipPath
+    const calls = animateSpy.mock.calls as unknown[][];
+    const newCall = calls[1];
+    expect(newCall[0]).toHaveProperty('clipPath');
+    expect(newCall[1]).toHaveProperty('pseudoElement', '::view-transition-new(root)');
+
+    // finished 后移除 is-theme-transitioning
+    await finishedP;
+    await Promise.resolve();
+    // happy-dom microtask 可能需要额外 tick
+    await new Promise((r) => setTimeout(r, 0));
+    expect(document.documentElement.classList.contains('is-theme-transitioning')).toBe(false);
 
     delete (document as unknown as { startViewTransition?: unknown }).startViewTransition;
   });
