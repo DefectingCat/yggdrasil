@@ -1,0 +1,22 @@
+/* ========== 主题切换圆形展开(View Transitions API) ========== */
+/* 取消默认交叉淡入淡出,由 clip-path: circle() 接管新快照的展开。 */
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+  /* --tt-x / --tt-y / --tt-max-r 由 JS 在 html 上设。 */
+  animation: tt-reveal 0.4s ease-out;
+}
+
+@keyframes tt-reveal {
+  from {
+    clip-path: circle(0px at var(--tt-x, 0px) var(--tt-y, 0px));
+  }
+  to {
+    clip-path: circle(var(--tt-max-r, 100vmax) at var(--tt-x, 0px) var(--tt-y, 0px));
+  }
+}

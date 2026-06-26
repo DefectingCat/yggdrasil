@@ -6,6 +6,9 @@
 //!   `prefers-color-scheme` 媒体查询；切换时同步更新 DOM class 与 localStorage。
 
 use dioxus::prelude::*;
+// InteractionLocation 提供 client_coordinates(),用于读取鼠标点击的视口坐标。
+// 该 trait 不在 dioxus::prelude(后者只 re-export events::*),需单独从 dioxus::html 引入。
+use dioxus::html::InteractionLocation;
 
 /// localStorage 中存储主题值的键名。
 #[cfg(any(target_arch = "wasm32", test))]
@@ -164,7 +167,23 @@ pub fn ThemeToggle() -> Element {
             class: "theme-toggle p-2 rounded-full cursor-pointer hover:text-paper-accent transition-colors duration-200 text-paper-secondary",
             r#type: "button",
             aria_label: "切换深色/浅色主题",
-            onclick: move |_| theme.set(theme().toggle()),
+            onclick: move |evt| {
+                let next = theme().toggle();
+                #[cfg(target_arch = "wasm32")]
+                {
+                    let is_dark = next == Theme::Dark;
+                    let coords = evt.client_coordinates();
+                    // 兜底:若 yggdrasil-core.js 尚未加载完(__startThemeTransition 未定义),
+                    // 跳过动画(后续 use_effect 仍会同步 dark class 与 localStorage)。
+                    let _ = js_sys::eval(&format!(
+                        "if (window.__startThemeTransition) \
+                         window.__startThemeTransition({x}, {y}, {is_dark})",
+                        x = coords.x,
+                        y = coords.y,
+                    ));
+                }
+                theme.set(next);
+            },
             if theme() == Theme::Dark {
                 svg {
                     xmlns: "http://www.w3.org/2000/svg",
