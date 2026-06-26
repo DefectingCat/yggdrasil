@@ -1,12 +1,11 @@
 /* ========== 主题切换圆形展开(View Transitions API) ========== */
 
-/* 硬锁 VT 伪元素样式:禁用 UA 默认的 fade-in/out,
-   强制两层都保持完全不透明 + 正常混合模式。
-   WAAPI 仅控制 ::view-transition-new 的 clip-path 展开,不涉及 opacity。
-   !important 确保覆盖 UA origin。 */
+/* 不用 animation: none — Chrome 对 VT 伪元素设置 animation:none 后
+   会阻止 WAAPI 的 clip-path 动画生效(暗→亮方向完全看不到动画)。
+   改为用 opacity:1 !important 锁定两层不透明度:UA 的 fade-in/out 动画
+   技术上还在运行,但 !important 阻止它修改 opacity,视觉上等于无动画。 */
 ::view-transition-old(root),
 ::view-transition-new(root) {
-  animation: none !important;
   opacity: 1 !important;
   mix-blend-mode: normal !important;
 }
