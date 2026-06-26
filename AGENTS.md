@@ -1,18 +1,27 @@
 # AGENTS.md
 
+## Workflow
+
+- **每完成一个功能点立即提交**。Agent 自主判断提交时机——当一个逻辑完整的改动通过验证(编译通过 / 测试通过)后,无需等待用户指令,直接 `git add` + `git commit`。
+- 提交粒度按"功能点"而非"文件":相关联的多文件改动合并为一个提交,不相关的改动拆成多个提交。
+- 提交信息遵循现有风格:`type(scope): 简述`,正文(可选)说明动机与关键改动。常见 type:`feat` / `fix` / `docs` / `refactor` / `chore` / `perf`。
+- 只在用户明确要求时才 `git push`。提交到本地即可,不主动推送。
+
 ## Development Commands
 
 ```bash
 make dev           # tailwindcss watch + dx serve (needs PostgreSQL)
-make build         # build-editor → highlight-css → tailwindcss → dx build --release
+make build         # build-editor → highlight-css → tailwindcss → doc → dx build --release
 make build-linux   # same as build but targets x86_64-unknown-linux-musl
 make css           # one-shot CSS
 make css-watch     # watch mode
 make test          # cargo test + vitest (tiptap-editor + lightbox libs)
+make doc           # cargo doc (ayu 主题) → 拷贝到 public/doc/，随 build 发布
+make doc-open      # 同 doc，生成后自动用浏览器打开（本地预览，不拷贝）
 make clean         # cargo clean + rm public/style.css
 ```
 
-**Build order matters**: `make build` runs `build-editor` → `highlight-css` (`cargo run --bin generate_highlight_css`) → `tailwindcss --minify` → `dx build --release`. Do not run `dx build --release` alone.
+**Build order matters**: `make build` runs `build-editor` → `highlight-css` (`cargo run --bin generate_highlight_css`) → `tailwindcss --minify` → `doc` (`cargo doc` + 拷贝到 `public/doc/`) → `dx build --release`. Do not run `dx build --release` alone.
 
 ## Prerequisites
 
