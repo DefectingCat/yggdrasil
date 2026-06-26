@@ -53,18 +53,11 @@ pub fn TrashPage(page: i32) -> Element {
     let mut loading: Signal<bool> = use_signal(|| false);
     #[allow(unused_mut)]
     let mut error: Signal<Option<String>> = use_signal(|| None);
-    // 自动清理配置（含本地草稿态用于表单输入）。
+    // 自动清理配置：由子组件 AutoPurgeSettings 写入（加载/保存），本组件读取
+    // retention_days 供 TrashRow 的「剩余天数」展示。
     let mut settings: Signal<TrashSettings> = use_signal(TrashSettings::default);
-    let mut settings_draft_days: Signal<String> = use_signal(|| "30".to_string());
-    let mut settings_draft_enabled: Signal<bool> = use_signal(|| false);
-    let mut settings_panel_open: Signal<bool> = use_signal(|| false);
-    let mut saving_settings: Signal<bool> = use_signal(|| false);
-    // 保存成功后的短暂反馈标记（用户再次编辑时清除）。
-    let mut just_saved: Signal<bool> = use_signal(|| false);
-    // 配置只加载一次的标记，避免每次翻页 effect 重复拉取。
-    let mut settings_loaded: Signal<bool> = use_signal(|| false);
 
-    // 加载回收站列表；配置仅首次加载。
+    // 加载回收站列表（自动清理配置由子组件 AutoPurgeSettings 自行加载）。
     use_effect(move || {
         let _ = current_page;
         loading.set(true);
@@ -82,16 +75,6 @@ pub fn TrashPage(page: i32) -> Element {
                 }
                 loading.set(false);
             });
-            if !settings_loaded() {
-                settings_loaded.set(true);
-                spawn(async move {
-                    if let Ok(s) = get_trash_settings().await {
-                        settings_draft_days.set(s.retention_days.to_string());
-                        settings_draft_enabled.set(s.auto_purge_enabled);
-                        settings.set(s);
-                    }
-                });
-            }
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -108,24 +91,6 @@ pub fn TrashPage(page: i32) -> Element {
         });
     };
 
-    // 草稿相对已保存配置是否存在差异：控制保存按钮可用性与“未保存”提示。
-    // 派生值用 use_memo：依赖信号不变时不重算（避免每次渲染重复 parse 字符串）。
-    let dirty = use_memo(move || {
-        settings_draft_enabled() != settings().auto_purge_enabled
-            || settings_draft_days()
-                .trim()
-                .parse::<i32>()
-                .ok()
-                .map(|d| d != settings().retention_days)
-                .unwrap_or(true)
-    });
-    // 折叠箭头旋转类（展开时翻转 180°）。
-    let chevron_rotate = if settings_panel_open() {
-        "rotate-180"
-    } else {
-        ""
-    };
-
     rsx! {
         div { class: "space-y-6",
             // 页面标题
@@ -134,189 +99,9 @@ pub fn TrashPage(page: i32) -> Element {
                 span { class: "text-sm text-paper-secondary", "共 {total()} 篇" }
             }
 
-            // 自动清理配置卡片：可折叠的设置面板，顶部始终显示当前状态摘要
-            div { class: "rounded-xl border border-paper-border overflow-hidden bg-paper-entry",
-                // 顶部可点击摘要条：状态指示灯 + 标题 + 展开箭头
-                button {
-                    class: "w-full flex items-center gap-3 px-5 py-4 text-left cursor-pointer hover:bg-paper-theme focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40",
-                    onclick: move |_| {
-                        settings_panel_open.set(!settings_panel_open());
-                        just_saved.set(false);
-                    },
-                    // 状态指示灯
-                    {
-                        let dot_class = if settings().auto_purge_enabled {
-                            "w-2 h-2 rounded-full bg-paper-accent shadow-[0_0_0_3px_rgba(92,122,94,0.15)]"
-                        } else {
-                            "w-2 h-2 rounded-full bg-paper-tertiary"
-                        };
-                        rsx! {
-                            div { class: "w-2 flex-shrink-0 flex items-center justify-center",
-                                div { class: "{dot_class}" }
-                            }
-                        }
-                    }
-                    // 标题 + 当前状态描述
-                    div { class: "flex-1 min-w-0",
-                        div { class: "text-sm font-medium text-paper-primary", "自动清理" }
-                        div { class: "text-xs text-paper-secondary mt-0.5 truncate",
-                            if settings().auto_purge_enabled {
-                                "已开启 · 超过 {settings().retention_days} 天的文章将被自动删除"
-                            } else {
-                                "已关闭"
-                            }
-                        }
-                    }
-                    // 展开箭头（旋转动画）
-                    svg {
-                        class: "w-4 h-4 text-paper-secondary transition-transform duration-200 flex-shrink-0 {chevron_rotate}",
-                        view_box: "0 0 24 24",
-                        fill: "none",
-                        stroke: "currentColor",
-                        stroke_width: "2",
-                        path {
-                            stroke_linecap: "round",
-                            stroke_linejoin: "round",
-                            d: "M19 9l-7 7-7-7",
-                        }
-                    }
-                }
+            // 自动清理配置卡片（抽取为子组件 AutoPurgeSettings，见文件末尾）。
+            AutoPurgeSettings { settings }
 
-                // 设置面板（可折叠）
-                if settings_panel_open() {
-                    div { class: "border-t border-paper-border p-5 space-y-6",
-                        // 开关行：启用自动清理
-                        div { class: "flex items-center justify-between gap-4",
-                            div { class: "min-w-0",
-                                div { class: "text-sm font-medium text-paper-primary",
-                                    "启用自动清理"
-                                }
-                                div { class: "text-xs text-paper-secondary mt-1",
-                                    "后台任务定期彻底删除超过保留期的文章"
-                                }
-                            }
-                            // 自定义开关（toggle switch）—— 取代原生 checkbox
-                            button {
-                                role: "switch",
-                                aria_checked: "{settings_draft_enabled()}",
-                                class: if settings_draft_enabled() { "relative w-11 h-6 flex-shrink-0 rounded-full bg-paper-accent cursor-pointer transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40" } else { "relative w-11 h-6 flex-shrink-0 rounded-full bg-paper-tertiary cursor-pointer transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40" },
-                                onclick: move |_| {
-                                    settings_draft_enabled.set(!settings_draft_enabled());
-                                    just_saved.set(false);
-                                },
-                                // 滑块圆点
-                                span { class: if settings_draft_enabled() { "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm dark:shadow-black/30 transition-transform duration-200 translate-x-5" } else { "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm dark:shadow-black/30 transition-transform duration-200" } }
-                            }
-                        }
-
-                        // 保留天数行
-                        div { class: "space-y-3",
-                            div { class: "min-w-0",
-                                div { class: "text-sm font-medium text-paper-primary",
-                                    "保留天数"
-                                }
-                                div { class: "text-xs text-paper-secondary mt-1",
-                                    "文章删除后保留的时长，到期后自动彻底清除（1–365）"
-                                }
-                            }
-                            // 数字输入 + 步进按钮 + 单位后缀
-                            div { class: "flex items-center gap-3",
-                                div { class: "flex items-center rounded-lg border border-paper-border bg-paper-entry overflow-hidden",
-                                    // 减号
-                                    button {
-                                        class: "w-9 h-9 flex items-center justify-center text-sm text-paper-secondary hover:text-paper-primary hover:bg-paper-theme cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40",
-                                        r#type: "button",
-                                        aria_label: "减少保留天数",
-                                        onclick: move |_| {
-                                            let cur: i32 = settings_draft_days().trim().parse().unwrap_or(30);
-                                            let next = cur.saturating_sub(1).max(1);
-                                            settings_draft_days.set(next.to_string());
-                                            just_saved.set(false);
-                                        },
-                                        "−"
-                                    }
-                                    // 数字输入（无边框，衔接步进按钮）
-                                    input {
-                                        r#type: "number",
-                                        min: "1",
-                                        max: "365",
-                                        class: "w-14 h-9 px-1 text-center text-sm tabular-nums text-paper-primary bg-transparent border-0 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
-                                        value: "{settings_draft_days()}",
-                                        oninput: move |e| {
-                                            settings_draft_days.set(e.value());
-                                            just_saved.set(false);
-                                        },
-                                    }
-                                    // 加号
-                                    button {
-                                        class: "w-9 h-9 flex items-center justify-center text-sm text-paper-secondary hover:text-paper-primary hover:bg-paper-theme cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40",
-                                        r#type: "button",
-                                        aria_label: "增加保留天数",
-                                        onclick: move |_| {
-                                            let cur: i32 = settings_draft_days().trim().parse().unwrap_or(30);
-                                            let next = cur.saturating_add(1).min(365);
-                                            settings_draft_days.set(next.to_string());
-                                            just_saved.set(false);
-                                        },
-                                        "+"
-                                    }
-                                }
-                                span { class: "text-xs text-paper-secondary", "天" }
-                            }
-                        }
-
-                        // 底部操作行：未保存提示 + 保存按钮
-                        div { class: "flex items-center justify-between gap-4 pt-1",
-                            // 草稿状态提示
-                            if just_saved() {
-                                span { class: "inline-flex items-center gap-1.5 text-xs text-paper-accent",
-                                    svg {
-                                        class: "w-3.5 h-3.5",
-                                        view_box: "0 0 24 24",
-                                        fill: "none",
-                                        stroke: "currentColor",
-                                        stroke_width: "2.5",
-                                        path {
-                                            stroke_linecap: "round",
-                                            stroke_linejoin: "round",
-                                            d: "M5 13l4 4L19 7",
-                                        }
-                                    }
-                                    "已保存"
-                                }
-                            } else if dirty() {
-                                span { class: "text-xs text-paper-secondary", "有未保存的更改" }
-                            } else {
-                                span { class: "text-xs text-transparent select-none",
-                                    "·"
-                                }
-                            }
-                            // 保存按钮：启用主题色，禁用/保存中态灰化
-                            button {
-                                class: if saving_settings() { "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium cursor-not-allowed text-paper-secondary bg-paper-tertiary rounded-full" } else if just_saved() { "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium cursor-not-allowed text-paper-secondary bg-paper-tertiary rounded-full" } else { "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-paper-theme bg-paper-accent rounded-full hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40" },
-                                disabled: saving_settings() || just_saved() || !dirty(),
-                                onclick: move |_| {
-                                    let days: i32 = settings_draft_days().parse().unwrap_or(30);
-                                    let enabled = settings_draft_enabled();
-                                    saving_settings.set(true);
-                                    spawn(async move {
-                                        if let Ok(s) = update_trash_settings(enabled, days).await {
-                                            settings.set(s);
-                                            just_saved.set(true);
-                                        }
-                                        saving_settings.set(false);
-                                    });
-                                },
-                                if saving_settings() {
-                                    "保存中…"
-                                } else {
-                                    "保存设置"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
 
             // 批量操作栏（选中时显示）
             if !selected_ids().is_empty() {
@@ -522,6 +307,241 @@ pub fn TrashPage(page: i32) -> Element {
                                 page: current_page + 1,
                             },
                             unit: "篇",
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// 自动清理配置子组件：可折叠的设置面板。
+///
+/// 封装自动清理的全部状态：表单草稿（`settings_draft_*`）、面板折叠态、保存态、
+/// 已保存反馈、以及派生的 `dirty` / `chevron_rotate`。配置加载与保存均在组件
+/// 内部完成。`settings`（已保存的服务端配置）由父组件传入双向绑定 signal：
+/// 本组件加载/保存时写入，父组件读取 `retention_days` 供 TrashRow 的「剩余天数」。
+///
+/// 从 `TrashPage` 抽取以降低 god component 复杂度（见 dioxus-render-purity skill）。
+#[component]
+#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
+fn AutoPurgeSettings(settings: Signal<TrashSettings>) -> Element {
+    let mut settings_draft_days: Signal<String> = use_signal(|| "30".to_string());
+    let mut settings_draft_enabled: Signal<bool> = use_signal(|| false);
+    let mut settings_panel_open: Signal<bool> = use_signal(|| false);
+    let mut saving_settings: Signal<bool> = use_signal(|| false);
+    // 保存成功后的短暂反馈标记（用户再次编辑时清除）。
+    let mut just_saved: Signal<bool> = use_signal(|| false);
+
+    // 首次渲染加载服务端配置：本组件挂载即触发一次，无需 settings_loaded 守卫
+    //（父组件每次翻页重渲染的是列表 effect，本组件 effect 只在自身首次挂载跑）。
+    use_effect(move || {
+        #[cfg(target_arch = "wasm32")]
+        spawn(async move {
+            if let Ok(s) = get_trash_settings().await {
+                settings_draft_days.set(s.retention_days.to_string());
+                settings_draft_enabled.set(s.auto_purge_enabled);
+                settings.set(s);
+            }
+        });
+    });
+
+    // 草稿相对已保存配置是否存在差异：控制保存按钮可用性与“未保存”提示。
+    // 派生值用 use_memo：依赖信号不变时不重算（避免每次渲染重复 parse 字符串）。
+    let dirty = use_memo(move || {
+        settings_draft_enabled() != settings().auto_purge_enabled
+            || settings_draft_days()
+                .trim()
+                .parse::<i32>()
+                .ok()
+                .map(|d| d != settings().retention_days)
+                .unwrap_or(true)
+    });
+    // 折叠箭头旋转类（展开时翻转 180°）。
+    let chevron_rotate = if settings_panel_open() {
+        "rotate-180"
+    } else {
+        ""
+    };
+
+    rsx! {
+        div { class: "rounded-xl border border-paper-border overflow-hidden bg-paper-entry",
+            // 顶部可点击摘要条：状态指示灯 + 标题 + 展开箭头
+            button {
+                class: "w-full flex items-center gap-3 px-5 py-4 text-left cursor-pointer hover:bg-paper-theme focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40",
+                onclick: move |_| {
+                    settings_panel_open.set(!settings_panel_open());
+                    just_saved.set(false);
+                },
+                // 状态指示灯
+                {
+                    let dot_class = if settings().auto_purge_enabled {
+                        "w-2 h-2 rounded-full bg-paper-accent shadow-[0_0_0_3px_rgba(92,122,94,0.15)]"
+                    } else {
+                        "w-2 h-2 rounded-full bg-paper-tertiary"
+                    };
+                    rsx! {
+                        div { class: "w-2 flex-shrink-0 flex items-center justify-center",
+                            div { class: "{dot_class}" }
+                        }
+                    }
+                }
+                // 标题 + 当前状态描述
+                div { class: "flex-1 min-w-0",
+                    div { class: "text-sm font-medium text-paper-primary", "自动清理" }
+                    div { class: "text-xs text-paper-secondary mt-0.5 truncate",
+                        if settings().auto_purge_enabled {
+                            "已开启 · 超过 {settings().retention_days} 天的文章将被自动删除"
+                        } else {
+                            "已关闭"
+                        }
+                    }
+                }
+                // 展开箭头（旋转动画）
+                svg {
+                    class: "w-4 h-4 text-paper-secondary transition-transform duration-200 flex-shrink-0 {chevron_rotate}",
+                    view_box: "0 0 24 24",
+                    fill: "none",
+                    stroke: "currentColor",
+                    stroke_width: "2",
+                    path {
+                        stroke_linecap: "round",
+                        stroke_linejoin: "round",
+                        d: "M19 9l-7 7-7-7",
+                    }
+                }
+            }
+
+            // 设置面板（可折叠）
+            if settings_panel_open() {
+                div { class: "border-t border-paper-border p-5 space-y-6",
+                    // 开关行：启用自动清理
+                    div { class: "flex items-center justify-between gap-4",
+                        div { class: "min-w-0",
+                            div { class: "text-sm font-medium text-paper-primary",
+                                "启用自动清理"
+                            }
+                            div { class: "text-xs text-paper-secondary mt-1",
+                                "后台任务定期彻底删除超过保留期的文章"
+                            }
+                        }
+                        // 自定义开关（toggle switch）—— 取代原生 checkbox
+                        button {
+                            role: "switch",
+                            aria_checked: "{settings_draft_enabled()}",
+                            class: if settings_draft_enabled() { "relative w-11 h-6 flex-shrink-0 rounded-full bg-paper-accent cursor-pointer transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40" } else { "relative w-11 h-6 flex-shrink-0 rounded-full bg-paper-tertiary cursor-pointer transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40" },
+                            onclick: move |_| {
+                                settings_draft_enabled.set(!settings_draft_enabled());
+                                just_saved.set(false);
+                            },
+                            // 滑块圆点
+                            span { class: if settings_draft_enabled() { "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm dark:shadow-black/30 transition-transform duration-200 translate-x-5" } else { "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm dark:shadow-black/30 transition-transform duration-200" } }
+                        }
+                    }
+
+                    // 保留天数行
+                    div { class: "space-y-3",
+                        div { class: "min-w-0",
+                            div { class: "text-sm font-medium text-paper-primary",
+                                "保留天数"
+                            }
+                            div { class: "text-xs text-paper-secondary mt-1",
+                                "文章删除后保留的时长，到期后自动彻底清除（1–365）"
+                            }
+                        }
+                        // 数字输入 + 步进按钮 + 单位后缀
+                        div { class: "flex items-center gap-3",
+                            div { class: "flex items-center rounded-lg border border-paper-border bg-paper-entry overflow-hidden",
+                                // 减号
+                                button {
+                                    class: "w-9 h-9 flex items-center justify-center text-sm text-paper-secondary hover:text-paper-primary hover:bg-paper-theme cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40",
+                                    r#type: "button",
+                                    aria_label: "减少保留天数",
+                                    onclick: move |_| {
+                                        let cur: i32 = settings_draft_days().trim().parse().unwrap_or(30);
+                                        let next = cur.saturating_sub(1).max(1);
+                                        settings_draft_days.set(next.to_string());
+                                        just_saved.set(false);
+                                    },
+                                    "−"
+                                }
+                                // 数字输入（无边框，衔接步进按钮）
+                                input {
+                                    r#type: "number",
+                                    min: "1",
+                                    max: "365",
+                                    class: "w-14 h-9 px-1 text-center text-sm tabular-nums text-paper-primary bg-transparent border-0 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+                                    value: "{settings_draft_days()}",
+                                    oninput: move |e| {
+                                        settings_draft_days.set(e.value());
+                                        just_saved.set(false);
+                                    },
+                                }
+                                // 加号
+                                button {
+                                    class: "w-9 h-9 flex items-center justify-center text-sm text-paper-secondary hover:text-paper-primary hover:bg-paper-theme cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40",
+                                    r#type: "button",
+                                    aria_label: "增加保留天数",
+                                    onclick: move |_| {
+                                        let cur: i32 = settings_draft_days().trim().parse().unwrap_or(30);
+                                        let next = cur.saturating_add(1).min(365);
+                                        settings_draft_days.set(next.to_string());
+                                        just_saved.set(false);
+                                    },
+                                    "+"
+                                }
+                            }
+                            span { class: "text-xs text-paper-secondary", "天" }
+                        }
+                    }
+
+                    // 底部操作行：未保存提示 + 保存按钮
+                    div { class: "flex items-center justify-between gap-4 pt-1",
+                        // 草稿状态提示
+                        if just_saved() {
+                            span { class: "inline-flex items-center gap-1.5 text-xs text-paper-accent",
+                                svg {
+                                    class: "w-3.5 h-3.5",
+                                    view_box: "0 0 24 24",
+                                    fill: "none",
+                                    stroke: "currentColor",
+                                    stroke_width: "2.5",
+                                    path {
+                                        stroke_linecap: "round",
+                                        stroke_linejoin: "round",
+                                        d: "M5 13l4 4L19 7",
+                                    }
+                                }
+                                "已保存"
+                            }
+                        } else if dirty() {
+                            span { class: "text-xs text-paper-secondary", "有未保存的更改" }
+                        } else {
+                            span { class: "text-xs text-transparent select-none",
+                                "·"
+                            }
+                        }
+                        // 保存按钮：启用主题色，禁用/保存中态灰化
+                        button {
+                            class: if saving_settings() { "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium cursor-not-allowed text-paper-secondary bg-paper-tertiary rounded-full" } else if just_saved() { "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium cursor-not-allowed text-paper-secondary bg-paper-tertiary rounded-full" } else { "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-paper-theme bg-paper-accent rounded-full hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40" },
+                            disabled: saving_settings() || just_saved() || !dirty(),
+                            onclick: move |_| {
+                                let days: i32 = settings_draft_days().parse().unwrap_or(30);
+                                let enabled = settings_draft_enabled();
+                                saving_settings.set(true);
+                                spawn(async move {
+                                    if let Ok(s) = update_trash_settings(enabled, days).await {
+                                        settings.set(s);
+                                        just_saved.set(true);
+                                    }
+                                    saving_settings.set(false);
+                                });
+                            },
+                            if saving_settings() {
+                                "保存中…"
+                            } else {
+                                "保存设置"
+                            }
                         }
                     }
                 }
