@@ -8,6 +8,8 @@
 use dioxus::prelude::*;
 // InteractionLocation 提供 client_coordinates(),用于读取鼠标点击的视口坐标。
 // 该 trait 不在 dioxus::prelude(后者只 re-export events::*),需单独从 dioxus::html 引入。
+// 仅 WASM 前端用到(ThemeToggle 的圆形展开动画取点击坐标),服务端构建剥离。
+#[cfg(target_arch = "wasm32")]
 use dioxus::html::InteractionLocation;
 
 /// localStorage 中存储主题值的键名。
@@ -158,6 +160,9 @@ pub fn ThemePreload() -> Element {
 }
 
 /// 主题切换按钮组件。
+// evt 仅在 wasm32 的圆形展开动画里使用(取点击坐标),服务端构建剥离,
+// 故允许非 wasm 构建下的 unused_variables(与 Write 组件同模式)。
+#[cfg_attr(not(target_arch = "wasm32"), allow(unused_variables))]
 #[component]
 pub fn ThemeToggle() -> Element {
     let mut theme = use_theme();
