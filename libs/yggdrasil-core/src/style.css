@@ -1,11 +1,14 @@
 /* ========== 主题切换圆形展开(View Transitions API) ========== */
 
-/* mix-blend-mode 不可通过 Web Animations API 设置,只能用 CSS。
-   UA 默认 plus-lighter 会导致新旧层颜色叠加发亮,需覆盖为 normal。
-   author 样式天然覆盖 UA 样式,无需 !important。 */
+/* 硬锁 VT 伪元素样式:禁用 UA 默认的 fade-in/out,
+   强制两层都保持完全不透明 + 正常混合模式。
+   WAAPI 仅控制 ::view-transition-new 的 clip-path 展开,不涉及 opacity。
+   !important 确保覆盖 UA origin。 */
 ::view-transition-old(root),
 ::view-transition-new(root) {
-  mix-blend-mode: normal;
+  animation: none !important;
+  opacity: 1 !important;
+  mix-blend-mode: normal !important;
 }
 
 /* 在 View Transition 期间强制禁用所有 CSS 过渡,

@@ -71,11 +71,11 @@ describe('startThemeTransition', () => {
     // ready 后通过 Web Animations API 控制动画
     await readyP;
     await Promise.resolve();
-    // animate 应被调用两次:一次 old(opacity),一次 new(clipPath + opacity)
-    expect(animateSpy).toHaveBeenCalledTimes(2);
-    // 第二次调用(new)应包含 clipPath
+    // animate 应被调用一次:clip-path 展开 on new
+    expect(animateSpy).toHaveBeenCalledTimes(1);
+    // 调用应包含 clipPath + pseudoElement
     const calls = animateSpy.mock.calls as unknown[][];
-    const newCall = calls[1];
+    const newCall = calls[0];
     expect(newCall[0]).toHaveProperty('clipPath');
     expect(newCall[1]).toHaveProperty('pseudoElement', '::view-transition-new(root)');
 

@@ -82,28 +82,18 @@ export function startThemeTransition(x: number, y: number): void {
 
   vt.ready
     .then(() => {
-      console.log('[tt] ready, animating via WAAPI');
-      // ── Web Animations API ──
-      // script-created 动画优先级高于 CSS 动画(含 UA 默认 fade-in/out),
-      // 天然覆盖,无需 !important,无残留样式问题。
-
-      // OLD: 覆盖 UA 默认的 fade-out,保持完全可见作为底图
-      document.documentElement.animate(
-        { opacity: [1, 1] },
-        {
-          duration: 400,
-          pseudoElement: '::view-transition-old(root)',
-        },
-      );
-
-      // NEW: 覆盖 UA 默认的 fade-in,改为 clip-path 圆形展开
+      console.log('[tt] ready, animating clip-path via WAAPI');
+      // CSS 已通过 animation:none + opacity:1 (!important) 锁定两层:
+      // OLD 保持完全可见(暗色底图),NEW 保持完全不透明。
+      // WAAPI 只需控制 NEW 的 clip-path 实现圆形展开。
+      // script-created Animation 优先级高于 CSS animation(已被 none 禁用),
+      // 只添加 clip-path 动画,不与 CSS 冲突。
       document.documentElement.animate(
         {
           clipPath: [
             `circle(0px at ${x}px ${y}px)`,
             `circle(${maxR}px at ${x}px ${y}px)`,
           ],
-          opacity: [1, 1],
         },
         {
           duration: 400,
