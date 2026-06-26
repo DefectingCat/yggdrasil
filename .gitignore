@@ -10,6 +10,7 @@ public/style.css
 public/highlight.css
 public/tiptap
 public/lightbox
+public/doc
 /static
 .env
 docs/superpowers/
