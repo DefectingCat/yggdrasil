@@ -1,4 +1,4 @@
-.PHONY: dev build build-linux css css-watch clean build-editor build-editor-incremental build-lightbox build-lightbox-incremental build-core build-core-incremental highlight-css test doc doc-open
+.PHONY: dev build build-linux css css-watch clean build-editor build-editor-incremental build-lightbox build-lightbox-incremental build-core build-core-incremental highlight-css test doc doc-open start
 
 build:
 	@$(MAKE) build-editor
@@ -8,6 +8,11 @@ build:
 	@tailwindcss -i input.css -o public/style.css --minify
 	@$(MAKE) doc
 	@dx build --release --debug-symbols=false
+	@echo ""
+	@echo "Build complete! To run the release version locally, use:"
+	@echo "  make start"
+	@echo "Or run manually with:"
+	@echo "  DIOXUS_ASSET_DIR=target/dx/yggdrasil/release/web/public ./target/dx/yggdrasil/release/web/server"
 
 build-linux:
 	@$(MAKE) build-editor
@@ -17,6 +22,10 @@ build-linux:
 	@tailwindcss -i input.css -o public/style.css --minify
 	@dx build @client --release --debug-symbols=false --wasm-js-cfg false
 	@dx build @server --release --debug-symbols=false --target x86_64-unknown-linux-musl --wasm-js-cfg false --features server
+	@echo ""
+	@echo "Linux build complete! The server binary is at target/dx/yggdrasil/release/web/server"
+	@echo "Remember to deploy it alongside the target/dx/yggdrasil/release/web/public directory."
+	@echo "When running the server, ensure DIOXUS_ASSET_DIR is set or the public directory is in CWD."
 
 highlight-css:
 	@cargo run --bin generate_highlight_css
@@ -58,6 +67,10 @@ dev: build-editor-incremental build-lightbox-incremental build-core-incremental
 	TAILWIND_PID=$$!; \
 	trap 'kill $$TAILWIND_PID 2>/dev/null; exit' INT TERM EXIT; \
 	SSR_CACHE_SECS=0 dx serve --addr 0.0.0.0
+
+start:
+	@echo "Starting local release build..."
+	@DIOXUS_ASSET_DIR=target/dx/yggdrasil/release/web/public ./target/dx/yggdrasil/release/web/server
 
 css:
 	@tailwindcss -i input.css -o public/style.css
