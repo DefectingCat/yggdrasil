@@ -1,8 +1,9 @@
-.PHONY: dev build build-linux css css-watch clean build-editor build-editor-incremental build-lightbox build-lightbox-incremental highlight-css test doc doc-open
+.PHONY: dev build build-linux css css-watch clean build-editor build-editor-incremental build-lightbox build-lightbox-incremental build-core build-core-incremental highlight-css test doc doc-open
 
 build:
 	@$(MAKE) build-editor
 	@$(MAKE) build-lightbox
+	@$(MAKE) build-core
 	@$(MAKE) highlight-css
 	@tailwindcss -i input.css -o public/style.css --minify
 	@dx build --release --debug-symbols=false
@@ -10,6 +11,7 @@ build:
 build-linux:
 	@$(MAKE) build-editor
 	@$(MAKE) build-lightbox
+	@$(MAKE) build-core
 	@$(MAKE) highlight-css
 	@tailwindcss -i input.css -o public/style.css --minify
 	@dx build @client --release --debug-symbols=false --wasm-js-cfg false
@@ -37,7 +39,16 @@ build-lightbox:
 build-lightbox-incremental:
 	@cd libs/lightbox && npm run build
 
-dev: build-editor-incremental build-lightbox-incremental
+build-core:
+	@echo "Building yggdrasil-core..."
+	@cd libs/yggdrasil-core && npm install && npm run build
+	@echo "yggdrasil-core built."
+
+# dev 用的增量构建：跳过 npm install（假设 node_modules 已存在），仅 vite build。
+build-core-incremental:
+	@cd libs/yggdrasil-core && npm run build
+
+dev: build-editor-incremental build-lightbox-incremental build-core-incremental
 	@echo "Cleaning static/..."
 	@rm -rf static/
 	@echo "Building Tiptap editor (incremental)..."
@@ -57,6 +68,7 @@ test:
 	@cargo test
 	@cd libs/tiptap-editor && npm test
 	@cd libs/lightbox && npm test
+	@cd libs/yggdrasil-core && npm test
 
 # 只编译当前 crate 的文档（--no-deps 跳过依赖，--document-private-items
 # 让纯 binary crate 的内部模块/私有项也进文档，否则页面基本是空的）。
