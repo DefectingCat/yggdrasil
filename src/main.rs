@@ -391,23 +391,6 @@ fn main() {
                     "/readyz",
                     axum::routing::get(crate::api::health::readyz),
                 )
-                // /doc 与 /doc/ 重定向到文档入口 /doc/yggdrasil/index.html。
-                // public/doc/ 由 Dioxus 自动托管，深层路径无需额外处理；仅裸路径需要
-                // 重定向，否则会落到 Router 的 /:..segments 兜底返回 404 页面。
-                // 放在 static_routes（与 /uploads 同层），不经过 CSRF/超时/缓存中间件，
-                // 行为与静态资源一致。用 301 永久重定向，让浏览器/书签记住跳转。
-                .route(
-                    "/doc",
-                    axum::routing::get(|| async {
-                        axum::response::Redirect::permanent("/doc/yggdrasil/index.html")
-                    }),
-                )
-                .route(
-                    "/doc/",
-                    axum::routing::get(|| async {
-                        axum::response::Redirect::permanent("/doc/yggdrasil/index.html")
-                    }),
-                )
                 .route(
                     "/uploads/{*path}",
                     axum::routing::get(crate::api::image::serve_image),
