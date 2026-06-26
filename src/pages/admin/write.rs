@@ -33,6 +33,13 @@ use dioxus::html::HasFileData;
 #[cfg(target_arch = "wasm32")]
 use dioxus::web::{WebEventExt, WebFileExt};
 
+/// 元信息表单复用的样式常量（label 与 input 各一份，避免多处重复粘贴）。
+/// 提升到模块级以便 write_editor 与 CoverUploader 共用。
+const META_LABEL_CLASS: &str =
+    "block text-[11px] font-medium text-[var(--color-paper-secondary)] tracking-wider mb-2";
+const META_INPUT_CLASS: &str =
+    "w-full text-sm bg-transparent text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border-b border-[var(--color-paper-tertiary)] focus:border-[var(--color-paper-primary)] transition-colors pb-1.5";
+
 /// 新建文章页面组件。
 ///
 /// 内部委托给 `write_editor`，以 `None` 表示新建模式。
@@ -71,13 +78,6 @@ fn write_editor(post_id: Option<i32>) -> Element {
     let mut cover_image = use_signal(|| "".to_string());
     let mut status = use_signal(|| "draft".to_string());
     let mut content = use_signal(|| "".to_string());
-    // 封面图上传状态：uploading 进度态、错误消息、URL 输入框展开、拖拽高亮。
-    let mut cover_uploading = use_signal(|| false);
-    let mut cover_error = use_signal(|| None::<String>);
-    let mut cover_url_mode = use_signal(|| false);
-    let mut cover_drag_active = use_signal(|| false);
-    // 封面 URL 输入框的临时值（确认前不直接写入 cover_image，避免半截 URL 触发预览加载）。
-    let mut cover_url_input = use_signal(|| "".to_string());
     // 页面与编辑器加载、保存、错误、成功等状态。
     let mut loading = use_signal(|| true);
     let mut saving = use_signal(|| false);
@@ -227,27 +227,6 @@ fn write_editor(post_id: Option<i32>) -> Element {
         loading.set(false);
     });
 
-    // 封面图上传：spawn 一个 async 调用 upload_image_file。
-    // 三条入口（file input / drop / paste）收敛成拿到 web_sys::File 后统一调用此闭包。
-    // 仅在 WASM 端有意义（upload_image_file 与 spawn 都依赖 WASM 运行时），
-    // server SSR 不渲染上传逻辑，故整体 cfg-gate 避免引用 wasm-only 符号。
-    #[cfg(target_arch = "wasm32")]
-    let mut spawn_cover_upload = move |file: web_sys::File| {
-        cover_uploading.set(true);
-        cover_error.set(None);
-        spawn(async move {
-            match upload_image_file(file).await {
-                Ok(url) => {
-                    cover_image.set(url);
-                }
-                Err(msg) => {
-                    cover_error.set(Some(msg));
-                }
-            }
-            cover_uploading.set(false);
-        });
-    };
-
     // 提交表单：校验标题与内容，读取 Tiptap 编辑器 Markdown，调用 create_post 或 update_post。
     let on_submit = move |_| {
         // 上传未完成/失败拦截：有占位符时阻止保存
@@ -268,12 +247,6 @@ fn write_editor(post_id: Option<i32>) -> Element {
             return;
         }
         drop(in_flight);
-
-        // 封面图上传中拦截：防止保存半成品。
-        if cover_uploading() {
-            error.set(Some("封面图正在上传，请等待完成后再保存".to_string()));
-            return;
-        }
 
         if title().trim().is_empty() {
             error.set(Some("标题不能为空".to_string()));
@@ -414,11 +387,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
         "保存"
     };
 
-    // 元信息表单复用的样式：label 与 input 各一份，避免三处重复粘贴。
-    const META_LABEL_CLASS: &str =
-        "block text-[11px] font-medium text-[var(--color-paper-secondary)] tracking-wider mb-2";
-    const META_INPUT_CLASS: &str =
-        "w-full text-sm bg-transparent text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border-b border-[var(--color-paper-tertiary)] focus:border-[var(--color-paper-primary)] transition-colors pb-1.5";
+    // 元信息表单复用样式见模块级 META_LABEL_CLASS / META_INPUT_CLASS。
 
     rsx! {
         div { class: "relative flex flex-col",
@@ -471,241 +440,8 @@ fn write_editor(post_id: Option<i32>) -> Element {
                         }
                     }
 
-                    // 封面图上传区：空态矮横条（不挤压编辑器），有图时展开成 21:9 超宽预览。
-                    // 21:9 与首页卡片封面统一比例，比 16:9 更扁，适合宽屏横幅式封面。
-                    // 容器统一绑定拖拽与粘贴事件；内部按 cover_image / cover_uploading 切换空态、上传中、预览。
-                    div {
-                        class: "relative w-full rounded-xl border border-dashed overflow-hidden transition-all duration-200 group/cover",
-                        // 空态矮横条；有图/上传中展开成 21:9。
-                        class: if cover_image().is_empty() && !cover_uploading() { "h-14" } else { "aspect-[21/9]" },
-                        class: if cover_drag_active() { "border-[var(--color-paper-accent)] bg-[var(--color-paper-accent-soft)]" } else if cover_image().is_empty() { "border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] hover:border-[var(--color-paper-accent)] hover:bg-[var(--color-paper-accent-soft)]" } else { "border-[var(--color-paper-border)] bg-[var(--color-paper-entry)]" },
-
-                        // 整个容器可接收拖拽与粘贴（ondragover 必须 prevent_default，否则浏览器直接打开文件）。
-                        ondragover: move |evt| {
-                            evt.prevent_default();
-                            if !cover_uploading() && cover_image().is_empty() {
-                                cover_drag_active.set(true);
-                            }
-                        },
-                        ondragenter: move |evt| {
-                            evt.prevent_default();
-                        },
-                        ondragleave: move |_| {
-                            cover_drag_active.set(false);
-                        },
-                        ondrop: move |evt| {
-                            evt.prevent_default();
-                            cover_drag_active.set(false);
-                            if !cover_uploading() && cover_image().is_empty() {
-                                #[cfg(target_arch = "wasm32")]
-                                {
-                                    if let Some(file) = evt.files().into_iter().next() {
-                                        if let Some(web_file) = file.get_web_file() {
-                                            spawn_cover_upload(web_file);
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        onpaste: move |evt| {
-                            evt.prevent_default();
-                            if !cover_uploading() && cover_image().is_empty() {
-                                #[cfg(target_arch = "wasm32")]
-                                {
-                                    use wasm_bindgen::JsCast;
-                                    if let Some(raw) = evt.try_as_web_event() {
-                                        if let Some(ce) = raw.dyn_ref::<web_sys::ClipboardEvent>() {
-                                            if let Some(dt) = ce.clipboard_data() {
-                                                if let Some(file_list) = dt.files() {
-                                                    if let Some(file) = file_list.item(0) {
-                                                        spawn_cover_upload(file);
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        },
-
-                        // —— 上传中：骨架占位 + 文案 ——
-                        if cover_uploading() {
-                            div { class: "absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--color-paper-tertiary)]/30 animate-pulse",
-                                span { class: "text-sm text-[var(--color-paper-secondary)]",
-                                    "上传中..."
-                                }
-                            }
-                        }
-
-                        // —— 有图：预览 + 移除/更换 ——
-                        if !cover_image().is_empty() && !cover_uploading() {
-                            // 预览图：/uploads/ 路径加 ?w=600 缩略，外链 URL 原样用。
-                            // 用条件表达式内联计算，避免 rsx 内 let 块（宏在 server 端解析受限）。
-                            img {
-                                class: "absolute inset-0 w-full h-full object-cover",
-                                src: {
-                                    let cv = cover_image();
-                                    if cv.starts_with("/uploads/") {
-                                        let base = cv.split('?').next().unwrap_or(&cv);
-                                        if cv.contains('?') {
-                                            format!("{}&w=600", base)
-                                        } else {
-                                            format!("{}?w=600", base)
-                                        }
-                                    } else {
-                                        cv
-                                    }
-                                },
-                                alt: "封面预览",
-                                // 外链预览加载失败时提示，避免空白。
-                                onerror: move |_| {
-                                    cover_error.set(Some("封面图加载失败，请检查 URL".to_string()));
-                                },
-                            }
-                            // 右上角移除按钮（hover 出现）。
-                            button {
-                                class: "absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full bg-black/50 text-white opacity-0 group-hover/cover:opacity-100 transition-opacity hover:bg-black/70 cursor-pointer",
-                                aria_label: "移除封面",
-                                onclick: move |_| {
-                                    cover_image.set(String::new());
-                                    cover_error.set(None);
-                                    cover_url_mode.set(false);
-                                    cover_url_input.set(String::new());
-                                },
-                                // 内联 SVG：关闭 X（与 header.rs 关闭按钮同风格，view_box 0 0 24 24）。
-                                svg {
-                                    class: "w-4 h-4",
-                                    xmlns: "http://www.w3.org/2000/svg",
-                                    view_box: "0 0 24 24",
-                                    fill: "none",
-                                    stroke: "currentColor",
-                                    stroke_width: "2",
-                                    stroke_linecap: "round",
-                                    stroke_linejoin: "round",
-                                    path { d: "M6 6l12 12M6 18L18 6" }
-                                }
-                            }
-                            // 底部渐变遮罩 + "更换封面"提示（hover 出现）。
-                            div { class: "absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-end justify-center pb-2 pointer-events-none",
-                                span { class: "text-xs text-white/90",
-                                    "点击下方区域可重新上传"
-                                }
-                            }
-                        }
-
-                        // —— 空态：横向矮横条，图标+提示+URL 链 ——
-                        if cover_image().is_empty() && !cover_uploading() {
-                            // label 包裹整个空态：点击天然触发隐藏的 file input，无需 JS。
-                            label { class: "absolute inset-0 flex flex-row items-center gap-3 cursor-pointer px-4 text-left",
-                                // 上传图标（Feather 风格线框，与项目现有图标体系一致）。
-                                svg {
-                                    class: "w-5 h-5 shrink-0 text-[var(--color-paper-secondary)]",
-                                    xmlns: "http://www.w3.org/2000/svg",
-                                    view_box: "0 0 24 24",
-                                    fill: "none",
-                                    stroke: "currentColor",
-                                    stroke_width: "1.8",
-                                    stroke_linecap: "round",
-                                    stroke_linejoin: "round",
-                                    path { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }
-                                    polyline { points: "17 8 12 3 7 8" }
-                                    line {
-                                        x1: "12",
-                                        y1: "3",
-                                        x2: "12",
-                                        y2: "15",
-                                    }
-                                }
-                                span { class: "text-sm text-[var(--color-paper-secondary)] shrink-0",
-                                    "拖拽 · 点击 · 粘贴封面图"
-                                }
-                                // URL 文字链：阻止 label 的默认 file 触发，切换到 URL 输入模式。
-                                span {
-                                    class: "text-[11px] font-medium tracking-wider text-[var(--color-paper-tertiary)] hover:text-[var(--color-paper-accent)] transition-colors ml-auto shrink-0",
-                                    onclick: move |evt| {
-                                        evt.prevent_default();
-                                        evt.stop_propagation();
-                                        cover_url_mode.set(true);
-                                        cover_url_input.set(cover_image());
-                                    },
-                                    "或使用图片 URL"
-                                }
-                                // 隐藏的 file input，由 label 点击触发。
-                                input {
-                                    r#type: "file",
-                                    accept: "image/jpeg,image/png,image/gif,image/webp",
-                                    class: "hidden",
-                                    onchange: move |evt| {
-                                        #[cfg(target_arch = "wasm32")]
-                                        {
-                                            if let Some(file) = evt.files().into_iter().next() {
-                                                if let Some(web_file) = file.get_web_file() {
-                                                    spawn_cover_upload(web_file);
-                                                }
-                                            }
-                                        }
-                                        // 注意：未重置 input.value，重复选择同一文件不会再次触发 onchange。
-                                        // 这是 file input 的通用行为，封面场景影响可忽略。
-                                    },
-                                }
-                            }
-                        }
-                    }
-
-                    // —— URL 输入模式（内联展开，空态时叠加在容器外，避免与拖拽区争抢点击）——
-                    if cover_url_mode() && cover_image().is_empty() {
-                        div { class: "flex items-center gap-2 mt-2",
-                            input {
-                                class: "flex-1 {META_INPUT_CLASS}",
-                                placeholder: "粘贴图片 URL",
-                                value: "{cover_url_input}",
-                                oninput: move |evt| cover_url_input.set(evt.value()),
-                                onkeydown: move |evt| {
-                                    if evt.key() == Key::Enter {
-                                        let v = cover_url_input().trim().to_string();
-                                        if !v.is_empty() {
-                                            cover_image.set(v);
-                                            cover_error.set(None);
-                                            cover_url_mode.set(false);
-                                        }
-                                    }
-                                },
-                            }
-                            button {
-                                class: "shrink-0 px-3 py-1 text-xs text-[var(--color-paper-theme)] bg-[var(--color-paper-accent)] rounded-full hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer",
-                                onclick: move |_| {
-                                    let v = cover_url_input().trim().to_string();
-                                    if !v.is_empty() {
-                                        cover_image.set(v);
-                                        cover_error.set(None);
-                                        cover_url_mode.set(false);
-                                    }
-                                },
-                                "确认"
-                            }
-                            button {
-                                class: "shrink-0 px-3 py-1 text-xs text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors cursor-pointer",
-                                onclick: move |_| {
-                                    cover_url_mode.set(false);
-                                    cover_url_input.set(String::new());
-                                },
-                                "取消"
-                            }
-                        }
-                    }
-
-                    // 封面上传失败提示：复用页面红色条风格。
-                    if let Some(err) = cover_error() {
-                        div { class: "flex items-center justify-between gap-3 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30 mt-2",
-                            span { "封面图: {err}" }
-                            button {
-                                class: "shrink-0 text-red-400 hover:text-red-600 cursor-pointer text-lg leading-none",
-                                aria_label: "关闭提示",
-                                onclick: move |_| cover_error.set(None),
-                                "×"
-                            }
-                        }
-                    }
+                    // 封面图上传区（抽取为子组件 CoverUploader，见文件末尾）。
+                    CoverUploader { cover_image }
                 }
 
                 // 编辑器区域 - 整页滚动下用视口高度，保证充裕的编辑空间。
@@ -802,6 +538,284 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     disabled: saving(),
                     onclick: on_submit,
                     "{save_button_text}"
+                }
+            }
+        }
+    }
+}
+
+/// 封面上传子组件。
+///
+/// 封装封面图的全部状态与交互：拖拽/粘贴/选择文件上传、URL 输入、预览、移除。
+/// 通过 `cover_image` signal 与父组件双向绑定——子组件写入最终 URL，
+/// 父组件读取它用于保存。其余上传中间态（uploading/error/url/drag）对本组件私有。
+///
+/// 从 `write_editor` 抽取以降低 god component 复杂度（见 dioxus-render-purity skill）。
+#[component]
+#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
+fn CoverUploader(cover_image: Signal<String>) -> Element {
+    // 封面图上传状态：uploading 进度态、错误消息、URL 输入框展开、拖拽高亮。
+    let mut cover_uploading = use_signal(|| false);
+    let mut cover_error = use_signal(|| None::<String>);
+    let mut cover_url_mode = use_signal(|| false);
+    let mut cover_drag_active = use_signal(|| false);
+    // 封面 URL 输入框的临时值（确认前不直接写入 cover_image，避免半截 URL 触发预览加载）。
+    let mut cover_url_input = use_signal(|| "".to_string());
+
+    // 封面图上传：spawn 一个 async 调用 upload_image_file。
+    // 三条入口（file input / drop / paste）收敛成拿到 web_sys::File 后统一调用此闭包。
+    // 仅在 WASM 端有意义（upload_image_file 与 spawn 都依赖 WASM 运行时），
+    // server SSR 不渲染上传逻辑，故整体 cfg-gate 避免引用 wasm-only 符号。
+    #[cfg(target_arch = "wasm32")]
+    let mut spawn_cover_upload = move |file: web_sys::File| {
+        cover_uploading.set(true);
+        cover_error.set(None);
+        spawn(async move {
+            match upload_image_file(file).await {
+                Ok(url) => {
+                    cover_image.set(url);
+                }
+                Err(msg) => {
+                    cover_error.set(Some(msg));
+                }
+            }
+            cover_uploading.set(false);
+        });
+    };
+
+    rsx! {
+        // 封面图上传区：空态矮横条（不挤压编辑器），有图时展开成 21:9 超宽预览。
+        // 21:9 与首页卡片封面统一比例，比 16:9 更扁，适合宽屏横幅式封面。
+        // 容器统一绑定拖拽与粘贴事件；内部按 cover_image / cover_uploading 切换空态、上传中、预览。
+        div {
+            class: "relative w-full rounded-xl border border-dashed overflow-hidden transition-all duration-200 group/cover",
+            // 空态矮横条；有图/上传中展开成 21:9。
+            class: if cover_image().is_empty() && !cover_uploading() { "h-14" } else { "aspect-[21/9]" },
+            class: if cover_drag_active() { "border-[var(--color-paper-accent)] bg-[var(--color-paper-accent-soft)]" } else if cover_image().is_empty() { "border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] hover:border-[var(--color-paper-accent)] hover:bg-[var(--color-paper-accent-soft)]" } else { "border-[var(--color-paper-border)] bg-[var(--color-paper-entry)]" },
+
+            // 整个容器可接收拖拽与粘贴（ondragover 必须 prevent_default，否则浏览器直接打开文件）。
+            ondragover: move |evt| {
+                evt.prevent_default();
+                if !cover_uploading() && cover_image().is_empty() {
+                    cover_drag_active.set(true);
+                }
+            },
+            ondragenter: move |evt| {
+                evt.prevent_default();
+            },
+            ondragleave: move |_| {
+                cover_drag_active.set(false);
+            },
+            ondrop: move |evt| {
+                evt.prevent_default();
+                cover_drag_active.set(false);
+                if !cover_uploading() && cover_image().is_empty() {
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        if let Some(file) = evt.files().into_iter().next() {
+                            if let Some(web_file) = file.get_web_file() {
+                                spawn_cover_upload(web_file);
+                            }
+                        }
+                    }
+                }
+            },
+            onpaste: move |evt| {
+                evt.prevent_default();
+                if !cover_uploading() && cover_image().is_empty() {
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        use wasm_bindgen::JsCast;
+                        if let Some(raw) = evt.try_as_web_event() {
+                            if let Some(ce) = raw.dyn_ref::<web_sys::ClipboardEvent>() {
+                                if let Some(dt) = ce.clipboard_data() {
+                                    if let Some(file_list) = dt.files() {
+                                        if let Some(file) = file_list.item(0) {
+                                            spawn_cover_upload(file);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+
+            // —— 上传中：骨架占位 + 文案 ——
+            if cover_uploading() {
+                div { class: "absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--color-paper-tertiary)]/30 animate-pulse",
+                    span { class: "text-sm text-[var(--color-paper-secondary)]",
+                        "上传中..."
+                    }
+                }
+            }
+
+            // —— 有图：预览 + 移除/更换 ——
+            if !cover_image().is_empty() && !cover_uploading() {
+                // 预览图：/uploads/ 路径加 ?w=600 缩略，外链 URL 原样用。
+                // 用条件表达式内联计算，避免 rsx 内 let 块（宏在 server 端解析受限）。
+                img {
+                    class: "absolute inset-0 w-full h-full object-cover",
+                    src: {
+                        let cv = cover_image();
+                        if cv.starts_with("/uploads/") {
+                            let base = cv.split('?').next().unwrap_or(&cv);
+                            if cv.contains('?') {
+                                format!("{}&w=600", base)
+                            } else {
+                                format!("{}?w=600", base)
+                            }
+                        } else {
+                            cv
+                        }
+                    },
+                    alt: "封面预览",
+                    // 外链预览加载失败时提示，避免空白。
+                    onerror: move |_| {
+                        cover_error.set(Some("封面图加载失败，请检查 URL".to_string()));
+                    },
+                }
+                // 右上角移除按钮（hover 出现）。
+                button {
+                    class: "absolute top-2 right-2 w-7 h-7 flex items-center justify-center rounded-full bg-black/50 text-white opacity-0 group-hover/cover:opacity-100 transition-opacity hover:bg-black/70 cursor-pointer",
+                    aria_label: "移除封面",
+                    onclick: move |_| {
+                        cover_image.set(String::new());
+                        cover_error.set(None);
+                        cover_url_mode.set(false);
+                        cover_url_input.set(String::new());
+                    },
+                    // 内联 SVG：关闭 X（与 header.rs 关闭按钮同风格，view_box 0 0 24 24）。
+                    svg {
+                        class: "w-4 h-4",
+                        xmlns: "http://www.w3.org/2000/svg",
+                        view_box: "0 0 24 24",
+                        fill: "none",
+                        stroke: "currentColor",
+                        stroke_width: "2",
+                        stroke_linecap: "round",
+                        stroke_linejoin: "round",
+                        path { d: "M6 6l12 12M6 18L18 6" }
+                    }
+                }
+                // 底部渐变遮罩 + "更换封面"提示（hover 出现）。
+                div { class: "absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-end justify-center pb-2 pointer-events-none",
+                    span { class: "text-xs text-white/90",
+                        "点击下方区域可重新上传"
+                    }
+                }
+            }
+
+            // —— 空态：横向矮横条，图标+提示+URL 链 ——
+            if cover_image().is_empty() && !cover_uploading() {
+                // label 包裹整个空态：点击天然触发隐藏的 file input，无需 JS。
+                label { class: "absolute inset-0 flex flex-row items-center gap-3 cursor-pointer px-4 text-left",
+                    // 上传图标（Feather 风格线框，与项目现有图标体系一致）。
+                    svg {
+                        class: "w-5 h-5 shrink-0 text-[var(--color-paper-secondary)]",
+                        xmlns: "http://www.w3.org/2000/svg",
+                        view_box: "0 0 24 24",
+                        fill: "none",
+                        stroke: "currentColor",
+                        stroke_width: "1.8",
+                        stroke_linecap: "round",
+                        stroke_linejoin: "round",
+                        path { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }
+                        polyline { points: "17 8 12 3 7 8" }
+                        line {
+                            x1: "12",
+                            y1: "3",
+                            x2: "12",
+                            y2: "15",
+                        }
+                    }
+                    span { class: "text-sm text-[var(--color-paper-secondary)] shrink-0",
+                        "拖拽 · 点击 · 粘贴封面图"
+                    }
+                    // URL 文字链：阻止 label 的默认 file 触发，切换到 URL 输入模式。
+                    span {
+                        class: "text-[11px] font-medium tracking-wider text-[var(--color-paper-tertiary)] hover:text-[var(--color-paper-accent)] transition-colors ml-auto shrink-0",
+                        onclick: move |evt| {
+                            evt.prevent_default();
+                            evt.stop_propagation();
+                            cover_url_mode.set(true);
+                            cover_url_input.set(cover_image());
+                        },
+                        "或使用图片 URL"
+                    }
+                    // 隐藏的 file input，由 label 点击触发。
+                    input {
+                        r#type: "file",
+                        accept: "image/jpeg,image/png,image/gif,image/webp",
+                        class: "hidden",
+                        onchange: move |evt| {
+                            #[cfg(target_arch = "wasm32")]
+                            {
+                                if let Some(file) = evt.files().into_iter().next() {
+                                    if let Some(web_file) = file.get_web_file() {
+                                        spawn_cover_upload(web_file);
+                                    }
+                                }
+                            }
+                            // 注意：未重置 input.value，重复选择同一文件不会再次触发 onchange。
+                            // 这是 file input 的通用行为，封面场景影响可忽略。
+                        },
+                    }
+                }
+            }
+        }
+
+        // —— URL 输入模式（内联展开，空态时叠加在容器外，避免与拖拽区争抢点击）——
+        if cover_url_mode() && cover_image().is_empty() {
+            div { class: "flex items-center gap-2 mt-2",
+                input {
+                    class: "flex-1 {META_INPUT_CLASS}",
+                    placeholder: "粘贴图片 URL",
+                    value: "{cover_url_input}",
+                    oninput: move |evt| cover_url_input.set(evt.value()),
+                    onkeydown: move |evt| {
+                        if evt.key() == Key::Enter {
+                            let v = cover_url_input().trim().to_string();
+                            if !v.is_empty() {
+                                cover_image.set(v);
+                                cover_error.set(None);
+                                cover_url_mode.set(false);
+                            }
+                        }
+                    },
+                }
+                button {
+                    class: "shrink-0 px-3 py-1 text-xs text-[var(--color-paper-theme)] bg-[var(--color-paper-accent)] rounded-full hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer",
+                    onclick: move |_| {
+                        let v = cover_url_input().trim().to_string();
+                        if !v.is_empty() {
+                            cover_image.set(v);
+                            cover_error.set(None);
+                            cover_url_mode.set(false);
+                        }
+                    },
+                    "确认"
+                }
+                button {
+                    class: "shrink-0 px-3 py-1 text-xs text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors cursor-pointer",
+                    onclick: move |_| {
+                        cover_url_mode.set(false);
+                        cover_url_input.set(String::new());
+                    },
+                    "取消"
+                }
+            }
+        }
+
+        // 封面上传失败提示：复用页面红色条风格。
+        if let Some(err) = cover_error() {
+            div { class: "flex items-center justify-between gap-3 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30 mt-2",
+                span { "封面图: {err}" }
+                button {
+                    class: "shrink-0 text-red-400 hover:text-red-600 cursor-pointer text-lg leading-none",
+                    aria_label: "关闭提示",
+                    onclick: move |_| cover_error.set(None),
+                    "×"
                 }
             }
         }
