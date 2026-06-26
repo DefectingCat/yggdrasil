@@ -106,12 +106,7 @@ pub enum Route {
 /// 初始化主题提供者、全局用户上下文，并挂载样式表与 `Router`。
 #[component]
 pub fn AppRouter() -> Element {
-    // 获取当前主题以设置顶层 dark 类
-    let theme = use_theme_provider();
-    let theme_class = match theme() {
-        Theme::Dark => "dark",
-        Theme::Light => "",
-    };
+    let _theme = use_theme_provider();
 
     // 提供全局用户上下文，供登录状态与路由守卫使用
     let user = use_signal(|| None::<Arc<crate::models::user::PublicUser>>);
@@ -122,7 +117,7 @@ pub fn AppRouter() -> Element {
         document::Stylesheet { href: "/style.css" }
         document::Stylesheet { href: "/highlight.css" }
         document::Title { "Yggdrasil Blog" }
-        div { class: "{theme_class}",
+        div {
             ThemePreload {}
             Router::<Route> {}
         }
