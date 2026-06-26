@@ -555,12 +555,6 @@ fn write_editor(post_id: Option<i32>) -> Element {
 /// 封面上传子组件。
 ///
 /// 封装封面图的全部状态与交互：拖拽/粘贴/选择文件上传、URL 输入、预览、移除。
-/// 通过 `cover_image` signal 与父组件双向绑定——子组件写入最终 URL，
-/// 父组件读取它用于保存。其余上传中间态（uploading/error/url/drag）对本组件私有。
-///
-/// 封面上传子组件。
-///
-/// 封装封面图的全部状态与交互：拖拽/粘贴/选择文件上传、URL 输入、预览、移除。
 /// 通过两个 signal 与父组件双向绑定：
 /// - `cover_image`：子组件写入最终 URL，父组件读取用于保存；
 /// - `cover_uploading`：子组件上传时置 true，父组件在 `on_submit` 读取以拦截
