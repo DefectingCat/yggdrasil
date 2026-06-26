@@ -76,6 +76,8 @@ fn write_editor(post_id: Option<i32>) -> Element {
     let mut slug = use_signal(|| "".to_string());
     let mut tags = use_signal(|| "".to_string());
     let mut cover_image = use_signal(|| "".to_string());
+    // 封面上传中状态：由子组件 CoverUploader 写入，本组件在 on_submit 读取以拦截保存。
+    let mut cover_uploading = use_signal(|| false);
     let mut status = use_signal(|| "draft".to_string());
     let mut content = use_signal(|| "".to_string());
     // 页面与编辑器加载、保存、错误、成功等状态。
@@ -247,6 +249,12 @@ fn write_editor(post_id: Option<i32>) -> Element {
             return;
         }
         drop(in_flight);
+
+        // 封面图上传中拦截：防止保存半成品（cover_uploading 由子组件 CoverUploader 写入）。
+        if cover_uploading() {
+            error.set(Some("封面图正在上传，请等待完成后再保存".to_string()));
+            return;
+        }
 
         if title().trim().is_empty() {
             error.set(Some("标题不能为空".to_string()));
@@ -441,7 +449,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     }
 
                     // 封面图上传区（抽取为子组件 CoverUploader，见文件末尾）。
-                    CoverUploader { cover_image }
+                    CoverUploader { cover_image, cover_uploading }
                 }
 
                 // 编辑器区域 - 整页滚动下用视口高度，保证充裕的编辑空间。
@@ -550,12 +558,20 @@ fn write_editor(post_id: Option<i32>) -> Element {
 /// 通过 `cover_image` signal 与父组件双向绑定——子组件写入最终 URL，
 /// 父组件读取它用于保存。其余上传中间态（uploading/error/url/drag）对本组件私有。
 ///
+/// 封面上传子组件。
+///
+/// 封装封面图的全部状态与交互：拖拽/粘贴/选择文件上传、URL 输入、预览、移除。
+/// 通过两个 signal 与父组件双向绑定：
+/// - `cover_image`：子组件写入最终 URL，父组件读取用于保存；
+/// - `cover_uploading`：子组件上传时置 true，父组件在 `on_submit` 读取以拦截
+///   上传中的保存（避免封面 URL 尚未落定就提交导致封面丢失）。
+/// 其余上传中间态（error/url/drag）对本组件私有。
+///
 /// 从 `write_editor` 抽取以降低 god component 复杂度（见 dioxus-render-purity skill）。
 #[component]
 #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
-fn CoverUploader(cover_image: Signal<String>) -> Element {
-    // 封面图上传状态：uploading 进度态、错误消息、URL 输入框展开、拖拽高亮。
-    let mut cover_uploading = use_signal(|| false);
+fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> Element {
+    // 封面图上传状态：错误消息、URL 输入框展开、拖拽高亮（cover_uploading 由父组件传入）。
     let mut cover_error = use_signal(|| None::<String>);
     let mut cover_url_mode = use_signal(|| false);
     let mut cover_drag_active = use_signal(|| false);
