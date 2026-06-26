@@ -10,14 +10,14 @@ use dioxus::prelude::*;
 /// - `content_html`：服务端渲染的文章 HTML 字符串
 ///
 /// 关键行为：
-/// - 在 `target_arch = "wasm32"` 环境下执行 `post-content.js`（代码块复制）。
+/// - 在 `target_arch = "wasm32"` 环境下调用 `window.__initPostContent` 初始化代码块
+///   复制按钮（`yggdrasil-core.js` 已由 `Dioxus.toml` 全局注入）。
 ///   灯箱（图片灯箱 + 懒加载）改由 `Dioxus.toml` 全局注入 `lightbox.js`，
 ///   这里仅设置其初始化配置 `__lightboxSelectors` 并兜底调用。
 #[component]
 pub fn PostContent(content_html: String) -> Element {
     #[cfg(target_arch = "wasm32")]
     use_effect(move || {
-        let _ = js_sys::eval(include_str!("../../../public/js/post-content.js"));
         let _ = js_sys::eval("window.__initPostContent('.post-content')");
         // lightbox 改由 Dioxus.toml 全局 <script src> 加载（不再 include_str!）。
         // 双保险契约：先设配置，若 lightbox.js 已加载则立即调用；
