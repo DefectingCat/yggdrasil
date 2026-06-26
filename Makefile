@@ -60,12 +60,15 @@ test:
 
 # 只编译当前 crate 的文档（--no-deps 跳过依赖，--document-private-items
 # 让纯 binary crate 的内部模块/私有项也进文档，否则页面基本是空的）。
+# RUSTDOCFLAGS 把 rustdoc 的 --default-theme=ayu 透传过去——cargo doc 本身
+# 无主题参数，但会把该环境变量转交给底层 rustdoc。注意它是默认值，浏览器
+# 若已记住上次的主题选择（localStorage）则不会被覆盖。
 doc:
-	@cargo doc --no-deps --document-private-items
+	@RUSTDOCFLAGS="--default-theme=ayu" cargo doc --no-deps --document-private-items
 
 # 同 doc，生成完自动用浏览器打开。
 doc-open:
-	@cargo doc --no-deps --document-private-items --open
+	@RUSTDOCFLAGS="--default-theme=ayu" cargo doc --no-deps --document-private-items --open
 
 clean:
 	@cargo clean
