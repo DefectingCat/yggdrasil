@@ -40,34 +40,6 @@ pub fn PostsPage(page: i32) -> Element {
     let mut total = use_signal(|| 0_i64);
     let mut loading = use_signal(|| true);
     let mut deleting = use_signal(|| None::<i32>);
-    let mut rebuilding = use_signal(|| false);
-    let mut rebuild_result = use_signal(|| Option::<String>::None);
-
-    // 重建文章渲染缓存：rebuild_all 为 false 时仅重建 content_html 为空的文章，
-    // 为 true 时重建所有文章（用于语法/渲染逻辑升级后批量刷新已有内容）。
-    let mut do_rebuild = move |rebuild_all: bool| {
-        rebuilding.set(true);
-        rebuild_result.set(None);
-        spawn(async move {
-            match rebuild_content_html(rebuild_all).await {
-                Ok(RebuildResult { rebuilt, failed, errors }) => {
-                    if failed > 0 {
-                        let mut msg = format!("已重建 {rebuilt} 篇，失败 {failed} 篇");
-                        if let Some(first) = errors.first() {
-                            msg.push_str(&format!("\n{first}"));
-                        }
-                        rebuild_result.set(Some(msg));
-                    } else {
-                        rebuild_result.set(Some(format!("已重建 {rebuilt} 篇文章")));
-                    }
-                }
-                Err(e) => {
-                    rebuild_result.set(Some(format!("失败: {e}")));
-                }
-            }
-            rebuilding.set(false);
-        });
-    };
 
     // 页码变化时加载分页数据：WASM 前端请求接口，SSR 直接结束加载。
     use_effect(move || {
@@ -105,46 +77,14 @@ pub fn PostsPage(page: i32) -> Element {
             div { class: "flex items-center justify-between",
                 h1 { class: "text-2xl font-bold text-paper-primary", "文章管理" }
                 div { class: "flex items-center gap-3",
-                    div { class: "group relative",
-                        button {
-                            class: if rebuilding() { "px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all" },
-                            disabled: rebuilding(),
-                            onclick: move |_| do_rebuild(false),
-                            if rebuilding() {
-                                "重建中..."
-                            } else {
-                                "重建内容"
-                            }
-                        }
-                        div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-paper-primary text-paper-theme shadow-lg z-50",
-                            "重建 content_html 为空的文章渲染缓存"
-                        }
-                    }
-                    div { class: "group relative",
-                        button {
-                            class: if rebuilding() { "px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all" },
-                            disabled: rebuilding(),
-                            onclick: move |_| do_rebuild(true),
-                            if rebuilding() {
-                                "重建中..."
-                            } else {
-                                "重建全部"
-                            }
-                        }
-                        div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-paper-primary text-paper-theme shadow-lg z-50",
-                            "重建所有文章的渲染缓存（含已有内容）"
-                        }
-                    }
+                    // 重建缓存工具条（抽取为子组件 RebuildCacheBar，见文件末尾）。
+                    RebuildCacheBar {}
                     Link {
                         class: "px-4 py-2 bg-paper-accent text-paper-theme rounded-full text-sm font-medium hover:brightness-110 active:scale-[0.98] transition-all duration-200 cursor-pointer",
                         to: Route::Write {},
                         "+ 写文章"
                     }
                 }
-            }
-
-            if let Some(msg) = rebuild_result() {
-                div { class: "text-sm text-paper-secondary px-1", "{msg}" }
             }
 
             if loading() && posts().is_empty() {
@@ -211,6 +151,87 @@ pub fn PostsPage(page: i32) -> Element {
                     },
                     unit: "篇",
                 }
+            }
+        }
+    }
+}
+
+/// 重建内容缓存工具条子组件。
+///
+/// 封装「重建内容 / 重建全部」两个按钮及其状态：重建中态（`rebuilding`）、
+/// 结果消息（`rebuild_result`）、以及 `do_rebuild` 异步闭包。完全自洽，与父组件
+/// 无任何状态共享。
+///
+/// 从 `PostsPage` 抽取以降低 god component 复杂度（见 dioxus-render-purity skill）。
+#[component]
+#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
+fn RebuildCacheBar() -> Element {
+    let mut rebuilding = use_signal(|| false);
+    let mut rebuild_result = use_signal(|| Option::<String>::None);
+
+    // 重建文章渲染缓存：rebuild_all 为 false 时仅重建 content_html 为空的文章，
+    // 为 true 时重建所有文章（用于语法/渲染逻辑升级后批量刷新已有内容）。
+    let mut do_rebuild = move |rebuild_all: bool| {
+        rebuilding.set(true);
+        rebuild_result.set(None);
+        spawn(async move {
+            match rebuild_content_html(rebuild_all).await {
+                Ok(RebuildResult { rebuilt, failed, errors }) => {
+                    if failed > 0 {
+                        let mut msg = format!("已重建 {rebuilt} 篇，失败 {failed} 篇");
+                        if let Some(first) = errors.first() {
+                            msg.push_str(&format!("\n{first}"));
+                        }
+                        rebuild_result.set(Some(msg));
+                    } else {
+                        rebuild_result.set(Some(format!("已重建 {rebuilt} 篇文章")));
+                    }
+                }
+                Err(e) => {
+                    rebuild_result.set(Some(format!("失败: {e}")));
+                }
+            }
+            rebuilding.set(false);
+        });
+    };
+
+    rsx! {
+        // 垂直容器：上方按钮行（与父级 + 写文章 同级水平排列），下方重建结果消息。
+        div { class: "flex flex-col gap-2",
+            div { class: "flex items-center gap-3",
+                div { class: "group relative",
+                    button {
+                        class: if rebuilding() { "px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all" },
+                        disabled: rebuilding(),
+                        onclick: move |_| do_rebuild(false),
+                        if rebuilding() {
+                            "重建中..."
+                        } else {
+                            "重建内容"
+                        }
+                    }
+                    div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-paper-primary text-paper-theme shadow-lg z-50",
+                        "重建 content_html 为空的文章渲染缓存"
+                    }
+                }
+                div { class: "group relative",
+                    button {
+                        class: if rebuilding() { "px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all" },
+                        disabled: rebuilding(),
+                        onclick: move |_| do_rebuild(true),
+                        if rebuilding() {
+                            "重建中..."
+                        } else {
+                            "重建全部"
+                        }
+                    }
+                    div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-paper-primary text-paper-theme shadow-lg z-50",
+                        "重建所有文章的渲染缓存（含已有内容）"
+                    }
+                }
+            }
+            if let Some(msg) = rebuild_result() {
+                div { class: "text-sm text-paper-secondary px-1", "{msg}" }
             }
         }
     }
