@@ -39,7 +39,7 @@ describe('startThemeTransition', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(false);
   });
 
-  it('主路径:有 startViewTransition 时调用它,callback 切换 dark class', async () => {
+  it('主路径:有 startViewTransition 时调用它,注入变量,callback 切换 dark class', async () => {
     const cbRef: { cb: (() => void) | null } = { cb: null };
     const readyP = Promise.resolve();
     const finishedP = Promise.resolve();
@@ -53,13 +53,14 @@ describe('startThemeTransition', () => {
       writable: true,
     });
 
-    // Mock animate on documentElement (happy-dom 不支持 pseudoElement)
-    const animateSpy = vi.fn(() => ({ finished: Promise.resolve() }));
-    document.documentElement.animate = animateSpy as unknown as typeof document.documentElement.animate;
-
     window.__startThemeTransition(100, 200);
 
     expect(startVT).toHaveBeenCalledTimes(1);
+
+    // CSS 变量应注入
+    expect(document.documentElement.style.getPropertyValue('--tt-x')).toBe('100px');
+    expect(document.documentElement.style.getPropertyValue('--tt-y')).toBe('200px');
+    expect(document.documentElement.style.getPropertyValue('--tt-r')).toMatch(/^\d+(\.\d+)?px$/);
 
     // is-theme-transitioning 应在 VT 之前添加
     expect(document.documentElement.classList.contains('is-theme-transitioning')).toBe(true);
@@ -68,23 +69,13 @@ describe('startThemeTransition', () => {
     cbRef.cb!();
     expect(document.documentElement.classList.contains('dark')).toBe(true);
 
-    // ready 后通过 Web Animations API 控制动画
-    await readyP;
-    await Promise.resolve();
-    // animate 应被调用一次:clip-path 展开 on new
-    expect(animateSpy).toHaveBeenCalledTimes(1);
-    // 调用应包含 clipPath + pseudoElement
-    const calls = animateSpy.mock.calls as unknown[][];
-    const newCall = calls[0];
-    expect(newCall[0]).toHaveProperty('clipPath');
-    expect(newCall[1]).toHaveProperty('pseudoElement', '::view-transition-new(root)');
-
-    // finished 后移除 is-theme-transitioning
+    // finished 后移除 is-theme-transitioning 和 CSS 变量
     await finishedP;
     await Promise.resolve();
     // happy-dom microtask 可能需要额外 tick
     await new Promise((r) => setTimeout(r, 0));
     expect(document.documentElement.classList.contains('is-theme-transitioning')).toBe(false);
+    expect(document.documentElement.style.getPropertyValue('--tt-x')).toBe('');
 
     delete (document as unknown as { startViewTransition?: unknown }).startViewTransition;
   });

@@ -1,21 +1,13 @@
 /**
  * 圆形展开主题切换动画(View Transitions API)。
  *
- * 点击按钮时,新主题页面从点击点 (x,y) 以圆形向外展开覆盖全屏。
- *
- * 实现方式:使用 Web Animations API 的 pseudoElement 选项,在 vt.ready 中
- * 直接对 ::view-transition-old/new(root) 伪元素创建动画。相比注入 <style>
- * + @keyframes 的旧方案,优势在于:
- *   - Web Animation 优先级高于 CSS 动画(包括 UA 默认的 fade-in/out),
- *     天然覆盖,无需 !important 或担心特异性冲突;
- *   - 每次调用产生独立的 Animation 对象,不存在 <style> 残留导致后续
- *     切换动画失效的问题;
- *   - 无需管理 prevStyleEl 的生命周期。
- *
- * mix-blend-mode: normal 通过 style.css 静态设置(不可动画属性)。
- * CSS transition 在 VT 期间通过 .is-theme-transitioning class 全局禁用。
- *
- * 降级:无 startViewTransition 或 prefers-reduced-motion 时瞬切 dark class。
+ * 采用纯 CSS 配合 CSS 变量的实现方案。
+ * 核心策略:始终让"暗色层"在上方,通过 clip-path 揭示下方的"亮色层"。
+ * - 亮 -> 暗: NEW 是暗色(在上方),从小圆扩大(`tt-expand`)覆盖底部的 OLD。
+ * - 暗 -> 亮: OLD 是暗色(在上方),从大圆缩小(`tt-shrink`)揭开底部的 NEW。
+ * 
+ * 相比 WAAPI 或动态注入 <style>,这种方式完全没有特异性冲突、DOM 残留或
+ * API 优先级 bug,是目前最稳定的 VT 主题切换方案。
  */
 
 function prefersReducedMotion(): boolean {
@@ -53,8 +45,6 @@ function applyDarkClass(isDark: boolean): void {
 
 export function startThemeTransition(x: number, y: number): void {
   const html = document.documentElement;
-  // 目标主题从 DOM 现状推导,不依赖外部传入——避免与 Rust Signal 状态不同步
-  // 导致方向错乱(isDark 传反而 toggle 成 no-op,新旧快照一样看不到动画)。
   const isDark = !html.classList.contains('dark');
   console.log('[tt] ENTER', { x, y, isDark, domHasDark: html.classList.contains('dark') });
 
@@ -69,6 +59,11 @@ export function startThemeTransition(x: number, y: number): void {
 
   const maxR = maxCornerDistance(x, y);
 
+  // 注入动画需要的 CSS 变量
+  html.style.setProperty('--tt-x', `${x}px`);
+  html.style.setProperty('--tt-y', `${y}px`);
+  html.style.setProperty('--tt-r', `${maxR}px`);
+
   // 禁用所有 CSS transition,确保 VT 截图是最终颜色
   html.classList.add('is-theme-transitioning');
 
@@ -81,27 +76,7 @@ export function startThemeTransition(x: number, y: number): void {
   });
 
   vt.ready
-    .then(() => {
-      console.log('[tt] ready, animating clip-path via WAAPI');
-      // CSS 已通过 animation:none + opacity:1 (!important) 锁定两层:
-      // OLD 保持完全可见(暗色底图),NEW 保持完全不透明。
-      // WAAPI 只需控制 NEW 的 clip-path 实现圆形展开。
-      // script-created Animation 优先级高于 CSS animation(已被 none 禁用),
-      // 只添加 clip-path 动画,不与 CSS 冲突。
-      document.documentElement.animate(
-        {
-          clipPath: [
-            `circle(0px at ${x}px ${y}px)`,
-            `circle(${maxR}px at ${x}px ${y}px)`,
-          ],
-        },
-        {
-          duration: 400,
-          easing: 'ease-out',
-          pseudoElement: '::view-transition-new(root)',
-        },
-      );
-    })
+    .then(() => console.log('[tt] ready OK'))
     .catch(() => {});
 
   vt.finished
@@ -109,5 +84,9 @@ export function startThemeTransition(x: number, y: number): void {
     .catch((e) => console.log('[tt] VT REJECT:', e))
     .finally(() => {
       html.classList.remove('is-theme-transitioning');
+      // 清理 CSS 变量
+      html.style.removeProperty('--tt-x');
+      html.style.removeProperty('--tt-y');
+      html.style.removeProperty('--tt-r');
     });
 }

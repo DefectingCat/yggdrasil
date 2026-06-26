@@ -1,13 +1,53 @@
 /* ========== 主题切换圆形展开(View Transitions API) ========== */
 
-/* 不用 animation: none — Chrome 对 VT 伪元素设置 animation:none 后
-   会阻止 WAAPI 的 clip-path 动画生效(暗→亮方向完全看不到动画)。
-   改为用 opacity:1 !important 锁定两层不透明度:UA 的 fade-in/out 动画
-   技术上还在运行,但 !important 阻止它修改 opacity,视觉上等于无动画。 */
+/* 取消所有 UA 默认的动画和颜色混合 */
 ::view-transition-old(root),
 ::view-transition-new(root) {
-  opacity: 1 !important;
-  mix-blend-mode: normal !important;
+  animation: none;
+  mix-blend-mode: normal;
+  display: block;
+}
+
+/* =========================================================================
+   设计策略：
+   无论方向，我们始终让“暗色层”在上面，并对其使用 clip-path。
+   - 亮->暗：NEW 是暗色，放在上层，从小圆扩展。
+   - 暗->亮：OLD 是暗色，放在上层，从大圆收缩。
+   这样就能保证无论哪个方向，都是“暗色吞噬亮色”或“亮色穿透暗色”。
+   ========================================================================= */
+
+/* 默认情况：从暗到亮 (Dark -> Light)
+   此时 DOM 上的 .dark 已经被移除，目标是亮色(NEW)。
+   策略：把暗色旧图(OLD)放在上层，缩小它的 clip-path，揭开底部的亮色新图(NEW)。 */
+::view-transition-old(root) {
+  z-index: 2;
+  animation: tt-shrink 0.4s ease-out forwards;
+}
+::view-transition-new(root) {
+  z-index: 1;
+}
+
+/* 切换到暗色情况：从亮到暗 (Light -> Dark)
+   此时 DOM 上已加上 .dark，目标是暗色(NEW)。
+   策略：把暗色新图(NEW)放在上层，放大它的 clip-path，覆盖底部的亮色旧图(OLD)。 */
+.dark::view-transition-old(root) {
+  z-index: 1;
+  animation: none;
+}
+.dark::view-transition-new(root) {
+  z-index: 2;
+  animation: tt-expand 0.4s ease-out forwards;
+}
+
+/* CSS 变量由 JS 注入到 html style 中 */
+@keyframes tt-expand {
+  from { clip-path: circle(0px at var(--tt-x) var(--tt-y)); }
+  to   { clip-path: circle(var(--tt-r) at var(--tt-x) var(--tt-y)); }
+}
+
+@keyframes tt-shrink {
+  from { clip-path: circle(var(--tt-r) at var(--tt-x) var(--tt-y)); }
+  to   { clip-path: circle(0px at var(--tt-x) var(--tt-y)); }
 }
 
 /* 在 View Transition 期间强制禁用所有 CSS 过渡,
