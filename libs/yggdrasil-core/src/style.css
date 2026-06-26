@@ -1,34 +1,12 @@
 /* ========== 主题切换圆形展开(View Transitions API) ========== */
 
-/* VT 回调期间临时冻结所有 CSS 过渡。
-   原因:body 有 transition: background-color 0.3s(input.css),
-   toggle dark class 后真实渲染的背景色要 0.3s 才过渡到新主题。
-   而 VT 在 toggle 后的下一帧(~16ms)拍 NEW 快照——此时背景色才走了 ~5%,
-   新旧两张快照几乎一样,圆形展开就看不出颜色差。
-   冻结过渡让 NEW 快照立即拿到新主题配色,圆形才有可见的颜色对比。 */
-html.vt-freeze,
-html.vt-freeze * {
+/* 在 View Transition 期间强制禁用所有 CSS 过渡，确保截图捕获的是最终状态。
+   不要在这里设置 ::view-transition-old/new 的 animation:
+   静态 animation: none 会让 new 在注入 @keyframes 之前完全不透明地覆盖 old,
+   导致暗→亮方向看不到动画。所有 VT 伪元素样式由 JS 在 vt.ready 中统一注入。 */
+html.is-theme-transitioning,
+html.is-theme-transitioning *,
+html.is-theme-transitioning *::before,
+html.is-theme-transitioning *::after {
   transition: none !important;
 }
-
-/* 取消默认交叉淡入淡出,由 clip-path: circle() 接管新快照的展开。 */
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation: none;
-  mix-blend-mode: normal;
-}
-
-::view-transition-new(root) {
-  /* --tt-x / --tt-y / --tt-max-r 由 JS 在 html 上设。 */
-  animation: tt-reveal 0.4s ease-out;
-}
-
-@keyframes tt-reveal {
-  from {
-    clip-path: circle(0px at var(--tt-x, 0px) var(--tt-y, 0px));
-  }
-  to {
-    clip-path: circle(var(--tt-max-r, 100vmax) at var(--tt-x, 0px) var(--tt-y, 0px));
-  }
-}
-

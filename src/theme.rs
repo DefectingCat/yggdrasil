@@ -92,28 +92,19 @@ fn detect_initial_theme() -> Theme {
 /// 提供主题上下文的 Hook。
 ///
 /// 初始化时按 SSR Cookie → WASM localStorage → 系统偏好的顺序检测主题；
-/// 主题变化时同步更新 HTML 根元素的 `dark` class 与 localStorage。
+/// 主题变化时将值持久化到 localStorage。
+///
+/// `<html>` 的 `dark` class 不在此处管理。WASM 端由 `ThemeToggle` 的 onclick
+/// 通过 `yggdrasil-core.js` 的圆形展开动画在 View Transition 回调里同步 toggle。
+/// 初始 class 由 `ThemePreload` 首屏脚本设置,避免闪烁。
 pub fn use_theme_provider() -> Signal<Theme> {
     let theme = use_signal(detect_initial_theme);
 
     use_effect(move || {
+        let current = theme();
         #[cfg(target_arch = "wasm32")]
         {
-            let current = theme();
             if let Some(window) = web_sys::window() {
-                // 同步 HTML 根元素的 dark class，用于 Tailwind dark mode。
-                if let Some(document) = window.document() {
-                    if let Some(html) = document.document_element() {
-                        match current {
-                            Theme::Dark => {
-                                let _ = html.class_list().add_1("dark");
-                            }
-                            Theme::Light => {
-                                let _ = html.class_list().remove_1("dark");
-                            }
-                        }
-                    }
-                }
                 // 将当前主题持久化到 localStorage。
                 if let Ok(Some(storage)) = window.local_storage() {
                     let theme_str = match current {
@@ -124,6 +115,8 @@ pub fn use_theme_provider() -> Signal<Theme> {
                 }
             }
         }
+        // 避免 unused 警告:非 wasm 构建下 current 未被读取。
+        let _ = current;
     });
 
     use_context_provider(|| theme);
@@ -160,12 +153,14 @@ pub fn ThemePreload() -> Element {
 }
 
 /// 主题切换按钮组件。
-// evt 仅在 wasm32 的圆形展开动画里使用(取点击坐标),服务端构建剥离,
-// 故允许非 wasm 构建下的 unused_variables(与 Write 组件同模式)。
+// evt 仅在 wasm32 用于取点击坐标,服务端构建剥离,故允许非 wasm 的 unused_variables。
 #[cfg_attr(not(target_arch = "wasm32"), allow(unused_variables))]
 #[component]
 pub fn ThemeToggle() -> Element {
     let mut theme = use_theme();
+    // generation:每次点击递增。延迟回调检查自己的 gen 是否最新,过期则跳过 set。
+    // 解决连续点击时多个 spawn_local 堆积导致的状态错乱。
+    let mut click_gen = use_signal(|| 0u32);
 
     rsx! {
         button {
@@ -176,18 +171,35 @@ pub fn ThemeToggle() -> Element {
                 let next = theme().toggle();
                 #[cfg(target_arch = "wasm32")]
                 {
-                    let is_dark = next == Theme::Dark;
                     let coords = evt.client_coordinates();
-                    // 兜底:若 yggdrasil-core.js 尚未加载完(__startThemeTransition 未定义),
-                    // 跳过动画(后续 use_effect 仍会同步 dark class 与 localStorage)。
+                    let x = coords.x;
+                    let y = coords.y;
+                    // JS 从 DOM 现状推导目标主题(不传 isDark),避免与 Signal 状态不同步。
                     let _ = js_sys::eval(&format!(
                         "if (window.__startThemeTransition) \
-                         window.__startThemeTransition({x}, {y}, {is_dark})",
-                        x = coords.x,
-                        y = coords.y,
+                         window.__startThemeTransition({x}, {y});",
+                        x = x,
+                        y = y,
                     ));
+                    // theme.set 推迟到动画结束:其触发的 Dioxus 微任务重渲染会打断 VT。
+                    // gen 确保连续点击只有最新回调 set。JS 已自治切换 dark class,
+                    // 动画完成后再更新 Dioxus 状态，避免组件重渲染可能带来的干扰
+                    let gen = click_gen() + 1;
+                    click_gen.set(gen);
+                    let mut theme_clone = theme;
+                    let mut gen_clone = click_gen;
+                    wasm_bindgen_futures::spawn_local(async move {
+                        crate::utils::time::sleep_ms(450).await;
+                        if gen_clone() == gen {
+                            theme_clone.set(next);
+                        }
+                    });
+                    return;
                 }
-                theme.set(next);
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    theme.set(next);
+                }
             },
             if theme() == Theme::Dark {
                 svg {

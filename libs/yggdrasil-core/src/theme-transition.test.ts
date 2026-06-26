@@ -2,7 +2,10 @@
  * theme-transition 测试。
  *
  * happy-dom 不提供 document.startViewTransition,天然覆盖降级路径(瞬切 dark class)。
- * 主路径通过 mock startViewTransition 验证:调用它、传对参数、设 CSS 变量。
+ * 主路径通过 mock startViewTransition 验证:调用它、设 CSS 变量。
+ *
+ * 注意:startThemeTransition 只接收 (x, y),目标主题(亮/暗)从 DOM 的 dark class
+ * 现状推导(取反),不依赖外部传入——避免与调用方状态不同步。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import './index';
@@ -10,43 +13,43 @@ import './index';
 describe('startThemeTransition', () => {
   beforeEach(() => {
     document.documentElement.classList.remove('dark');
-    document.documentElement.classList.remove('vt-freeze');
     document.documentElement.style.cssText = '';
+    document.head.querySelectorAll('style').forEach((s) => {
+      if (s.textContent?.includes('tt-')) s.remove();
+    });
     vi.restoreAllMocks();
   });
   afterEach(() => {
     document.documentElement.classList.remove('dark');
-    document.documentElement.classList.remove('vt-freeze');
     document.documentElement.style.cssText = '';
+    document.head.querySelectorAll('style').forEach((s) => {
+      if (s.textContent?.includes('tt-')) s.remove();
+    });
   });
 
-  it('降级:无 startViewTransition 时直接 toggle dark class(切到 dark)', () => {
+  it('降级:无 startViewTransition 时,亮→暗(无 dark class 时 add)', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(false);
 
-    window.__startThemeTransition(100, 200, true);
+    window.__startThemeTransition(100, 200);
 
     expect(document.documentElement.classList.contains('dark')).toBe(true);
   });
 
-  it('降级:切到 light 时移除 dark class', () => {
+  it('降级:无 startViewTransition 时,暗→亮(有 dark class 时 remove)', () => {
     document.documentElement.classList.add('dark');
 
-    window.__startThemeTransition(100, 200, false);
+    window.__startThemeTransition(100, 200);
 
     expect(document.documentElement.classList.contains('dark')).toBe(false);
   });
 
-  it('降级时不设 CSS 变量(--tt-x/y/max-r 仅主路径用)', () => {
-    window.__startThemeTransition(100, 200, true);
-
-    expect(document.documentElement.style.getPropertyValue('--tt-x')).toBe('');
-  });
-
-  it('主路径:有 startViewTransition 时调用它并设 CSS 变量', () => {
+  it('主路径:有 startViewTransition 时调用它,并注入带 keyframes 的 style', async () => {
     const cbRef: { cb: (() => void) | null } = { cb: null };
+    const readyP = Promise.resolve();
+    const finishedP = Promise.resolve();
     const startVT = vi.fn((cb: () => void) => {
       cbRef.cb = cb;
-      return { finished: Promise.resolve(), skipTransition: () => {} };
+      return { ready: readyP, finished: finishedP, skipTransition: () => {} };
     });
     Object.defineProperty(document, 'startViewTransition', {
       value: startVT,
@@ -54,52 +57,28 @@ describe('startThemeTransition', () => {
       writable: true,
     });
 
-    window.__startThemeTransition(100, 200, true);
+    window.__startThemeTransition(100, 200);
 
-    // 调了 startViewTransition
     expect(startVT).toHaveBeenCalledTimes(1);
-    // 设了圆心与半径变量
-    expect(document.documentElement.style.getPropertyValue('--tt-x')).toBe('100px');
-    expect(document.documentElement.style.getPropertyValue('--tt-y')).toBe('200px');
-    // max-r 是个正数 px 值
-    expect(document.documentElement.style.getPropertyValue('--tt-max-r')).toMatch(/^\d+(\.\d+)?px$/);
-
-    // 回调里 toggle dark class(模拟浏览器截图前)
-    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    // callback 里根据 DOM 现状(无 dark)切到 dark
     cbRef.cb!();
     expect(document.documentElement.classList.contains('dark')).toBe(true);
-    // 回调里同时冻结 CSS 过渡,让 NEW 快照立即反映新主题配色
-    expect(document.documentElement.classList.contains('vt-freeze')).toBe(true);
 
-    delete (document as unknown as { startViewTransition?: unknown }).startViewTransition;
-  });
-
-  it('主路径:vt.finished 结束后移除 vt-freeze 并复位重入标志', async () => {
-    const finishedPromise = Promise.resolve();
-    const startVT = vi.fn((cb: () => void) => {
-      cb();
-      return { finished: finishedPromise, skipTransition: () => {} };
-    });
-    Object.defineProperty(document, 'startViewTransition', {
-      value: startVT,
-      configurable: true,
-      writable: true,
-    });
-
-    window.__startThemeTransition(0, 0, true);
-    // 回调执行后 freeze 已加
-    expect(document.documentElement.classList.contains('vt-freeze')).toBe(true);
-
-    await finishedPromise;
-    // 微任务:.finally 在 finished resolve 后于微任务阶段执行,等一轮
+    // ready 后注入带 keyframes 的 style
+    await readyP;
     await Promise.resolve();
-    expect(document.documentElement.classList.contains('vt-freeze')).toBe(false);
+    const style = document.head.querySelector('style');
+    expect(style).not.toBeNull();
+    expect(style?.textContent).toContain('circle(0px at 100px 200px)');
+    expect(style?.textContent).toMatch(/circle\(\d+(\.\d+)?px at 100px 200px\)/);
+    expect(style?.textContent).toContain('::view-transition-old(root)');
+    expect(style?.textContent).toContain('::view-transition-new(root)');
 
     delete (document as unknown as { startViewTransition?: unknown }).startViewTransition;
   });
 
   it('reduced-motion:即使有 startViewTransition 也走降级(瞬切)', () => {
-    const startVT = vi.fn(() => ({ finished: Promise.resolve(), skipTransition: () => {} }));
+    const startVT = vi.fn(() => ({ ready: Promise.resolve(), finished: Promise.resolve(), skipTransition: () => {} }));
     Object.defineProperty(document, 'startViewTransition', {
       value: startVT,
       configurable: true,
@@ -116,7 +95,7 @@ describe('startThemeTransition', () => {
       dispatchEvent: () => false,
     })));
 
-    window.__startThemeTransition(0, 0, true);
+    window.__startThemeTransition(0, 0);
 
     expect(startVT).not.toHaveBeenCalled();
     expect(document.documentElement.classList.contains('dark')).toBe(true);
