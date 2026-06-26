@@ -46,13 +46,11 @@ function applyDarkClass(isDark: boolean): void {
 export function startThemeTransition(x: number, y: number): void {
   const html = document.documentElement;
   const isDark = !html.classList.contains('dark');
-  console.log('[tt] ENTER', { x, y, isDark, domHasDark: html.classList.contains('dark') });
 
   const hasVT = typeof document.startViewTransition === 'function';
   const reduced = prefersReducedMotion();
 
   if (!hasVT || reduced) {
-    console.log('[tt] DEGRADE');
     applyDarkClass(isDark);
     return;
   }
@@ -68,21 +66,15 @@ export function startThemeTransition(x: number, y: number): void {
   html.classList.add('is-theme-transitioning');
 
   const vt = document.startViewTransition(() => {
-    console.log('[tt] CALLBACK set dark=', isDark);
     applyDarkClass(isDark);
     // 强制同步样式重算:确保 body 的 background-color 解析为目标值
     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     getComputedStyle(document.body).backgroundColor;
   });
 
-  vt.ready
-    .then(() => console.log('[tt] ready OK'))
-    .catch(() => {});
+  vt.ready.catch(() => {});
 
-  vt.finished
-    .then(() => console.log('[tt] VT finished OK'))
-    .catch((e) => console.log('[tt] VT REJECT:', e))
-    .finally(() => {
+  vt.finished.finally(() => {
       html.classList.remove('is-theme-transitioning');
       // 清理 CSS 变量
       html.style.removeProperty('--tt-x');
