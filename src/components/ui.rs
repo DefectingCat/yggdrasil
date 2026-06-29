@@ -207,6 +207,7 @@ pub fn FilterTabs(
     let mut indicator_style = use_signal(|| "left: 0px; width: 0px; opacity: 0;".to_string());
     let id_prefix = use_hook(|| TAB_GROUP_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
 
+    #[cfg_attr(not(target_arch = "wasm32"), allow(unused_variables))]
     let update_indicator = move |active: String| {
         spawn(async move {
             #[cfg(target_arch = "wasm32")]
@@ -254,11 +255,7 @@ pub fn FilterTabs(
                 button {
                     id: "tab-{id_prefix}-{value}",
                     key: "{value}",
-                    class: if active_value == *value {
-                        "cursor-pointer px-4 py-2 text-sm font-medium text-paper-primary transition-colors"
-                    } else {
-                        "cursor-pointer px-4 py-2 text-sm font-medium text-paper-secondary hover:text-paper-primary transition-colors"
-                    },
+                    class: if active_value == *value { "cursor-pointer px-4 py-2 text-sm font-medium text-paper-primary transition-colors" } else { "cursor-pointer px-4 py-2 text-sm font-medium text-paper-secondary hover:text-paper-primary transition-colors" },
                     onclick: {
                         let v = value.to_string();
                         move |_| {
