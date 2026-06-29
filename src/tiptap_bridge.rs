@@ -64,7 +64,8 @@ pub mod wasm {
     /// unchecked_into 只做编译期类型标注，不做运行时校验（Reflect.get 已保证拿到的是目标对象）。
     pub fn get_module() -> TiptapEditorModule {
         let window = web_sys::window().expect("no window");
-        let val = js_sys::Reflect::get(&window, &"TiptapEditor".into()).expect("window.TiptapEditor missing");
+        let val = js_sys::Reflect::get(&window, &"TiptapEditor".into())
+            .expect("window.TiptapEditor missing");
         val.unchecked_into::<TiptapEditorModule>()
     }
 
@@ -106,25 +107,25 @@ pub mod wasm {
         #[wasm_bindgen(method, setter, js_name = placeholder)]
         pub fn set_placeholder(this: &EditorOptions, v: &str);
 
-    /// 文档变更回调（ProseMirror transaction 提交时触发，参数为最新 Markdown）。
-    #[wasm_bindgen(method, setter, js_name = onUpdate)]
-    pub fn set_on_update(this: &EditorOptions, cb: &Closure<dyn FnMut(String)>);
+        /// 文档变更回调（ProseMirror transaction 提交时触发，参数为最新 Markdown）。
+        #[wasm_bindgen(method, setter, js_name = onUpdate)]
+        pub fn set_on_update(this: &EditorOptions, cb: &Closure<dyn FnMut(String)>);
 
-    /// JS 侧 onImageUpload: (file: File) => Promise<string>。
-    /// Rust closure 返回 js_sys::Promise，由 future_to_promise 包装。
-    #[wasm_bindgen(method, setter, js_name = onImageUpload)]
-    pub fn set_on_image_upload(
-        this: &EditorOptions,
-        cb: &Closure<dyn Fn(web_sys::File) -> js_sys::Promise>,
-    );
+        /// JS 侧 onImageUpload: (file: File) => Promise<string>。
+        /// Rust closure 返回 js_sys::Promise，由 future_to_promise 包装。
+        #[wasm_bindgen(method, setter, js_name = onImageUpload)]
+        pub fn set_on_image_upload(
+            this: &EditorOptions,
+            cb: &Closure<dyn Fn(web_sys::File) -> js_sys::Promise>,
+        );
 
-    /// 编辑器就绪回调（init 末尾同步触发一次）。
-    #[wasm_bindgen(method, setter, js_name = onReady)]
-    pub fn set_on_ready(this: &EditorOptions, cb: &Closure<dyn FnMut()>);
+        /// 编辑器就绪回调（init 末尾同步触发一次）。
+        #[wasm_bindgen(method, setter, js_name = onReady)]
+        pub fn set_on_ready(this: &EditorOptions, cb: &Closure<dyn FnMut()>);
 
-    /// 上传事件回调（coordinator.emit 时触发，携带 counts）。
-    #[wasm_bindgen(method, setter, js_name = onUploadEvent)]
-    pub fn set_on_upload_event(this: &EditorOptions, cb: &Closure<dyn FnMut(UploadEventJs)>);
+        /// 上传事件回调（coordinator.emit 时触发，携带 counts）。
+        #[wasm_bindgen(method, setter, js_name = onUploadEvent)]
+        pub fn set_on_upload_event(this: &EditorOptions, cb: &Closure<dyn FnMut(UploadEventJs)>);
     }
 
     // —— 上传事件（JS UploadEvent 的 Rust 映射）——
@@ -307,9 +308,7 @@ pub mod wasm {
             .map_err(|_| "上传响应类型异常".to_string())?;
 
         // 读响应体文本（无论 2xx 与否，服务端都返回 JSON）
-        let text_promise = resp
-            .text()
-            .map_err(|e| format!("读取响应失败: {:?}", e))?;
+        let text_promise = resp.text().map_err(|e| format!("读取响应失败: {:?}", e))?;
         let text_val = wasm_bindgen_futures::JsFuture::from(text_promise)
             .await
             .map_err(|e| format!("读取响应失败: {:?}", e))?;
@@ -355,6 +354,6 @@ pub mod wasm {
 /// server 构建剥离该子模块，故此重导出仅对 WASM 前端生效。
 #[cfg(target_arch = "wasm32")]
 pub use wasm::{
-    consume_upload_event, make_upload_closure, upload_image_file, EditorHandle, EditorOptions,
-    UploadEventJs, get_module,
+    consume_upload_event, get_module, make_upload_closure, upload_image_file, EditorHandle,
+    EditorOptions, UploadEventJs,
 };

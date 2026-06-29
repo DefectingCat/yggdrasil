@@ -151,7 +151,11 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        std::env::temp_dir().join(format!("yggdrasil_image_cache_test_{}_{}", nanos, std::process::id()))
+        std::env::temp_dir().join(format!(
+            "yggdrasil_image_cache_test_{}_{}",
+            nanos,
+            std::process::id()
+        ))
     }
 
     #[tokio::test]

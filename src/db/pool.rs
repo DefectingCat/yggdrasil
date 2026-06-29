@@ -22,9 +22,8 @@ use tokio_postgres::{Config, NoTls};
 ///
 /// 返回 `Err(String)` 而非 panic，调用方决定如何向用户报告错误。
 fn build_pg_config() -> Result<tokio_postgres::Config, String> {
-    let db_url = std::env::var("DATABASE_URL").map_err(|_| {
-        "DATABASE_URL environment variable not set".to_string()
-    })?;
+    let db_url = std::env::var("DATABASE_URL")
+        .map_err(|_| "DATABASE_URL environment variable not set".to_string())?;
     let mut pg_cfg = db_url
         .parse::<tokio_postgres::Config>()
         .map_err(|e| format!("Invalid DATABASE_URL format: {e}"))?;
@@ -36,7 +35,10 @@ fn build_pg_config() -> Result<tokio_postgres::Config, String> {
         .and_then(|s| s.parse::<u32>().ok())
         .unwrap_or(30);
     // 通过 libpq options 传递 GUC；tokio-postgres 在建连时执行。
-    pg_cfg.options(format!("-c statement_timeout={}", statement_timeout_secs * 1000));
+    pg_cfg.options(format!(
+        "-c statement_timeout={}",
+        statement_timeout_secs * 1000
+    ));
 
     Ok(pg_cfg)
 }
@@ -166,10 +168,7 @@ pub async fn get_conn_for_startup(
         match DB_POOL.get().await {
             Ok(conn) => {
                 if attempt > 1 {
-                    tracing::info!(
-                        "connected to database after {} attempt(s)",
-                        attempt
-                    );
+                    tracing::info!("connected to database after {} attempt(s)", attempt);
                 }
                 return Ok(conn);
             }

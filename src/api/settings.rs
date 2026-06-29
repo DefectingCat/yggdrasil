@@ -8,13 +8,13 @@
 
 use dioxus::prelude::*;
 
-use crate::models::settings::TrashSettings;
 #[cfg(feature = "server")]
 use crate::api::auth::get_current_admin_user;
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
 #[cfg(feature = "server")]
 use crate::db::pool::get_conn;
+use crate::models::settings::TrashSettings;
 
 /// 读取回收站配置。
 ///

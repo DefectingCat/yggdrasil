@@ -19,9 +19,9 @@ use crate::auth::session::get_session_from_ctx;
 use crate::auth::{password, session};
 #[cfg(feature = "server")]
 use crate::db::pool::get_conn;
+use crate::models::user::PublicUser;
 #[cfg(feature = "server")]
 use crate::models::user::{SessionUser, UserRole};
-use crate::models::user::PublicUser;
 
 #[cfg(feature = "server")]
 fn validate_username(username: &str) -> Result<(), String> {
@@ -119,12 +119,10 @@ pub async fn register(
 
     // Argon2 是 memory-hard 计算，必须在 spawn_blocking 中执行，避免阻塞 Tokio worker。
     let pw_for_hash = password.clone();
-    let password_hash = tokio::task::spawn_blocking(move || {
-        password::hash_password(&pw_for_hash)
-    })
-    .await
-    .map_err(|_| AppError::Internal("密码处理任务失败"))?
-    .map_err(|_| AppError::Internal("密码处理失败"))?;
+    let password_hash = tokio::task::spawn_blocking(move || password::hash_password(&pw_for_hash))
+        .await
+        .map_err(|_| AppError::Internal("密码处理任务失败"))?
+        .map_err(|_| AppError::Internal("密码处理失败"))?;
 
     // 使用 INSERT ON CONFLICT 原子性地完成“首个用户成为 admin”的竞争。
     // 若已有 admin 或用户名/邮箱冲突，RETURNING 将返回空。
@@ -149,7 +147,10 @@ pub async fn register(
 
     // 插入失败：区分是已有 admin 还是用户名/邮箱冲突。
     let admin_exists: bool = client
-        .query_one("SELECT EXISTS (SELECT 1 FROM users WHERE role = 'admin')", &[])
+        .query_one(
+            "SELECT EXISTS (SELECT 1 FROM users WHERE role = 'admin')",
+            &[],
+        )
         .await
         .map_err(AppError::query)?
         .get(0);

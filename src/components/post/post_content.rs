@@ -24,7 +24,7 @@ pub fn PostContent(content_html: String) -> Element {
         // 否则 lightbox.js 加载完后其 IIFE 尾部读到配置自启动。
         let _ = js_sys::eval(
             "window.__lightboxSelectors = ['.post-content', '.entry-cover']; \
-             if (window.__initLightbox) window.__initLightbox(window.__lightboxSelectors);"
+             if (window.__initLightbox) window.__initLightbox(window.__lightboxSelectors);",
         );
     });
 

@@ -13,7 +13,7 @@ use crate::api::posts::{get_post_stats, list_posts};
 #[cfg(target_arch = "wasm32")]
 use crate::api::posts::{PostListResponse, PostStatsResponse};
 use crate::components::skeletons::atoms::SkeletonBox;
-use crate::components::ui::{BTN_SECONDARY, ADMIN_CARD_CLASS};
+use crate::components::ui::{ADMIN_CARD_CLASS, BTN_SECONDARY};
 use crate::models::post::{PostListItem, PostStats};
 use crate::router::Route;
 

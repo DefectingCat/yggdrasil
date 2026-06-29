@@ -12,9 +12,9 @@ use axum::{
     response::Json,
 };
 #[cfg(feature = "server")]
-use std::net::SocketAddr;
-#[cfg(feature = "server")]
 use serde_json::{json, Value};
+#[cfg(feature = "server")]
+use std::net::SocketAddr;
 
 #[cfg(feature = "server")]
 use crate::auth::session::parse_session_token;
@@ -47,9 +47,7 @@ fn validate_image_magic_bytes(data: &[u8], mime_type: &str) -> bool {
         "image/gif" => data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a"),
         "image/webp" => {
             // RIFF....WEBP
-            data.len() >= 12
-                && &data[0..4] == b"RIFF"
-                && &data[8..12] == b"WEBP"
+            data.len() >= 12 && &data[0..4] == b"RIFF" && &data[8..12] == b"WEBP"
         }
         _ => false,
     }
@@ -448,8 +446,14 @@ mod tests {
 
     #[test]
     fn validate_jpeg_magic_bytes() {
-        assert!(super::validate_image_magic_bytes(&[0xFF, 0xD8, 0xFF], "image/jpeg"));
-        assert!(!super::validate_image_magic_bytes(&[0x89, 0x50], "image/jpeg"));
+        assert!(super::validate_image_magic_bytes(
+            &[0xFF, 0xD8, 0xFF],
+            "image/jpeg"
+        ));
+        assert!(!super::validate_image_magic_bytes(
+            &[0x89, 0x50],
+            "image/jpeg"
+        ));
     }
 
     #[test]
@@ -458,7 +462,10 @@ mod tests {
             &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
             "image/png"
         ));
-        assert!(!super::validate_image_magic_bytes(&[0xFF, 0xD8], "image/png"));
+        assert!(!super::validate_image_magic_bytes(
+            &[0xFF, 0xD8],
+            "image/png"
+        ));
     }
 
     #[test]
@@ -472,6 +479,9 @@ mod tests {
     fn validate_webp_magic_bytes() {
         let webp = b"RIFF\x00\x00\x00\x00WEBPVP8 ";
         assert!(super::validate_image_magic_bytes(&webp[..12], "image/webp"));
-        assert!(!super::validate_image_magic_bytes(&[0xFF, 0xD8], "image/webp"));
+        assert!(!super::validate_image_magic_bytes(
+            &[0xFF, 0xD8],
+            "image/webp"
+        ));
     }
 }

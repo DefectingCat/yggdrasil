@@ -77,7 +77,11 @@ pub enum CacheKey {
     /// 按标签查询的文章列表（不分页，返回全部）。
     PostsByTag(String),
     /// 按标签查询的分页文章列表。
-    PostsByTagPage { tag: String, page: i32, per_page: i32 },
+    PostsByTagPage {
+        tag: String,
+        page: i32,
+        per_page: i32,
+    },
     /// 文章统计信息。
     PostStats,
     /// 某篇文章下的评论列表。
@@ -760,5 +764,4 @@ mod tests {
         invalidate_search_results();
         assert!(get_search_results("tokio").await.is_none());
     }
-
 }

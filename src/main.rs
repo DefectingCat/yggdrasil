@@ -165,7 +165,9 @@ fn cache_control_for_path(
         || path == "/style.css"
         || path == "/highlight.css"
     {
-        return Some(HeaderValue::from_static("public, max-age=31536000, immutable"));
+        return Some(HeaderValue::from_static(
+            "public, max-age=31536000, immutable",
+        ));
     }
 
     // 公开页面：5 分钟新鲜期，过期后 1 小时内可提供过期内容并后台重新验证
@@ -190,7 +192,10 @@ async fn add_cache_control(
 
     if let Some(value) = cache_value {
         // 仅当响应尚未设置 Cache-Control 时才添加，避免覆盖已有策略
-        response.headers_mut().entry(header::CACHE_CONTROL).or_insert(value);
+        response
+            .headers_mut()
+            .entry(header::CACHE_CONTROL)
+            .or_insert(value);
     }
 
     response
@@ -215,7 +220,9 @@ fn main() {
         if std::env::var("DATABASE_URL").is_err() {
             tracing::error!("DATABASE_URL environment variable not set. Make sure .env exists or the variable is exported.");
             eprintln!("ERROR: DATABASE_URL environment variable not set");
-            eprintln!("HINT: create a .env file with DATABASE_URL=postgres://user:pass@host:5432/dbname");
+            eprintln!(
+                "HINT: create a .env file with DATABASE_URL=postgres://user:pass@host:5432/dbname"
+            );
             std::process::exit(1);
         }
 
@@ -290,10 +297,10 @@ fn main() {
 
         // 启动 Dioxus 服务端，返回构建好的 Axum Router
         dioxus::server::serve(|| async move {
+            use axum::http::StatusCode;
             use dioxus::server::{axum, DioxusRouterExt, ServeConfig};
             use std::time::Duration;
             use tower_http::timeout::TimeoutLayer;
-            use axum::http::StatusCode;
 
             // 启动后台定时任务：IP 信息清理
             tokio::spawn(async {
@@ -340,7 +347,9 @@ fn main() {
                 let generation = crate::ssr_cache::current_global_generation();
                 let is_get = req.method() == axum::http::Method::GET;
                 let (mut parts, body) = req.into_parts();
-                parts.extensions.insert(crate::ssr_cache::SsrGeneration(generation));
+                parts
+                    .extensions
+                    .insert(crate::ssr_cache::SsrGeneration(generation));
                 let mut response = next.run(axum::http::Request::from_parts(parts, body)).await;
                 if is_get {
                     response.headers_mut().insert(
@@ -364,9 +373,7 @@ fn main() {
                     StatusCode::REQUEST_TIMEOUT,
                     Duration::from_secs(300),
                 ))
-                .layer(axum::middleware::from_fn(
-                    crate::api::csrf::csrf_middleware,
-                ));
+                .layer(axum::middleware::from_fn(crate::api::csrf::csrf_middleware));
 
             // Dioxus 应用路由：自动挂载所有 server function 并渲染前端组件
             let dioxus_app =
@@ -377,9 +384,7 @@ fn main() {
             let mut app_routes = dioxus_app
                 .layer(axum::middleware::from_fn(ssr_generation_middleware))
                 .layer(axum::middleware::from_fn(add_cache_control))
-                .layer(axum::middleware::from_fn(
-                    crate::api::csrf::csrf_middleware,
-                ));
+                .layer(axum::middleware::from_fn(crate::api::csrf::csrf_middleware));
             if let Some(layer) = compression_layer_from_env() {
                 app_routes = app_routes.layer(layer);
             }
@@ -396,14 +401,8 @@ fn main() {
             // 优雅降级。生产环境应在反向代理后部署并配置 TRUSTED_PROXY_COUNT，
             // 使限流能拿到真实客户端 IP。
             let static_routes = axum::Router::new()
-                .route(
-                    "/healthz",
-                    axum::routing::get(crate::api::health::healthz),
-                )
-                .route(
-                    "/readyz",
-                    axum::routing::get(crate::api::health::readyz),
-                )
+                .route("/healthz", axum::routing::get(crate::api::health::healthz))
+                .route("/readyz", axum::routing::get(crate::api::health::readyz))
                 .route(
                     "/uploads/{*path}",
                     axum::routing::get(crate::api::image::serve_image),
@@ -434,8 +433,7 @@ mod tests {
     use axum::http::Method;
 
     fn cache_value(path: &str, method: Method) -> Option<String> {
-        cache_control_for_path(path, &method)
-            .map(|v| v.to_str().unwrap().to_string())
+        cache_control_for_path(path, &method).map(|v| v.to_str().unwrap().to_string())
     }
 
     #[test]

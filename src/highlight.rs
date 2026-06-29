@@ -25,9 +25,7 @@ pub mod server {
         tracing::info!(
             "SyntaxSet built: {} syntaxes, swift={:?}",
             built.syntaxes().len(),
-            built
-                .find_syntax_by_extension("swift")
-                .map(|s| &s.name)
+            built.find_syntax_by_extension("swift").map(|s| &s.name)
         );
         built
     });
@@ -257,7 +255,8 @@ mod tests {
     #[test]
     fn highlight_code_swift_keyword_and_func() {
         // Swift 关键字 func/import/let 应生成 declaration/keyword span，而不是纯文本。
-        let code = "import Foundation\nfunc greet(person: String) -> String {\n    return \"Hi\"\n}";
+        let code =
+            "import Foundation\nfunc greet(person: String) -> String {\n    return \"Hi\"\n}";
         let result = highlight_code(code, Some("swift"));
         assert!(
             result.contains("keyword"),
@@ -338,11 +337,7 @@ mod tests {
         // Zig 关键字 const/fn/pub 与内建函数 @import 都应被高亮。
         let code = "const std = @import(\"std\");\npub fn main() void {}";
         let result = highlight_code(code, Some("zig"));
-        assert!(
-            result.contains("keyword"),
-            "Zig 关键字未被识别: {}",
-            result
-        );
+        assert!(result.contains("keyword"), "Zig 关键字未被识别: {}", result);
         assert!(
             result.contains("name function"),
             "Zig 函数名未被识别: {}",
@@ -365,15 +360,7 @@ mod tests {
             "Zig u32 类型未被识别: {}",
             result
         );
-        assert!(
-            result.contains("string"),
-            "Zig 字符串未被识别: {}",
-            result
-        );
-        assert!(
-            result.contains("numeric"),
-            "Zig 数字未被识别: {}",
-            result
-        );
+        assert!(result.contains("string"), "Zig 字符串未被识别: {}", result);
+        assert!(result.contains("numeric"), "Zig 数字未被识别: {}", result);
     }
 }

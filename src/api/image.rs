@@ -12,7 +12,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 #[cfg(feature = "server")]
-use std::net::SocketAddr;
+use bytes::Bytes;
 #[cfg(feature = "server")]
 use moka::future::Cache;
 #[cfg(feature = "server")]
@@ -20,9 +20,9 @@ use moka::sync::Cache as SyncCache;
 #[cfg(feature = "server")]
 use serde::Deserialize;
 #[cfg(feature = "server")]
-use std::sync::LazyLock;
+use std::net::SocketAddr;
 #[cfg(feature = "server")]
-use bytes::Bytes;
+use std::sync::LazyLock;
 
 #[cfg(feature = "server")]
 fn etag_for(data: &[u8]) -> String {
@@ -55,13 +55,7 @@ pub static MAX_IMAGE_DIMENSION: LazyLock<u32> = LazyLock::new(|| {
     let (val, clamped) = std::env::var("MAX_IMAGE_DIMENSION")
         .ok()
         .and_then(|s| s.parse::<u32>().ok())
-        .map(|v| {
-            if v < MIN {
-                (MIN, true)
-            } else {
-                (v, false)
-            }
-        })
+        .map(|v| if v < MIN { (MIN, true) } else { (v, false) })
         .unwrap_or((DEFAULT, false));
     if clamped {
         tracing::warn!(
@@ -89,13 +83,7 @@ pub static MAX_IMAGE_PIXELS: LazyLock<u32> = LazyLock::new(|| {
     let (val, clamped) = std::env::var("MAX_IMAGE_PIXELS")
         .ok()
         .and_then(|s| s.parse::<u32>().ok())
-        .map(|v| {
-            if v < MIN {
-                (MIN, true)
-            } else {
-                (v, false)
-            }
-        })
+        .map(|v| if v < MIN { (MIN, true) } else { (v, false) })
         .unwrap_or((DEFAULT, false));
     if clamped {
         tracing::warn!(
@@ -264,7 +252,10 @@ fn image_response(
                 StatusCode::NOT_MODIFIED,
                 [
                     (header::ETAG, HeaderValue::from_str(&etag).unwrap()),
-                    (header::CACHE_CONTROL, HeaderValue::from_static(cache_control)),
+                    (
+                        header::CACHE_CONTROL,
+                        HeaderValue::from_static(cache_control),
+                    ),
                     (header::CONTENT_TYPE, content_type),
                     // nosniff 防止浏览器对 content-type 错配的图片字节做 MIME sniff（M2）。
                     (
@@ -281,7 +272,10 @@ fn image_response(
         StatusCode::OK,
         [
             (header::CONTENT_TYPE, content_type),
-            (header::CACHE_CONTROL, HeaderValue::from_static(cache_control)),
+            (
+                header::CACHE_CONTROL,
+                HeaderValue::from_static(cache_control),
+            ),
             (header::ETAG, HeaderValue::from_str(&etag).unwrap()),
             (
                 header::X_CONTENT_TYPE_OPTIONS,
@@ -347,15 +341,12 @@ pub fn check_upload_dimensions(data: &[u8], mime_type: &str) -> Result<(), &'sta
 
 #[cfg(feature = "server")]
 /// 按 MIME 只读 header 拿 (width, height)。失败返回损坏错误。
-fn read_dimensions_by_mime(
-    data: &[u8],
-    mime_type: &str,
-) -> Result<(u32, u32), &'static str> {
+fn read_dimensions_by_mime(data: &[u8], mime_type: &str) -> Result<(u32, u32), &'static str> {
     match mime_type {
         "image/webp" => {
             // zenwebp 的 WebPDecoder::build 只解析 RIFF header,不解码像素(与 webp::decode 同源)。
-            let decoder = zenwebp::WebPDecoder::build(data)
-                .map_err(|_| "图片文件损坏或格式不正确")?;
+            let decoder =
+                zenwebp::WebPDecoder::build(data).map_err(|_| "图片文件损坏或格式不正确")?;
             let info = decoder.info();
             Ok((info.width, info.height))
         }
@@ -624,7 +615,12 @@ pub async fn serve_image(
             Ok(_) => match tokio::fs::read(&file_path).await {
                 Ok(data) => {
                     let ct = content_type(detect_format(&path));
-                    image_response(Bytes::from(data), ct, "public, max-age=31536000, immutable", &headers)
+                    image_response(
+                        Bytes::from(data),
+                        ct,
+                        "public, max-age=31536000, immutable",
+                        &headers,
+                    )
                 }
                 Err(_) => StatusCode::NOT_FOUND.into_response(),
             },
@@ -658,19 +654,18 @@ pub async fn serve_image(
     // runtime stays responsive to other requests.
     let path_for_blocking = path.clone();
     let params_for_blocking = params.clone();
-    let (processed, content_type) =
-        match tokio::task::spawn_blocking(move || {
-            process_image_blocking(data, params_for_blocking, path_for_blocking)
-        })
-        .await
-        {
-            Ok(Ok(r)) => r,
-            Ok(Err(status)) => return status.into_response(),
-            Err(_) => {
-                tracing::error!("Image processing task panicked");
-                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-            }
-        };
+    let (processed, content_type) = match tokio::task::spawn_blocking(move || {
+        process_image_blocking(data, params_for_blocking, path_for_blocking)
+    })
+    .await
+    {
+        Ok(Ok(r)) => r,
+        Ok(Err(status)) => return status.into_response(),
+        Err(_) => {
+            tracing::error!("Image processing task panicked");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
 
     let processed = Bytes::from(processed);
     let cached = CachedImage {
@@ -1086,15 +1081,17 @@ mod tests {
         );
         assert_eq!(resp.status(), StatusCode::OK);
         let headers = resp.headers();
-        assert_eq!(
-            headers.get(header::CONTENT_TYPE).unwrap(),
-            "image/webp"
-        );
+        assert_eq!(headers.get(header::CONTENT_TYPE).unwrap(), "image/webp");
         assert_eq!(
             headers.get(header::CACHE_CONTROL).unwrap(),
             "public, max-age=86400"
         );
-        assert!(headers.get(header::ETAG).unwrap().to_str().unwrap().starts_with('"'));
+        assert!(headers
+            .get(header::ETAG)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .starts_with('"'));
     }
 
     #[test]
@@ -1102,10 +1099,7 @@ mod tests {
         let data = Bytes::from(vec![1, 2, 3]);
         let etag = etag_for(&data);
         let mut req_headers = HeaderMap::new();
-        req_headers.insert(
-            header::IF_NONE_MATCH,
-            HeaderValue::from_str(&etag).unwrap(),
-        );
+        req_headers.insert(header::IF_NONE_MATCH, HeaderValue::from_str(&etag).unwrap());
         let resp = image_response(
             data,
             HeaderValue::from_static("image/webp"),

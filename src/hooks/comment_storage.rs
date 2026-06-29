@@ -272,7 +272,11 @@ pub fn relative_label_from_millis(delta_millis: i64, created_iso: &str) -> (Stri
         .map(|dt| dt.format("%Y-%m-%d").to_string())
         .unwrap_or_default();
 
-    let label = if label.is_empty() { absolute.clone() } else { label };
+    let label = if label.is_empty() {
+        absolute.clone()
+    } else {
+        label
+    };
     (label, absolute)
 }
 

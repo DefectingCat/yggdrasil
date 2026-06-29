@@ -16,8 +16,7 @@ use crate::router::Route;
 // ===========================================================================
 
 /// Admin 卡片容器：白底圆角描边，亮/暗双模式。用于 stat 卡片、面板等。
-pub const ADMIN_CARD_CLASS: &str =
-    "bg-paper-entry rounded-xl border border-paper-border";
+pub const ADMIN_CARD_CLASS: &str = "bg-paper-entry rounded-xl border border-paper-border";
 
 /// Admin 表格容器：在卡片基础上加 `overflow-hidden`，圆角裁剪表格。
 pub const ADMIN_TABLE_CLASS: &str =
@@ -56,7 +55,8 @@ pub const BTN_TEXT_AMBER: &str = "text-xs text-amber-600 hover:text-amber-800 da
 pub const BTN_TEXT_RED: &str =
     "text-xs text-red-500 hover:text-red-700 dark:hover:text-red-300 transition-colors cursor-pointer";
 /// 主题绿（鼠尾草）文字小按钮（行内恢复）。
-pub const BTN_TEXT_ACCENT: &str = "text-xs text-paper-accent hover:text-paper-primary transition-colors cursor-pointer";
+pub const BTN_TEXT_ACCENT: &str =
+    "text-xs text-paper-accent hover:text-paper-primary transition-colors cursor-pointer";
 
 // --- 次要按钮（冷调玫瑰第二色，ghost 描边风格，从属于主色鼠尾草绿） ---
 
@@ -192,7 +192,7 @@ static TAB_GROUP_ID: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicU
 ///
 /// 用于切换不同的视图或筛选条件（例如：全部、待审核、已通过等）。
 /// 具备高级的平滑滑动底部指示器动画。
-/// 
+///
 /// Props：
 /// - `items`：选项卡列表，每一项为 `(value, label)`
 /// - `active_value`：当前选中的值
@@ -212,15 +212,16 @@ pub fn FilterTabs(
             #[cfg(target_arch = "wasm32")]
             {
                 use wasm_bindgen::JsCast;
-                
+
                 // 等待 DOM 节点更新
                 let promise = js_sys::Promise::new(&mut |resolve, _| {
                     if let Some(window) = web_sys::window() {
-                        let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 50);
+                        let _ = window
+                            .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 50);
                     }
                 });
                 let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
-                
+
                 if let Some(window) = web_sys::window() {
                     if let Some(doc) = window.document() {
                         let element_id = format!("tab-{}-{}", id_prefix, active);
@@ -253,10 +254,10 @@ pub fn FilterTabs(
                 button {
                     id: "tab-{id_prefix}-{value}",
                     key: "{value}",
-                    class: if active_value == *value { 
-                        "cursor-pointer px-4 py-2 text-sm font-medium text-paper-primary transition-colors" 
-                    } else { 
-                        "cursor-pointer px-4 py-2 text-sm font-medium text-paper-secondary hover:text-paper-primary transition-colors" 
+                    class: if active_value == *value {
+                        "cursor-pointer px-4 py-2 text-sm font-medium text-paper-primary transition-colors"
+                    } else {
+                        "cursor-pointer px-4 py-2 text-sm font-medium text-paper-secondary hover:text-paper-primary transition-colors"
                     },
                     onclick: {
                         let v = value.to_string();

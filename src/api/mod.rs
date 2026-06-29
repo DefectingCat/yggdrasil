@@ -6,10 +6,10 @@
 
 /// 认证相关的 Dioxus server function。
 pub mod auth;
-/// CSRF 防护中间件。
-pub mod csrf;
 /// 评论相关接口。
 pub mod comments;
+/// CSRF 防护中间件。
+pub mod csrf;
 /// 应用错误类型与转换。
 pub mod error;
 /// 健康检查端点（liveness / readiness）。

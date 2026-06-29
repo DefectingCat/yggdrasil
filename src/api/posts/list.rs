@@ -190,7 +190,10 @@ pub async fn list_deleted_posts(
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
         let count_row = client
-            .query_one("SELECT COUNT(*) FROM posts WHERE deleted_at IS NOT NULL", &[])
+            .query_one(
+                "SELECT COUNT(*) FROM posts WHERE deleted_at IS NOT NULL",
+                &[],
+            )
             .await
             .map_err(AppError::query)?;
         let total: i64 = count_row.get(0);

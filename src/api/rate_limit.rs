@@ -426,7 +426,10 @@ mod tests {
                 break;
             }
         }
-        assert!(blocked, "strict bucket should eventually block real IP burst");
+        assert!(
+            blocked,
+            "strict bucket should eventually block real IP burst"
+        );
         assert!(
             allowed <= 6,
             "strict burst is 5, allowed should be <= 6, got {allowed}"

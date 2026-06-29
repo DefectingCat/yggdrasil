@@ -42,7 +42,9 @@ pub struct SsrGeneration(pub u64);
 
 /// 原子递增并返回新的全局世代号。
 pub fn bump_global_generation() -> u64 {
-    GLOBAL_GENERATION.fetch_add(1, Ordering::SeqCst).wrapping_add(1)
+    GLOBAL_GENERATION
+        .fetch_add(1, Ordering::SeqCst)
+        .wrapping_add(1)
 }
 
 /// 返回当前全局世代号。

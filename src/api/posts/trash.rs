@@ -232,8 +232,7 @@ pub async fn batch_restore_posts(post_ids: Vec<i32>) -> Result<CreatePostRespons
         // 逐条恢复，slug 冲突时自动加后缀；同时收集受影响的 slug 与标签。
         let mut restored = 0u64;
         let mut affected_slugs: Vec<String> = Vec::with_capacity(post_ids.len() * 2);
-        let mut affected_tags: std::collections::HashSet<String> =
-            std::collections::HashSet::new();
+        let mut affected_tags: std::collections::HashSet<String> = std::collections::HashSet::new();
 
         for id in &post_ids {
             let row = tx
@@ -289,7 +288,8 @@ pub async fn batch_restore_posts(post_ids: Vec<i32>) -> Result<CreatePostRespons
             for slug in &unique_slugs {
                 crate::cache::invalidate_post_by_slug(slug).await;
             }
-            crate::cache::invalidate_tag_posts_for(&affected_tags.into_iter().collect::<Vec<_>>()).await;
+            crate::cache::invalidate_tag_posts_for(&affected_tags.into_iter().collect::<Vec<_>>())
+                .await;
 
             // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
             crate::ssr_cache::bump_global_generation();
@@ -344,8 +344,7 @@ pub async fn batch_purge_posts(post_ids: Vec<i32>) -> Result<CreatePostResponse,
         let use_precise = post_ids.len() <= PRECISE_INVALIDATION_LIMIT;
         let (slugs, tags) = if use_precise {
             let mut slugs = Vec::with_capacity(post_ids.len());
-            let mut tags_set: std::collections::HashSet<String> =
-                std::collections::HashSet::new();
+            let mut tags_set: std::collections::HashSet<String> = std::collections::HashSet::new();
 
             for id in &post_ids {
                 let slug_row = tx
@@ -445,8 +444,8 @@ pub async fn empty_trash() -> Result<CreatePostResponse, ServerFnError> {
             )
             .await
             .map_err(AppError::query)?;
-        let use_precise = !deleted_rows.is_empty()
-            && deleted_rows.len() <= PRECISE_INVALIDATION_LIMIT;
+        let use_precise =
+            !deleted_rows.is_empty() && deleted_rows.len() <= PRECISE_INVALIDATION_LIMIT;
 
         let (slugs, tags) = if use_precise {
             let slugs: Vec<String> = deleted_rows.iter().map(|r| r.get("slug")).collect();

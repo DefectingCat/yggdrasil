@@ -51,4 +51,3 @@ pub async fn get_comments(post_id: i32) -> Result<CommentTreeResponse, ServerFnE
     #[cfg(not(feature = "server"))]
     unreachable!()
 }
-

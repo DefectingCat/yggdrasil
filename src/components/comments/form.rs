@@ -27,11 +27,7 @@ const COMMENT_SUBMIT_CLASS: &str = "py-2.5 px-6 bg-paper-accent text-white font-
 /// - 提交时校验必填项与蜜罐字段
 /// - 提交成功后清空内容、保存作者信息、添加待审核评论并触发列表刷新
 #[component]
-pub fn CommentForm(
-    post_id: i32,
-    parent_id: Option<i64>,
-    parent_indent: Option<i32>,
-) -> Element {
+pub fn CommentForm(post_id: i32, parent_id: Option<i64>, parent_indent: Option<i32>) -> Element {
     let ctx: CommentContext = use_context();
     let mut active_reply = ctx.active_reply;
     let mut refresh_trigger = ctx.refresh_trigger;

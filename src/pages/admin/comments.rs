@@ -14,12 +14,12 @@ use crate::api::comments::trash_comment;
 use crate::api::comments::{approve_comment, batch_update_comment_status, spam_comment};
 #[cfg(target_arch = "wasm32")]
 use crate::api::comments::{get_all_comments, AllCommentsResponse};
+use crate::components::empty_state::EmptyState;
 use crate::components::skeletons::atoms::SkeletonBox;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
-use crate::components::empty_state::EmptyState;
 use crate::components::ui::{
     FilterTabs, Pagination, StatusBadge, ADMIN_CARD_CLASS, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS,
-    BTN_TEXT_AMBER, BTN_TEXT_GREEN, BTN_TEXT_RED, BTN_SOLID_AMBER, BTN_SOLID_GREEN, BTN_SOLID_RED,
+    BTN_SOLID_AMBER, BTN_SOLID_GREEN, BTN_SOLID_RED, BTN_TEXT_AMBER, BTN_TEXT_GREEN, BTN_TEXT_RED,
     CHECKBOX_CLASS,
 };
 use crate::models::comment::{AdminComment, CommentStatus};
@@ -470,4 +470,3 @@ fn CommentRow(
         }
     }
 }
-

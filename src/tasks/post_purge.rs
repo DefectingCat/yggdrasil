@@ -19,16 +19,14 @@ pub async fn run_purge() {
     let mut ticker = interval(Duration::from_secs(86400));
     loop {
         match get_conn().await {
-            Ok(client) => {
-                match purge_expired(&client).await {
-                    Ok(n) => {
-                        if n > 0 {
-                            tracing::info!("Post auto-purge: removed {} expired trashed posts", n);
-                        }
+            Ok(client) => match purge_expired(&client).await {
+                Ok(n) => {
+                    if n > 0 {
+                        tracing::info!("Post auto-purge: removed {} expired trashed posts", n);
                     }
-                    Err(e) => tracing::error!("Post auto-purge error: {:?}", e),
                 }
-            }
+                Err(e) => tracing::error!("Post auto-purge error: {:?}", e),
+            },
             Err(e) => tracing::error!("Failed to get DB connection for post purge: {:?}", e),
         }
         ticker.tick().await;

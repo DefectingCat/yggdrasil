@@ -12,10 +12,12 @@ use crate::api::posts::list_posts;
 #[cfg(target_arch = "wasm32")]
 use crate::api::posts::PostListResponse;
 use crate::api::posts::{delete_post, rebuild_content_html, CreatePostResponse, RebuildResult};
+use crate::components::empty_state::{EmptyState, EmptyStateAction};
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::posts_skeleton::PostsSkeleton;
-use crate::components::empty_state::{EmptyState, EmptyStateAction};
-use crate::components::ui::{Pagination, StatusBadge, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_TEXT_RED};
+use crate::components::ui::{
+    Pagination, StatusBadge, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_TEXT_RED,
+};
 use crate::models::post::PostListItem;
 use crate::router::Route;
 
@@ -188,7 +190,11 @@ fn RebuildCacheBar() -> Element {
         rebuild_result.set(None);
         spawn(async move {
             match rebuild_content_html(rebuild_all).await {
-                Ok(RebuildResult { rebuilt, failed, errors }) => {
+                Ok(RebuildResult {
+                    rebuilt,
+                    failed,
+                    errors,
+                }) => {
                     if failed > 0 {
                         let mut msg = format!("已重建 {rebuilt} 篇，失败 {failed} 篇");
                         if let Some(first) = errors.first() {

@@ -113,10 +113,7 @@ fn strip_background_color(body: &str) -> String {
     body.split(';')
         .filter(|decl| {
             let trimmed = decl.trim();
-            !trimmed.is_empty()
-                && !trimmed
-                    .to_ascii_lowercase()
-                    .starts_with("background-color")
+            !trimmed.is_empty() && !trimmed.to_ascii_lowercase().starts_with("background-color")
         })
         .collect::<Vec<_>>()
         .join(";")

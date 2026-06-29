@@ -7,7 +7,7 @@
 pub mod comment;
 /// 文章模型、文章状态、标签与统计信息。
 pub mod post;
-/// 用户模型、用户角色与可公开用户信息。
-pub mod user;
 /// 回收站与站点配置模型。
 pub mod settings;
+/// 用户模型、用户角色与可公开用户信息。
+pub mod user;

@@ -349,7 +349,10 @@ mod tests {
         // 用一个不含 dimensions 的路径验证 --ar 缺省时的结构正确性。
         let html = r#"<p><img src="/uploads/nonexistent/test.webp" alt="test"></p>"#;
         let result = wrap_images_with_blur(html);
-        assert!(result.contains("blur-img-placeholder"), "should have placeholder");
+        assert!(
+            result.contains("blur-img-placeholder"),
+            "should have placeholder"
+        );
         assert!(result.contains("blur-img-full"), "should have full layer");
         assert!(result.contains("?w=20"), "placeholder should use ?w=20");
         assert!(result.contains("?w=800"), "full should use ?w=800");
@@ -361,7 +364,10 @@ mod tests {
         let html = r#"<img src="https://example.com/img.png" alt="ext">"#;
         let result = wrap_images_with_blur(html);
         // 外链图不处理，保持原样
-        assert!(!result.contains("blur-img"), "external image should not be wrapped");
+        assert!(
+            !result.contains("blur-img"),
+            "external image should not be wrapped"
+        );
     }
 
     #[test]
@@ -372,7 +378,11 @@ mod tests {
         println!("ACTUAL OUTPUT: {}", result);
         // aspect-ratio 必须用斜杠分隔，如 "--ar:800 / 600;"
         assert!(result.contains("--ar:"), "should have --ar");
-        assert!(result.contains(" / "), "aspect-ratio must use slash separator, got: {}", result);
+        assert!(
+            result.contains(" / "),
+            "aspect-ratio must use slash separator, got: {}",
+            result
+        );
     }
 
     #[test]
@@ -384,7 +394,11 @@ mod tests {
         let cleaned = clean_html(&wrapped);
         println!("WRAPPED:  {}", wrapped);
         println!("CLEANED:  {}", cleaned);
-        assert!(cleaned.contains(" / "), "clean_html must preserve slash in --ar, got: {}", cleaned);
+        assert!(
+            cleaned.contains(" / "),
+            "clean_html must preserve slash in --ar, got: {}",
+            cleaned
+        );
     }
 
     #[test]

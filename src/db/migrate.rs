@@ -35,7 +35,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
     ("005", include_str!("../../migrations/005_comments.sql")),
     ("006", include_str!("../../migrations/006_add_toc_html.sql")),
     ("007", include_str!("../../migrations/007_settings.sql")),
-    ("008", include_str!("../../migrations/008_comments_cascade.sql")),
+    (
+        "008",
+        include_str!("../../migrations/008_comments_cascade.sql"),
+    ),
     (
         "009",
         include_str!("../../migrations/009_cleanup_duplicate_indexes.sql"),
@@ -185,7 +188,9 @@ async fn ensure_versions_table(conn: &deadpool_postgres::Object) -> Result<(), M
 async fn applied_versions(
     conn: &deadpool_postgres::Object,
 ) -> Result<HashSet<String>, MigrateError> {
-    let rows = conn.query("SELECT version FROM schema_migrations", &[]).await?;
+    let rows = conn
+        .query("SELECT version FROM schema_migrations", &[])
+        .await?;
     let mut set = HashSet::with_capacity(rows.len());
     for row in rows {
         set.insert(row.get::<_, String>(0));
@@ -243,7 +248,10 @@ mod tests {
         let mut sorted = MIGRATIONS.iter().map(|(v, _)| *v).collect::<Vec<_>>();
         sorted.sort_unstable();
         let original: Vec<&str> = MIGRATIONS.iter().map(|(v, _)| *v).collect();
-        assert_eq!(original, sorted, "MIGRATIONS must be in ascending version order");
+        assert_eq!(
+            original, sorted,
+            "MIGRATIONS must be in ascending version order"
+        );
     }
 
     #[test]
@@ -252,7 +260,11 @@ mod tests {
         let total = versions.len();
         versions.sort_unstable();
         versions.dedup();
-        assert_eq!(versions.len(), total, "MIGRATIONS has duplicate version strings");
+        assert_eq!(
+            versions.len(),
+            total,
+            "MIGRATIONS has duplicate version strings"
+        );
     }
 
     #[test]
@@ -296,8 +308,7 @@ mod tests {
             MIGRATIONS.iter().map(|(v, _)| v.to_string()).collect();
 
         // 磁盘上有但数组里没有 → 忘记加行（会静默不执行该迁移）。
-        let missing_in_array: Vec<&String> =
-            files_on_disk.difference(&versions_in_array).collect();
+        let missing_in_array: Vec<&String> = files_on_disk.difference(&versions_in_array).collect();
         assert!(
             missing_in_array.is_empty(),
             "migrations/*.sql files not registered in MIGRATIONS: {:?}. \
@@ -306,8 +317,7 @@ mod tests {
         );
 
         // 数组里有但磁盘上没有 → include_str! 本就会编译失败，这里只是双保险。
-        let missing_on_disk: Vec<&String> =
-            versions_in_array.difference(&files_on_disk).collect();
+        let missing_on_disk: Vec<&String> = versions_in_array.difference(&files_on_disk).collect();
         assert!(
             missing_on_disk.is_empty(),
             "MIGRATIONS rows without a corresponding .sql file: {:?}",

@@ -131,7 +131,9 @@ pub fn validate_comment_url(url: &str) -> Result<(), String> {
     if trimmed.len() > 200 {
         return Err("网址长度不能超过 200 个字符".to_string());
     }
-    if trimmed.chars().any(|c| matches!(c, '<' | '>' | '"' | '\'' | '&' | ' ' | '\t' | '\n' | '\r'))
+    if trimmed
+        .chars()
+        .any(|c| matches!(c, '<' | '>' | '"' | '\'' | '&' | ' ' | '\t' | '\n' | '\r'))
     {
         return Err("网址包含非法字符".to_string());
     }

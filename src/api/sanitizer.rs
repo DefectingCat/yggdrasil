@@ -395,7 +395,10 @@ mod tests {
         let input = r#"<span class="blur-img" style="--ar:16/9"><img class="blur-img-placeholder" src="/uploads/x.webp?w=20" alt="t"><img class="blur-img-full" data-src="/uploads/x.webp?w=800" alt="t"></span>"#;
         let result = clean_html(input);
         assert!(result.contains("data-src"), "data-src should be allowed");
-        assert!(result.contains("blur-img-placeholder"), "class should be allowed");
+        assert!(
+            result.contains("blur-img-placeholder"),
+            "class should be allowed"
+        );
         assert!(result.contains("--ar"), "style should be allowed");
     }
 
@@ -492,12 +495,24 @@ mod tests {
         let schemes = DEFAULT_ALLOWED_SCHEMES.clone();
         // 仅在显式允许且 media type 为图片时通过
         assert!(is_safe_url("data:image/png;base64,iVBOR", &schemes, true));
-        assert!(is_safe_url("data:image/svg+xml;base64,PHN2Zz4=", &schemes, true));
+        assert!(is_safe_url(
+            "data:image/svg+xml;base64,PHN2Zz4=",
+            &schemes,
+            true
+        ));
         // 禁用 data URI 时拒绝
         assert!(!is_safe_url("data:image/png;base64,iVBOR", &schemes, false));
         // 非图片 data URI 拒绝
-        assert!(!is_safe_url("data:text/html,<script>alert(1)</script>", &schemes, true));
-        assert!(!is_safe_url("data:application/javascript,alert(1)", &schemes, true));
+        assert!(!is_safe_url(
+            "data:text/html,<script>alert(1)</script>",
+            &schemes,
+            true
+        ));
+        assert!(!is_safe_url(
+            "data:application/javascript,alert(1)",
+            &schemes,
+            true
+        ));
     }
 
     #[test]
@@ -538,7 +553,11 @@ mod tests {
         let schemes = DEFAULT_ALLOWED_SCHEMES.clone();
         // 未知 scheme 默认拒绝。
         assert!(!is_safe_url("file:///etc/passwd", &schemes, false));
-        assert!(!is_safe_url("blob:https://example.com/abc", &schemes, false));
+        assert!(!is_safe_url(
+            "blob:https://example.com/abc",
+            &schemes,
+            false
+        ));
         assert!(!is_safe_url("about:blank", &schemes, false));
         assert!(!is_safe_url("custom-app://open", &schemes, false));
     }

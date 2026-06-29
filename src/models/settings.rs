@@ -72,7 +72,13 @@ mod tests {
     #[test]
     #[cfg(feature = "server")]
     fn clamp_retention_boundary() {
-        assert_eq!(TrashSettings::clamp_retention(MIN_RETENTION_DAYS), MIN_RETENTION_DAYS);
-        assert_eq!(TrashSettings::clamp_retention(MAX_RETENTION_DAYS), MAX_RETENTION_DAYS);
+        assert_eq!(
+            TrashSettings::clamp_retention(MIN_RETENTION_DAYS),
+            MIN_RETENTION_DAYS
+        );
+        assert_eq!(
+            TrashSettings::clamp_retention(MAX_RETENTION_DAYS),
+            MAX_RETENTION_DAYS
+        );
     }
 }
