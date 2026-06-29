@@ -38,3 +38,8 @@ make dev
 ```bash
 make build
 ```
+
+## 生产部署
+
+生产环境必须前置反向代理（nginx/Caddy）做 TLS 终结，并设置 `APP_BASE_URL`、
+`COOKIE_SECURE=true`、`TRUSTED_PROXY_COUNT=1`。详见 [部署指南](docs/DEPLOYMENT.md)。
