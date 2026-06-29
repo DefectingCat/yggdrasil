@@ -12,6 +12,7 @@ use dioxus::prelude::*;
 
 use crate::api::posts::{search_posts, PostListResponse};
 use crate::components::post_card::PostCard;
+use crate::components::empty_state::EmptyState;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::search_skeleton::SearchSkeleton;
 
@@ -72,7 +73,10 @@ pub fn Search() -> Element {
             DelayedSkeleton { SearchSkeleton {} }
         } else if let Some(Ok(PostListResponse { posts, total: _ })) = search_res() {
             if posts.is_empty() {
-                div { class: "text-center text-paper-secondary py-20", "未找到相关文章" }
+                EmptyState {
+                    title: "未找到相关文章",
+                    description: "换个关键词再试一次吧",
+                }
             } else {
                 for post in posts.iter() {
                     PostCard { key: "{post.id}", post: post.clone() }
