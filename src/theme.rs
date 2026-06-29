@@ -157,10 +157,15 @@ pub fn ThemePreload() -> Element {
 #[cfg_attr(not(target_arch = "wasm32"), allow(unused_variables))]
 #[component]
 pub fn ThemeToggle() -> Element {
+    // theme 仅在非 wasm（server）构建的 theme.set(next) 需要 mut；wasm 端该分支
+    // 被 cfg 剥离，写操作转移到副本 theme_clone，故 wasm 下标注 unused_mut。
+    #[cfg_attr(target_arch = "wasm32", allow(unused_mut))]
     let mut theme = use_theme();
     // generation:每次点击递增。延迟回调检查自己的 gen 是否最新,过期则跳过 set。
     // 解决连续点击时多个 spawn_local 堆积导致的状态错乱。
-    #[allow(unused_mut)]
+    // click_gen 仅在 wasm 分支被 set（连续点击防抖）；server 构建剥离该分支，
+    // 故非 wasm 端标注 unused_mut。
+    #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut))]
     let mut click_gen = use_signal(|| 0u32);
 
     rsx! {
@@ -188,7 +193,7 @@ pub fn ThemeToggle() -> Element {
                     let gen = click_gen() + 1;
                     click_gen.set(gen);
                     let mut theme_clone = theme;
-                    let mut gen_clone = click_gen;
+                    let gen_clone = click_gen;
                     wasm_bindgen_futures::spawn_local(async move {
                         crate::utils::time::sleep_ms(450).await;
                         if gen_clone() == gen {
