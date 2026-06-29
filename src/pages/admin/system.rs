@@ -63,7 +63,7 @@ pub fn System() -> Element {
                     SystemTab::ServerStatus => rsx! { ServerStatusTab {} },
                     SystemTab::SqlConsole => rsx! { SqlConsoleTab {} },
                     SystemTab::Export => rsx! { ExportTab {} },
-                    SystemTab::Backup => rsx! { div { class: "text-paper-secondary py-8", "备份恢复（待实现）" } },
+                    SystemTab::Backup => rsx! { BackupTab {} },
                 }
             }
         }
@@ -1036,4 +1036,342 @@ fn urlencode(s: &str) -> String {
         }
     }
     out
+}
+
+/// 备份恢复 tab：备份按钮 + 进度轮询 + 备份列表（下载/恢复/删除）。
+#[allow(non_snake_case)]
+fn BackupTab() -> Element {
+    use crate::api::database::backup::BackupInfo;
+    use crate::api::database::tasks::TaskProgress;
+    #[cfg(target_arch = "wasm32")]
+    use crate::api::database::backup::{create_backup, delete_backup, list_backups, restore_backup};
+    #[cfg(target_arch = "wasm32")]
+    use crate::api::database::tasks::{get_task_progress, TaskStatus};
+    use crate::components::ui::{ADMIN_CARD_CLASS, ADMIN_TABLE_CLASS};
+
+    let backups = use_signal(Vec::<BackupInfo>::new);
+    let mut loading = use_signal(|| false);
+    let error = use_signal(|| Option::<String>::None);
+    // 当前进行中的任务（备份/恢复）id + 进度
+    let active_task_id: Signal<Option<String>> = use_signal(|| None);
+    let active_progress = use_signal(|| Option::<TaskProgress>::None);
+    // 待恢复的文件名（确认对话框用）
+    let mut pending_restore: Signal<Option<String>> = use_signal(|| None);
+    let busy = use_signal(|| false);
+
+    // 刷新备份列表
+    let mut refresh_list = move || {
+        loading.set(true);
+        #[cfg(target_arch = "wasm32")]
+        {
+            let backups = backups;
+            let error = error;
+            spawn(async move {
+                match list_backups().await {
+                    Ok(list) => {
+                        backups.set(list);
+                        error.set(None);
+                    }
+                    Err(e) => error.set(Some(e.to_string())),
+                }
+                loading.set(false);
+            });
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            loading.set(false);
+        }
+    };
+
+    use_effect(move || {
+        refresh_list();
+    });
+
+    // 恢复确认：pending_restore 被设置时弹出原生 confirm，确认后发起 restore_backup
+    // 并开始进度轮询。用 use_future 响应 pending_restore 变化。
+    let _pending_for_confirm = pending_restore.read().clone();
+    use_future(move || {
+        let pending_restore = pending_restore;
+        let busy = busy;
+        let active_progress = active_progress;
+        let active_task_id = active_task_id;
+        let error = error;
+        async move {
+            #[cfg(target_arch = "wasm32")]
+            {
+                let fname = match _pending_for_confirm {
+                    Some(f) => f,
+                    None => return,
+                };
+                let confirmed = web_sys::window()
+                    .and_then(|w| {
+                        w.confirm_with_message(&format!(
+                            "恢复将覆盖现有数据，确认恢复 {}？\n\n仅本系统生成的备份可恢复。",
+                            fname
+                        ))
+                        .ok()
+                    })
+                    == Some(true);
+                if confirmed {
+                    busy.set(true);
+                    active_progress.set(None);
+                    match restore_backup(fname, true).await {
+                        Ok(id) => active_task_id.set(Some(id)),
+                        Err(e) => {
+                            error.set(Some(e.to_string()));
+                            busy.set(false);
+                        }
+                    }
+                }
+                // 无论确认与否都清空 pending
+                pending_restore.set(None);
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let _ = (pending_restore, busy, active_progress, active_task_id, error);
+            }
+        }
+    });
+
+    // 任务进度轮询：active_task_id 存在时每 1.5s 拉取进度，Done/Failed 后停止 + 刷新列表
+    let _task_id_for_poll = active_task_id.read().clone();
+    use_future(move || {
+        let active_task_id = active_task_id;
+        let active_progress = active_progress;
+        let backups_f = backups;
+        let busy_f = busy;
+        async move {
+            #[cfg(target_arch = "wasm32")]
+            {
+                let tid = match _task_id_for_poll {
+                    Some(t) => t,
+                    None => return,
+                };
+                loop {
+                    wasm_sleep(1500).await;
+                    match get_task_progress(tid.clone()).await {
+                        Ok(p) => {
+                            let done = p.status == TaskStatus::Done || p.status == TaskStatus::Failed;
+                            active_progress.set(Some(p));
+                            if done {
+                                // 刷新列表（备份完成后新文件出现）并清理任务态
+                                match list_backups().await {
+                                    Ok(list) => backups_f.set(list),
+                                    _ => {}
+                                }
+                                active_task_id.set(None);
+                                busy_f.set(false);
+                                break;
+                            }
+                        }
+                        Err(_) => {
+                            active_task_id.set(None);
+                            busy_f.set(false);
+                            break;
+                        }
+                    }
+                }
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let _ = (active_task_id, active_progress, backups_f, busy_f);
+            }
+        }
+    });
+
+    let current_backups = backups.read().clone();
+    let current_error = error.read().clone();
+    let current_progress = active_progress.read().clone();
+    let is_busy = busy();
+    // 预格式化备份行（避免在 rsx for 循环体内 let / 格式化）。
+    // 每行：(filename, mode, size_str, dl_url)
+    let backup_rows: Vec<(String, String, String, String)> = current_backups
+        .iter()
+        .map(|b| {
+            (
+                b.filename.clone(),
+                b.mode.clone(),
+                format_bytes(b.size_bytes as i64),
+                format!("/api/database/backups/{}", urlencode_dl(&b.filename)),
+            )
+        })
+        .collect();
+
+    rsx! {
+        div { class: "space-y-4",
+            // 操作栏
+            div { class: "flex items-center gap-3",
+                button {
+                    class: "px-4 py-1.5 text-sm bg-paper-accent text-paper-theme rounded hover:brightness-110 transition disabled:opacity-50",
+                    disabled: is_busy,
+                    onclick: move |_| {
+                        #[cfg(target_arch = "wasm32")]
+                        {
+                            busy.set(true);
+                            active_progress.set(None);
+                            let active_task_id = active_task_id;
+                            spawn(async move {
+                                match create_backup().await {
+                                    Ok(id) => active_task_id.set(Some(id)),
+                                    Err(e) => { error.set(Some(e.to_string())); busy.set(false); }
+                                }
+                            });
+                        }
+                    },
+                    if is_busy { "处理中..." } else { "创建备份" }
+                }
+                button {
+                    class: "px-3 py-1.5 text-sm border border-paper-border text-paper-primary rounded hover:bg-paper-entry transition disabled:opacity-50",
+                    disabled: loading() || is_busy,
+                    onclick: move |_| refresh_list(),
+                    "刷新列表"
+                }
+            }
+
+            // 进度
+            if let Some(p) = current_progress {
+                div { class: "{ADMIN_CARD_CLASS} p-4",
+                    div { class: "flex items-center justify-between mb-2",
+                        span { class: "text-sm font-medium text-paper-primary", "{p.stage}" }
+                        span { class: "text-sm text-paper-secondary", "{p.percent}%" }
+                    }
+                    div { class: "w-full bg-paper-entry rounded-full h-2 overflow-hidden",
+                        div { class: "bg-paper-accent h-full transition-all", style: "width: {p.percent}%" }
+                    }
+                    if let Some(detail) = p.detail {
+                        p { class: "text-xs text-paper-secondary mt-2", "{detail}" }
+                    }
+                    if let Some(err) = p.error {
+                        p { class: "text-xs text-red-600 dark:text-red-400 mt-2", "错误：{err}" }
+                    }
+                }
+            }
+
+            // 错误
+            if let Some(err) = current_error {
+                div { class: "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-700 dark:text-red-300",
+                    "{err}"
+                }
+            }
+
+            // 备份列表
+            if !current_backups.is_empty() {
+                div { class: "{ADMIN_TABLE_CLASS}",
+                    div { class: "overflow-x-auto",
+                        table { class: "w-full text-sm",
+                            thead {
+                                tr { class: "border-b border-paper-border text-left text-paper-secondary",
+                                    th { class: "px-4 py-2 font-medium", "文件名" }
+                                    th { class: "px-4 py-2 font-medium", "模式" }
+                                    th { class: "px-4 py-2 font-medium text-right", "大小" }
+                                    th { class: "px-4 py-2 font-medium text-right", "操作" }
+                                }
+                            }
+                            tbody {
+                                for (fname, mode, size_str, dl_url) in backup_rows.iter() {
+                                    BackupRow {
+                                        key: "{fname}",
+                                        filename: fname.clone(),
+                                        mode: mode.clone(),
+                                        size_str: size_str.clone(),
+                                        dl_url: dl_url.clone(),
+                                        busy: is_busy,
+                                        on_restore: move |f| pending_restore.set(Some(f)),
+                                        on_delete: move |_fname_del| {
+                                            #[cfg(target_arch = "wasm32")]
+                                            {
+                                                let fname_del = _fname_del;
+                                                let confirmed = web_sys::window()
+                                                    .and_then(|w| {
+                                                        w.confirm_with_message(&format!("确认删除 {}？", fname_del))
+                                                            .ok()
+                                                    })
+                                                    == Some(true);
+                                                if confirmed {
+                                                    let backups = backups;
+                                                    spawn(async move {
+                                                        let _ = delete_backup(fname_del.clone()).await;
+                                                        if let Ok(list) = list_backups().await {
+                                                            backups.set(list);
+                                                        }
+                                                    });
+                                                }
+                                            }
+                                        },
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if !loading() {
+                div { class: "text-paper-secondary text-sm py-4", "暂无备份文件" }
+            }
+
+            p { class: "text-xs text-paper-secondary",
+                "备份优先用 pg_dump（含 schema），不可用时回退纯 SQL（仅数据）。"
+                "恢复仅接受本系统生成的备份，且会覆盖现有数据。"
+            }
+        }
+    }
+}
+
+/// 下载链接用的 URL 编码（wasm32 才用，server 端 rsx 也引用故需编译）。
+fn urlencode_dl(s: &str) -> String {
+    #[cfg(target_arch = "wasm32")]
+    {
+        urlencode(s)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        s.to_string()
+    }
+}
+
+/// 备份列表单行（抽取为子组件：各自 scope 内 let/clone 不冲突）。
+#[derive(Props, Clone, PartialEq)]
+struct BackupRowProps {
+    filename: String,
+    mode: String,
+    size_str: String,
+    dl_url: String,
+    busy: bool,
+    on_restore: Callback<String>,
+    on_delete: Callback<String>,
+}
+
+#[component]
+fn BackupRow(props: BackupRowProps) -> Element {
+    // Callback 是 Copy，直接复用；filename 需 clone（两个闭包各取一份）。
+    let on_restore = props.on_restore;
+    let on_delete = props.on_delete;
+    let fname_for_restore = props.filename.clone();
+    let fname_for_delete = props.filename.clone();
+    rsx! {
+        tr { class: "border-b border-paper-border last:border-0 hover:bg-paper-entry transition-colors",
+            td { class: "px-4 py-2 font-mono text-xs text-paper-primary", "{props.filename}" }
+            td { class: "px-4 py-2 text-paper-secondary", "{props.mode}" }
+            td { class: "px-4 py-2 text-right text-paper-secondary", "{props.size_str}" }
+            td { class: "px-4 py-2 text-right whitespace-nowrap",
+                a {
+                    class: "text-xs text-paper-accent hover:underline mr-3",
+                    href: "{props.dl_url}",
+                    download: "",
+                    "下载"
+                }
+                button {
+                    class: "text-xs text-amber-600 hover:text-amber-800 dark:text-amber-400 mr-3 disabled:opacity-50",
+                    disabled: props.busy,
+                    onclick: move |_| on_restore.call(fname_for_restore.clone()),
+                    "恢复"
+                }
+                button {
+                    class: "text-xs text-red-600 hover:text-red-800 dark:text-red-400 disabled:opacity-50",
+                    disabled: props.busy,
+                    onclick: move |_| on_delete.call(fname_for_delete.clone()),
+                    "删除"
+                }
+            }
+        }
+    }
 }

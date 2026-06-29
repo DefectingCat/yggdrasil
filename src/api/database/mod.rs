@@ -16,3 +16,7 @@ pub mod sql_console;
 pub mod schema;
 /// 数据导出 Axum 流式处理器。
 pub mod export;
+/// 备份/恢复（双模式 + 任务进度）。
+pub mod backup;
+/// 备份/恢复异步任务进度表。
+pub mod tasks;

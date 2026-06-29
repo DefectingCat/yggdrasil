@@ -162,6 +162,30 @@ Core JavaScript bundle in `libs/yggdrasil-core/`, built as an IIFE library expos
 
 Do not edit `public/yggdrasil-core/` — they are build artifacts.
 
+## CodeMirror Editor Subproject
+
+CodeMirror 6 code editor in `libs/codemirror-editor/`, built as an IIFE library exposing `window.CodeMirrorEditor` (object literal `{ create(containerId, options) }`) and `window.EditorOptions` (a class so `new EditorOptions()` survives TS erasure from wasm). Mirrors the tiptap-editor packaging pattern exactly.
+
+- Output: `public/codemirror/` (`editor.js`, `editor.js.map`). No CSS file — themes are JS `Extension`s from `@catppuccin/codemirror` (Latte light / Mocha dark, matching the syntax-highlighting `themes/`).
+- `make build` runs `pnpm ci --include=dev && pnpm run build` inside `libs/codemirror-editor`; the `build` script is `tsc --noEmit && vite build` (Vite 8 / Rolldown, type-check before bundle). Output is IIFE (`formats: ['iife']`, `exports: 'default'`).
+- Features: `@codemirror/lang-sql` with live schema autocomplete (schema injected via `set_schema` from `get_db_schema` server function), `@replit/codemirror-vim` keymap (injected before other keymaps), Catppuccin theme hot-swap via `Compartment.reconfigure` (no instance rebuild — preserves Vim state/cursor/undo).
+- Rust bridge: `src/codemirror_bridge.rs` mirrors `src/tiptap_bridge.rs` — `get_module()` uses `js_sys::Reflect::get` + `unchecked_into` (object literal, not a constructor, so NOT an extern fn call and NOT `dyn_into`); `EditorHandle` holds the instance + all `Closure`s; `impl Drop` calls `destroy()`.
+- Shared data types `SqlSchema`/`SqlTable` (serde) compile on both targets; the wasm-bindgen externs live in a `#[cfg(target_arch = "wasm32")] mod wasm`.
+- Unit tests: `pnpm test` (Vitest 4 + happy-dom), covering getValue/setValue, setTheme (Compartment), setSchema, vim toggle, onChange.
+- Injected via `Dioxus.toml` `script` array (`/codemirror/editor.js`).
+
+Do not edit `public/codemirror/` — they are build artifacts.
+
+## Database Management (`/admin/system`)
+
+Admin area at `/admin/system` (menu "系统") with 5 tabs: 数据库状态 / 服务器状态 / SQL 控制台 / 数据导出 / 备份恢复. All gated by `get_current_admin_user` (admin-only). Backend in `src/api/database/` (status/system_status/sql_console/schema/export/backup/tasks), page in `src/pages/admin/system.rs`.
+
+- **SQL 控制台** is full read-write with 4 guards: (1) `sqlparser` AST gates — `DROP DATABASE`/`DROP SCHEMA`/`CREATE DATABASE` absolutely forbidden (string pre-check); `DROP`/`TRUNCATE`/`ALTER` require a `confirm_dangerous` checkbox; (2) `UPDATE`/`DELETE` without `WHERE` rejected; (3) `STATEMENT_TIMEOUT_SECS` query timeout (pool-level GUC); (4) frontend write-confirm dialog. Multi-statement disabled by default. Results capped at 500 rows.
+- **备份恢复** uses `dashmap` task-progress table; `create_backup`/`restore_backup` return a task_id immediately and poll `get_task_progress`. Backup prefers `pg_dump` (full, incl. schema), falls back to per-table `COPY TO STDOUT` (data only) when `pg_dump` is unavailable. Backup files carry a `-- YGGDRASIL BACKUP v1` signature header; restore rejects non-system files. `backups/` is gitignored and served only via `GET /api/database/backups/{filename}` (admin-gated, path-allowlist).
+- **服务器状态** uses `sysinfo` (optional, server feature) with a background sampler (`SYSINFO_SAMPLE_SECS`, default 0.5s) writing to a `RwLock<SystemSnapshot>`; server functions read the snapshot (zero sampling cost), so frontend can poll high-frequency. `src/cache.rs` exposes moka hit-rate via `AtomicU64` hit/miss counters per cache + `cache_stats()`.
+- New env var: `SYSINFO_SAMPLE_SECS` (sysinfo sampling interval in seconds, supports decimals).
+- New deps (all `optional = true`, server feature): `sysinfo`, `sqlparser`, `dashmap`.
+
 ## Syntax Highlighting Pipeline
 
 - `themes/` contains Catppuccin Latte (light) and Mocha (dark) `.tmTheme` files

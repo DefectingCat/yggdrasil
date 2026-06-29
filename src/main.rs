@@ -395,6 +395,11 @@ fn main() {
                     "/api/database/export",
                     axum::routing::get(crate::api::database::export::export_data),
                 )
+                // 备份下载：admin 鉴权 + 路径白名单（backups/ 不直接暴露静态目录）
+                .route(
+                    "/api/database/backups/{filename}",
+                    axum::routing::get(crate::api::database::backup::download_backup),
+                )
                 .layer(TimeoutLayer::with_status_code(
                     StatusCode::REQUEST_TIMEOUT,
                     Duration::from_secs(120),

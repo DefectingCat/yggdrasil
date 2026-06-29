@@ -22,6 +22,9 @@ uploads/*
 !uploads/.gitkeep
 uploads/.cache/
 
+# Database backups
+backups/
+
 profile.json.gz
 
 # Git worktrees

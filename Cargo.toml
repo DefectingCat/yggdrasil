@@ -37,6 +37,7 @@ moka = { version = "0.12", features = ["future", "sync"], optional = true }
 governor = { version = "0.8", optional = true }
 sysinfo = { version = "0.34", optional = true }
 sqlparser = { version = "0.45", optional = true }
+dashmap = { version = "6.2", optional = true }
 md-5 = { version = "0.10", optional = true }
 futures = { version = "0.3", optional = true }
 bytes = { version = "1", optional = true }
@@ -91,6 +92,7 @@ server = [
     "dep:governor",
     "dep:sysinfo",
     "dep:sqlparser",
+    "dep:dashmap",
     "dep:md-5",
     "dep:futures",
     "dep:bytes",
