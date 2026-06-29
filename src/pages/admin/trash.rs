@@ -22,8 +22,8 @@ use crate::components::empty_state::EmptyState;
 use crate::components::skeletons::atoms::SkeletonBox;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::ui::{
-    Pagination, StatusBadge, ADMIN_CARD_CLASS, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS,
-    BTN_SOLID_GREEN, BTN_SOLID_RED, BTN_TEXT_ACCENT, BTN_TEXT_RED, CHECKBOX_CLASS,
+    Pagination, StatusBadge, ADMIN_CARD_CLASS, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_SOLID_GREEN,
+    BTN_SOLID_RED, BTN_TEXT_ACCENT, BTN_TEXT_RED, CHECKBOX_CLASS,
 };
 use crate::models::post::PostListItem;
 use crate::models::settings::TrashSettings;
@@ -68,7 +68,10 @@ pub fn TrashPage(page: i32) -> Element {
             let page = current_page;
             spawn(async move {
                 match list_deleted_posts(page, TRASH_PER_PAGE).await {
-                    Ok(PostListResponse { posts: list, total: t }) => {
+                    Ok(PostListResponse {
+                        posts: list,
+                        total: t,
+                    }) => {
                         posts.set(list);
                         total.set(t);
                     }
@@ -607,7 +610,11 @@ fn TrashRow(
     } else {
         "bg-paper-tertiary text-paper-secondary"
     };
-    let badge_text = if expired { "待清理".to_string() } else { format!("{remaining}天") };
+    let badge_text = if expired {
+        "待清理".to_string()
+    } else {
+        format!("{remaining}天")
+    };
     let deleted_str = post
         .deleted_at
         .map(|d| d.format("%Y-%m-%d").to_string())
