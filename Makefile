@@ -1,4 +1,4 @@
-.PHONY: dev build build-linux css css-watch clean build-editor build-editor-incremental build-lightbox build-lightbox-incremental build-core build-core-incremental highlight-css test doc doc-open start
+.PHONY: dev build build-linux css css-watch clean build-editor build-editor-incremental build-lightbox build-lightbox-incremental build-core build-core-incremental highlight-css test doc doc-open start clippy fix
 
 build:
 	@$(MAKE) build-editor
@@ -74,6 +74,12 @@ test:
 	@cd libs/tiptap-editor && pnpm test
 	@cd libs/lightbox && pnpm test
 	@cd libs/yggdrasil-core && pnpm test
+
+clippy:
+	@cargo clippy --all-targets --all-features -- -D warnings
+
+fix:
+	@cargo fix --allow-dirty
 
 # 只编译当前 crate 的文档（--no-deps 跳过依赖，--document-private-items
 # 让纯 binary crate 的内部模块/私有项也进文档，否则页面基本是空的）。
