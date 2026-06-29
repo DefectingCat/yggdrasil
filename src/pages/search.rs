@@ -80,6 +80,15 @@ pub fn Search() -> Element {
             }
         } else if search_res().as_ref().map(|r| r.is_err()).unwrap_or(false) {
             div { class: "text-center text-red-500 dark:text-red-400 py-20", "搜索失败" }
+        } else {
+            div { class: "flex flex-col items-center justify-center py-20 page-enter",
+                img {
+                    class: "w-48 h-auto rounded-lg select-none dark:brightness-90",
+                    src: "/images/xiantiaoxiaogou_02.webp",
+                    alt: "空状态提示",
+                    draggable: "false",
+                }
+            }
         }
     }
 }
