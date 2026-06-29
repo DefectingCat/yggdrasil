@@ -14,7 +14,8 @@ use dioxus::router::components::Link;
 #[derive(Props, Clone, PartialEq)]
 pub struct EmptyStateAction {
     /// 按钮文案。
-    pub label: &'static str,
+    #[props(into)]
+    pub label: String,
     /// 跳转目标路由。
     pub to: crate::router::Route,
 }
@@ -28,11 +29,14 @@ pub struct EmptyStateAction {
 #[component]
 pub fn EmptyState(
     /// 主标题（通常为「还没有文章」之类）。
-    #[props(default)] title: Option<&'static str>,
+    #[props(into, default = "还没有文章".to_string())]
+    title: String,
     /// 副文案，说明当前状态或引导用户。
-    #[props(default)] description: Option<&'static str>,
+    #[props(into, default = String::new())]
+    description: String,
     /// 可选的行动按钮。
-    #[props(default)] action: Option<EmptyStateAction>,
+    #[props(default)]
+    action: Option<EmptyStateAction>,
 ) -> Element {
     rsx! {
         div { class: "flex flex-col items-center justify-center text-center py-20 px-4 page-enter",
@@ -45,12 +49,12 @@ pub fn EmptyState(
             }
             // 主标题：衬线字体，与首页 H1 风格呼应但更轻量。
             h2 { class: "mt-8 text-2xl font-bold tracking-tight text-paper-primary",
-                {title.unwrap_or("还没有文章")}
+                "{title}"
             }
             // 副文案：次要色，限宽保证可读性。
-            if let Some(desc) = description {
+            if !description.is_empty() {
                 p { class: "mt-3 text-sm leading-relaxed text-paper-secondary max-w-md",
-                    {desc}
+                    "{description}"
                 }
             }
             // 行动按钮：药丸形，与搜索页主按钮一致。
@@ -58,7 +62,7 @@ pub fn EmptyState(
                 Link {
                     class: "mt-8 inline-flex items-center px-6 py-2 bg-paper-accent text-white rounded-full font-medium text-sm hover:brightness-110 active:scale-[0.98] transition-all duration-200",
                     to: act.to,
-                    {act.label}
+                    "{act.label}"
                 }
             }
         }

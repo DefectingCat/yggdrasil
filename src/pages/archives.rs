@@ -11,6 +11,7 @@ use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
 use crate::api::posts::{list_published_posts, PostListResponse};
+use crate::components::empty_state::EmptyState;
 use crate::components::skeletons::archive_skeleton::ArchiveSkeleton;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::models::post::PostListItem;
@@ -119,17 +120,26 @@ fn ArchivesContent() -> Element {
     let posts_data = posts_res.read();
     match &*posts_data {
         Some(Ok(PostListResponse { posts, total })) => {
-            let grouped = group_posts(posts);
-            rsx! {
-                div { class: "mt-2 text-base text-paper-secondary",
-                    "共 "
-                    span { class: "font-medium text-paper-primary", "{total}" }
-                    " 篇文章"
+            if *total == 0 {
+                rsx! {
+                    EmptyState {
+                        title: "还没有文章归档",
+                        description: "发布文章后，这里会自动按年月进行归档显示。",
+                    }
                 }
-                for year_group in grouped.iter() {
-                    YearSection {
-                        key: "{year_group.year}",
-                        year_group: year_group.clone(),
+            } else {
+                let grouped = group_posts(posts);
+                rsx! {
+                    div { class: "mt-2 text-base text-paper-secondary",
+                        "共 "
+                        span { class: "font-medium text-paper-primary", "{total}" }
+                        " 篇文章"
+                    }
+                    for year_group in grouped.iter() {
+                        YearSection {
+                            key: "{year_group.year}",
+                            year_group: year_group.clone(),
+                        }
                     }
                 }
             }
