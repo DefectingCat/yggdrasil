@@ -662,7 +662,8 @@ mod tests {
 
     #[test]
     fn test_auto_purge_settings_has_transition_class() {
-        let code = include_str!("trash.rs");
+        let full_code = include_str!("trash.rs");
+        let code = full_code.split("#[cfg(test)]").next().unwrap_or(full_code);
         assert!(code.contains("grid transition-all duration-300 ease-in-out"));
         assert!(code.contains("grid-template-rows: 1fr; opacity: 1;"));
         assert!(code.contains("grid-template-rows: 0fr; opacity: 0;"));
