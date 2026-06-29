@@ -185,3 +185,38 @@ pub fn EmptyState(message: &'static str, variant: &'static str) -> Element {
         div { class: "{class}", "{message}" }
     }
 }
+
+/// 筛选选项卡组件。
+///
+/// 用于切换不同的视图或筛选条件（例如：全部、待审核、已通过等）。
+/// 
+/// Props：
+/// - `items`：选项卡列表，每一项为 `(value, label)`
+/// - `active_value`：当前选中的值
+/// - `on_change`：选项卡切换时的回调
+#[component]
+pub fn FilterTabs(
+    items: Vec<(&'static str, &'static str)>,
+    active_value: String,
+    on_change: EventHandler<String>,
+) -> Element {
+    rsx! {
+        div { class: "flex gap-1 border-b border-paper-border",
+            for (value, label) in items {
+                button {
+                    key: "{value}",
+                    class: if active_value == *value { 
+                        "cursor-pointer px-4 py-2 text-sm font-medium border-b-2 border-paper-accent text-paper-primary" 
+                    } else { 
+                        "cursor-pointer px-4 py-2 text-sm font-medium text-paper-secondary hover:text-paper-primary transition-colors" 
+                    },
+                    onclick: {
+                        let v = value.to_string();
+                        move |_| on_change.call(v.clone())
+                    },
+                    "{label}"
+                }
+            }
+        }
+    }
+}

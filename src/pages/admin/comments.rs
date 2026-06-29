@@ -18,7 +18,7 @@ use crate::components::skeletons::atoms::SkeletonBox;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::empty_state::EmptyState;
 use crate::components::ui::{
-    Pagination, StatusBadge, ADMIN_CARD_CLASS, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS,
+    FilterTabs, Pagination, StatusBadge, ADMIN_CARD_CLASS, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS,
     BTN_TEXT_AMBER, BTN_TEXT_GREEN, BTN_TEXT_RED, BTN_SOLID_AMBER, BTN_SOLID_GREEN, BTN_SOLID_RED,
     CHECKBOX_CLASS,
 };
@@ -129,20 +129,15 @@ pub fn AdminCommentsPage(page: i32) -> Element {
         div { class: "space-y-6",
             h1 { class: "text-2xl font-bold text-paper-primary", "评论管理" }
 
-            div { class: "flex gap-1 border-b border-paper-border",
-                for (status, label) in [
+            FilterTabs {
+                items: vec![
                     ("", "全部"),
                     ("pending", "待审核"),
                     ("approved", "已通过"),
                     ("spam", "垃圾箱"),
-                ]
-                {
-                    button {
-                        class: if active_filter() == status { "cursor-pointer px-4 py-2 text-sm font-medium border-b-2 border-paper-accent text-paper-primary" } else { "cursor-pointer px-4 py-2 text-sm font-medium text-paper-secondary hover:text-paper-primary transition-colors" },
-                        onclick: move |_| active_filter.set(status.to_string()),
-                        "{label}"
-                    }
-                }
+                ],
+                active_value: active_filter(),
+                on_change: move |v| active_filter.set(v),
             }
 
             if !selected_ids().is_empty() {
