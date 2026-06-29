@@ -77,7 +77,7 @@ pub fn CommentItem(comment: PublicComment, post_id: i32) -> Element {
                     }
 
                     div {
-                        class: "prose prose-sm dark:prose-invert max-w-none text-paper-secondary",
+                        class: "prose prose-sm dark:prose-invert max-w-none text-paper-secondary md-content",
                         dangerous_inner_html: comment.content_html.as_deref().unwrap_or(""),
                     }
 
