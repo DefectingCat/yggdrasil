@@ -388,6 +388,19 @@ fn main() {
                 ))
                 .layer(axum::middleware::from_fn(crate::api::csrf::csrf_middleware));
 
+            // 数据导出：流式响应，走 GET + query（参数较短）。
+            // 鉴权在 handler 内部从 cookie 校验 admin；CSRF 最外层拦截非法来源。
+            let export_route = axum::Router::new()
+                .route(
+                    "/api/database/export",
+                    axum::routing::get(crate::api::database::export::export_data),
+                )
+                .layer(TimeoutLayer::with_status_code(
+                    StatusCode::REQUEST_TIMEOUT,
+                    Duration::from_secs(120),
+                ))
+                .layer(axum::middleware::from_fn(crate::api::csrf::csrf_middleware));
+
             // Dioxus 应用路由：自动挂载所有 server function 并渲染前端组件
             let dioxus_app =
                 axum::Router::new().serve_dioxus_application(config, router::AppRouter);
@@ -425,8 +438,8 @@ fn main() {
                     axum::routing::get(|| async { StatusCode::NOT_FOUND }),
                 );
 
-            // 合并：upload 路由保持自己独立的 300s 超时；app routes 加可选压缩/30s；static routes 无任何中间件
-            let router = upload_route.merge(app_routes).merge(static_routes);
+            // 合并：upload 路由保持自己独立的 300s 超时；export 路由 120s；app routes 加可选压缩/30s；static routes 无任何中间件
+            let router = upload_route.merge(export_route).merge(app_routes).merge(static_routes);
 
             Ok(router)
         });
