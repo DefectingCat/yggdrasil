@@ -9,6 +9,7 @@ others/
 public/style.css
 public/highlight.css
 public/tiptap
+public/codemirror
 public/lightbox
 public/yggdrasil-core
 public/doc

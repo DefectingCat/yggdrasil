@@ -1,9 +1,10 @@
-.PHONY: dev build build-linux css css-watch clean build-editor build-editor-incremental build-lightbox build-lightbox-incremental build-core build-core-incremental highlight-css test doc doc-open start clippy fix
+.PHONY: dev build build-linux css css-watch clean build-editor build-editor-incremental build-lightbox build-lightbox-incremental build-core build-core-incremental build-codemirror build-codemirror-incremental highlight-css test doc doc-open start clippy fix
 
 build:
 	@$(MAKE) build-editor
 	@$(MAKE) build-lightbox
 	@$(MAKE) build-core
+	@$(MAKE) build-codemirror
 	@$(MAKE) highlight-css
 	@tailwindcss -i input.css -o public/style.css --minify
 	@$(MAKE) doc
@@ -13,6 +14,7 @@ build-linux:
 	@$(MAKE) build-editor
 	@$(MAKE) build-lightbox
 	@$(MAKE) build-core
+	@$(MAKE) build-codemirror
 	@$(MAKE) highlight-css
 	@tailwindcss -i input.css -o public/style.css --minify
 	@dx build @client --release --debug-symbols=false --wasm-js-cfg false
@@ -53,7 +55,16 @@ build-core:
 build-core-incremental:
 	@cd libs/yggdrasil-core && pnpm run build
 
-dev: build-editor-incremental build-lightbox-incremental build-core-incremental
+build-codemirror:
+	@echo "Building CodeMirror editor..."
+	@cd libs/codemirror-editor && pnpm ci --include=dev && pnpm run build
+	@echo "CodeMirror editor built."
+
+# dev 用的增量构建：跳过 pnpm ci（假设 node_modules 已存在），仅 vite build。
+build-codemirror-incremental:
+	@cd libs/codemirror-editor && pnpm run build
+
+dev: build-editor-incremental build-lightbox-incremental build-core-incremental build-codemirror-incremental
 	@echo "Cleaning static/..."
 	@rm -rf static/
 	@echo "Building Tiptap editor (incremental)..."
@@ -74,6 +85,7 @@ test:
 	@cd libs/tiptap-editor && pnpm test
 	@cd libs/lightbox && pnpm test
 	@cd libs/yggdrasil-core && pnpm test
+	@cd libs/codemirror-editor && pnpm test
 
 clippy:
 	@cargo clippy --all-targets --all-features -- -D warnings

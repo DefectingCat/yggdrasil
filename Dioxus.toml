@@ -11,8 +11,8 @@ watch_path = ["src", "Cargo.toml"]
 
 [web.resource]
 style = ["/style.css", "/highlight.css", "/tiptap/editor.css", "/lightbox/lightbox.css", "/yggdrasil-core/yggdrasil-core.css"]
-script = ["/tiptap/editor.js", "/lightbox/lightbox.js", "/yggdrasil-core/yggdrasil-core.js"]
+script = ["/tiptap/editor.js", "/codemirror/editor.js", "/lightbox/lightbox.js", "/yggdrasil-core/yggdrasil-core.js"]
 
 [web.resource.dev]
 style = ["/style.css", "/highlight.css", "/tiptap/editor.css", "/lightbox/lightbox.css", "/yggdrasil-core/yggdrasil-core.css"]
-script = ["/tiptap/editor.js", "/lightbox/lightbox.js", "/yggdrasil-core/yggdrasil-core.js"]
+script = ["/tiptap/editor.js", "/codemirror/editor.js", "/lightbox/lightbox.js", "/yggdrasil-core/yggdrasil-core.js"]

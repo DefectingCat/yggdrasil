@@ -1,0 +1,27 @@
+import { defineConfig } from 'vite';
+import { resolve } from 'path';
+
+export default defineConfig({
+  build: {
+    // 输出直写 public/codemirror/，Dioxus 直接托管，无需拷贝步骤。
+    outDir: resolve(__dirname, '../../public/codemirror'),
+    emptyOutDir: true,
+    lib: {
+      entry: resolve(__dirname, 'src/index.ts'),
+      // IIFE 产物挂在 window.CodeMirrorEditor 上，Rust 侧用 Reflect::get 取。
+      name: 'CodeMirrorEditor',
+      fileName: () => 'editor.js',
+      formats: ['iife'],
+    },
+    rolldownOptions: {
+      output: {
+        // 默认导出（对象字面量 { create() }）成为 window.CodeMirrorEditor。
+        exports: 'default',
+        assetFileNames: 'editor.[ext]',
+      },
+    },
+    cssCodeSplit: false,
+    minify: true,
+    sourcemap: true,
+  },
+});
