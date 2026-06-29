@@ -138,7 +138,7 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                 ]
                 {
                     button {
-                        class: if active_filter() == status { "px-4 py-2 text-sm font-medium border-b-2 border-paper-accent text-paper-primary" } else { "px-4 py-2 text-sm font-medium text-paper-secondary hover:text-paper-primary transition-colors" },
+                        class: if active_filter() == status { "cursor-pointer px-4 py-2 text-sm font-medium border-b-2 border-paper-accent text-paper-primary" } else { "cursor-pointer px-4 py-2 text-sm font-medium text-paper-secondary hover:text-paper-primary transition-colors" },
                         onclick: move |_| active_filter.set(status.to_string()),
                         "{label}"
                     }
