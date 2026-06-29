@@ -147,10 +147,10 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>, parent_indent: Option<i
                         class: "block text-sm font-medium text-paper-secondary mb-1",
                         "内容 *"
                     }
-                    div { class: "relative",
+                    div { class: "relative bg-paper-entry rounded-lg",
                         textarea {
                             id: "comment-content-{id_suffix}",
-                            class: "{INPUT_CLASS} peer min-h-[100px] resize-y",
+                            class: "{INPUT_CLASS} !bg-transparent relative z-10 peer block min-h-[100px] resize-y",
                             value: "{content_md}",
                             disabled: submitting(),
                             oninput: move |e| content_md.set(e.value()),
@@ -158,7 +158,7 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>, parent_indent: Option<i
                         img {
                             src: "/images/xiantiaoxiaogou_03.webp",
                             alt: "",
-                            class: "absolute bottom-2 right-2 w-24 pointer-events-none opacity-60 peer-focus:opacity-10 transition-opacity duration-300",
+                            class: "absolute bottom-1.5 right-1.5 w-24 pointer-events-none opacity-60 peer-focus:opacity-10 transition-opacity duration-300 z-0",
                         }
                     }
                 }
