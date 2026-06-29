@@ -8,3 +8,5 @@
 
 /// 数据库运行状态聚合查询。
 pub mod status;
+/// 服务器状态聚合查询（应用内 + 主机层）。
+pub mod system_status;

@@ -35,6 +35,7 @@ image = { version = "0.25", optional = true, default-features = false, features 
 zenwebp = { version = "0.3", optional = true }
 moka = { version = "0.12", features = ["future", "sync"], optional = true }
 governor = { version = "0.8", optional = true }
+sysinfo = { version = "0.34", optional = true }
 md-5 = { version = "0.10", optional = true }
 futures = { version = "0.3", optional = true }
 bytes = { version = "1", optional = true }
@@ -87,6 +88,7 @@ server = [
     "dep:zenwebp",
     "dep:moka",
     "dep:governor",
+    "dep:sysinfo",
     "dep:md-5",
     "dep:futures",
     "dep:bytes",

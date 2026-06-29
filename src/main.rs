@@ -23,6 +23,9 @@ mod hooks;
 mod models;
 mod pages;
 mod router;
+// sysinfo_sampler 仅在 server feature 启用时编译：主机指标后台采样 + RwLock 快照。
+#[cfg(feature = "server")]
+mod sysinfo_sampler;
 // ssr_cache 仅在 server feature 启用时编译；保存 SSR 世代号失效状态。
 #[cfg(feature = "server")]
 mod ssr_cache;
@@ -324,6 +327,9 @@ fn main() {
             tokio::spawn(async {
                 tasks::image_cache_cleanup::run_cleanup().await;
             });
+
+            // 启动后台采样任务：sysinfo 主机指标（CPU/内存/磁盘），server function 只读快照。
+            sysinfo_sampler::spawn_sampler();
 
             // 配置增量渲染缓存，默认缓存 3600 秒，可通过 SSR_CACHE_SECS 覆盖。
             // 注意：src/ssr_cache.rs 中的世代号是未来就绪基础设施，当前并不会使
