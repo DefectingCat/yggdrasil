@@ -325,16 +325,20 @@ fn main() {
             // 配置增量渲染缓存，默认缓存 3600 秒，可通过 SSR_CACHE_SECS 覆盖。
             // 注意：src/ssr_cache.rs 中的世代号是未来就绪基础设施，当前并不会使
             // Dioxus 0.7 的 SSR 缓存实际失效（Dioxus 未暴露相应 API）。在 API 可用
-            // 之前，SSR_CACHE_SECS 仍是唯一有效的兜底 TTL。
+            // 之前，SSR_CACHE_SECS 仍是唯一有效的兜底 TTL——它就是内容写入后
+            // SSR 页面可见滞后的上界。
+            let ssr_cache_secs = std::env::var("SSR_CACHE_SECS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(3600);
+            tracing::info!(
+                ssr_cache_secs,
+                "增量渲染缓存生效（写入后内容可见滞后的上界）；\
+                 调小可缩短滞后，代价是 SSR 重渲染更频繁"
+            );
             let config = ServeConfig::builder().incremental(
-                dioxus::server::IncrementalRendererConfig::default().invalidate_after(
-                    std::time::Duration::from_secs(
-                        std::env::var("SSR_CACHE_SECS")
-                            .ok()
-                            .and_then(|s| s.parse().ok())
-                            .unwrap_or(3600),
-                    ),
-                ),
+                dioxus::server::IncrementalRendererConfig::default()
+                    .invalidate_after(std::time::Duration::from_secs(ssr_cache_secs)),
             );
 
             // SSR 世代号中间件：把当前全局世代号注入请求扩展，并对 GET 请求的

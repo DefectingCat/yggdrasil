@@ -41,10 +41,21 @@ static GLOBAL_GENERATION: LazyLock<AtomicU64> = LazyLock::new(AtomicU64::default
 pub struct SsrGeneration(pub u64);
 
 /// 原子递增并返回新的全局世代号。
+///
+/// 任何文章写入操作都会调用本函数,标记 SSR 渲染结果已过期。当前 Dioxus 0.7
+/// 不读取此世代号(详见模块文档),实际失效仍依赖 `SSR_CACHE_SECS` 兜底 TTL。
+/// 此处打一条 info 日志,既证明写入路径已执行,也提醒部署者此处存在滞后——
+/// 避免"我改了文章怎么没变"被误判成 DB/发布链路问题。
 pub fn bump_global_generation() -> u64 {
-    GLOBAL_GENERATION
+    let new = GLOBAL_GENERATION
         .fetch_add(1, Ordering::SeqCst)
-        .wrapping_add(1)
+        .wrapping_add(1);
+    tracing::info!(
+        new_generation = new,
+        "SSR 世代号已递增（写入路径触发）。注意：Dioxus 0.7 不读取此值，\
+         SSR 缓存需等待 SSR_CACHE_SECS 过期后才反映新内容"
+    );
+    new
 }
 
 /// 返回当前全局世代号。
