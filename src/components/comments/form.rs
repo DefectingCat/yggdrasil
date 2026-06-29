@@ -147,12 +147,19 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>, parent_indent: Option<i
                         class: "block text-sm font-medium text-paper-secondary mb-1",
                         "内容 *"
                     }
-                    textarea {
-                        id: "comment-content-{id_suffix}",
-                        class: "{INPUT_CLASS} min-h-[100px] resize-y",
-                        value: "{content_md}",
-                        disabled: submitting(),
-                        oninput: move |e| content_md.set(e.value()),
+                    div { class: "relative",
+                        textarea {
+                            id: "comment-content-{id_suffix}",
+                            class: "{INPUT_CLASS} peer min-h-[100px] resize-y",
+                            value: "{content_md}",
+                            disabled: submitting(),
+                            oninput: move |e| content_md.set(e.value()),
+                        }
+                        img {
+                            src: "/images/xiantiaoxiaogou_03.webp",
+                            alt: "",
+                            class: "absolute bottom-2 right-2 w-24 pointer-events-none opacity-60 peer-focus:opacity-10 transition-opacity duration-300",
+                        }
                     }
                 }
 
