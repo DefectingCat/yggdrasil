@@ -18,10 +18,11 @@ use crate::api::posts::{
 use crate::api::posts::{list_deleted_posts, PostListResponse};
 #[allow(unused_imports)]
 use crate::api::settings::{get_trash_settings, update_trash_settings};
+use crate::components::empty_state::EmptyState;
 use crate::components::skeletons::atoms::SkeletonBox;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::ui::{
-    EmptyState, Pagination, StatusBadge, ADMIN_CARD_CLASS, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS,
+    Pagination, StatusBadge, ADMIN_CARD_CLASS, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS,
     BTN_SOLID_GREEN, BTN_SOLID_RED, BTN_TEXT_ACCENT, BTN_TEXT_RED, CHECKBOX_CLASS,
 };
 use crate::models::post::PostListItem;
@@ -155,7 +156,10 @@ pub fn TrashPage(page: i32) -> Element {
             {
                 if error().is_some() {
                     rsx! {
-                        EmptyState { message: "加载失败", variant: "error" }
+                        EmptyState {
+                            title: "加载失败",
+                            description: "获取回收站列表时发生错误，请稍后重试。",
+                        }
                     }
                 } else if loading() && posts().is_empty() {
                     rsx! {
@@ -169,7 +173,10 @@ pub fn TrashPage(page: i32) -> Element {
                     }
                 } else if posts().is_empty() {
                     rsx! {
-                        EmptyState { message: "回收站为空", variant: "default" }
+                        EmptyState {
+                            title: "回收站为空",
+                            description: "当前没有被软删除的文章。",
+                        }
                     }
                 } else {
                     let list = posts();
