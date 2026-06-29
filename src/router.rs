@@ -22,7 +22,7 @@ use crate::pages::post_detail::PostDetail;
 use crate::pages::register::Register;
 use crate::pages::search::Search;
 use crate::pages::tags::{TagDetail, Tags};
-use crate::theme::{use_theme_provider, Theme, ThemePreload};
+use crate::theme::{use_theme_provider, ThemePreload};
 
 /// 全站路由枚举，每个变体对应一个页面路径
 #[derive(Clone, Routable, Debug, PartialEq)]

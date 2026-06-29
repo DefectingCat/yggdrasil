@@ -160,6 +160,7 @@ pub fn ThemeToggle() -> Element {
     let mut theme = use_theme();
     // generation:每次点击递增。延迟回调检查自己的 gen 是否最新,过期则跳过 set。
     // 解决连续点击时多个 spawn_local 堆积导致的状态错乱。
+    #[allow(unused_mut)]
     let mut click_gen = use_signal(|| 0u32);
 
     rsx! {
