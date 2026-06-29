@@ -419,10 +419,17 @@ fn AutoPurgeSettings(settings: Signal<TrashSettings>) -> Element {
                 }
             }
 
-            // 设置面板（可折叠）
-            if settings_panel_open() {
-                div { class: "border-t border-paper-border p-5 space-y-6",
-                    // 开关行：启用自动清理
+            // 设置面板（可折叠带平滑动画）
+            div {
+                class: "grid transition-all duration-300 ease-in-out",
+                style: if settings_panel_open() {
+                    "grid-template-rows: 1fr; opacity: 1;"
+                } else {
+                    "grid-template-rows: 0fr; opacity: 0; pointer-events: none;"
+                },
+                div { class: "overflow-hidden",
+                    div { class: "border-t border-paper-border p-5 space-y-6",
+                        // 开关行：启用自动清理
                     div { class: "flex items-center justify-between gap-4",
                         div { class: "min-w-0",
                             div { class: "text-sm font-medium text-paper-primary",
@@ -553,6 +560,7 @@ fn AutoPurgeSettings(settings: Signal<TrashSettings>) -> Element {
                     }
                 }
             }
+            }
         }
     }
 }
@@ -648,3 +656,15 @@ fn TrashRow(
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_auto_purge_settings_has_transition_class() {
+        let code = include_str!("trash.rs");
+        assert!(code.contains("grid transition-all duration-300 ease-in-out"));
+        assert!(code.contains("grid-template-rows: 1fr; opacity: 1;"));
+        assert!(code.contains("grid-template-rows: 0fr; opacity: 0;"));
+    }
+}
