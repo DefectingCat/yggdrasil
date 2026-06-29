@@ -170,6 +170,10 @@ pub fn PostsPage(page: i32) -> Element {
 /// 结果消息（`rebuild_result`）、以及 `do_rebuild` 异步闭包。完全自洽，与父组件
 /// 无任何状态共享。
 ///
+/// 布局要点：根容器 `relative`，结果消息 `absolute` 悬挂于按钮行下方，**不进入文档流**。
+/// 这样无论消息是否出现，本组件的盒高始终等于按钮行高度，避免外层 header 的
+/// `items-center` 因消息撑高而把标题与「+ 写文章」按钮重新居中、与重建按钮错位。
+///
 /// 从 `PostsPage` 抽取以降低 god component 复杂度（见 dioxus-render-purity skill）。
 #[component]
 #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
@@ -204,8 +208,11 @@ fn RebuildCacheBar() -> Element {
     };
 
     rsx! {
-        // 垂直容器：上方按钮行（与父级 + 写文章 同级水平排列），下方重建结果消息。
-        div { class: "flex flex-col gap-2",
+        // 根容器仅占「按钮行」高度：结果消息用绝对定位悬挂于按钮下方，
+        // 不进入文档流。否则消息出现时会撑高本组件，导致外层 header 的
+        // items-center 把「文章管理」标题与「+ 写文章」按钮重新居中、
+        // 与停在容器顶部的重建按钮产生纵向错位。
+        div { class: "relative",
             div { class: "flex items-center gap-3",
                 div { class: "group relative",
                     button {
@@ -239,7 +246,9 @@ fn RebuildCacheBar() -> Element {
                 }
             }
             if let Some(msg) = rebuild_result() {
-                div { class: "text-sm text-paper-secondary px-1", "{msg}" }
+                div { class: "absolute top-full left-0 mt-2 text-sm text-paper-secondary whitespace-nowrap",
+                    "{msg}"
+                }
             }
         }
     }
