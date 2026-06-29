@@ -207,41 +207,43 @@ pub fn FilterTabs(
     let mut indicator_style = use_signal(|| "left: 0px; width: 0px; opacity: 0;".to_string());
     let id_prefix = use_hook(|| TAB_GROUP_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
 
-    use_effect({
-        let active_value = active_value.clone();
-        move || {
-            #[allow(unused_variables)]
-            let active = active_value.clone();
-            spawn(async move {
-                #[cfg(target_arch = "wasm32")]
-                {
-                    use wasm_bindgen::JsCast;
-                    
-                    // 等待 DOM 节点更新
-                    let promise = js_sys::Promise::new(&mut |resolve, _| {
-                        if let Some(window) = web_sys::window() {
-                            let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 50);
-                        }
-                    });
-                    let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
-                    
+    let update_indicator = move |active: String| {
+        spawn(async move {
+            #[cfg(target_arch = "wasm32")]
+            {
+                use wasm_bindgen::JsCast;
+                
+                // 等待 DOM 节点更新
+                let promise = js_sys::Promise::new(&mut |resolve, _| {
                     if let Some(window) = web_sys::window() {
-                        if let Some(doc) = window.document() {
-                            let element_id = format!("tab-{}-{}", id_prefix, active);
-                            if let Some(el) = doc.get_element_by_id(&element_id) {
-                                if let Ok(html_el) = el.dyn_into::<web_sys::HtmlElement>() {
-                                    let left = html_el.offset_left();
-                                    let width = html_el.offset_width();
-                                    indicator_style.set(format!(
-                                        "left: {}px; width: {}px; opacity: 1;",
-                                        left, width
-                                    ));
-                                }
+                        let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 50);
+                    }
+                });
+                let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+                
+                if let Some(window) = web_sys::window() {
+                    if let Some(doc) = window.document() {
+                        let element_id = format!("tab-{}-{}", id_prefix, active);
+                        if let Some(el) = doc.get_element_by_id(&element_id) {
+                            if let Ok(html_el) = el.dyn_into::<web_sys::HtmlElement>() {
+                                let left = html_el.offset_left();
+                                let width = html_el.offset_width();
+                                indicator_style.set(format!(
+                                    "left: {}px; width: {}px; opacity: 1;",
+                                    left, width
+                                ));
                             }
                         }
                     }
                 }
-            });
+            }
+        });
+    };
+
+    use_effect({
+        let active_value = active_value.clone();
+        move || {
+            update_indicator(active_value.clone());
         }
     });
 
@@ -258,7 +260,10 @@ pub fn FilterTabs(
                     },
                     onclick: {
                         let v = value.to_string();
-                        move |_| on_change.call(v.clone())
+                        move |_| {
+                            on_change.call(v.clone());
+                            update_indicator(v.clone());
+                        }
                     },
                     "{label}"
                 }
