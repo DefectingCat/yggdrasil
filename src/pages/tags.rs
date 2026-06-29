@@ -18,6 +18,7 @@ use crate::api::posts::{get_posts_by_tag, list_tags, PostListResponse, TagListRe
 use crate::components::post_card::PostCard;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::tags_skeleton::{TagDetailSkeleton, TagsSkeleton};
+use crate::components::empty_state::EmptyState;
 use crate::router::Route;
 
 /// 标签云页面组件，对应路由 `/tags`。
@@ -49,25 +50,34 @@ fn TagsContent() -> Element {
 
     match tags_data {
         Some(Ok(tags)) => {
-            let total = tags.iter().map(|t| t.post_count).sum::<i64>();
-            rsx! {
-                div { class: "mt-2 text-base text-paper-secondary",
-                    "共 "
-                    span { class: "font-medium text-paper-primary", "{tags.len()}" }
-                    " 个标签，"
-                    span { class: "font-medium text-paper-primary", "{total}" }
-                    " 篇文章"
+            if tags.is_empty() {
+                rsx! {
+                    EmptyState {
+                        title: "暂无标签",
+                        description: "当前还没有任何标签。"
+                    }
                 }
-                ul { class: "flex flex-wrap gap-4 mt-6",
-                    for tag in tags {
-                        li { key: "{tag.name}",
-                            Link {
-                                class: "inline-flex items-center px-3 py-1.5 text-base font-medium bg-paper-accent-soft text-paper-accent rounded-lg hover:bg-paper-accent hover:text-white transition-all duration-200",
-                                to: Route::TagDetail {
-                                    tag: tag.name.clone(),
-                                },
-                                "{tag.name}"
-                                sup { class: "ml-1 text-sm text-paper-secondary", "{tag.post_count}" }
+            } else {
+                let total = tags.iter().map(|t| t.post_count).sum::<i64>();
+                rsx! {
+                    div { class: "mt-2 text-base text-paper-secondary",
+                        "共 "
+                        span { class: "font-medium text-paper-primary", "{tags.len()}" }
+                        " 个标签，"
+                        span { class: "font-medium text-paper-primary", "{total}" }
+                        " 篇文章"
+                    }
+                    ul { class: "flex flex-wrap gap-4 mt-6",
+                        for tag in tags {
+                            li { key: "{tag.name}",
+                                Link {
+                                    class: "inline-flex items-center px-3 py-1.5 text-base font-medium bg-paper-accent-soft text-paper-accent rounded-lg hover:bg-paper-accent hover:text-white transition-all duration-200",
+                                    to: Route::TagDetail {
+                                        tag: tag.name.clone(),
+                                    },
+                                    "{tag.name}"
+                                    sup { class: "ml-1 text-sm text-paper-secondary", "{tag.post_count}" }
+                                }
                             }
                         }
                     }
@@ -116,14 +126,23 @@ fn TagDetailContent(tag: String) -> Element {
 
     match posts_data {
         Some(Ok((posts, total))) => {
-            rsx! {
-                div { class: "mt-2 text-base text-paper-secondary",
-                    "共 "
-                    span { class: "font-medium text-paper-primary", "{total}" }
-                    " 篇文章"
+            if posts.is_empty() {
+                rsx! {
+                    EmptyState {
+                        title: "暂无文章",
+                        description: "该标签下还没有发布任何文章。"
+                    }
                 }
-                for post in posts.iter() {
-                    PostCard { key: "{post.id}", post: post.clone() }
+            } else {
+                rsx! {
+                    div { class: "mt-2 text-base text-paper-secondary",
+                        "共 "
+                        span { class: "font-medium text-paper-primary", "{total}" }
+                        " 篇文章"
+                    }
+                    for post in posts.iter() {
+                        PostCard { key: "{post.id}", post: post.clone() }
+                    }
                 }
             }
         }
