@@ -16,8 +16,9 @@ use crate::api::comments::{approve_comment, batch_update_comment_status, spam_co
 use crate::api::comments::{get_all_comments, AllCommentsResponse};
 use crate::components::skeletons::atoms::SkeletonBox;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
+use crate::components::empty_state::EmptyState;
 use crate::components::ui::{
-    EmptyState, Pagination, StatusBadge, ADMIN_CARD_CLASS, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS,
+    Pagination, StatusBadge, ADMIN_CARD_CLASS, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS,
     BTN_TEXT_AMBER, BTN_TEXT_GREEN, BTN_TEXT_RED, BTN_SOLID_AMBER, BTN_SOLID_GREEN, BTN_SOLID_RED,
     CHECKBOX_CLASS,
 };
@@ -214,7 +215,10 @@ pub fn AdminCommentsPage(page: i32) -> Element {
             {
                 if error().is_some() {
                     rsx! {
-                        EmptyState { message: "加载失败", variant: "error" }
+                        EmptyState {
+                            title: "加载失败",
+                            description: "获取评论列表时发生错误，请稍后重试。",
+                        }
                     }
                 } else if loading() && comments().is_empty() {
                     rsx! {
@@ -233,7 +237,10 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                     }
                 } else if comments().is_empty() {
                     rsx! {
-                        EmptyState { message: "暂无评论", variant: "default" }
+                        EmptyState {
+                            title: "暂无评论",
+                            description: "当前分类下还没有任何评论。",
+                        }
                     }
                 } else {
                     let list = comments();
