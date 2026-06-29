@@ -8,11 +8,6 @@ build:
 	@tailwindcss -i input.css -o public/style.css --minify
 	@$(MAKE) doc
 	@dx build --release --debug-symbols=false
-	@echo ""
-	@echo "Build complete! To run the release version locally, use:"
-	@echo "  make start"
-	@echo "Or run manually with:"
-	@echo "  DIOXUS_ASSET_DIR=target/dx/yggdrasil/release/web/public ./target/dx/yggdrasil/release/web/server"
 
 build-linux:
 	@$(MAKE) build-editor
@@ -67,10 +62,6 @@ dev: build-editor-incremental build-lightbox-incremental build-core-incremental
 	TAILWIND_PID=$$!; \
 	trap 'kill $$TAILWIND_PID 2>/dev/null; exit' INT TERM EXIT; \
 	SSR_CACHE_SECS=0 dx serve --addr 0.0.0.0
-
-start:
-	@echo "Starting local release build..."
-	@DIOXUS_ASSET_DIR=target/dx/yggdrasil/release/web/public ./target/dx/yggdrasil/release/web/server
 
 css:
 	@tailwindcss -i input.css -o public/style.css
