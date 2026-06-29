@@ -426,11 +426,11 @@ fn AutoPurgeSettings(settings: Signal<TrashSettings>) -> Element {
             div {
                 class: "grid transition-all duration-300 ease-in-out",
                 style: if settings_panel_open() {
-                    "grid-template-rows: 1fr; opacity: 1;"
+                    "grid-template-rows: 1fr; opacity: 1; pointer-events: auto;"
                 } else {
                     "grid-template-rows: 0fr; opacity: 0; pointer-events: none;"
                 },
-                div { class: "overflow-hidden",
+                div { class: "overflow-hidden min-h-0",
                     div { class: "border-t border-paper-border p-5 space-y-6",
                         // 开关行：启用自动清理
                     div { class: "flex items-center justify-between gap-4",
