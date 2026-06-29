@@ -135,13 +135,15 @@ fn TagDetailContent(tag: String) -> Element {
                 }
             } else {
                 rsx! {
-                    div { class: "mt-2 text-base text-paper-secondary",
+                    div { class: "mt-2 mb-8 text-base text-paper-secondary",
                         "共 "
                         span { class: "font-medium text-paper-primary", "{total}" }
                         " 篇文章"
                     }
-                    for post in posts.iter() {
-                        PostCard { key: "{post.id}", post: post.clone() }
+                    div { class: "mt-8",
+                        for post in posts.iter() {
+                            PostCard { key: "{post.id}", post: post.clone() }
+                        }
                     }
                 }
             }
