@@ -10,6 +10,8 @@ pub mod auth;
 pub mod comments;
 /// CSRF 防护中间件。
 pub mod csrf;
+/// 数据库管理接口（运行状态 / SQL 控制台 / 导出 / 备份恢复）。
+pub mod database;
 /// 应用错误类型与转换。
 pub mod error;
 /// 健康检查端点（liveness / readiness）。
