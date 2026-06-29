@@ -61,7 +61,7 @@ pub fn System() -> Element {
                 match active_tab() {
                     SystemTab::DbStatus => rsx! { DbStatusTab {} },
                     SystemTab::ServerStatus => rsx! { ServerStatusTab {} },
-                    SystemTab::SqlConsole => rsx! { div { class: "text-paper-secondary py-8", "SQL 控制台（待实现）" } },
+                    SystemTab::SqlConsole => rsx! { SqlConsoleTab {} },
                     SystemTab::Export => rsx! { div { class: "text-paper-secondary py-8", "数据导出（待实现）" } },
                     SystemTab::Backup => rsx! { div { class: "text-paper-secondary py-8", "备份恢复（待实现）" } },
                 }
@@ -630,6 +630,272 @@ fn ServerStatusTab() -> Element {
                 div { class: "text-paper-secondary py-8", "加载中..." }
             } else {
                 div { class: "text-paper-secondary py-8", "暂无数据" }
+            }
+        }
+    }
+}
+
+/// SQL 控制台 tab：CodeMirror 编辑器（SQL 高亮/补全/Vim）+ 4 道护栏 + 结果表 + EXPLAIN。
+///
+/// 护栏 4（前端二次确认）：提交写操作前弹窗确认。
+#[allow(non_snake_case)]
+fn SqlConsoleTab() -> Element {
+    use crate::api::database::sql_console::SqlResult;
+    #[cfg(target_arch = "wasm32")]
+    use crate::api::database::sql_console::{execute_sql, ExecuteSqlOpts};
+    #[cfg(target_arch = "wasm32")]
+    use crate::api::database::schema::get_db_schema;
+    use crate::components::ui::ADMIN_TABLE_CLASS;
+    #[cfg(target_arch = "wasm32")]
+    use crate::codemirror_bridge;
+    use crate::theme::use_theme;
+    #[cfg(target_arch = "wasm32")]
+    use crate::theme::Theme;
+
+    let theme = use_theme();
+    let sql_text = use_signal(String::new);
+    let result = use_signal(|| Option::<SqlResult>::None);
+    let mut error = use_signal(|| Option::<String>::None);
+    let mut running = use_signal(|| false);
+    // 选项 toggles
+    let mut with_explain = use_signal(|| false);
+    let mut allow_multi = use_signal(|| false);
+    let mut confirm_dangerous = use_signal(|| false);
+    // theme/sql_text 仅在 wasm32 块内使用；server 构建时显式引用避免 unused 警告。
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = (&theme, &sql_text);
+
+    // CodeMirror 实例句柄（仅 WASM）。
+    #[cfg(target_arch = "wasm32")]
+    let mut editor_handle: Signal<Option<codemirror_bridge::EditorHandle>> = use_signal(|| None);
+
+    // 初始化 CodeMirror + 拉取 schema 注入补全。仅 WASM。
+    #[cfg(target_arch = "wasm32")]
+    {
+        use dioxus::prelude::wasm_bindgen::closure::Closure;
+        use_effect(move || {
+            if editor_handle().is_some() {
+                return;
+            }
+            let mut text = sql_text;
+            let on_change = Closure::new(move |v: String| {
+                text.set(v);
+            });
+            let on_ready = Closure::new(|| {});
+
+            let theme_name = if theme() == Theme::Dark { "dark" } else { "light" };
+            let opts = codemirror_bridge::EditorOptions::new();
+            opts.set_language("sql");
+            opts.set_theme(theme_name);
+            opts.set_vim(true);
+            opts.set_on_change(&on_change);
+            opts.set_on_ready(&on_ready);
+
+            match codemirror_bridge::get_module().create("sql-editor", &opts) {
+                Ok(Some(inst)) => {
+                    let handle = codemirror_bridge::EditorHandle::new(inst, on_change, on_ready);
+                    editor_handle.set(Some(handle));
+                }
+                _ => {}
+            }
+
+            // 异步拉取 schema 注入补全
+            spawn(async move {
+                if let Ok(schema) = get_db_schema().await {
+                    if let Some(h) = editor_handle.read().as_ref() {
+                        h.instance().set_schema(&schema);
+                    }
+                }
+            });
+        });
+
+        // 主题切换时同步编辑器主题
+        use_effect(move || {
+            let t = theme();
+            if let Some(h) = editor_handle.read().as_ref() {
+                h.instance().set_theme(if t == Theme::Dark { "dark" } else { "light" });
+            }
+        });
+    }
+
+    // 执行 SQL
+    let mut run_sql = move || {
+        running.set(true);
+        error.set(None);
+        #[cfg(target_arch = "wasm32")]
+        {
+            let sql = sql_text.read().clone();
+            let opts = ExecuteSqlOpts {
+                allow_multi: allow_multi(),
+                confirm_dangerous: confirm_dangerous(),
+                with_explain: with_explain(),
+            };
+            // 护栏 4：写操作前端二次确认（简单判断：含 UPDATE/DELETE/INSERT/ALTER/DROP/TRUNCATE/CREATE 关键词）
+            let lower = sql.to_lowercase();
+            let looks_write = ["update ", "delete ", "insert ", "alter ", "drop ", "truncate ", "create "]
+                .iter()
+                .any(|k| lower.contains(k));
+            if looks_write && !confirm_dangerous() {
+                // 简单提示；真正的高危放行靠 confirm_dangerous 开关
+                let confirmed = web_sys::window().and_then(|w| {
+                    w.confirm_with_message(
+                        "这是写操作（修改数据/结构），确认执行？\n\n高危操作（DROP/TRUNCATE/ALTER）还需勾选「我了解后果」。",
+                    )
+                    .ok()
+                });
+                if confirmed != Some(true) {
+                    running.set(false);
+                    return;
+                }
+            }
+            spawn(async move {
+                match execute_sql(sql, opts).await {
+                    Ok(r) => result.set(Some(r)),
+                    Err(e) => error.set(Some(e.to_string())),
+                }
+                running.set(false);
+            });
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            running.set(false);
+        }
+    };
+
+    let current_result = result.read().clone();
+    let current_error = error.read().clone();
+    let elapsed = current_result.as_ref().map(|r| r.elapsed_ms).unwrap_or(0);
+    let affected = current_result.as_ref().map(|r| r.affected_rows).unwrap_or(0);
+    let stmt_type = current_result
+        .as_ref()
+        .map(|r| r.statement_type.clone())
+        .unwrap_or_default();
+    let truncated = current_result.as_ref().map(|r| r.truncated).unwrap_or(false);
+    // 结果行预格式化（避免在 rsx for 循环体内格式化）
+    let result_rows: Vec<Vec<String>> = current_result
+        .as_ref()
+        .map(|r| {
+            r.rows
+                .iter()
+                .map(|row| {
+                    row.iter()
+                        .map(|cell| match cell {
+                            serde_json::Value::Null => "NULL".to_string(),
+                            serde_json::Value::String(s) => s.clone(),
+                            other => other.to_string(),
+                        })
+                        .collect()
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let result_columns: Vec<String> = current_result
+        .as_ref()
+        .map(|r| r.columns.clone())
+        .unwrap_or_default();
+    let explain = current_result.as_ref().and_then(|r| r.explain.clone());
+
+    rsx! {
+        div { class: "space-y-4",
+            // 编辑器容器
+            div {
+                class: "border border-paper-border rounded-lg overflow-hidden bg-paper-entry",
+                id: "sql-editor",
+                style: "min-height: 200px"
+            }
+
+            // 选项 + 执行按钮
+            div { class: "flex flex-wrap items-center gap-3",
+                button {
+                    class: "px-4 py-1.5 text-sm bg-paper-accent text-paper-theme rounded hover:brightness-110 transition disabled:opacity-50",
+                    disabled: running(),
+                    onclick: move |_| run_sql(),
+                    if running() { "执行中..." } else { "执行 (Ctrl+Enter)" }
+                }
+                label { class: "flex items-center gap-1 text-sm text-paper-secondary",
+                    input {
+                        r#type: "checkbox",
+                        class: "mr-1",
+                        checked: with_explain(),
+                        onchange: move |e| with_explain.set(e.checked()),
+                    }
+                    "EXPLAIN"
+                }
+                label { class: "flex items-center gap-1 text-sm text-paper-secondary",
+                    input {
+                        r#type: "checkbox",
+                        class: "mr-1",
+                        checked: allow_multi(),
+                        onchange: move |e| allow_multi.set(e.checked()),
+                    }
+                    "允许多语句"
+                }
+                label { class: "flex items-center gap-1 text-sm text-red-600 dark:text-red-400",
+                    input {
+                        r#type: "checkbox",
+                        class: "mr-1",
+                        checked: confirm_dangerous(),
+                        onchange: move |e| confirm_dangerous.set(e.checked()),
+                    }
+                    "我了解后果（放开 DROP/TRUNCATE/ALTER）"
+                }
+            }
+
+            // 错误
+            if let Some(err) = current_error {
+                div { class: "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-700 dark:text-red-300",
+                    "{err}"
+                }
+            }
+
+            // 结果摘要
+            if current_result.is_some() {
+                div { class: "flex flex-wrap gap-4 text-sm text-paper-secondary",
+                    span { "类型：{stmt_type}" }
+                    if affected > 0 {
+                        span { "影响行数：{affected}" }
+                    }
+                    span { "耗时：{elapsed}ms" }
+                    if truncated {
+                        span { class: "text-amber-600 dark:text-amber-400", "结果超过 500 行，已截断" }
+                    }
+                }
+            }
+
+            // 结果表格
+            if !result_rows.is_empty() {
+                div { class: "{ADMIN_TABLE_CLASS}",
+                    div { class: "overflow-x-auto",
+                        table { class: "w-full text-sm",
+                            thead {
+                                tr { class: "border-b border-paper-border text-left text-paper-secondary",
+                                    for col in result_columns.iter() {
+                                        th { class: "px-4 py-2 font-medium whitespace-nowrap", "{col}" }
+                                    }
+                                }
+                            }
+                            tbody {
+                                for row in result_rows.iter() {
+                                    tr { class: "border-b border-paper-border last:border-0 hover:bg-paper-entry transition-colors",
+                                        for cell in row.iter() {
+                                            td { class: "px-4 py-2 font-mono text-xs text-paper-secondary", "{cell}" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // EXPLAIN 输出
+            if let Some(explain) = explain {
+                div { class: "{ADMIN_TABLE_CLASS}",
+                    div { class: "px-4 py-2 border-b border-paper-border text-sm font-medium text-paper-primary",
+                        "执行计划"
+                    }
+                    pre { class: "p-4 text-xs font-mono text-paper-secondary overflow-x-auto whitespace-pre", "{explain}" }
+                }
             }
         }
     }

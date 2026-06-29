@@ -10,3 +10,7 @@
 pub mod status;
 /// 服务器状态聚合查询（应用内 + 主机层）。
 pub mod system_status;
+/// SQL 控制台执行（全读写 + 4 护栏）。
+pub mod sql_console;
+/// SQL 补全用 schema 拉取。
+pub mod schema;
