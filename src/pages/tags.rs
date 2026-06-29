@@ -54,7 +54,7 @@ fn TagsContent() -> Element {
                 rsx! {
                     EmptyState {
                         title: "暂无标签",
-                        description: "当前还没有任何标签。"
+                        description: "当前还没有任何标签。",
                     }
                 }
             } else {
@@ -76,7 +76,9 @@ fn TagsContent() -> Element {
                                         tag: tag.name.clone(),
                                     },
                                     "{tag.name}"
-                                    sup { class: "ml-1 text-sm text-paper-secondary", "{tag.post_count}" }
+                                    sup { class: "ml-1 text-sm text-paper-secondary",
+                                        "{tag.post_count}"
+                                    }
                                 }
                             }
                         }
@@ -130,7 +132,7 @@ fn TagDetailContent(tag: String) -> Element {
                 rsx! {
                     EmptyState {
                         title: "暂无文章",
-                        description: "该标签下还没有发布任何文章。"
+                        description: "该标签下还没有发布任何文章。",
                     }
                 }
             } else {

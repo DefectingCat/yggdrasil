@@ -181,15 +181,14 @@ pub fn ThemeToggle() -> Element {
                     let x = coords.x;
                     let y = coords.y;
                     // JS 从 DOM 现状推导目标主题(不传 isDark),避免与 Signal 状态不同步。
-                    let _ = js_sys::eval(&format!(
-                        "if (window.__startThemeTransition) \
-                         window.__startThemeTransition({x}, {y});",
-                        x = x,
-                        y = y,
-                    ));
-                    // theme.set 推迟到动画结束:其触发的 Dioxus 微任务重渲染会打断 VT。
-                    // gen 确保连续点击只有最新回调 set。JS 已自治切换 dark class,
-                    // 动画完成后再更新 Dioxus 状态，避免组件重渲染可能带来的干扰
+                    let _ = js_sys::eval(
+                        &format!(
+                            "if (window.__startThemeTransition) \
+                                 window.__startThemeTransition({x}, {y});", // theme.set 推迟到动画结束:其触发的 Dioxus 微任务重渲染会打断 VT。
+                            x = x,
+                            y = y,
+                        ),
+                    );
                     let gen = click_gen() + 1;
                     click_gen.set(gen);
                     let mut theme_clone = theme;

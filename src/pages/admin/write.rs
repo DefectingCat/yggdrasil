@@ -656,9 +656,7 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
             // —— 上传中：骨架占位 + 文案 ——
             if cover_uploading() {
                 div { class: "absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--color-paper-tertiary)]/30 animate-pulse",
-                    span { class: "text-sm text-[var(--color-paper-secondary)]",
-                        "上传中..."
-                    }
+                    span { class: "text-sm text-[var(--color-paper-secondary)]", "上传中..." }
                 }
             }
 
@@ -712,9 +710,7 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
                 }
                 // 底部渐变遮罩 + "更换封面"提示（hover 出现）。
                 div { class: "absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-end justify-center pb-2 pointer-events-none",
-                    span { class: "text-xs text-white/90",
-                        "点击下方区域可重新上传"
-                    }
+                    span { class: "text-xs text-white/90", "点击下方区域可重新上传" }
                 }
             }
 

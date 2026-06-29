@@ -99,7 +99,7 @@ pub fn PostsPage(page: i32) -> Element {
                     action: EmptyStateAction {
                         label: "写文章".to_string(),
                         to: Route::Write {},
-                    }
+                    },
                 }
             } else {
                 div { class: "{ADMIN_TABLE_CLASS}",
