@@ -707,3 +707,4 @@
 }
 
 /* ========== Blur-up 渐进图片加载（已移入 @layer components） ========== */
+@source "./src/**/*.{rs,html}";
