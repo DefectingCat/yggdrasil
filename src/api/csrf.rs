@@ -19,6 +19,36 @@ fn is_write_method(method: &Method) -> bool {
     )
 }
 
+/// 启动时检查 `APP_BASE_URL` 是否已设置，未设置则打一条 WARN。
+///
+/// [`trusted_origin`] 在拿不到该变量时会回退到请求 `Host` 头推导本站 origin，
+/// 反向代理后若 `Host` 头可被客户端影响，该回退路径可被 CSRF 绕过。
+/// 生产环境应显式设置该变量为站点完整 origin（如 `https://your-domain.example`）。
+///
+/// 本地开发同样会触发（默认不设 `APP_BASE_URL`），代价仅是启动时一条 WARN，
+/// 远小于误判 localhost 的复杂度。与 `image.rs` 的启动告警同范式：一次性 WARN，
+/// 不污染每请求路径。
+#[cfg(feature = "server")]
+pub fn warn_if_app_base_url_unset() {
+    if app_base_url_is_set() {
+        return;
+    }
+    tracing::warn!(
+        "APP_BASE_URL 未设置。CSRF 校验将回退到请求 Host 头推导本站 origin，\
+         反向代理后若 Host 头可被客户端影响存在绕过风险。\
+         生产环境应显式设置为站点完整 origin，如 https://your-domain.example。"
+    );
+}
+
+/// `APP_BASE_URL` 是否已设置为非空值。纯函数，便于测试。
+#[cfg(feature = "server")]
+fn app_base_url_is_set() -> bool {
+    std::env::var("APP_BASE_URL")
+        .ok()
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false)
+}
+
 /// 从 `scheme://host[:port][/path][?query]` 提取标准化的 `scheme://host[:port]`，
 /// 端口为默认值（http=80, https=443）时省略。
 ///
@@ -196,5 +226,62 @@ mod tests {
     fn extract_origin_returns_none_when_both_absent() {
         let headers = HeaderMap::new();
         assert_eq!(extract_origin(&headers), None);
+    }
+
+    // ── APP_BASE_URL 启动告警 ──────────────────────────────────────
+    // 这些测试读/写 APP_BASE_URL 全局环境变量，用 serial 串行隔离，
+    // 与 rate_limit.rs 的 env 测试同模式（保存 → 设值 → 恢复）。
+
+    #[test]
+    #[serial_test::serial]
+    fn app_base_url_is_set_false_when_unset() {
+        let original = std::env::var("APP_BASE_URL").ok();
+        std::env::remove_var("APP_BASE_URL");
+        assert!(!app_base_url_is_set());
+        restore_env("APP_BASE_URL", original);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn app_base_url_is_set_false_when_empty() {
+        let original = std::env::var("APP_BASE_URL").ok();
+        std::env::set_var("APP_BASE_URL", "");
+        assert!(!app_base_url_is_set());
+        restore_env("APP_BASE_URL", original);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn app_base_url_is_set_false_when_whitespace_only() {
+        let original = std::env::var("APP_BASE_URL").ok();
+        std::env::set_var("APP_BASE_URL", "   \t  ");
+        assert!(!app_base_url_is_set());
+        restore_env("APP_BASE_URL", original);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn app_base_url_is_set_true_when_set() {
+        let original = std::env::var("APP_BASE_URL").ok();
+        std::env::set_var("APP_BASE_URL", "https://example.com");
+        assert!(app_base_url_is_set());
+        restore_env("APP_BASE_URL", original);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn app_base_url_is_set_trims_surrounding_whitespace() {
+        let original = std::env::var("APP_BASE_URL").ok();
+        std::env::set_var("APP_BASE_URL", "  https://example.com  ");
+        assert!(app_base_url_is_set());
+        restore_env("APP_BASE_URL", original);
+    }
+
+    /// 恢复环境变量到测试前的状态，避免污染其他测试。
+    fn restore_env(key: &str, original: Option<String>) {
+        match original {
+            Some(value) => std::env::set_var(key, value),
+            None => std::env::remove_var(key),
+        }
     }
 }

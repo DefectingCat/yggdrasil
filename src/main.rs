@@ -224,6 +224,10 @@ fn main() {
             std::process::exit(1);
         }
 
+        // 提醒部署者显式设置 APP_BASE_URL：未设置时 CSRF 会回退到 Host 头，
+        // 反向代理后存在绕过风险（本地 localhost 开发会静默，不打日志）。
+        api::csrf::warn_if_app_base_url_unset();
+
         // 启动前执行数据库迁移。阻塞：完成前不监听端口。
         // 失败用 exit(1) 退出（不 panic），避免启动一个 schema 不一致的半残服务。
         // 多实例滚动发布时由咨询锁串行化，详见 src/db/migrate.rs。
