@@ -186,9 +186,12 @@ pub fn EmptyState(message: &'static str, variant: &'static str) -> Element {
     }
 }
 
+static TAB_GROUP_ID: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 /// 筛选选项卡组件。
 ///
 /// 用于切换不同的视图或筛选条件（例如：全部、待审核、已通过等）。
+/// 具备高级的平滑滑动底部指示器动画。
 /// 
 /// Props：
 /// - `items`：选项卡列表，每一项为 `(value, label)`
@@ -200,13 +203,50 @@ pub fn FilterTabs(
     active_value: String,
     on_change: EventHandler<String>,
 ) -> Element {
+    let indicator_style = use_signal(|| "left: 0px; width: 0px; opacity: 0;".to_string());
+    let id_prefix = use_hook(|| TAB_GROUP_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
+
+    use_effect({
+        let active_value = active_value.clone();
+        move || {
+            #[allow(unused_variables)]
+            let active = active_value.clone();
+            spawn(async move {
+                #[cfg(target_arch = "wasm32")]
+                {
+                    use wasm_bindgen::JsCast;
+                    
+                    // 等待下一帧渲染完成，以确保 DOM 节点已经更新
+                    dioxus_core::prelude::wait_for_next_render().await;
+                    
+                    if let Some(window) = web_sys::window() {
+                        if let Some(doc) = window.document() {
+                            let element_id = format!("tab-{}-{}", id_prefix, active);
+                            if let Some(el) = doc.get_element_by_id(&element_id) {
+                                if let Ok(html_el) = el.dyn_into::<web_sys::HtmlElement>() {
+                                    let left = html_el.offset_left();
+                                    let width = html_el.offset_width();
+                                    indicator_style.set(format!(
+                                        "left: {}px; width: {}px; opacity: 1;",
+                                        left, width
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    });
+
     rsx! {
-        div { class: "flex gap-1 border-b border-paper-border",
+        div { class: "relative flex gap-1 border-b border-paper-border",
             for (value, label) in items {
                 button {
+                    id: "tab-{id_prefix}-{value}",
                     key: "{value}",
                     class: if active_value == *value { 
-                        "cursor-pointer px-4 py-2 text-sm font-medium border-b-2 border-paper-accent text-paper-primary" 
+                        "cursor-pointer px-4 py-2 text-sm font-medium text-paper-primary transition-colors" 
                     } else { 
                         "cursor-pointer px-4 py-2 text-sm font-medium text-paper-secondary hover:text-paper-primary transition-colors" 
                     },
@@ -216,6 +256,11 @@ pub fn FilterTabs(
                     },
                     "{label}"
                 }
+            }
+            // 绝对定位的滑动颜色条
+            div {
+                class: "absolute bottom-[-1px] h-[2px] bg-paper-accent transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] pointer-events-none",
+                style: "{indicator_style}",
             }
         }
     }
