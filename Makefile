@@ -27,31 +27,31 @@ highlight-css:
 
 build-editor:
 	@echo "Building Tiptap editor..."
-	@cd libs/tiptap-editor && npm ci --include=dev && npm run build
+	@cd libs/tiptap-editor && pnpm ci --include=dev && pnpm run build
 	@echo "Tiptap editor built."
 
-# dev 用的增量构建：跳过 npm ci（假设 node_modules 已存在），仅 vite build。
+# dev 用的增量构建：跳过 pnpm ci（假设 node_modules 已存在），仅 vite build。
 # 与 build-editor 分开，避免每次 make dev 都重装依赖。
 build-editor-incremental:
-	@cd libs/tiptap-editor && npm run build
+	@cd libs/tiptap-editor && pnpm run build
 
 build-lightbox:
 	@echo "Building Lightbox..."
-	@cd libs/lightbox && npm install && npm run build
+	@cd libs/lightbox && pnpm install && pnpm run build
 	@echo "Lightbox built."
 
-# dev 用的增量构建：跳过 npm ci（假设 node_modules 已存在），仅 vite build。
+# dev 用的增量构建：跳过 pnpm ci（假设 node_modules 已存在），仅 vite build。
 build-lightbox-incremental:
-	@cd libs/lightbox && npm run build
+	@cd libs/lightbox && pnpm run build
 
 build-core:
 	@echo "Building yggdrasil-core..."
-	@cd libs/yggdrasil-core && npm install && npm run build
+	@cd libs/yggdrasil-core && pnpm install && pnpm run build
 	@echo "yggdrasil-core built."
 
-# dev 用的增量构建：跳过 npm install（假设 node_modules 已存在），仅 vite build。
+# dev 用的增量构建：跳过 pnpm install（假设 node_modules 已存在），仅 vite build。
 build-core-incremental:
-	@cd libs/yggdrasil-core && npm run build
+	@cd libs/yggdrasil-core && pnpm run build
 
 dev: build-editor-incremental build-lightbox-incremental build-core-incremental
 	@echo "Cleaning static/..."
@@ -71,9 +71,9 @@ css-watch:
 
 test:
 	@cargo test
-	@cd libs/tiptap-editor && npm test
-	@cd libs/lightbox && npm test
-	@cd libs/yggdrasil-core && npm test
+	@cd libs/tiptap-editor && pnpm test
+	@cd libs/lightbox && pnpm test
+	@cd libs/yggdrasil-core && pnpm test
 
 # 只编译当前 crate 的文档（--no-deps 跳过依赖，--document-private-items
 # 让纯 binary crate 的内部模块/私有项也进文档，否则页面基本是空的）。
