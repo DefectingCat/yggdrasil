@@ -458,8 +458,13 @@ fn write_editor(post_id: Option<i32>) -> Element {
                 // h-[60vh]：随窗口高度自适应；min-h-[400px]：窗口过矮时仍可用。
                 div { class: "h-[60vh] min-h-[400px] flex flex-col my-4",
                     div {
-                        class: "flex-1 min-h-0 w-full border border-[var(--color-paper-border)] rounded-xl overflow-hidden bg-[var(--color-paper-entry)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none",
+                        class: "relative group flex-1 min-h-0 w-full border border-[var(--color-paper-border)] rounded-xl overflow-hidden bg-[var(--color-paper-entry)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none",
                         id: "tiptap-editor",
+                        img {
+                            src: "/images/xiantiaoxiaogou_03.webp",
+                            alt: "",
+                            class: "absolute bottom-1.5 right-1.5 opacity-60 group-focus-within:opacity-10 transition-opacity duration-300 pointer-events-none z-0",
+                        }
                     }
                 }
 
