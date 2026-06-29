@@ -628,10 +628,6 @@
     background: transparent;
   }
 
-  /* 暗色模式灰底 */
-  .dark .blur-img {
-    background: var(--color-paper-code-bg, #2a2a2a);
-  }
 }
 
 @keyframes fadeIn {
