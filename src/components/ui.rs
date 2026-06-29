@@ -203,7 +203,8 @@ pub fn FilterTabs(
     active_value: String,
     on_change: EventHandler<String>,
 ) -> Element {
-    let indicator_style = use_signal(|| "left: 0px; width: 0px; opacity: 0;".to_string());
+    #[allow(unused_mut)]
+    let mut indicator_style = use_signal(|| "left: 0px; width: 0px; opacity: 0;".to_string());
     let id_prefix = use_hook(|| TAB_GROUP_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
 
     use_effect({
@@ -216,8 +217,13 @@ pub fn FilterTabs(
                 {
                     use wasm_bindgen::JsCast;
                     
-                    // 等待下一帧渲染完成，以确保 DOM 节点已经更新
-                    dioxus_core::prelude::wait_for_next_render().await;
+                    // 等待 DOM 节点更新
+                    let promise = js_sys::Promise::new(&mut |resolve, _| {
+                        if let Some(window) = web_sys::window() {
+                            let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 50);
+                        }
+                    });
+                    let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
                     
                     if let Some(window) = web_sys::window() {
                         if let Some(doc) = window.document() {
