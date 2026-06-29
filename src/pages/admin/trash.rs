@@ -660,8 +660,6 @@ fn TrashRow(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_auto_purge_settings_has_transition_class() {
         let full_code = include_str!("trash.rs");

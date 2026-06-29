@@ -336,25 +336,25 @@ mod tests {
     fn relative_label_hours() {
         let (label, _) = relative_label_from_millis(60 * 60_000, ISO);
         assert_eq!(label, "1 小时前");
-        let (label, _) = relative_label_from_millis(3 * 3600_000, ISO);
+        let (label, _) = relative_label_from_millis(3 * 3_600_000, ISO);
         assert_eq!(label, "3 小时前");
-        let (label, _) = relative_label_from_millis(23 * 3600_000, ISO);
+        let (label, _) = relative_label_from_millis(23 * 3_600_000, ISO);
         assert_eq!(label, "23 小时前");
     }
 
     #[test]
     fn relative_label_days() {
-        let (label, _) = relative_label_from_millis(24 * 3600_000, ISO);
+        let (label, _) = relative_label_from_millis(24 * 3_600_000, ISO);
         assert_eq!(label, "1 天前");
-        let (label, _) = relative_label_from_millis(7 * 24 * 3600_000, ISO);
+        let (label, _) = relative_label_from_millis(7 * 24 * 3_600_000, ISO);
         assert_eq!(label, "7 天前");
-        let (label, _) = relative_label_from_millis(29 * 24 * 3600_000, ISO);
+        let (label, _) = relative_label_from_millis(29 * 24 * 3_600_000, ISO);
         assert_eq!(label, "29 天前");
     }
 
     #[test]
     fn relative_label_falls_back_to_date_over_30_days() {
-        let (label, absolute) = relative_label_from_millis(60 * 24 * 3600_000, ISO);
+        let (label, absolute) = relative_label_from_millis(60 * 24 * 3_600_000, ISO);
         assert_eq!(label, "2026-06-22");
         assert_eq!(absolute, "2026-06-22");
     }
