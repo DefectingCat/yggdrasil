@@ -88,7 +88,21 @@ async fn run_pg_dump_backup(task_id: &str, timestamp: &str) {
     );
     let filename = format!("backup_{}.sql", timestamp);
     let path = backup_path(&filename);
-    let db_url = std::env::var("DATABASE_URL").unwrap_or_default();
+    let db_url = match std::env::var("DATABASE_URL") {
+        Ok(u) if !u.is_empty() => u,
+        _ => {
+            tasks::update(
+                task_id,
+                "DATABASE_URL 未配置",
+                100,
+                TaskStatus::Failed,
+                None,
+                Some("pg_dump 备份需要 DATABASE_URL".to_string()),
+                None,
+            );
+            return;
+        }
+    };
 
     let mut header = String::new();
     header.push_str(&format!("{}\n", BACKUP_SIGNATURE));
@@ -262,11 +276,11 @@ async fn run_sql_fallback_backup(task_id: &str, timestamp: &str) {
                 out.push_str(&format!("-- 导出失败: {}\n", e));
             }
         }
-        // 按表更新进度
+        // 按表更新进度（用 u32 避免大 schema 下的截断/溢出）
         tasks::update(
             task_id,
             &format!("导出表 {}/{}", i + 1, total),
-            10 + (i + 1) as u8 * 90 / total as u8,
+            (10 + (i + 1) as u32 * 90 / total as u32).min(99) as u8,
             TaskStatus::Running,
             None,
             None,
@@ -345,7 +359,21 @@ pub async fn restore_backup(filename: String, confirm: bool) -> Result<String, S
 #[cfg(feature = "server")]
 async fn run_restore(task_id: &str, filename: &str) {
     let path = backup_path(filename);
-    let db_url = std::env::var("DATABASE_URL").unwrap_or_default();
+    let db_url = match std::env::var("DATABASE_URL") {
+        Ok(u) if !u.is_empty() => u,
+        _ => {
+            tasks::update(
+                task_id,
+                "DATABASE_URL 未配置",
+                100,
+                TaskStatus::Failed,
+                None,
+                Some("恢复需要 DATABASE_URL".to_string()),
+                None,
+            );
+            return;
+        }
+    };
     let psql_ok = std::process::Command::new("psql")
         .arg("--version")
         .output()

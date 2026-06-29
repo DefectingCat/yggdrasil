@@ -50,11 +50,11 @@ pub async fn export_data(
 
     // 2. 解析来源 + 白名单/只读校验
     let include_columns = params.include_columns.unwrap_or(true);
-    let source_sql = parse_source(&params.source)?;
+    let (source_sql, table_name) = parse_source(&params.source)?;
 
     match params.format.as_str() {
         "csv" => export_csv(source_sql, include_columns).await,
-        "sql" => export_sql(source_sql, include_columns).await,
+        "sql" => export_sql(source_sql, include_columns, table_name).await,
         _ => Err((StatusCode::BAD_REQUEST, "不支持的格式".to_string())),
     }
     .map(|(body, content_type, filename)| {
@@ -74,17 +74,17 @@ pub async fn export_data(
     })
 }
 
-/// 解析导出来源，返回可直接执行的内部 SQL。
-/// - `table:posts` → 校验表名合法后，`SELECT * FROM "posts"`（只读）。
-/// - `query:SELECT ...` → 校验为只读语句后原样返回。
-fn parse_source(source: &str) -> Result<String, (StatusCode, String)> {
+/// 解析导出来源，返回（内部 SQL，表名）。
+/// - `table:posts` → 校验表名合法后，`SELECT * FROM "posts"`（只读）+ 表名 "posts"。
+/// - `query:SELECT ...` → 校验为只读语句后原样返回，表名为 "export"。
+fn parse_source(source: &str) -> Result<(String, String), (StatusCode, String)> {
     if let Some(table) = source.strip_prefix("table:") {
         // 表名白名单：仅允许标识符字符，防注入
         let t = table.trim();
         if t.is_empty() || !is_simple_ident(t) {
             return Err((StatusCode::BAD_REQUEST, "无效的表名".to_string()));
         }
-        Ok(format!("SELECT * FROM \"{}\"", t))
+        Ok((format!("SELECT * FROM \"{}\"", t), t.to_string()))
     } else if let Some(query) = source.strip_prefix("query:") {
         // 只读校验：sqlparser 解析后所有语句均为 Query/Explain
         let dialect = sqlparser::dialect::PostgreSqlDialect {};
@@ -96,7 +96,7 @@ fn parse_source(source: &str) -> Result<String, (StatusCode, String)> {
                 "导出查询必须是只读（SELECT/EXPLAIN）".to_string(),
             ));
         }
-        Ok(query.to_string())
+        Ok((query.to_string(), "export".to_string()))
     } else {
         Err((
             StatusCode::BAD_REQUEST,
@@ -144,6 +144,7 @@ async fn export_csv(
 async fn export_sql(
     source_sql: String,
     include_columns: bool,
+    table_name: String,
 ) -> Result<(Body, &'static str, String), (StatusCode, String)> {
     let client = crate::db::pool::get_conn()
         .await
@@ -154,8 +155,6 @@ async fn export_sql(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("查询失败：{e}")))?;
 
-    // 表名（从 SQL 简单解析，或用 "export"）
-    let table_name = "export";
     let columns: Vec<String> = rows
         .first()
         .map(|r| r.columns().iter().map(|c| c.name().to_string()).collect())
@@ -175,7 +174,7 @@ async fn export_sql(
             .collect();
         out.push_str(&format!(
             "INSERT INTO {} {} VALUES ({});\n",
-            table_name,
+            &table_name,
             col_clause,
             vals.join(", ")
         ));

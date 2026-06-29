@@ -40,8 +40,6 @@ pub struct SqlResult {
     pub explain: Option<String>,
     /// 是否因 500 行上限截断。
     pub truncated: bool,
-    /// 截断时的估算总行数（重查用）。
-    pub total_estimate: Option<i64>,
 }
 
 /// 结果行数上限（超出截断 + 提示）。
@@ -67,11 +65,20 @@ fn check_guards(
     asts: &[sqlparser::ast::Statement],
     confirm_dangerous: bool,
 ) -> GuardResult {
-    use sqlparser::ast::Statement;
+    use sqlparser::ast::{ObjectType, Statement};
 
     for stmt in asts {
         match stmt {
-            // 护栏 1：需确认的高危语句
+            // 护栏 1（绝禁）：DROP SCHEMA 永远禁止（ObjectType 无 Database 变体，
+            // DROP DATABASE 由字符串预检 + AST 双重拦截——见上方 ABSOLUTELY_FORBIDDEN）。
+            // 这里在 AST 层结构性禁止 DROP SCHEMA，防 SQL 注释/空白绕过字符串预检。
+            Statement::Drop {
+                object_type: ObjectType::Schema,
+                ..
+            } => {
+                return GuardResult::Forbidden("禁止 DROP SCHEMA".to_string());
+            }
+            // 护栏 1：需确认的高危语句（DROP TABLE/VIEW/INDEX 等、TRUNCATE、ALTER）
             Statement::Drop { .. } | Statement::Truncate { .. } | Statement::AlterTable { .. } => {
                 if !confirm_dangerous {
                     return GuardResult::NeedsConfirm;
@@ -231,10 +238,14 @@ pub async fn execute_sql(sql: String, opts: ExecuteSqlOpts) -> Result<SqlResult,
         let client = get_conn().await.map_err(AppError::db_conn)?;
         let start = std::time::Instant::now;
 
-        // 逐条执行（allow_multi 时多条，否则单条）
+        // 逐条执行：每条用其 AST 重序列化的形式（stmt.to_string()），
+        // 而非原始整段 SQL——保证执行的语句与护栏检查的 AST 完全一致，
+        // 避免 allow_multi 时整段 SQL 被重复执行，也杜绝读/写分类与实际执行解耦。
         let mut last_result = SqlResult::default();
         for stmt in &asts {
-            last_result = execute_one(&client, stmt, &sql, opts.with_explain, start).await?;
+            // 重序列化单条语句为可执行 SQL（去掉末尾分号，避免与 execute 的隐式分号冲突）
+            let stmt_sql = stmt.to_string();
+            last_result = execute_one(&client, stmt, &stmt_sql, opts.with_explain, start).await?;
         }
         Ok(last_result)
     }
@@ -246,11 +257,14 @@ pub async fn execute_sql(sql: String, opts: ExecuteSqlOpts) -> Result<SqlResult,
 }
 
 /// 执行单条语句，返回结果。
+///
+/// `stmt_sql` 必须是 `stmt` 重序列化后的**单条**语句 SQL（不含其他语句），
+/// 保证护栏检查的 AST 与实际执行的语句一致。
 #[cfg(feature = "server")]
 async fn execute_one(
     client: &deadpool_postgres::Object,
     stmt: &sqlparser::ast::Statement,
-    sql: &str,
+    stmt_sql: &str,
     with_explain: bool,
     start: impl Fn() -> std::time::Instant + Copy,
 ) -> Result<SqlResult, ServerFnError> {
@@ -258,8 +272,8 @@ async fn execute_one(
     let read_only = is_read_only(stmt);
 
     if with_explain && read_only {
-        // EXPLAIN 模式：包裹原 SQL 执行计划，取首列文本拼接
-        let explain_sql = format!("EXPLAIN {}", sql.trim_end_matches(';'));
+        // EXPLAIN 模式：包裹单条语句取执行计划，取首列文本拼接
+        let explain_sql = format!("EXPLAIN {}", stmt_sql.trim_end_matches(';'));
         let rows = client
             .query(&explain_sql, &[])
             .await
@@ -279,7 +293,10 @@ async fn execute_one(
 
     if read_only {
         // 只读：取结果集。列名从第一行取（空结果集时无列名，前端容错）。
-        let rows = client.query(sql, &[]).await.map_err(AppError::query)?;
+        let rows = client
+            .query(stmt_sql, &[])
+            .await
+            .map_err(AppError::query)?;
         let columns: Vec<String> = rows
             .first()
             .map(|r| {
@@ -309,7 +326,10 @@ async fn execute_one(
         })
     } else {
         // 写操作：返回影响行数
-        let affected = client.execute(sql, &[]).await.map_err(AppError::query)?;
+        let affected = client
+            .execute(stmt_sql, &[])
+            .await
+            .map_err(AppError::query)?;
         Ok(SqlResult {
             affected_rows: affected,
             statement_type,
