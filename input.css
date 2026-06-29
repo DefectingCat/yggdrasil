@@ -334,6 +334,12 @@
     height: auto;
   }
 
+  .dark .md-content img:not(.blur-img-placeholder):not(.blur-img-full),
+  .dark .md-content .blur-img,
+  .dark .lightbox-img {
+    filter: brightness(0.9);
+  }
+
   .md-content-img-zoomable {
     cursor: zoom-in;
     transition: opacity 0.2s ease-out;
