@@ -12,7 +12,8 @@ use crate::components::frontend_layout::FrontendLayout;
 use crate::context::UserContext;
 use crate::pages::about::About;
 use crate::pages::admin::{
-    Admin, AdminComments, AdminCommentsPage, Posts, PostsPage, Trash, TrashPage, Write, WriteEdit,
+    Admin, AdminComments, AdminCommentsPage, Posts, PostsPage, System, Trash, TrashPage, Write,
+    WriteEdit,
 };
 use crate::pages::archives::Archives;
 use crate::pages::home::{Home, HomePage};
@@ -90,6 +91,9 @@ pub enum Route {
         /// 回收站分页
         #[route("/trash/:page")]
         TrashPage { page: i32 },
+        /// 系统管理（数据库 + 服务器状态 + SQL 控制台 + 导出 + 备份）
+        #[route("/system")]
+        System {},
     #[end_layout]
     #[end_nest]
 
