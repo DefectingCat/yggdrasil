@@ -5,7 +5,7 @@
 
 use dioxus::prelude::*;
 
-use crate::components::ui::Tabs;
+use crate::components::ui::FilterTabs;
 
 /// 系统管理的 5 个功能 tab。
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -23,7 +23,7 @@ enum SystemTab {
 }
 
 impl SystemTab {
-    /// 变体 → 稳定字符串 key(用于与基于 String 的 `Tabs` 组件桥接)。
+    /// 变体 → 稳定字符串 key(用于与基于 String 的 `FilterTabs` 组件桥接)。
     /// 改这些 key 会破坏潜在的持久化/调试场景,见 `from_str` 的反向映射。
     fn as_str(&self) -> &'static str {
         match self {
@@ -60,8 +60,9 @@ pub fn System() -> Element {
         div { class: "space-y-6",
             h1 { class: "text-2xl font-bold text-paper-primary", "系统管理" }
 
-            // 顶部 tab 切换栏:用公共 Tabs 组件(String API,经 as_str/from_str 桥接枚举)。
-            Tabs {
+            // 顶部 tab 切换栏:复用公共 FilterTabs 组件(String API,经 as_str/from_str 桥接枚举)。
+            // 视觉与评论页一致:平滑滑动指示条 + 选中文字 text-paper-primary。
+            FilterTabs {
                 items: vec![
                     ("db_status", "数据库状态"),
                     ("server_status", "服务器状态"),
