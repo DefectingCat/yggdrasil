@@ -3,6 +3,13 @@ name = "yggdrasil"
 version = "0.3.0"
 edition = "2021"
 
+# 构建时工具二进制：用 syntect（server-only 依赖）生成 highlight.css。
+# 仅在启用 server feature 时编译——WASM 前端构建（--no-default-features --features web）
+# 不会拉入 syntect，此二进制若也参与编译会因找不到 syntect 报错。
+[[bin]]
+name = "generate_highlight_css"
+required-features = ["server"]
+
 [dependencies]
 dioxus = { version = "0.7.9", features = ["fullstack", "router"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -47,6 +54,8 @@ web-sys = { version = "0.3", features = ["Document", "Window", "Storage", "Eleme
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
+# 把 serde 类型（如 SqlSchema）序列化为 JsValue，供 wasm-bindgen extern 传递。
+serde-wasm-bindgen = "0.6"
 
 [dev-dependencies]
 tokio = { version = "1.52", features = ["rt-multi-thread", "macros", "fs", "time", "sync"] }

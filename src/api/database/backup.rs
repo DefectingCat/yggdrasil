@@ -7,14 +7,21 @@
 //! 恢复：仅接受本系统生成的备份（签名校验）+ 二次确认 + 路径穿越防护。
 //! 长耗时操作走后台任务 + 进度轮询（见 [`super::tasks`]）。
 
+// Component/PathBuf/chrono::Utc 仅 server 构建的备份逻辑用到。
+#[cfg(feature = "server")]
 use std::path::{Component, PathBuf};
 
+#[cfg(feature = "server")]
 use chrono::Utc;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
+// admin 鉴权 + AppError + tasks 进度表仅在 server 构建里被 server function 体引用。
+#[cfg(feature = "server")]
 use crate::api::auth::get_current_admin_user;
+#[cfg(feature = "server")]
 use crate::api::database::tasks::{self, TaskKind, TaskStatus};
+#[cfg(feature = "server")]
 use crate::api::error::AppError;
 
 /// 备份目录（项目根，与 uploads/ 平级，gitignored）。
@@ -316,30 +323,32 @@ async fn run_sql_fallback_backup(task_id: &str, timestamp: &str) {
 pub async fn restore_backup(filename: String, confirm: bool) -> Result<String, ServerFnError> {
     let _user = get_current_admin_user().await?;
 
-    if !confirm {
-        return Err(AppError::BadRequest("需确认恢复（会覆盖现有数据）".to_string()).into());
-    }
-    // 路径穿越防护
-    let re = regex::Regex::new(FILENAME_RE).unwrap();
-    if !re.is_match(&filename) {
-        return Err(AppError::BadRequest("无效的文件名".to_string()).into());
-    }
-    let path = backup_path(&filename);
-    if !path.exists() {
-        return Err(AppError::NotFound("备份文件不存在").into());
-    }
-
-    // 签名校验：首行需含签名
-    let head = std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|s| s.lines().next().map(|l| l.trim().to_string()))
-        .unwrap_or_default();
-    if !head.contains(BACKUP_SIGNATURE) {
-        return Err(AppError::BadRequest("非本系统生成的备份文件，拒绝恢复".to_string()).into());
-    }
-
+    // 全部校验都在 server cfg 块内：confirm/regex/backup_path/std::fs 都是 server-only。
+    // WASM 侧的 server-function 客户端桩只返回 Ok(String::new())。
     #[cfg(feature = "server")]
     {
+        if !confirm {
+            return Err(AppError::BadRequest("需确认恢复（会覆盖现有数据）".to_string()).into());
+        }
+        // 路径穿越防护
+        let re = regex::Regex::new(FILENAME_RE).unwrap();
+        if !re.is_match(&filename) {
+            return Err(AppError::BadRequest("无效的文件名".to_string()).into());
+        }
+        let path = backup_path(&filename);
+        if !path.exists() {
+            return Err(AppError::NotFound("备份文件不存在").into());
+        }
+
+        // 签名校验：首行需含签名
+        let head = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| s.lines().next().map(|l| l.trim().to_string()))
+            .unwrap_or_default();
+        if !head.contains(BACKUP_SIGNATURE) {
+            return Err(AppError::BadRequest("非本系统生成的备份文件，拒绝恢复".to_string()).into());
+        }
+
         let task_id = uuid::Uuid::new_v4().to_string();
         tasks::insert(task_id.clone(), TaskKind::Restore);
         let tid = task_id.clone();
@@ -351,6 +360,8 @@ pub async fn restore_backup(filename: String, confirm: bool) -> Result<String, S
     }
     #[cfg(not(feature = "server"))]
     {
+        // WASM 客户端桩：忽略参数，返回空 task_id。
+        let _ = (filename, confirm);
         Ok(String::new())
     }
 }
@@ -525,6 +536,8 @@ fn backup_path(filename: &str) -> PathBuf {
 }
 
 /// Axum 处理器：下载备份文件（admin 鉴权 + 路径白名单）。
+/// 仅 server 构建：纯 Axum 路由（在 main.rs 注册），无 WASM 消费者。
+#[cfg(feature = "server")]
 pub async fn download_backup(
     axum::extract::Path(filename): axum::extract::Path<String>,
     headers: axum::http::HeaderMap,

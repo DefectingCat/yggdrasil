@@ -14,8 +14,12 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
+// admin 鉴权 + DB 查询仅在 server 构建里被 server function 体引用。
+#[cfg(feature = "server")]
 use crate::api::auth::get_current_admin_user;
+#[cfg(feature = "server")]
 use crate::api::error::AppError;
+#[cfg(feature = "server")]
 use crate::db::pool::get_conn;
 
 #[derive(Deserialize, Serialize, Debug, Clone, Copy)]

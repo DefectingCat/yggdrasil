@@ -97,7 +97,7 @@ async fn wasm_sleep(ms: u32) {
             .expect("no window")
             .set_timeout_with_callback_and_timeout_and_arguments_0(
                 &resolve.unchecked_into(),
-                ms,
+                ms.try_into().unwrap(),
             )
             .expect("set_timeout failed");
     });
@@ -107,6 +107,9 @@ async fn wasm_sleep(ms: u32) {
 /// 数据库状态 tab：概览卡片 + 表清单 + 索引 Top + 活跃连接。
 /// 手动刷新按钮 + 自动刷新开关（1s/2s/5s/30s/手动，默认手动）。
 #[allow(non_snake_case)]
+// status/error/loading 在 spawn/onclick 闭包里 .set()，仅 WASM 前端真正用到；
+// server 构建里这些 set 调用都在被剥离的 #[cfg(wasm32)] 块内，故 allow unused_mut。
+#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
 fn DbStatusTab() -> Element {
     use crate::api::database::status::DbStatus;
     // get_db_status 只在 WASM 前端调用，server 构建时该 server function 的客户端桩不需要导入。
@@ -115,9 +118,9 @@ fn DbStatusTab() -> Element {
     use crate::components::ui::{ADMIN_CARD_CLASS, ADMIN_TABLE_CLASS};
 
     // Signal 是 Copy，可在多个 spawn/effect 中捕获同一副本；set 走内部可变（&self）。
-    let status = use_signal(|| Option::<DbStatus>::None);
+    let mut status = use_signal(|| Option::<DbStatus>::None);
     let mut loading = use_signal(|| true);
-    let error = use_signal(|| Option::<String>::None);
+    let mut error = use_signal(|| Option::<String>::None);
     // 自动刷新间隔（秒）；None = 手动。DB 查询有成本，最低 1s。
     let mut refresh_interval: Signal<Option<u32>> = use_signal(|| None);
 
@@ -155,9 +158,9 @@ fn DbStatusTab() -> Element {
     use_future(move || {
         // 在依赖闭包里读 interval，使 use_future 在它变化时重新执行。
         let interval_secs = refresh_interval();
-        let status_f = status;
-        let loading_f = loading;
-        let error_f = error;
+        let mut status_f = status;
+        let mut loading_f = loading;
+        let mut error_f = error;
         async move {
             #[cfg(target_arch = "wasm32")]
             {
@@ -397,15 +400,16 @@ fn format_uptime(secs: u64) -> String {
 /// 手动刷新 + 自动刷新开关（500ms/1s/2s/5s/手动，默认手动）。
 /// 主机层数据由后台 500ms 采样，前端轮询只读快照零成本，故可高频。
 #[allow(non_snake_case)]
+#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
 fn ServerStatusTab() -> Element {
     use crate::api::database::system_status::ServerStatus;
     #[cfg(target_arch = "wasm32")]
     use crate::api::database::system_status::get_server_status;
     use crate::components::ui::{ADMIN_CARD_CLASS, ADMIN_TABLE_CLASS};
 
-    let status = use_signal(|| Option::<ServerStatus>::None);
+    let mut status = use_signal(|| Option::<ServerStatus>::None);
     let mut loading = use_signal(|| true);
-    let error = use_signal(|| Option::<String>::None);
+    let mut error = use_signal(|| Option::<String>::None);
     // 自动刷新间隔（毫秒）；None = 手动。主机层后台采样，前端可高频轮询。
     let mut refresh_ms: Signal<Option<u32>> = use_signal(|| None);
 
@@ -437,9 +441,9 @@ fn ServerStatusTab() -> Element {
     // 自动刷新：refresh_ms 变化时重建 future。
     use_future(move || {
         let interval_ms = refresh_ms();
-        let status_f = status;
-        let loading_f = loading;
-        let error_f = error;
+        let mut status_f = status;
+        let mut loading_f = loading;
+        let mut error_f = error;
         async move {
             #[cfg(target_arch = "wasm32")]
             {
@@ -639,6 +643,7 @@ fn ServerStatusTab() -> Element {
 ///
 /// 护栏 4（前端二次确认）：提交写操作前弹窗确认。
 #[allow(non_snake_case)]
+#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
 fn SqlConsoleTab() -> Element {
     use crate::api::database::sql_console::SqlResult;
     #[cfg(target_arch = "wasm32")]
@@ -654,7 +659,7 @@ fn SqlConsoleTab() -> Element {
 
     let theme = use_theme();
     let sql_text = use_signal(String::new);
-    let result = use_signal(|| Option::<SqlResult>::None);
+    let mut result = use_signal(|| Option::<SqlResult>::None);
     let mut error = use_signal(|| Option::<String>::None);
     let mut running = use_signal(|| false);
     // 选项 toggles
@@ -672,9 +677,9 @@ fn SqlConsoleTab() -> Element {
     // 初始化 CodeMirror + 拉取 schema 注入补全。仅 WASM。
     #[cfg(target_arch = "wasm32")]
     {
-        use dioxus::prelude::wasm_bindgen::closure::Closure;
+        use wasm_bindgen::closure::Closure;
         use_effect(move || {
-            if editor_handle().is_some() {
+            if editor_handle.read().is_some() {
                 return;
             }
             let mut text = sql_text;
@@ -702,8 +707,12 @@ fn SqlConsoleTab() -> Element {
             // 异步拉取 schema 注入补全
             spawn(async move {
                 if let Ok(schema) = get_db_schema().await {
-                    if let Some(h) = editor_handle.read().as_ref() {
-                        h.instance().set_schema(&schema);
+                    // SqlSchema 是 serde 类型：先用 serde_wasm_bindgen 转 JsValue，
+                    // 再传给 CodeMirror（extern set_schema 只接受 &JsValue）。
+                    if let Ok(js) = serde_wasm_bindgen::to_value(&schema) {
+                        if let Some(h) = editor_handle.read().as_ref() {
+                            h.instance().set_schema(&js);
+                        }
                     }
                 }
             });
@@ -1040,6 +1049,7 @@ fn urlencode(s: &str) -> String {
 
 /// 备份恢复 tab：备份按钮 + 进度轮询 + 备份列表（下载/恢复/删除）。
 #[allow(non_snake_case)]
+#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
 fn BackupTab() -> Element {
     use crate::api::database::backup::BackupInfo;
     use crate::api::database::tasks::TaskProgress;
@@ -1049,23 +1059,25 @@ fn BackupTab() -> Element {
     use crate::api::database::tasks::{get_task_progress, TaskStatus};
     use crate::components::ui::{ADMIN_CARD_CLASS, ADMIN_TABLE_CLASS};
 
+    // backups/active_task_id 仅在闭包内的重绑定副本上 .set()（如 backups_f），
+    // 外层绑定本身不改值，故无需 mut。
     let backups = use_signal(Vec::<BackupInfo>::new);
     let mut loading = use_signal(|| false);
-    let error = use_signal(|| Option::<String>::None);
+    let mut error = use_signal(|| Option::<String>::None);
     // 当前进行中的任务（备份/恢复）id + 进度
     let active_task_id: Signal<Option<String>> = use_signal(|| None);
-    let active_progress = use_signal(|| Option::<TaskProgress>::None);
+    let mut active_progress = use_signal(|| Option::<TaskProgress>::None);
     // 待恢复的文件名（确认对话框用）
     let mut pending_restore: Signal<Option<String>> = use_signal(|| None);
-    let busy = use_signal(|| false);
+    let mut busy = use_signal(|| false);
 
     // 刷新备份列表
     let mut refresh_list = move || {
         loading.set(true);
         #[cfg(target_arch = "wasm32")]
         {
-            let backups = backups;
-            let error = error;
+            let mut backups = backups;
+            let mut error = error;
             spawn(async move {
                 match list_backups().await {
                     Ok(list) => {
@@ -1089,17 +1101,19 @@ fn BackupTab() -> Element {
 
     // 恢复确认：pending_restore 被设置时弹出原生 confirm，确认后发起 restore_backup
     // 并开始进度轮询。用 use_future 响应 pending_restore 变化。
+    // _pending_for_confirm 被 clone 进 async move（FnMut 可重入），用 Option::clone 兜底。
     let _pending_for_confirm = pending_restore.read().clone();
     use_future(move || {
-        let pending_restore = pending_restore;
-        let busy = busy;
-        let active_progress = active_progress;
-        let active_task_id = active_task_id;
-        let error = error;
+        let mut pending_restore = pending_restore;
+        let mut busy = busy;
+        let mut active_progress = active_progress;
+        let mut active_task_id = active_task_id;
+        let mut error = error;
+        let pending_for_confirm = _pending_for_confirm.clone();
         async move {
             #[cfg(target_arch = "wasm32")]
             {
-                let fname = match _pending_for_confirm {
+                let fname = match pending_for_confirm {
                     Some(f) => f,
                     None => return,
                 };
@@ -1128,22 +1142,24 @@ fn BackupTab() -> Element {
             }
             #[cfg(not(target_arch = "wasm32"))]
             {
-                let _ = (pending_restore, busy, active_progress, active_task_id, error);
+                let _ = (pending_restore, busy, active_progress, active_task_id, error, pending_for_confirm);
             }
         }
     });
 
     // 任务进度轮询：active_task_id 存在时每 1.5s 拉取进度，Done/Failed 后停止 + 刷新列表
+    // _task_id_for_poll 被 clone 进 async move（FnMut 可重入）。
     let _task_id_for_poll = active_task_id.read().clone();
     use_future(move || {
-        let active_task_id = active_task_id;
-        let active_progress = active_progress;
-        let backups_f = backups;
-        let busy_f = busy;
+        let mut active_task_id = active_task_id;
+        let mut active_progress = active_progress;
+        let mut backups_f = backups;
+        let mut busy_f = busy;
+        let task_id_for_poll = _task_id_for_poll.clone();
         async move {
             #[cfg(target_arch = "wasm32")]
             {
-                let tid = match _task_id_for_poll {
+                let tid = match task_id_for_poll {
                     Some(t) => t,
                     None => return,
                 };
@@ -1174,7 +1190,7 @@ fn BackupTab() -> Element {
             }
             #[cfg(not(target_arch = "wasm32"))]
             {
-                let _ = (active_task_id, active_progress, backups_f, busy_f);
+                let _ = (active_task_id, active_progress, backups_f, busy_f, task_id_for_poll);
             }
         }
     });
@@ -1209,7 +1225,7 @@ fn BackupTab() -> Element {
                         {
                             busy.set(true);
                             active_progress.set(None);
-                            let active_task_id = active_task_id;
+                            let mut active_task_id = active_task_id;
                             spawn(async move {
                                 match create_backup().await {
                                     Ok(id) => active_task_id.set(Some(id)),
@@ -1276,8 +1292,8 @@ fn BackupTab() -> Element {
                                         size_str: size_str.clone(),
                                         dl_url: dl_url.clone(),
                                         busy: is_busy,
-                                        on_restore: move |f| pending_restore.set(Some(f)),
-                                        on_delete: move |_fname_del| {
+                                        on_restore: move |f: String| pending_restore.set(Some(f)),
+                                        on_delete: move |_fname_del: String| {
                                             #[cfg(target_arch = "wasm32")]
                                             {
                                                 let fname_del = _fname_del;
@@ -1288,7 +1304,7 @@ fn BackupTab() -> Element {
                                                     })
                                                     == Some(true);
                                                 if confirmed {
-                                                    let backups = backups;
+                                                    let mut backups = backups;
                                                     spawn(async move {
                                                         let _ = delete_backup(fname_del.clone()).await;
                                                         if let Ok(list) = list_backups().await {

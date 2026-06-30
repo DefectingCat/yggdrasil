@@ -6,14 +6,18 @@
 //! [`update`] 更新进度，前端轮询 [`get_task_progress`]。
 //! 已完成超过 1 小时的任务惰性清理，避免内存累积。
 
-use std::sync::LazyLock;
-
 use chrono::{DateTime, Utc};
-use dashmap::DashMap;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
+// admin 鉴权仅 server 构建用到。
+#[cfg(feature = "server")]
 use crate::api::auth::get_current_admin_user;
+// DashMap / LazyLock 仅 server 构建持有任务进度表；WASM 端只序列化 TaskProgress。
+#[cfg(feature = "server")]
+use std::sync::LazyLock;
+#[cfg(feature = "server")]
+use dashmap::DashMap;
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub enum TaskKind {

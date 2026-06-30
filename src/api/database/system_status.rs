@@ -8,7 +8,10 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
+// admin 鉴权 + AppError 仅在 server 构建里被 server function 体引用。
+#[cfg(feature = "server")]
 use crate::api::auth::get_current_admin_user;
+#[cfg(feature = "server")]
 use crate::api::error::AppError;
 
 /// 单个缓存的统计快照（前端展示用）。

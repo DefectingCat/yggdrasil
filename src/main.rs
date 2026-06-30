@@ -23,8 +23,9 @@ mod hooks;
 mod models;
 mod pages;
 mod router;
-// sysinfo_sampler 仅在 server feature 启用时编译：主机指标后台采样 + RwLock 快照。
-#[cfg(feature = "server")]
+// sysinfo_sampler：主机指标快照。
+// SystemSnapshot 结构体两端都编译（被 system_status 的 ServerStatus 字段引用）；
+// 真正的采样任务 / RwLock / read_snapshot 实现在本模块内部自行 #[cfg(feature = "server")] gate。
 mod sysinfo_sampler;
 // ssr_cache 仅在 server feature 启用时编译；保存 SSR 世代号失效状态。
 #[cfg(feature = "server")]

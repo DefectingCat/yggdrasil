@@ -9,8 +9,13 @@ use chrono::{DateTime, Utc};
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
+// 仅 server 构建用到：admin 鉴权 + DB 查询。WASM 侧的 server-function 客户端桩
+// 不解析这些符号，必须 gate 以避免在非 server 构建里找不到 server-only 符号。
+#[cfg(feature = "server")]
 use crate::api::auth::get_current_admin_user;
+#[cfg(feature = "server")]
 use crate::api::error::AppError;
+#[cfg(feature = "server")]
 use crate::db::pool::get_conn;
 
 /// 数据库状态聚合数据。

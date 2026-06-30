@@ -14,7 +14,8 @@ pub mod system_status;
 pub mod sql_console;
 /// SQL 补全用 schema 拉取。
 pub mod schema;
-/// 数据导出 Axum 流式处理器。
+/// 数据导出 Axum 流式处理器（仅 server：纯 Axum 路由，无 WASM 消费者）。
+#[cfg(feature = "server")]
 pub mod export;
 /// 备份/恢复（双模式 + 任务进度）。
 pub mod backup;

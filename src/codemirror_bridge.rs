@@ -32,7 +32,6 @@ pub struct SqlTable {
 // ============================================================================
 #[cfg(target_arch = "wasm32")]
 pub mod wasm {
-    use super::SqlSchema;
     use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;
 
@@ -91,8 +90,10 @@ pub mod wasm {
         pub fn set_theme(this: &EditorInstance, theme: &str);
 
         /// 更新 SQL 补全 schema（Compartment.reconfigure）。
+        /// 参数为 serde_wasm_bindgen::to_value 序列化后的 JsValue
+        ///（SqlSchema 是 serde 类型，非 wasm-bindgen 类型，故不能直接传 &SqlSchema）。
         #[wasm_bindgen(method, js_name = setSchema)]
-        pub fn set_schema(this: &EditorInstance, schema: &SqlSchema);
+        pub fn set_schema(this: &EditorInstance, schema: &wasm_bindgen::JsValue);
 
         /// 让编辑器获取焦点。
         #[wasm_bindgen(method)]
@@ -126,9 +127,9 @@ pub mod wasm {
         #[wasm_bindgen(method, setter, js_name = vim)]
         pub fn set_vim(this: &EditorOptions, v: bool);
 
-        /// SQL 补全 schema（表/列数据）。
+        /// SQL 补全 schema（表/列数据）。v 为 serde_wasm_bindgen::to_value 序列化结果。
         #[wasm_bindgen(method, setter, js_name = schema)]
-        pub fn set_schema(this: &EditorOptions, v: &SqlSchema);
+        pub fn set_schema(this: &EditorOptions, v: &wasm_bindgen::JsValue);
 
         /// 初始文档内容。
         #[wasm_bindgen(method, setter, js_name = value)]

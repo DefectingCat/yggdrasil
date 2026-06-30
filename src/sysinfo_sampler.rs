@@ -5,7 +5,10 @@
 //!
 //! 采样间隔由环境变量 `SYSINFO_SAMPLE_SECS` 配置（默认 0.5 秒，支持小数如 0.1）。
 
+// LazyLock / Duration 仅 server 构建的采样任务用到；WASM 端只序列化 SystemSnapshot。
+#[cfg(feature = "server")]
 use std::sync::LazyLock;
+#[cfg(feature = "server")]
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};

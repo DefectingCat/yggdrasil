@@ -4,10 +4,15 @@
 
 use dioxus::prelude::*;
 
+// admin 鉴权 + DB 查询仅在 server 构建里被 server function 体引用。
+#[cfg(feature = "server")]
 use crate::api::auth::get_current_admin_user;
+#[cfg(feature = "server")]
 use crate::api::error::AppError;
-use crate::codemirror_bridge::SqlSchema;
+#[cfg(feature = "server")]
 use crate::db::pool::get_conn;
+// SqlSchema/SqlTable 是两端共享的纯数据类型（定义在 codemirror_bridge）。
+use crate::codemirror_bridge::SqlSchema;
 
 /// 拉取数据库 schema（表名 + 列名），供 CodeMirror SQL 补全。
 #[server(GetDbSchema, "/api")]
