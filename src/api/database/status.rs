@@ -89,10 +89,12 @@ pub async fn get_db_status() -> Result<DbStatus, ServerFnError> {
             .map_err(AppError::query)?
             .get(0);
 
-        // 当前库连接数 + 全局最大连接数
+        // 当前库连接数 + 全局最大连接数。
+        // count(*) 原生返回 bigint(int8)，与下方 setting::int 一并显式转 int4，
+        // 以匹配 total_connections/max_connections 的 i32 类型（否则 FromSql 反序列化失败）。
         let conn_row = client
             .query_one(
-                "SELECT count(*), \
+                "SELECT count(*)::int, \
                  (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') \
                  FROM pg_stat_activity WHERE datname = current_database()",
                 &[],
