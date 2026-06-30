@@ -1,4 +1,4 @@
-.PHONY: dev build build-linux css css-watch clean build-editor build-editor-incremental build-lightbox build-lightbox-incremental build-core build-core-incremental build-codemirror build-codemirror-incremental highlight-css test doc doc-open start clippy fix
+.PHONY: dev build build-linux docker css css-watch clean build-editor build-editor-incremental build-lightbox build-lightbox-incremental build-core build-core-incremental build-codemirror build-codemirror-incremental highlight-css test doc doc-open start clippy fix
 
 build:
 	@$(MAKE) build-editor
@@ -117,6 +117,9 @@ doc:
 # 同 doc，生成完自动用浏览器打开。
 doc-open:
 	@RUSTDOCFLAGS="--default-theme=ayu" cargo doc --no-deps --document-private-items --open
+
+docker:
+	@docker build -t yggdrasil .
 
 clean:
 	@cargo clean
