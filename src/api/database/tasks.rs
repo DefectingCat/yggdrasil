@@ -3,7 +3,7 @@
 //! 备份/恢复的异步任务进度表（DashMap）。
 //!
 //! create_backup/restore_backup 立即返回 task_id，后台任务跑时通过
-//! [`update`] 更新进度，前端轮询 [`get_task_progress`]。
+//! `update` 更新进度，前端轮询 [`get_task_progress`][crate::api::database::tasks::get_task_progress]。
 //! 已完成超过 1 小时的任务惰性清理，避免内存累积。
 
 use chrono::{DateTime, Utc};

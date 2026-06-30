@@ -46,14 +46,20 @@ pub struct SqlResult {
     pub truncated: bool,
 }
 
+// 以下常量/枚举仅被 server function 体引用（WASM 构建里 server fn 体被 cfg 剥掉，
+// 故这些符号也需 gate，否则非 server 构建会报 dead_code）。
+
 /// 结果行数上限（超出截断 + 提示）。
+#[cfg(feature = "server")]
 const MAX_ROWS: usize = 500;
 
 /// 绝对禁止的语句关键词（字符串预检，sqlparser 无 ObjectType::Database/Schema）。
 /// 命中即拒，不可放行。
+#[cfg(feature = "server")]
 const ABSOLUTELY_FORBIDDEN: &[&str] = &["drop database", "drop schema", "create database"];
 
 /// 护栏检查返回值。
+#[cfg(feature = "server")]
 #[derive(Debug)]
 enum GuardResult {
     Allowed,

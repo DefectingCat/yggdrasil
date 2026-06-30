@@ -2,7 +2,7 @@
 //!
 //! 封装与 `window.CodeMirrorEditor`（IIFE 暴露的全局对象字面量）的全部交互，
 //! 严格镜像 [`crate::tiptap_bridge`] 的结构：共享纯数据类型双目标编译，
-//! wasm-bindgen extern + [`EditorHandle`] 仅在 WASM 前端编译（server 构建无 window）。
+//! wasm-bindgen extern + `EditorHandle` 仅在 WASM 前端编译（server 构建无 window）。
 //!
 //! 与 tiptap 一样，`CodeMirrorEditor` 是 IIFE 挂在 window 上的**对象字面量**
 //! （`{ create }`），不是函数——因此用 `js_sys::Reflect::get` 做属性访问拿到，

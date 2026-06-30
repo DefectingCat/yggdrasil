@@ -3,7 +3,7 @@
 //! 数据库运行状态聚合查询（只读）。
 //!
 //! 全部查询走 `pg_catalog` / `pg_stat_*` / `schema_migrations`，零写、零风险。
-//! [`get_db_status`] 在一次 server function 调用里聚合多组数据返回。
+//! [`get_db_status`][crate::api::database::status::get_db_status] 在一次 server function 调用里聚合多组数据返回。
 
 use chrono::{DateTime, Utc};
 use dioxus::prelude::*;

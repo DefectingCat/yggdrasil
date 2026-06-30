@@ -5,7 +5,7 @@
 //! 备份：探测 pg_dump 可用性——可用则子进程生成完整 .sql，不可用则回退纯 SQL
 //! （仅数据）。备份文件含签名头。
 //! 恢复：仅接受本系统生成的备份（签名校验）+ 二次确认 + 路径穿越防护。
-//! 长耗时操作走后台任务 + 进度轮询（见 [`super::tasks`]）。
+//! 长耗时操作走后台任务 + 进度轮询（见 [`crate::api::database::tasks`]）。
 
 // Component/PathBuf/chrono::Utc 仅 server 构建的备份逻辑用到。
 #[cfg(feature = "server")]
@@ -24,11 +24,17 @@ use crate::api::database::tasks::{self, TaskKind, TaskStatus};
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
 
+// 以下常量仅被 server 构建的备份/恢复逻辑引用（WASM 构建里相关函数体被 cfg 剥掉，
+// 故常量也需 gate，否则非 server 构建会报 dead_code）。
+
 /// 备份目录（项目根，与 uploads/ 平级，gitignored）。
+#[cfg(feature = "server")]
 const BACKUP_DIR: &str = "backups";
 /// 文件名白名单正则：仅字母数字下划线点连字符（防路径穿越）。
+#[cfg(feature = "server")]
 const FILENAME_RE: &str = r"^[a-zA-Z0-9_.\-]+$";
 /// 备份文件签名头（恢复时校验，拒绝非本系统文件）。
+#[cfg(feature = "server")]
 const BACKUP_SIGNATURE: &str = "-- YGGDRASIL BACKUP v1";
 
 /// 备份文件元信息（列表展示用）。

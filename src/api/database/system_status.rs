@@ -3,7 +3,7 @@
 //! 服务器状态聚合查询（只读）：应用内指标 + 主机层指标。
 //!
 //! 应用内：DB 连接池、moka 缓存命中率、活跃会话数、进程运行时间。
-//! 主机层：sysinfo 后台采样快照（CPU/内存/磁盘/load），由 [`sysinfo_sampler`] 维护。
+//! 主机层：sysinfo 后台采样快照（CPU/内存/磁盘/load），由 [`crate::sysinfo_sampler`] 维护。
 
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};

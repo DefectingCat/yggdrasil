@@ -1,7 +1,7 @@
 //! sysinfo 主机指标后台采样。
 //!
 //! sysinfo 的 CPU% **不是即时值**，需要两次采样间的 delta。因此用后台任务周期
-//! 刷新，server function 只读 [`RwLock`] 快照（毫秒级返回，零采样成本）。
+//! 刷新，server function 只读 [`tokio::sync::RwLock`] 快照（毫秒级返回，零采样成本）。
 //!
 //! 采样间隔由环境变量 `SYSINFO_SAMPLE_SECS` 配置（默认 0.5 秒，支持小数如 0.1）。
 
@@ -101,6 +101,7 @@ pub async fn read_snapshot() -> SystemSnapshot {
 }
 
 #[cfg(not(feature = "server"))]
+#[allow(dead_code)]
 pub async fn read_snapshot() -> SystemSnapshot {
     SystemSnapshot::default()
 }
