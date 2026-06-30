@@ -5,6 +5,8 @@
 
 use dioxus::prelude::*;
 
+use crate::components::ui::Tabs;
+
 /// 系统管理的 5 个功能 tab。
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum SystemTab {
@@ -20,9 +22,6 @@ enum SystemTab {
     Backup,
 }
 
-// Task 3 起由 Tabs 组件经 SystemTab::as_str/from_str 消费;在此之前无生产调用方,
-// 加 allow 抑制 -D warnings 的 dead_code(参考 src/api/auth.rs:427 的同类处理)。
-#[allow(dead_code)]
 impl SystemTab {
     /// 变体 → 稳定字符串 key(用于与基于 String 的 `Tabs` 组件桥接)。
     /// 改这些 key 会破坏潜在的持久化/调试场景,见 `from_str` 的反向映射。
@@ -57,33 +56,24 @@ pub fn System() -> Element {
     // tab 切换无需深链/书签，避免新增路由变体。
     let mut active_tab = use_signal(|| SystemTab::DbStatus);
 
-    let tabs = [
-        ("数据库状态", SystemTab::DbStatus),
-        ("服务器状态", SystemTab::ServerStatus),
-        ("SQL 控制台", SystemTab::SqlConsole),
-        ("数据导出", SystemTab::Export),
-        ("备份恢复", SystemTab::Backup),
-    ];
-
     rsx! {
         div { class: "space-y-6",
             h1 { class: "text-2xl font-bold text-paper-primary", "系统管理" }
 
-            // 顶部 tab 切换栏
-            div { class: "flex flex-wrap gap-1 border-b border-paper-border",
-                for (label, tab) in tabs {
-                    button {
-                        key: "{tab:?}",
-                        class: "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
-                        class: if active_tab() == tab {
-                            "border-paper-accent text-paper-accent"
-                        } else {
-                            "border-transparent text-paper-secondary hover:text-paper-primary"
-                        },
-                        onclick: move |_| active_tab.set(tab),
-                        {label}
-                    }
-                }
+            // 顶部 tab 切换栏:用公共 Tabs 组件(String API,经 as_str/from_str 桥接枚举)。
+            Tabs {
+                items: vec![
+                    ("db_status", "数据库状态"),
+                    ("server_status", "服务器状态"),
+                    ("sql_console", "SQL 控制台"),
+                    ("export", "数据导出"),
+                    ("backup", "备份恢复"),
+                ],
+                active_value: active_tab().as_str().to_string(),
+                on_change: move |v: String| {
+                    // 未知 key fallback 到默认 tab,保证状态始终有效。
+                    active_tab.set(SystemTab::from_str(&v).unwrap_or(SystemTab::DbStatus));
+                },
             }
 
             // tab 内容

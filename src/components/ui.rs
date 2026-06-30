@@ -290,8 +290,6 @@ pub fn FilterTabs(
 /// - `items`:`(value, label)` 列表,`value` 是稳定字符串 key,`label` 是展示文案
 /// - `active_value`:当前选中项的 value
 /// - `on_change`:切换时回调,传入新选中项的 value
-// Task 3 起由 /admin/system 页面消费;在此之前无调用方,加 allow 抑制 dead_code(参考 src/api/auth.rs:427)。
-#[allow(dead_code)]
 #[component]
 pub fn Tabs(
     items: Vec<(&'static str, &'static str)>,
