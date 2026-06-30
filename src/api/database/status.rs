@@ -173,11 +173,13 @@ pub async fn get_db_status() -> Result<DbStatus, ServerFnError> {
             })
             .collect();
 
-        // 活跃连接（过滤自身 pid，避免循环显示）
+        // 活跃连接（过滤自身 pid，避免循环显示）。
+        // extract(epoch FROM ...) 原生返回 numeric(decimal)，tokio-postgres 无 FromSql<f64>
+        // 实现该类型；显式 ::double precision 转 float8 以匹配 query_duration_secs 的 f64。
         let conn_rows = client
             .query(
                 "SELECT pid, usename, state, query, \
-                 extract(epoch FROM now() - query_start) \
+                 extract(epoch FROM now() - query_start)::double precision \
                  FROM pg_stat_activity \
                  WHERE datname = current_database() AND pid <> pg_backend_pid() \
                  ORDER BY query_start DESC NULLS LAST LIMIT 50",
