@@ -273,17 +273,17 @@ fn DbStatusTab() -> Element {
                     }
                 }
 
-                // 表清单
+                // 表清单（小表显示真实行数；大表回退估算，行数前标 ~）
                 div { class: "{ADMIN_TABLE_CLASS}",
                     div { class: "px-4 py-3 border-b border-paper-border text-sm font-medium text-paper-primary",
-                        "表清单（~行数为估算）"
+                        "表清单（行数：小表为真实值，大表标 ~ 为估算）"
                     }
                     div { class: "overflow-x-auto",
                         table { class: "w-full text-sm",
                             thead {
                                 tr { class: "border-b border-paper-border text-left text-paper-secondary",
                                     th { class: "px-4 py-2 font-medium", "表名" }
-                                    th { class: "px-4 py-2 font-medium text-right", "~行数" }
+                                    th { class: "px-4 py-2 font-medium text-right", "行数" }
                                     th { class: "px-4 py-2 font-medium text-right", "表大小" }
                                     th { class: "px-4 py-2 font-medium text-right", "索引大小" }
                                     th { class: "px-4 py-2 font-medium text-right", "总大小" }
@@ -294,7 +294,9 @@ fn DbStatusTab() -> Element {
                                 for t in s.tables.iter() {
                                     tr { class: "border-b border-paper-border last:border-0 hover:bg-paper-entry transition-colors",
                                         td { class: "px-4 py-2 font-mono text-paper-primary", "{t.name}" }
-                                        td { class: "px-4 py-2 text-right text-paper-secondary", "{t.row_estimate}" }
+                                        td { class: "px-4 py-2 text-right text-paper-secondary",
+                                            if t.row_count_estimated { "~{t.row_count}" } else { "{t.row_count}" }
+                                        }
                                         td { class: "px-4 py-2 text-right text-paper-secondary", "{format_bytes(t.table_size_bytes)}" }
                                         td { class: "px-4 py-2 text-right text-paper-secondary", "{format_bytes(t.index_size_bytes)}" }
                                         td { class: "px-4 py-2 text-right text-paper-primary font-medium", "{format_bytes(t.total_size_bytes)}" }

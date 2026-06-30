@@ -43,8 +43,10 @@ pub struct DbStatus {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TableInfo {
     pub name: String,
-    /// 行数估算（`pg_class.reltuples`，非 COUNT(*)，UI 标注"~估算"）。
-    pub row_estimate: i64,
+    /// 行数：total_size 小于阈值时为真实 COUNT(*)，否则回退 reltuples 估算（见 row_count_estimated）。
+    pub row_count: i64,
+    /// true 表示 row_count 是 reltuples 估算值（大表回退，未 ANALYZE 时 reltuples=-1 会显示为估算）。
+    pub row_count_estimated: bool,
     pub table_size_bytes: i64,
     pub index_size_bytes: i64,
     pub total_size_bytes: i64,
@@ -118,7 +120,9 @@ pub async fn get_db_status() -> Result<DbStatus, ServerFnError> {
             None => (None, None),
         };
 
-        // 表清单：行数用 reltuples 估算，避免大表 COUNT(*) 拖垮库
+        // 表清单：大小/统计走 catalog；行数对小表用真实 COUNT(*)，大表回退 reltuples 估算。
+        // 阈值 100MB：超过则 COUNT(*) 成本过高（全表扫描），降级为估算值并标注。
+        const COUNT_SIZE_THRESHOLD: i64 = 100 * 1024 * 1024;
         let table_rows = client
             .query(
                 "SELECT c.relname, c.reltuples::bigint, pg_relation_size(c.oid), \
@@ -134,20 +138,40 @@ pub async fn get_db_status() -> Result<DbStatus, ServerFnError> {
             )
             .await
             .map_err(AppError::query)?;
-        let tables = table_rows
-            .into_iter()
-            .map(|r| TableInfo {
-                name: r.get(0),
-                row_estimate: r.get(1),
-                table_size_bytes: r.get(2),
-                index_size_bytes: r.get(3),
-                total_size_bytes: r.get(4),
-                last_vacuum: r.get(5),
-                last_analyze: r.get(6),
-                dead_tuples: r.get(7),
-                live_tuples: r.get(8),
-            })
-            .collect();
+        let tables = {
+            let mut out = Vec::with_capacity(table_rows.len());
+            for r in table_rows {
+                let name: String = r.get(0);
+                let reltuples: i64 = r.get(1);
+                let total_size: i64 = r.get(4);
+                // 小表：真实 COUNT(*)；大表：回退 reltuples 估算。
+                // relname 来自 pg_class 可信，但表名可能含大写/特殊字符，需 PG 标识符转义（双引号包裹，内部双引号双写）。
+                let (row_count, estimated) = if total_size < COUNT_SIZE_THRESHOLD {
+                    let ident = format!("\"{}\"", name.replace('"', "\"\""));
+                    let cnt: i64 = client
+                        .query_one(&format!("SELECT count(*)::bigint FROM {}", ident), &[])
+                        .await
+                        .map_err(AppError::query)?
+                        .get(0);
+                    (cnt, false)
+                } else {
+                    (reltuples, true)
+                };
+                out.push(TableInfo {
+                    name,
+                    row_count,
+                    row_count_estimated: estimated,
+                    table_size_bytes: r.get(2),
+                    index_size_bytes: r.get(3),
+                    total_size_bytes: total_size,
+                    last_vacuum: r.get(5),
+                    last_analyze: r.get(6),
+                    dead_tuples: r.get(7),
+                    live_tuples: r.get(8),
+                });
+            }
+            out
+        };
 
         // 索引占用 Top 10
         let index_rows = client
