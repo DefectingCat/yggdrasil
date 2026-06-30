@@ -20,6 +20,36 @@ enum SystemTab {
     Backup,
 }
 
+// Task 3 起由 Tabs 组件经 SystemTab::as_str/from_str 消费;在此之前无生产调用方,
+// 加 allow 抑制 -D warnings 的 dead_code(参考 src/api/auth.rs:427 的同类处理)。
+#[allow(dead_code)]
+impl SystemTab {
+    /// 变体 → 稳定字符串 key(用于与基于 String 的 `Tabs` 组件桥接)。
+    /// 改这些 key 会破坏潜在的持久化/调试场景,见 `from_str` 的反向映射。
+    fn as_str(&self) -> &'static str {
+        match self {
+            SystemTab::DbStatus => "db_status",
+            SystemTab::ServerStatus => "server_status",
+            SystemTab::SqlConsole => "sql_console",
+            SystemTab::Export => "export",
+            SystemTab::Backup => "backup",
+        }
+    }
+
+    /// 字符串 key → 变体。未知/空串返回 Err(调用方 fallback 到默认 tab)。
+    /// 与 `as_str` 严格对应;大小写敏感。
+    fn from_str(s: &str) -> Result<SystemTab, &'static str> {
+        match s {
+            "db_status" => Ok(SystemTab::DbStatus),
+            "server_status" => Ok(SystemTab::ServerStatus),
+            "sql_console" => Ok(SystemTab::SqlConsole),
+            "export" => Ok(SystemTab::Export),
+            "backup" => Ok(SystemTab::Backup),
+            _ => Err("unknown tab key"),
+        }
+    }
+}
+
 /// 系统管理入口组件。
 #[component]
 pub fn System() -> Element {
@@ -1391,5 +1421,43 @@ fn BackupRow(props: BackupRowProps) -> Element {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SystemTab;
+
+    #[test]
+    fn as_str_roundtrips_all_variants() {
+        // 每个变体经 as_str -> from_str 必须还原为自身。
+        for tab in [
+            SystemTab::DbStatus,
+            SystemTab::ServerStatus,
+            SystemTab::SqlConsole,
+            SystemTab::Export,
+            SystemTab::Backup,
+        ] {
+            let s = tab.as_str();
+            assert_eq!(SystemTab::from_str(s), Ok(tab), "roundtrip failed for {tab:?}");
+        }
+    }
+
+    #[test]
+    fn as_str_returns_stable_keys() {
+        // 字符串 key 必须稳定(改 key 会破坏 URL/调试/未来持久化),锁定之。
+        assert_eq!(SystemTab::DbStatus.as_str(), "db_status");
+        assert_eq!(SystemTab::ServerStatus.as_str(), "server_status");
+        assert_eq!(SystemTab::SqlConsole.as_str(), "sql_console");
+        assert_eq!(SystemTab::Export.as_str(), "export");
+        assert_eq!(SystemTab::Backup.as_str(), "backup");
+    }
+
+    #[test]
+    fn from_str_rejects_unknown_and_empty() {
+        assert!(SystemTab::from_str("nonsense").is_err());
+        assert!(SystemTab::from_str("").is_err());
+        // 大小写敏感:不接受大写变体,避免歧义。
+        assert!(SystemTab::from_str("DbStatus").is_err());
     }
 }
