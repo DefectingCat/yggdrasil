@@ -13,6 +13,8 @@
 make dev           # tailwindcss watch + dx serve (needs PostgreSQL)
 make build         # build-editor → highlight-css → tailwindcss → doc → dx build --release
 make build-linux   # same as build but targets x86_64-unknown-linux-musl
+make build-freebsd # cross-compile FreeBSD x86_64 server binary (clang + lld + sysroot)
+make freebsd-sysroot # download/extract FreeBSD base.txz → .freebsd-sysroot/ (idempotent)
 make css           # one-shot CSS
 make css-watch     # watch mode
 make test          # cargo test + vitest (tiptap-editor + lightbox + yggdrasil-core libs)
