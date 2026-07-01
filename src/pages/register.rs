@@ -108,7 +108,14 @@ pub fn Register() -> Element {
                             value: username(),
                             disabled: is_loading,
                             oninput: move |v: String| username.set(v),
-                            onkeydown: None,
+                            // 回车键触发提交
+                            onkeydown: Some(
+                                EventHandler::new(move |e: KeyboardEvent| {
+                                    if e.key() == Key::Enter {
+                                        on_submit(())
+                                    }
+                                }),
+                            ),
                         }
                     }
                     div {
@@ -123,7 +130,14 @@ pub fn Register() -> Element {
                             value: email(),
                             disabled: is_loading,
                             oninput: move |v: String| email.set(v),
-                            onkeydown: None,
+                            // 回车键触发提交
+                            onkeydown: Some(
+                                EventHandler::new(move |e: KeyboardEvent| {
+                                    if e.key() == Key::Enter {
+                                        on_submit(())
+                                    }
+                                }),
+                            ),
                         }
                     }
                     div {
@@ -138,7 +152,14 @@ pub fn Register() -> Element {
                             value: password(),
                             disabled: is_loading,
                             oninput: move |v: String| password.set(v),
-                            onkeydown: None,
+                            // 回车键触发提交
+                            onkeydown: Some(
+                                EventHandler::new(move |e: KeyboardEvent| {
+                                    if e.key() == Key::Enter {
+                                        on_submit(())
+                                    }
+                                }),
+                            ),
                         }
                     }
                     div {
@@ -153,7 +174,14 @@ pub fn Register() -> Element {
                             value: confirm_password(),
                             disabled: is_loading,
                             oninput: move |v: String| confirm_password.set(v),
-                            onkeydown: None,
+                            // 回车键触发提交
+                            onkeydown: Some(
+                                EventHandler::new(move |e: KeyboardEvent| {
+                                    if e.key() == Key::Enter {
+                                        on_submit(())
+                                    }
+                                }),
+                            ),
                         }
                     }
                     button {
