@@ -121,6 +121,7 @@ pub fn AppRouter() -> Element {
         document::Stylesheet { href: "/style.css" }
         document::Stylesheet { href: "/highlight.css" }
         document::Title { "Yggdrasil Blog" }
+        document::Link { rel: "icon", href: "/favicon.ico" }
         div {
             ThemePreload {}
             Router::<Route> {}
