@@ -29,14 +29,20 @@ pub struct NavItemConfig {
 /// Props：
 /// - `nav_items`：导航项列表
 /// - `right_content`：右侧自定义内容（如主题切换、登出按钮）
+/// - `max_width`：内部导航的宽度类，需与正文 `max-w-*` 一致以保证左右边缘对齐。
+///   默认 `max-w-3xl`（前台阅读宽度）；后台传 `max-w-5xl` 与之同宽。
 #[component]
-pub fn Header(nav_items: Vec<NavItemConfig>, right_content: Element) -> Element {
+pub fn Header(
+    nav_items: Vec<NavItemConfig>,
+    right_content: Element,
+    #[props(default = "max-w-3xl")] max_width: &'static str,
+) -> Element {
     let mut mobile_open = use_signal(|| false);
     let menu_id = use_memo(|| "mobile-nav-menu".to_string());
 
     rsx! {
         header { class: "sticky top-0 z-40 w-full border-b border-paper-border bg-paper-theme/80 backdrop-blur-sm",
-            nav { class: "max-w-3xl mx-auto px-6 h-[60px] flex items-center justify-between",
+            nav { class: "{max_width} mx-auto px-6 h-[60px] flex items-center justify-between",
                 Link {
                     class: "text-2xl font-bold font-serif text-paper-primary hover:text-paper-accent transition-colors duration-200",
                     to: Route::Home {},
