@@ -154,7 +154,11 @@ fn write_editor(post_id: Option<i32>) -> Element {
     // use_effect 在首次渲染后跑，此时 #tiptap-editor 容器已挂载。
     #[cfg(target_arch = "wasm32")]
     use_effect(move || {
-        // 编辑模式：等数据加载完再初始化（避免空内容覆盖回填）
+        // 编辑模式：等数据加载完再初始化（避免空内容覆盖回填）。
+        // 回填内容直接从 edit_post（唯一可信源）取，不走 content signal——
+        // content 由独立的回填 effect 写入，两者在 edit_post 变更同一 tick 触发时
+        // 没有保证的先后顺序：本 effect 可能先于回填 effect 跑，读到仍是空串，
+        // 导致 setMarkdown 被跳过、编辑器空白（且 editor_content_set=true 阻止重试）。
         if is_edit && edit_post().is_none() {
             return;
         }
@@ -193,11 +197,16 @@ fn write_editor(post_id: Option<i32>) -> Element {
         // —— create（同步返回；找不到容器返回 None，构造失败抛异常）——
         match crate::tiptap_bridge::get_module().create("tiptap-editor", &opts) {
             Ok(Some(inst)) => {
-                // 编辑模式回填：create 成功立即回填（实例已创建，时机确定）
+                // 编辑模式回填：create 成功立即回填（实例已创建，时机确定）。
+                // 直接从 edit_post 取 content_md：本 effect 已在上面 guard 了 edit_post.is_none()，
+                // 而 edit_post 是异步加载后一次性写入、之后只读的真值源，读取它没有竞态。
+                // 用 editor_content_set 防重复回填（effect 重跑时跳过）。
                 if is_edit && !editor_content_set() {
-                    let md = content();
-                    if !md.is_empty() {
-                        inst.set_markdown(&md);
+                    if let Some(post) = edit_post() {
+                        let md = &post.content_md;
+                        if !md.is_empty() {
+                            inst.set_markdown(md);
+                        }
                     }
                     editor_content_set.set(true);
                 }
