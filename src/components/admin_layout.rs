@@ -84,7 +84,7 @@ pub fn AdminLayout() -> Element {
         div { class: "flex items-center gap-3",
             ThemeToggle {}
             button {
-                class: "text-sm text-paper-secondary hover:text-paper-primary transition-colors",
+                class: "text-sm text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer",
                 onclick: move |_| {
                     spawn(async move {
                         let _ = logout().await;
