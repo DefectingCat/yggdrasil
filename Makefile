@@ -1,4 +1,4 @@
-.PHONY: dev build build-linux build-freebsd freebsd-sysroot docker css css-watch clean build-editor build-editor-incremental build-lightbox build-lightbox-incremental build-core build-core-incremental build-codemirror build-codemirror-incremental highlight-css test doc doc-open start clippy fix
+.PHONY: dev build build-linux build-freebsd freebsd-sysroot docker css css-watch clean build-editor build-editor-incremental build-lightbox build-lightbox-incremental build-core build-core-incremental build-codemirror build-codemirror-incremental highlight-css test doc doc-open start clippy fix restore-webp
 
 build:
 	@$(MAKE) build-editor
@@ -9,6 +9,7 @@ build:
 	@tailwindcss -i input.css -o public/style.css --minify
 	@$(MAKE) doc
 	@dx build --release --debug-symbols=false
+	@$(MAKE) restore-webp
 
 build-linux:
 	@$(MAKE) build-editor
@@ -19,6 +20,7 @@ build-linux:
 	@tailwindcss -i input.css -o public/style.css --minify
 	@dx build @client --release --debug-symbols=false --wasm-js-cfg false
 	@dx build @server --release --debug-symbols=false --target x86_64-unknown-linux-musl --wasm-js-cfg false --features server
+	@$(MAKE) restore-webp
 	@echo ""
 	@echo "Linux build complete! The server binary is at target/dx/yggdrasil/release/web/server"
 	@echo "Remember to deploy it alongside the target/dx/yggdrasil/release/web/public directory."
@@ -60,6 +62,26 @@ build-freebsd:
 	@echo "FreeBSD build complete! Server binary: target/x86_64-unknown-freebsd/release/yggdrasil"
 	@echo "Deploy it to FreeBSD 15+ alongside the static public/ directory."
 	@echo "Runtime needs (bundled in FreeBSD base): libc.so.7 libthr.so.3 libkvm.so.7 etc."
+
+# 兜底：dx build 0.7.9 会把 public/ 下的 .webp 重编码成 VP8L 无损静图
+# （动画帧被丢弃，静图体积反增 7-8 倍），与文档承诺的"原样拷贝"不符。
+# SVG/ICO 等其他格式不受影响，故只需覆盖 .webp。
+# 遍历所有 dx 产物目录（release/debug），用源 public/ 的同名文件覆盖回去。
+# 仅覆盖产物中已存在的 .webp，不引入源里新增但 dx 未生成的文件。
+# 参考：https://dioxuslabs.com/learn/0.7/essentials/ui/assets/
+# 上游修复后可移除此 target 及 build/build-linux 里的调用。
+restore-webp:
+	@find target/dx -type d -path "*/web/public" 2>/dev/null | while read prod; do \
+		find "$$prod" -type f -name "*.webp" 2>/dev/null | while read p; do \
+			rel=$${p#$$prod/}; \
+			src="public/$$rel"; \
+			if [ -f "$$src" ]; then \
+				cp "$$src" "$$p"; \
+			else \
+				echo "restore-webp: 源缺失，跳过 $$rel"; \
+			fi; \
+		done; \
+	done
 
 highlight-css:
 	@cargo run --bin generate_highlight_css
