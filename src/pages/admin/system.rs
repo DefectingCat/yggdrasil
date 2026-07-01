@@ -173,41 +173,43 @@ fn DbStatusTab() -> Element {
         load_once();
     });
 
-    // 自动刷新：interval 变化时 use_future 重新执行，内部周期 sleep 后重新 load。
-    // wasm32 才有意义（SSR 不轮询）；sleep 用 web_sys 的 setTimeout 包成 JsFuture，
-    // 避免引入新依赖。interval 在 use_future 依赖里读取，变化即重建 future。
-    use_future(move || {
-        // 在依赖闭包里读 interval，使 use_future 在它变化时重新执行。
-        let interval_secs = refresh_interval();
-        let mut status_f = status;
-        let mut loading_f = loading;
-        let mut error_f = error;
-        async move {
-            #[cfg(target_arch = "wasm32")]
-            {
-                let secs = interval_secs.unwrap_or(0);
+    // 自动刷新：使用官方推荐模式——一个永不重建的长生命周期 loop，在每次循环
+    // 内部读取 refresh_interval 的当前值，自然响应间隔切换。
+    // 旧做法在闭包同步体内读 status/loading/error signal，导致这些 signal 每次
+    // .set() 后都触发 use_future 重建，产生多个并发 loop（请求爆炸）。
+    use_future(move || async move {
+        #[cfg(target_arch = "wasm32")]
+        {
+            loop {
+                // 每次循环读最新 interval（signal 的 Copy 语义，直接调用即可）。
+                let secs = refresh_interval().unwrap_or(0);
                 if secs == 0 {
-                    return;
+                    // 手动模式：短暂 yield，让事件循环呼吸，避免忙等；
+                    // 用户切换到自动模式后最多等 200ms 即响应。
+                    wasm_sleep(200).await;
+                    continue;
                 }
-                loop {
-                    wasm_sleep(secs * 1000).await;
-                    loading_f.set(true);
-                    spawn(async move {
-                        match get_db_status().await {
-                            Ok(s) => {
-                                status_f.set(Some(s));
-                                error_f.set(None);
-                            }
-                            Err(e) => error_f.set(Some(e.to_string())),
+                wasm_sleep(secs * 1000).await;
+                // 二次检查：sleep 期间用户可能切回手动。
+                if refresh_interval().is_none() {
+                    continue;
+                }
+                loading.set(true);
+                spawn(async move {
+                    match get_db_status().await {
+                        Ok(s) => {
+                            status.set(Some(s));
+                            error.set(None);
                         }
-                        loading_f.set(false);
-                    });
-                }
+                        Err(e) => error.set(Some(e.to_string())),
+                    }
+                    loading.set(false);
+                });
             }
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                let _ = (interval_secs, status_f, loading_f, error_f);
-            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = (status, loading, error, refresh_interval);
         }
     });
 
@@ -461,38 +463,37 @@ fn ServerStatusTab() -> Element {
         load_once();
     });
 
-    // 自动刷新：refresh_ms 变化时重建 future。
-    use_future(move || {
-        let interval_ms = refresh_ms();
-        let mut status_f = status;
-        let mut loading_f = loading;
-        let mut error_f = error;
-        async move {
-            #[cfg(target_arch = "wasm32")]
-            {
-                let ms = interval_ms.unwrap_or(0);
+    // 自动刷新：同 DbStatusTab，采用官方推荐的单一长生命周期 loop 模式。
+    // 闭包体内不读任何 signal（避免隐式依赖追踪导致重建），loop 内部实时读取。
+    use_future(move || async move {
+        #[cfg(target_arch = "wasm32")]
+        {
+            loop {
+                let ms = refresh_ms().unwrap_or(0);
                 if ms == 0 {
-                    return;
+                    wasm_sleep(200).await;
+                    continue;
                 }
-                loop {
-                    wasm_sleep(ms).await;
-                    loading_f.set(true);
-                    spawn(async move {
-                        match get_server_status().await {
-                            Ok(s) => {
-                                status_f.set(Some(s));
-                                error_f.set(None);
-                            }
-                            Err(e) => error_f.set(Some(e.to_string())),
+                wasm_sleep(ms).await;
+                if refresh_ms().is_none() {
+                    continue;
+                }
+                loading.set(true);
+                spawn(async move {
+                    match get_server_status().await {
+                        Ok(s) => {
+                            status.set(Some(s));
+                            error.set(None);
                         }
-                        loading_f.set(false);
-                    });
-                }
+                        Err(e) => error.set(Some(e.to_string())),
+                    }
+                    loading.set(false);
+                });
             }
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                let _ = (interval_ms, status_f, loading_f, error_f);
-            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = (status, loading, error, refresh_ms);
         }
     });
 
