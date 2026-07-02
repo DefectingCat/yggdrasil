@@ -330,14 +330,13 @@
 
 .tiptap-editor ul[data-type="taskList"] li {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.5em;
   margin: 0.3em 0;
 }
 
 .tiptap-editor ul[data-type="taskList"] li > label {
   flex-shrink: 0;
-  margin-top: 0.3em;
   cursor: pointer;
   user-select: none;
 }
@@ -351,6 +350,12 @@
 
 .tiptap-editor ul[data-type="taskList"] li > div {
   flex: 1;
+}
+
+/* task list 项内的段落去掉上下 margin（.tiptap-editor p 默认 .6em 0），
+   否则 margin 会撑高 div，使 checkbox 与文本垂直中线错位、项间距过大。 */
+.tiptap-editor ul[data-type="taskList"] li > div > p {
+  margin: 0;
 }
 
 .tiptap-editor ul[data-type="taskList"] li[data-checked="true"] > div {
