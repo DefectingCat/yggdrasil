@@ -24,7 +24,7 @@ RUN apt-get update \
         git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js 22 (required by Tailwind CSS v4 and the Tiptap editor build).
+# Install Node.js 22 (required by Tailwind CSS v4 and the JS libs build) + pnpm.
 RUN mkdir -p /etc/apt/keyrings \
     && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
        | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
@@ -32,7 +32,9 @@ RUN mkdir -p /etc/apt/keyrings \
        > /etc/apt/sources.list.d/nodesource.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends nodejs \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && corepack enable \
+    && corepack prepare pnpm@11.8.0 --activate
 
 # Add the targets used by Dioxus fullstack builds.
 RUN rustup target add wasm32-unknown-unknown x86_64-unknown-linux-musl
@@ -48,16 +50,22 @@ RUN curl -fsSL "https://github.com/tailwindlabs/tailwindcss/releases/download/v$
 
 WORKDIR /build
 
-# Cache the Tiptap editor's node_modules by copying only package manifests first.
-COPY libs/tiptap-editor/package*.json libs/tiptap-editor/
-RUN cd libs/tiptap-editor && npm ci --include=dev
+# Cache the pnpm workspace node_modules by copying only package manifests first.
+# Copying all 4 libs' manifests + the workspace root lets pnpm install everything
+# in one shot; this layer is reused as long as the manifests don't change.
+COPY libs/package.json libs/pnpm-workspace.yaml libs/pnpm-lock.yaml libs/
+COPY libs/tiptap-editor/package.json      libs/tiptap-editor/
+COPY libs/codemirror-editor/package.json  libs/codemirror-editor/
+COPY libs/lightbox/package.json           libs/lightbox/
+COPY libs/yggdrasil-core/package.json     libs/yggdrasil-core/
+RUN cd libs && pnpm install --frozen-lockfile
 
 # Copy the rest of the source tree and build everything.
 COPY . .
 
-# Build the Tiptap editor, syntax-highlight CSS and Tailwind stylesheet.
+# Build all 4 JS libs, syntax-highlight CSS and Tailwind stylesheet.
 # These steps produce the contents of the public/ directory.
-RUN make build-editor && make highlight-css && tailwindcss -i input.css -o public/style.css --minify
+RUN make build-libs && make highlight-css && tailwindcss -i input.css -o public/style.css --minify
 
 # Build the client-side Dioxus WASM bundle. We use dx only for the client assets;
 # dx's linker wrapper is incompatible with a raw static linker, so the server

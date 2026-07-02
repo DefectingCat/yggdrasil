@@ -3,12 +3,16 @@ target/
 dist/
 .dioxus/
 node_modules/
-libs/tiptap-editor/node_modules/
+libs/node_modules/
+libs/*/node_modules/
 
 # Generated assets are rebuilt inside the container.
 public/style.css
 public/highlight.css
 public/tiptap/
+public/codemirror/
+public/lightbox/
+public/yggdrasil-core/
 
 # Uploads directory is created at runtime; only keep the gitkeep marker.
 uploads/*

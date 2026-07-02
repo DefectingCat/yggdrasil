@@ -14,34 +14,36 @@
 ## Development Commands
 
 ```bash
-make dev           # 增量构建 4 个 libs + tailwindcss watch + dx serve (needs PostgreSQL, SSR_CACHE_SECS=0)
-make build         # build-editor → build-lightbox → build-core → build-codemirror → highlight-css → tailwindcss → doc → dx build --release → restore-webp
+make dev           # 增量构建 4 个 libs (pnpm -r run build) + tailwindcss watch + dx serve (needs PostgreSQL, SSR_CACHE_SECS=0)
+make build         # pnpm install → build-libs → highlight-css → tailwindcss → doc → dx build --release → restore-webp
 make build-linux   # 客户端 + 服务端分离构建,target x86_64-unknown-linux-musl
 make build-freebsd # cross-compile FreeBSD x86_64 server binary (clang + lld + sysroot, via cargo, not dx)
 make freebsd-sysroot # download/extract FreeBSD base.txz → .freebsd-sysroot/ (idempotent)
 make css           # one-shot Tailwind build
 make css-watch     # Tailwind watch mode
-make test          # cargo test + pnpm test in all 4 libs (tiptap-editor / lightbox / yggdrasil-core / codemirror-editor)
+make test          # cargo test + pnpm -r run test (all 4 libs: tiptap-editor / lightbox / yggdrasil-core / codemirror-editor)
 make doc           # cargo doc (ayu 主题) → 拷贝到 public/doc/，随 build 发布
 make doc-open      # 同 doc，生成后自动用浏览器打开（本地预览，不拷贝）
-make clippy        # cargo clippy --all-targets --all-features -- -D warnings (严格模式,warning 即失败)
-make fix           # cargo fix --allow-dirty
-make clean         # cargo clean + rm public/{style.css,highlight.css,doc} + rm -rf uploads/.cache
+make lint          # Biome check (libs) + cargo clippy (严格模式,warning 即失败)
+make fix           # biome format --write (libs) + cargo fix --allow-dirty
+make clean         # cargo clean + rm public/{style.css,highlight.css,doc} + rm -rf uploads/.cache + rm -rf libs/node_modules libs/*/node_modules
 ```
 
-**Build order matters**: `make build` runs all 4 lib builds → `highlight-css` (`cargo run --bin generate_highlight_css`) → `tailwindcss --minify` → `doc` → `dx build --release` → `restore-webp`. Do not run `dx build --release` alone.
+**Build order matters**: `make build` runs `pnpm install --frozen-lockfile` (in `libs/`) → `build-libs` (`pnpm -r run build`, all 4 libs in parallel) → `highlight-css` (`cargo run --bin generate_highlight_css`) → `tailwindcss --minify` → `doc` → `dx build --release` → `restore-webp`. Do not run `dx build --release` alone.
 
 **`restore-webp` workaround**: dx build 0.7.9 re-encodes `public/*.webp` into VP8L lossless stills (drops animation frames, 7-8× larger), contradicting the "verbatim copy" promise. `restore-webp` overwrites `.webp` in `target/dx/**/web/public/` from source `public/`. SVG/ICO are unaffected. Remove once upstream fixes it.
 
-**Libs use pnpm, not npm**: every lib has `pnpm-lock.yaml`; Makefile recipes use `pnpm ci`/`pnpm install`/`pnpm run`. The `*-incremental` targets skip install (assume `node_modules` present) for faster `make dev`.
+**JS workspace lives under `libs/`**: `libs/` is a pnpm workspace — root `libs/package.json` hoists the 4 shared devDeps (`happy-dom`/`typescript`/`vite`/`vitest`) + Biome; `libs/pnpm-workspace.yaml` lists `libs/*` packages; `libs/pnpm-lock.yaml` is the single lockfile. First-time setup: `cd libs && pnpm install`. All Makefile recipes `cd libs && pnpm ...`. Build a single lib: `make build-editor` (≈ `cd libs && pnpm --filter @yggdrasil/tiptap-editor run build`).
 
 ## Prerequisites
 
 - Rust 1.95+ with `wasm32-unknown-unknown` target
 - `dx` CLI (`cargo install dioxus-cli`)
 - `tailwindcss` CLI v4 — install via `npm install -g @tailwindcss/cli` (v4 splits the CLI into its own package; the `tailwindcss` core package has no `bin`), or use the standalone binary
-- `pnpm` (all 4 `libs/` subprojects use it)
+- `pnpm` 11+ (`libs/` is a pnpm workspace; vendored as a `devDependency` via corepack, but a global install is convenient)
 - PostgreSQL running locally
+
+**Biome** (linter + formatter for `libs/`) is a `devDependency` in `libs/package.json` — no separate install. `make lint` runs `biome check` + `cargo clippy`; `make fix` runs `biome format --write` + `cargo fix`. Config in `libs/biome.json`.
 
 ## Environment
 
@@ -152,16 +154,16 @@ src/codemirror_bridge.rs — wasm-bindgen bindings for CodeMirror editor (mirror
 
 ## Frontend Lib Subprojects
 
-Four Vite-built IIFE libraries under `libs/`, each with `pnpm-lock.yaml`. Built artifacts go to `public/<name>/` — **do not edit `public/<name>/` files; they are build artifacts**. Each `build` script is `tsc --noEmit && vite build` (type-check before bundle). Output is IIFE because Dioxus `[web.resource] script` injects bare `<script src>` without `type="module"` support. Registered globally in `Dioxus.toml` `script`/`style` arrays.
+Four Vite-built IIFE libraries under `libs/`, managed as a **pnpm workspace** (single `libs/pnpm-lock.yaml`, shared `libs/tsconfig.base.json` + `libs/biome.json`, hoisted devDeps). Built artifacts go to `public/<name>/` — **do not edit `public/<name>/` files; they are build artifacts**. Each `build` script is `tsc --noEmit && vite build` (type-check before bundle). Output is IIFE because Dioxus `[web.resource] script` injects bare `<script src>` without `type="module"` support. Registered globally in `Dioxus.toml` `script`/`style` arrays.
 
 | Lib                       | Output dir                                                   | Exposes                                                                                                       | Wiring                                                                                                                                                                                                                                                                                                                                            |
 | ------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `libs/tiptap-editor/`     | `public/tiptap/` (`editor.js`/`.css`/`.map`)                 | `window.TiptapEditor`                                                                                         | wasm-bindgen via `src/tiptap_bridge.rs` — injects `Closure` callbacks (`onUpdate`/`onReady`/`onUploadEvent`/`onImageUpload`) into `TiptapEditor.create`, holds instance + closures in `EditorHandle` (Drop → `destroy()`). No `js_sys::eval`, no `window` globals, no polling.                                                                    |
 | `libs/codemirror-editor/` | `public/codemirror/` (`editor.js`/`.map`, **no CSS**)        | `window.CodeMirrorEditor` (object literal `{ create }`) + `window.EditorOptions` (class, survives TS erasure) | `src/codemirror_bridge.rs` mirrors tiptap — `get_module()` uses `Reflect::get` + `unchecked_into` (object literal, NOT a constructor extern). Themes are JS `Extension`s from `@catppuccin/codemirror` (Latte/Mocha), hot-swapped via `Compartment.reconfigure`.                                                                                  |
 | `libs/lightbox/`          | `public/lightbox/` (`lightbox.js`/`.css`/`.map`)             | self-initializing IIFE                                                                                        | **Not** wasm-bindgen. `src/components/post/post_content.rs` sets `window.__lightboxSelectors` before load; IIFE tail reads it and self-initializes. Direct fallback call if already loaded.                                                                                                                                                       |
-| `libs/yggdrasil-core/`    | `public/yggdrasil-core/` (`yggdrasil-core.js`/`.css`/`.map`) | `window.__initPostContent`, `window.__startThemeTransition`                                                   | Designated home for all new core JS — add here, not to `public/js/`. Rust calls entry points via `js_sys::eval("window.__xxx(...)")` guarded by `if (window.__xxx)`. Theme reveal uses View Transitions API (`startViewTransition` + `@keyframes tt-reveal` `clip-path` expand); falls back to instant switch when VT / `prefers-reduced-motion`. |
+| `libs/yggdrasil-core/`    | `public/yggdrasil-core/` (`yggdrasil-core.js`/`.css`/`.map`) | `window.__initPostContent`, `window.__startThemeTransition`                                                   | Designated home for all new core JS — add here, not to `public/js/`. Rust calls entry points via `js_sys::Reflect::get` + `Function::apply` (no `js_sys::eval`), silently no-oping if undefined. Theme reveal uses View Transitions API (`startViewTransition` + `@keyframes tt-expand` `clip-path` expand); falls back to instant switch when VT / `prefers-reduced-motion`. |
 
-Run a single lib's tests: `cd libs/<name> && pnpm test` (Vitest + happy-dom). Watch mode: `pnpm test:watch`.
+Run a single lib's tests: `cd libs && pnpm --filter @yggdrasil/<name> test` (Vitest + happy-dom). Watch mode: append `-- test:watch`.
 
 ## Database Management (`/admin/system`)
 
@@ -195,9 +197,9 @@ Admin area at `/admin/system` (menu "系统") with 5 tabs: 数据库状态 / 服
 ## Testing
 
 ```bash
-make test   # cargo test (Rust) + pnpm test in all 4 libs
-make clippy # cargo clippy --all-targets --all-features -- -D warnings
-dx check    # Dioxus type-check (catches component/Router issues)
+make test # cargo test (Rust) + pnpm -r run test in all 4 libs
+make lint # Biome check (libs) + cargo clippy --all-targets --all-features -- -D warnings
+dx check  # Dioxus type-check (catches component/Router issues)
 ```
 
 **Must verify both targets**: This is a fullstack project — the server binary and the WASM frontend are two separate compilation targets with different features (`--all-features` enables `web`+`server`; the WASM bundle uses `--no-default-features --features web`). A change that compiles on one target can fail on the other. **`cargo build --all-features` alone is NOT sufficient** — it only builds the server binary. Before considering work done, compile the WASM target too:
@@ -230,7 +232,7 @@ Most Rust tests use `#[cfg(all(test, feature = "server"))]` — they only run wh
 - `public/{tiptap,codemirror,lightbox,yggdrasil-core}/` — Vite build outputs
 - `public/doc/` — cargo doc output (copied by `make doc`)
 - `/dist`, `/.dioxus`, `/target`, `/static`
-- `node_modules` (inside each `libs/` subproject)
+- `libs/node_modules/` + `libs/*/node_modules/` — pnpm workspace store + symlinks
 - `uploads/.cache/` — image processing disk cache
 - `backups/` — admin DB backup files
 - `.freebsd-sysroot/` — FreeBSD cross-compile sysroot (machine-local)

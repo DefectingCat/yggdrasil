@@ -35,10 +35,11 @@ jobs:
           done
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
-      - name: Install Node.js
+      - name: Install Node.js & pnpm
         run: |
           apt-get update
           apt-get install -y nodejs npm
+          npm install -g pnpm
 
       - name: Install Rust target
         run: rustup target add wasm32-unknown-unknown
@@ -54,6 +55,9 @@ jobs:
 
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Biome lint (libs)
+        run: cd libs && pnpm install --frozen-lockfile && pnpm exec biome check .
 
       - name: Run tests
         run: cargo test --all-features
@@ -89,10 +93,11 @@ jobs:
           done
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
-      - name: Install Node.js
+      - name: Install Node.js & pnpm
         run: |
           apt-get update
           apt-get install -y nodejs npm
+          npm install -g pnpm
 
       - name: Install Rust target
         run: rustup target add wasm32-unknown-unknown
