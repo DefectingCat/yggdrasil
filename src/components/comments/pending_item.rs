@@ -5,7 +5,7 @@
 
 use dioxus::prelude::*;
 
-use crate::hooks::comment_storage::{render_pending_content, PendingComment};
+use crate::utils::comment_storage::{render_pending_content, PendingComment};
 use crate::utils::time::format_relative_time_iso;
 
 /// 待审核评论项组件。

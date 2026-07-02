@@ -7,7 +7,7 @@ use dioxus::prelude::*;
 use crate::api::comments::create_comment;
 use crate::components::comments::section::CommentContext;
 use crate::components::forms::{AlertBox, INPUT_CLASS};
-use crate::hooks::comment_storage::{self, PendingComment};
+use crate::utils::comment_storage::{self, PendingComment};
 
 /// 评论提交按钮样式：去掉全宽，改为内联宽度并右对齐。
 ///

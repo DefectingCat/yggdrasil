@@ -1,7 +1,7 @@
 //! HTML 转义工具（零依赖纯函数，前端后端通用）。
 //!
 //! 仓库内原先存在两份 `escape_html` 实现：
-//! - `hooks::comment_storage::escape_html`（`'` → `&#39;`）
+//! - `utils::html::escape_html`（`'` → `&#39;`）
 //! - `api::comments::helpers::escape_html`（`'` → `&#x27;`，server-only）
 //! 现统一到本模块，单引号采用 HTML5 标准的 `&#x27;`。
 

@@ -6,7 +6,7 @@ use dioxus::prelude::*;
 
 use crate::components::comments::item::CommentItem;
 use crate::components::comments::pending_item::PendingCommentItem;
-use crate::hooks::comment_storage::PendingComment;
+use crate::utils::comment_storage::PendingComment;
 use crate::models::comment::PublicComment;
 
 /// 合并后的评论节点，可能是已审核或待审核评论。

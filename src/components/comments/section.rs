@@ -9,7 +9,7 @@ use crate::api::comments::{check_pending_status, get_comments, CommentTreeRespon
 use crate::components::comments::form::CommentForm;
 use crate::components::comments::list::CommentList;
 use crate::components::skeletons::comment_skeleton::CommentListSkeleton;
-use crate::hooks::comment_storage::{self, PendingComment};
+use crate::utils::comment_storage::{self, PendingComment};
 
 /// 评论上下文，供评论相关组件共享状态。
 ///

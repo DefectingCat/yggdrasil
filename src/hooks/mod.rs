@@ -1,12 +1,11 @@
 //! 共享的 Dioxus Hooks 模块。
 //!
 //! 该模块集中管理可在组件树中复用的自定义 Hook，包括：
-//! - 评论草稿在浏览器 localStorage 中的持久化（WASM 端）
 //! - 骨架屏延迟加载状态
 //! - 通用 DOM 事件监听（注册 + 自动卸载清理）
-
-/// 评论草稿持久化 Hook，基于浏览器的 localStorage（仅在 WASM 端有效）。
-pub mod comment_storage;
+//!
+//! 评论草稿持久化（localStorage 读写）已迁至 `crate::utils::comment_storage`，
+//! 因为它是纯工具函数而非渲染期 Hook。
 
 /// 延迟加载状态 Hook。
 pub mod delayed_loading;
