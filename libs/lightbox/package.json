@@ -9,11 +9,5 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
-  },
-  "devDependencies": {
-    "happy-dom": "^20.10.6",
-    "typescript": "^6.0.3",
-    "vite": "^8.1.0",
-    "vitest": "^4.1.9"
   }
 }

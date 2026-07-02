@@ -21,11 +21,5 @@
     "@tiptap/pm": "^3.27.1",
     "@tiptap/starter-kit": "^3.27.1",
     "@tiptap/suggestion": "^3.27.1"
-  },
-  "devDependencies": {
-    "happy-dom": "^20.10.6",
-    "typescript": "^6.0.3",
-    "vite": "^8.1.0",
-    "vitest": "^4.1.9"
   }
 }
