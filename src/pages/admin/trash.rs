@@ -12,10 +12,9 @@ use dioxus::prelude::*;
 // 但部分仅用于 WASM 代码路径，SSR 下触发 unused imports，按项目惯例放行。
 #[allow(unused_imports)]
 use crate::api::posts::{
-    batch_purge_posts, batch_restore_posts, empty_trash, purge_post, restore_post,
+    batch_purge_posts, batch_restore_posts, empty_trash, list_deleted_posts, purge_post,
+    restore_post, PostListResponse,
 };
-#[cfg(target_arch = "wasm32")]
-use crate::api::posts::{list_deleted_posts, PostListResponse};
 #[allow(unused_imports)]
 use crate::api::settings::{get_trash_settings, update_trash_settings};
 use crate::components::empty_state::EmptyState;
@@ -25,6 +24,7 @@ use crate::components::ui::{
     Pagination, StatusBadge, ADMIN_CARD_CLASS, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_SOLID_GREEN,
     BTN_SOLID_RED, BTN_TEXT_ACCENT, BTN_TEXT_RED, CHECKBOX_CLASS,
 };
+use crate::hooks::query::use_paginated;
 use crate::models::post::PostListItem;
 use crate::models::settings::TrashSettings;
 use crate::router::Route;
@@ -48,43 +48,25 @@ pub fn Trash() -> Element {
 pub fn TrashPage(page: i32) -> Element {
     let current_page = page.max(1);
     let mut selected_ids: Signal<HashSet<i32>> = use_signal(HashSet::new);
-    let mut posts: Signal<Vec<PostListItem>> = use_signal(Vec::new);
-    let mut total: Signal<i64> = use_signal(|| 0);
-    #[allow(unused_mut)]
-    let mut loading: Signal<bool> = use_signal(|| false);
-    #[allow(unused_mut)]
-    let mut error: Signal<Option<String>> = use_signal(|| None);
+
+    // 分页列表加载（loading / posts / total / error）由 use_paginated 统一管理。
+    let paginated = use_paginated(
+        move || current_page,
+        TRASH_PER_PAGE,
+        |p, pp| async move {
+            list_deleted_posts(p, pp)
+                .await
+                .map(|PostListResponse { posts, total }| (posts, total))
+        },
+    );
+    let mut posts = paginated.items;
+    let mut total = paginated.total;
+    let loading = paginated.loading;
+    let mut error = paginated.error;
+
     // 自动清理配置：由子组件 AutoPurgeSettings 写入（加载/保存），本组件读取
     // retention_days 供 TrashRow 的「剩余天数」展示。
     let mut settings: Signal<TrashSettings> = use_signal(TrashSettings::default);
-
-    // 加载回收站列表（自动清理配置由子组件 AutoPurgeSettings 自行加载）。
-    use_effect(move || {
-        let _ = current_page;
-        loading.set(true);
-        error.set(None);
-        #[cfg(target_arch = "wasm32")]
-        {
-            let page = current_page;
-            spawn(async move {
-                match list_deleted_posts(page, TRASH_PER_PAGE).await {
-                    Ok(PostListResponse {
-                        posts: list,
-                        total: t,
-                    }) => {
-                        posts.set(list);
-                        total.set(t);
-                    }
-                    Err(e) => error.set(Some(e.to_string())),
-                }
-                loading.set(false);
-            });
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            loading.set(false);
-        }
-    });
 
     // 本地移除一篇文章（乐观更新）。
     let mut remove_post = move |id: i32| {

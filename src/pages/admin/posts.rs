@@ -6,11 +6,9 @@
 use dioxus::prelude::*;
 use dioxus::router::components::Link;
 
-// 仅在 WASM 前端使用的分页数据接口。
-#[cfg(target_arch = "wasm32")]
-use crate::api::posts::list_posts;
-#[cfg(target_arch = "wasm32")]
-use crate::api::posts::PostListResponse;
+// 分页数据接口：list_posts 是 server function，两端都生成（wasm 端为 client stub，
+// server 端为真实实现），故无需 cfg。实际请求只在 use_paginated 的 wasm 分支发出。
+use crate::api::posts::{list_posts, PostListResponse};
 use crate::api::posts::{delete_post, rebuild_content_html, CreatePostResponse, RebuildResult};
 use crate::components::empty_state::{EmptyState, EmptyStateAction};
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
@@ -18,6 +16,7 @@ use crate::components::skeletons::posts_skeleton::PostsSkeleton;
 use crate::components::ui::{
     Pagination, StatusBadge, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_TEXT_RED,
 };
+use crate::hooks::query::use_paginated;
 use crate::models::post::PostListItem;
 use crate::router::Route;
 
@@ -38,10 +37,24 @@ pub fn Posts() -> Element {
 #[component]
 pub fn PostsPage(page: i32) -> Element {
     let current_page = page.max(1);
-    // 文章列表、总数、加载状态、删除中 ID、重建缓存状态与结果。
-    let mut posts = use_signal(Vec::<PostListItem>::new);
-    let mut total = use_signal(|| 0_i64);
-    let mut loading = use_signal(|| true);
+
+    // 分页列表加载（loading / posts / total / error）由 use_paginated 统一管理；
+    // 原先吞掉 Err，现向 trash 看齐暴露 error signal（保持一致性）。
+    let paginated = use_paginated(
+        move || current_page,
+        POSTS_PER_PAGE,
+        |p, pp| async move {
+            list_posts(p, pp)
+                .await
+                .map(|PostListResponse { posts, total }| (posts, total))
+        },
+    );
+    let mut posts = paginated.items;
+    let mut total = paginated.total;
+    let loading = paginated.loading;
+    let _error = paginated.error;
+
+    // 删除中 ID、重建缓存状态与结果仍由本组件持有（业务逻辑不归 hook 管）。
     let mut deleting = use_signal(|| None::<i32>);
     // 重建缓存的状态由本组件持有并下发给 RebuildCacheBar：结果消息也在本组件
     // 渲染（header 与表格之间的独立行），既不撑高 header 触发 items-center 重排，
@@ -50,35 +63,6 @@ pub fn PostsPage(page: i32) -> Element {
     // 走 Signal 的内部可变性；SSR target 下那些 set 不可见，mut 会触发 unused_mut。
     let rebuilding = use_signal(|| false);
     let rebuild_result = use_signal(|| Option::<String>::None);
-
-    // 页码变化时加载分页数据：WASM 前端请求接口，SSR 直接结束加载。
-    use_effect(move || {
-        let _ = current_page;
-
-        loading.set(true);
-        // 仅在 WASM 前端发起分页请求。
-        #[cfg(target_arch = "wasm32")]
-        {
-            let p = current_page;
-            spawn(async move {
-                match list_posts(p, POSTS_PER_PAGE).await {
-                    Ok(PostListResponse {
-                        posts: list,
-                        total: t,
-                    }) => {
-                        posts.set(list);
-                        total.set(t);
-                    }
-                    Err(_) => {}
-                }
-                loading.set(false);
-            });
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            loading.set(false);
-        }
-    });
 
     let get_posts = move || -> Vec<PostListItem> { posts() };
 
