@@ -472,7 +472,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
                         img {
                             src: "/images/xiantiaoxiaogou_input_bg.webp",
                             alt: "",
-                            class: "absolute bottom-1.5 right-1.5 opacity-10 pointer-events-none z-0",
+                            class: "absolute bottom-2 right-2 w-24 opacity-10 pointer-events-none z-0",
                         }
                     }
                 }
