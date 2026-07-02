@@ -1,6 +1,6 @@
 import { Extension } from '@tiptap/core'
 import type { Node, Fragment } from '@tiptap/pm/model'
-import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
 
 /**
  * 让手动输入 `- [ ]` / `- [x]` 创建任务列表。
@@ -85,8 +85,12 @@ export const TaskInputRule = Extension.create({
           // 当前命中的 listItem 删除 `[ ] ` 前缀并设 checked;其余 listItem 默认未勾选。
           const listPos = $from.start(listParentDepth) - 1 // bulletList 节点的文档位置
           const newItems: Node[] = []
+          // 记录命中项在 bulletList 中的序号(用于替换后定位光标)。
+          let matchedIndex = -1
+          let i = 0
           listParent.forEach((itemNode) => {
             const isMatched = itemNode === listItem
+            if (isMatched) matchedIndex = i
             // 复用原 listItem 的子节点(段落等),命中的去掉前缀文本。
             let children = itemNode.content
             if (isMatched) {
@@ -98,13 +102,29 @@ export const TaskInputRule = Extension.create({
                 children,
               ),
             )
+            i++
           })
 
           const newTaskList = taskListType.create(null, newItems)
           const replaceTr = tr.replaceWith(listPos, listPos + listParent.nodeSize, newTaskList)
 
-          // 保持光标在转换后的合理位置(命中的 taskItem 内,去掉前缀后)。
-          // replaceWith 会保留映射,但为确保光标落在文本内,显式重设到新 taskItem 末尾。
+          // 显式重设光标:整段 replaceWith 后,ProseMirror 的选区映射无法把原 listItem
+          // 内的光标正确映射到新 taskItem 内(默认落到替换区域之后=下一行)。
+          // 这里算出命中的 taskItem 在新文档中的位置,把光标设到其段落文本末尾。
+          const newMatchedItem = newTaskList.child(matchedIndex)
+          // taskItem 的第一个子节点是段落(textblock);光标落在段落内容末尾。
+          const itemPos = listPos + 1 // taskList 起始后进入第一个 taskItem
+          let cursorPos = itemPos
+          for (let k = 0; k < matchedIndex; k++) {
+            cursorPos += newTaskList.child(k).nodeSize
+          }
+          // cursorPos 现在指向命中 taskItem 的起始;+1 进入其第一个段落,
+          // +段落文本长度 = 段落末尾(用户继续输入的位置)。
+          const paragraph = newMatchedItem.firstChild
+          const paragraphTextLen = paragraph ? paragraph.content.size : 0
+          cursorPos += 1 + paragraphTextLen
+          replaceTr.setSelection(TextSelection.near(replaceTr.doc.resolve(cursorPos)))
+
           return replaceTr
         },
       }),

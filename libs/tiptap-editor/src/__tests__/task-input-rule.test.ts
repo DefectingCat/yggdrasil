@@ -79,6 +79,9 @@ describe('TaskInputRule (appendTransaction 升级方案)', () => {
     expect(taskItem?.attrs?.checked).toBe(false)
     // 前缀 "[ ] " 应被删除,不残留为文本
     expect(taskItem?.content?.[0]?.content?.[0]?.text).not.toContain('[')
+    // 光标应落在命中 taskItem 的段落内(pos 3 = doc>taskList>taskItem>paragraph 内),
+    // 而非被甩到下一行(替换区域之后)。
+    expect(editor.state.selection.from).toBe(3)
   })
 
   it('打 "[x] " 升级成已勾选任务列表项', async () => {
