@@ -209,6 +209,18 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
 /// 3. 生成 `<span class="blur-img" style="--ar:..">` 包裹两层 img
 #[cfg(feature = "server")]
 fn wrap_images_with_blur(html: &str) -> String {
+    wrap_images_with_blur_with(html, crate::api::image::get_image_dimensions)
+}
+
+/// `wrap_images_with_blur` 的纯函数核心，接受 dimensions 查询闭包以便单测。
+///
+/// `dims_fn(rel_path) -> Option<(u32, u32)>` 注入真实或测试用的 dimensions 来源，
+/// 使本函数不依赖文件系统——测试可注入已知宽高，生产注入 get_image_dimensions。
+#[cfg(feature = "server")]
+fn wrap_images_with_blur_with<F>(html: &str, dims_fn: F) -> String
+where
+    F: Fn(&str) -> Option<(u32, u32)>,
+{
     use regex::Regex;
     use std::sync::LazyLock;
 
@@ -233,7 +245,7 @@ fn wrap_images_with_blur(html: &str) -> String {
 
             // 查 dimensions，算 aspect-ratio
             // 注意：CSS aspect-ratio 用斜杠分隔（width / height），不是冒号
-            let ar_style = crate::api::image::get_image_dimensions(rel_path)
+            let ar_style = dims_fn(rel_path)
                 .map(|(w, h)| format!(" style=\"--ar:{} / {};\"", w, h))
                 .unwrap_or_default();
 
@@ -345,10 +357,10 @@ mod tests {
 
     #[test]
     fn wrap_images_with_blur_wraps_uploads_image() {
-        // 注意：此测试依赖 uploads/ 目录下存在对应文件才能拿到 dimensions。
-        // 用一个不含 dimensions 的路径验证 --ar 缺省时的结构正确性。
+        // 注入返回 None 的 dims_fn,验证 --ar 缺省时的结构正确性。
+        // 不依赖 uploads/ 文件系统。
         let html = r#"<p><img src="/uploads/nonexistent/test.webp" alt="test"></p>"#;
-        let result = wrap_images_with_blur(html);
+        let result = wrap_images_with_blur_with(html, |_| None);
         assert!(
             result.contains("blur-img-placeholder"),
             "should have placeholder"
@@ -361,9 +373,9 @@ mod tests {
 
     #[test]
     fn wrap_images_with_blur_skips_external_image() {
+        // 外链图不进入 dims_fn,保持原样。
         let html = r#"<img src="https://example.com/img.png" alt="ext">"#;
-        let result = wrap_images_with_blur(html);
-        // 外链图不处理，保持原样
+        let result = wrap_images_with_blur_with(html, |_| None);
         assert!(
             !result.contains("blur-img"),
             "external image should not be wrapped"
@@ -372,28 +384,71 @@ mod tests {
 
     #[test]
     fn wrap_images_with_blur_uses_slash_in_aspect_ratio() {
-        // 用真实存在的 uploads 文件，让 dimensions 成功返回，验证 --ar 格式
-        let html = r#"<img src="/uploads/2026/06/18/090402.21c4f0b6-6d5a-49ee-bc79-99cb557ff385.webp" alt="t">"#;
-        let result = wrap_images_with_blur(html);
-        println!("ACTUAL OUTPUT: {}", result);
-        // aspect-ratio 必须用斜杠分隔，如 "--ar:800 / 600;"
+        // 注入已知 dimensions,验证 --ar 用斜杠分隔(如 "--ar:800 / 600;")。
+        // 此前依赖 uploads/ 真实文件,现已解耦。
+        let html = r#"<img src="/uploads/2026/06/18/abc.webp" alt="t">"#;
+        let result = wrap_images_with_blur_with(html, |_| Some((800, 600)));
         assert!(result.contains("--ar:"), "should have --ar");
         assert!(
             result.contains(" / "),
             "aspect-ratio must use slash separator, got: {}",
             result
         );
+        assert!(result.contains("--ar:800 / 600;"), "应含精确宽高");
+    }
+
+    #[test]
+    fn wrap_images_with_blur_omits_ar_when_no_dimensions() {
+        // dims_fn 返回 None 时不输出 --ar,避免空 style 属性。
+        let html = r#"<img src="/uploads/x.webp" alt="t">"#;
+        let result = wrap_images_with_blur_with(html, |_| None);
+        assert!(!result.contains("--ar"), "无 dimensions 不应有 --ar");
+        // 但包裹结构仍应生成
+        assert!(result.contains("blur-img"));
+    }
+
+    #[test]
+    fn wrap_images_with_blur_strips_query_from_rel_path() {
+        // rel_path 提取应去 query 后缀,dims_fn 收到的是去 query 的路径。
+        // dims_fn 是 Fn(replace_all 要求),用 RefCell 捕获传入值。
+        use std::cell::RefCell;
+        let html = r#"<img src="/uploads/2026/x.webp?w=100" alt="t">"#;
+        let received = RefCell::new(String::new());
+        let _ = wrap_images_with_blur_with(html, |p| {
+            *received.borrow_mut() = p.to_string();
+            Some((100, 100))
+        });
+        assert_eq!(received.borrow().as_str(), "2026/x.webp", "rel_path 应去 query");
+    }
+
+    #[test]
+    fn wrap_images_with_blur_preserves_alt() {
+        let html = r#"<img src="/uploads/x.webp" alt="描述">"#;
+        let result = wrap_images_with_blur_with(html, |_| Some((10, 10)));
+        assert!(result.contains(r#"alt="描述""#), "placeholder 应保留 alt");
+        assert!(
+            result.matches(r#"alt="描述""#).count() == 2,
+            "两层 img 都应带 alt"
+        );
+    }
+
+    #[test]
+    fn wrap_images_with_blur_omits_alt_attr_when_empty() {
+        let html = r#"<img src="/uploads/x.webp">"#;
+        let result = wrap_images_with_blur_with(html, |_| None);
+        assert!(
+            !result.contains("alt=\""),
+            "无 alt 时不应生成空 alt 属性"
+        );
     }
 
     #[test]
     fn full_pipeline_wrap_then_clean_preserves_slash() {
-        // 模拟完整渲染管线：wrap_images_with_blur → clean_html
-        // 验证 sanitizer 不把斜杠转义或删掉
-        let html = r#"<img src="/uploads/2026/06/18/090402.21c4f0b6-6d5a-49ee-bc79-99cb557ff385.webp" alt="t">"#;
-        let wrapped = wrap_images_with_blur(html);
+        // 模拟完整渲染管线:wrap → clean_html,验证 sanitizer 不破坏斜杠。
+        // 注入确定 dimensions,脱离文件系统依赖。
+        let html = r#"<img src="/uploads/2026/06/18/abc.webp" alt="t">"#;
+        let wrapped = wrap_images_with_blur_with(html, |_| Some((800, 600)));
         let cleaned = clean_html(&wrapped);
-        println!("WRAPPED:  {}", wrapped);
-        println!("CLEANED:  {}", cleaned);
         assert!(
             cleaned.contains(" / "),
             "clean_html must preserve slash in --ar, got: {}",
