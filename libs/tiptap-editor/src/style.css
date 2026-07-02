@@ -339,6 +339,12 @@
   flex-shrink: 0;
   cursor: pointer;
   user-select: none;
+  /* label 默认 inline,内部 checkbox 是 inline-block 会受 line-height 撑出
+     基线间距导致 checkbox 在 label 内偏上。用 flex 居中并清零行高,
+     让 checkbox 严格在 label 盒子中心。 */
+  display: flex;
+  align-items: center;
+  line-height: 0;
 }
 
 .tiptap-editor ul[data-type="taskList"] li > label input[type="checkbox"] {
