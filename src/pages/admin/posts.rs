@@ -43,6 +43,13 @@ pub fn PostsPage(page: i32) -> Element {
     let mut total = use_signal(|| 0_i64);
     let mut loading = use_signal(|| true);
     let mut deleting = use_signal(|| None::<i32>);
+    // 重建缓存的状态由本组件持有并下发给 RebuildCacheBar：结果消息也在本组件
+    // 渲染（header 与表格之间的独立行），既不撑高 header 触发 items-center 重排，
+    // 也不脱离文档流溢进表格。rebuilding 仅按钮态用，不在此渲染。
+    // 不加 mut：本组件只读信号并下发，.set() 都在 RebuildCacheBar 的 spawn 块里，
+    // 走 Signal 的内部可变性；SSR target 下那些 set 不可见，mut 会触发 unused_mut。
+    let rebuilding = use_signal(|| false);
+    let rebuild_result = use_signal(|| Option::<String>::None);
 
     // 页码变化时加载分页数据：WASM 前端请求接口，SSR 直接结束加载。
     use_effect(move || {
@@ -81,12 +88,24 @@ pub fn PostsPage(page: i32) -> Element {
                 h1 { class: "text-2xl font-bold text-paper-primary", "文章管理" }
                 div { class: "flex items-center gap-3",
                     // 重建缓存工具条（抽取为子组件 RebuildCacheBar，见文件末尾）。
-                    RebuildCacheBar {}
+                    RebuildCacheBar {
+                        rebuilding: rebuilding,
+                        rebuild_result: rebuild_result,
+                    }
                     Link {
                         class: "px-4 py-2 bg-paper-accent text-paper-theme rounded-full text-sm font-medium hover:brightness-110 active:scale-[0.98] transition-all duration-200 cursor-pointer",
                         to: Route::Write {},
                         "+ 写文章"
                     }
+                }
+            }
+
+            // 重建结果消息：独立成行，进入文档流，吃 space-y-6 的正常间距。
+            // 既不撑高 header（不在 header 内）触发 items-center 重排，也不脱离流
+            // 溢进表格（曾用 absolute top-full mt-2，因 28px > 24px 间距溢出 4px）。
+            if let Some(msg) = rebuild_result() {
+                div { class: "text-sm text-paper-secondary",
+                    "{msg}"
                 }
             }
 
@@ -168,21 +187,19 @@ pub fn PostsPage(page: i32) -> Element {
 
 /// 重建内容缓存工具条子组件。
 ///
-/// 封装「重建内容 / 重建全部」两个按钮及其状态：重建中态（`rebuilding`）、
-/// 结果消息（`rebuild_result`）、以及 `do_rebuild` 异步闭包。完全自洽，与父组件
-/// 无任何状态共享。
-///
-/// 布局要点：根容器 `relative`，结果消息 `absolute` 悬挂于按钮行下方，**不进入文档流**。
-/// 这样无论消息是否出现，本组件的盒高始终等于按钮行高度，避免外层 header 的
-/// `items-center` 因消息撑高而把标题与「+ 写文章」按钮重新居中、与重建按钮错位。
+/// 封装「重建内容 / 重建全部」两个按钮及其 `do_rebuild` 异步闭包。状态
+/// (`rebuilding` / `rebuild_result`) 由父组件 `PostsPage` 持有并下发：
+/// 结果消息在父组件渲染为 header 与表格之间的独立行（进入文档流，吃
+/// `space-y-6` 的正常间距），既不撑高 header 触发 `items-center` 重排，
+/// 也不脱离文档流溢进表格。
 ///
 /// 从 `PostsPage` 抽取以降低 god component 复杂度（见 dioxus-render-purity skill）。
 #[component]
 #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
-fn RebuildCacheBar() -> Element {
-    let mut rebuilding = use_signal(|| false);
-    let mut rebuild_result = use_signal(|| Option::<String>::None);
-
+fn RebuildCacheBar(
+    rebuilding: Signal<bool>,
+    rebuild_result: Signal<Option<String>>,
+) -> Element {
     // 重建文章渲染缓存：rebuild_all 为 false 时仅重建 content_html 为空的文章，
     // 为 true 时重建所有文章（用于语法/渲染逻辑升级后批量刷新已有内容）。
     let mut do_rebuild = move |rebuild_all: bool| {
@@ -214,46 +231,36 @@ fn RebuildCacheBar() -> Element {
     };
 
     rsx! {
-        // 根容器仅占「按钮行」高度：结果消息用绝对定位悬挂于按钮下方，
-        // 不进入文档流。否则消息出现时会撑高本组件，导致外层 header 的
-        // items-center 把「文章管理」标题与「+ 写文章」按钮重新居中、
-        // 与停在容器顶部的重建按钮产生纵向错位。
-        div { class: "relative",
-            div { class: "flex items-center gap-3",
-                div { class: "group relative",
-                    button {
-                        class: if rebuilding() { "px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all" },
-                        disabled: rebuilding(),
-                        onclick: move |_| do_rebuild(false),
-                        if rebuilding() {
-                            "重建中..."
-                        } else {
-                            "重建内容"
-                        }
-                    }
-                    div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-paper-primary text-paper-theme shadow-lg z-50",
-                        "重建 content_html 为空的文章渲染缓存"
+        // 仅渲染按钮行本身：结果消息已上提到 PostsPage，作为独立状态行进入文档流。
+        div { class: "flex items-center gap-3",
+            div { class: "group relative",
+                button {
+                    class: if rebuilding() { "px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all" },
+                    disabled: rebuilding(),
+                    onclick: move |_| do_rebuild(false),
+                    if rebuilding() {
+                        "重建中..."
+                    } else {
+                        "重建内容"
                     }
                 }
-                div { class: "group relative",
-                    button {
-                        class: if rebuilding() { "px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all" },
-                        disabled: rebuilding(),
-                        onclick: move |_| do_rebuild(true),
-                        if rebuilding() {
-                            "重建中..."
-                        } else {
-                            "重建全部"
-                        }
-                    }
-                    div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-paper-primary text-paper-theme shadow-lg z-50",
-                        "重建所有文章的渲染缓存（含已有内容）"
-                    }
+                div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-paper-primary text-paper-theme shadow-lg z-50",
+                    "重建 content_html 为空的文章渲染缓存"
                 }
             }
-            if let Some(msg) = rebuild_result() {
-                div { class: "absolute top-full left-0 mt-2 text-sm text-paper-secondary whitespace-nowrap",
-                    "{msg}"
+            div { class: "group relative",
+                button {
+                    class: if rebuilding() { "px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all" },
+                    disabled: rebuilding(),
+                    onclick: move |_| do_rebuild(true),
+                    if rebuilding() {
+                        "重建中..."
+                    } else {
+                        "重建全部"
+                    }
+                }
+                div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-paper-primary text-paper-theme shadow-lg z-50",
+                    "重建所有文章的渲染缓存（含已有内容）"
                 }
             }
         }
