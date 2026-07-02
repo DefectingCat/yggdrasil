@@ -200,6 +200,20 @@ make clippy # cargo clippy --all-targets --all-features -- -D warnings
 dx check    # Dioxus type-check (catches component/Router issues)
 ```
 
+**Must verify both targets**: This is a fullstack project — the server binary and the WASM frontend are two separate compilation targets with different features (`--all-features` enables `web`+`server`; the WASM bundle uses `--no-default-features --features web`). A change that compiles on one target can fail on the other. **`cargo build --all-features` alone is NOT sufficient** — it only builds the server binary. Before considering work done, compile the WASM target too:
+
+```bash
+cargo build --all-features                                        # server target (native)
+cargo build --target wasm32-unknown-unknown --no-default-features --features web  # WASM frontend
+```
+
+`dx check` does Dioxus-level type-checking but does NOT run a full `cargo build` for the WASM target, so it can miss borrow-checker / move / lifetime errors that only surface in the frontend bundle. `dx serve` / `make dev` do the real WASM compile — run them (or the explicit `cargo build --target wasm32-...` above) before declaring a task complete.
+
+Common target-mismatch traps:
+- `#[cfg(target_arch = "wasm32")]` code invisible to server build → `web_sys` / `js_sys` references only resolve on WASM.
+- `let mut x = use_signal(...)` flagged as `unused_mut` on server (where the `.set()` calls live inside stripped wasm blocks) but **required** on WASM. Use `#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut))]` on the function/item rather than deleting `mut`.
+- `use` imports placed inside a `#[cfg(target_arch = "wasm32")] {}` block are invisible to the server build; imports at module top level are visible to both. When an import is only needed on one target, gate the `use` line itself.
+
 Most Rust tests use `#[cfg(all(test, feature = "server"))]` — they only run when the server feature is active (which is the default). No integration tests requiring a database connection; the migration `.sql`↔`MIGRATIONS`-array parity is enforced by a compile-time test. The 4 `libs/` subprojects run their own vitest suites (Vitest + happy-dom).
 
 ## Image Processing Constraints
@@ -226,3 +240,27 @@ Most Rust tests use `#[cfg(all(test, feature = "server"))]` — they only run wh
 - `rand` is optional and only enabled by the `server` feature; it is not compiled into the WASM frontend.
 - `#[allow(unused_mut, unused_variables)]` on `Write` component is intentional — `mut` signals are used in `#[cfg(target_arch = "wasm32")]` blocks stripped in server builds.
 - Release profile: `panic = "abort"` (drops WASM unwind metadata; server errors go through `Result` + `?`, process crashes restarted by systemd/k8s).
+
+## Pitfall Log (踩坑记录)
+
+Recurring traps that have cost real debugging time. Read before touching the relevant area; add new entries when you hit a non-obvious failure.
+
+### Custom hooks that own resources (use_hook + use_effect + use_drop)
+
+When writing a hook that registers a side effect (e.g. `src/hooks/event_listener.rs`), the `use_effect` callback is typed `FnMut` and may run more than once. But the things you move into it are often `FnOnce` (an init/acquire closure) or need to be moved onward into a `Closure::wrap` event handler. Naively `move ||`-ing them in triggers **E0507 cannot move out of captured variable in an FnMut closure** and **E0310 the parameter type may not live long enough**.
+
+Fix pattern (used in `event_listener.rs`): wrap the `FnOnce`/`FnMut` args in `Option`, `take()` them on the first effect run, and add `'static` bounds to the relevant generic params (`A: FnOnce() -> Option<T> + 'static`). This consumes each captured value exactly once without violating `FnMut`.
+
+Also: `use_hook` / `use_effect` / `use_drop` come from `dioxus::prelude`. If you scope an import to a `#[cfg(target_arch = "wasm32")]` block, the `use dioxus::prelude::*;` must live **inside that block** too — the server (no-wasm) variant of the hook is a no-op and must not reference them.
+
+### Single-target verification is a lie
+
+The single most repeated mistake: running only `cargo build --all-features` (server) and shipping, then `dx serve` blowing up on the WASM bundle. The WASM target compiles with different features and surfaces different borrow/move errors. **Always compile both targets** (see Testing section) before marking work done. `dx check` is a fast Dioxus type-check, not a substitute for `cargo build --target wasm32-unknown-unknown`.
+
+### `mut` bindings needed only on WASM
+
+`let mut x = use_signal(...)` produces `unused_mut` on the server build when every `.set()` lives inside a `#[cfg(target_arch = "wasm32")]` block. Don't delete `mut` — it's required on the WASM build. Use `#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut))]` on the enclosing fn/struct. This is the project's established convention (see `Write` component, `use_paginated`, etc.).
+
+### Placing util functions: check the feature gate of the target module
+
+`src/utils/text.rs` is `#[cfg(feature = "server")]`-gated and pulls in `regex` (an optional, server-only dep). A frontend-reachable function (e.g. `escape_html`, called from a `#[component]`) **cannot** move there — the WASM build would fail on the missing `regex` crate. Use an ungated module (`src/utils/html.rs`, `src/utils/time.rs`) for code that must compile on both targets. Verify the destination module's cfg before moving anything into it.
