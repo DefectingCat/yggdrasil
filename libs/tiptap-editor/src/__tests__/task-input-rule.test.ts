@@ -6,29 +6,22 @@ import { TaskList, TaskItem } from '@tiptap/extension-list'
 import { TaskInputRule } from '../task-input-rule'
 
 /**
- * TaskInputRule 单元测试（happy-dom 真实 DOM + 真实 Editor）。
+ * TaskInputRule 单元测试(happy-dom 真实 DOM + 真实 Editor)。
  *
- * input rule 在真实输入时由 ProseMirror 的 handleTextInput 触发。测试里用
- * `insertContentAt(pos, text, { applyInputRules: true })` 模拟——它走与真实输入
- * 相同的 inputRulesPlugin（经 applyInputRules meta，setTimeout 异步触发），
- * 因此断言前需 await 一个宏任务让 setTimeout 排空。
+ * 真实输入是逐字符的:打 `- ` 时 BulletList input rule 先触发,把这行变成
+ * bulletList > listItem;再打 `[ ] ` 时 appendTransaction 监听到 listItem
+ * 文本变化,把 bulletList 升级成 taskList。
  *
- * 46 个回归测试见 upload-coordinator/upload-image/slash-command，这里只覆盖
- * TaskInputRule 自身的触发/checked/不误判。
+ * 测试用 insertContentAt(无 applyInputRules)模拟逐段输入:它走正常 dispatch,
+ * 既触发 input rule(经 handleTextInput 路径外的 plugin)也触发 appendTransaction。
+ * 为贴近逐字符时序,分两步:先 `- `(触发 BulletList),再 `[ ] `(触发升级)。
+ *
+ * 46 个回归测试见 upload-coordinator/upload-image/slash-command。
  */
 
-/** 等待 applyInputRules 的 setTimeout 排空。 */
-function flushInputRules() {
+/** 等待异步(input rule 的 setTimeout + appendTransaction)。 */
+function flush() {
   return new Promise((resolve) => setTimeout(resolve, 0))
-}
-
-/**
- * 取 JSON 文档首个节点(任务列表/无序列表等)。
- * getJSON() 的 content 项是 Node | Text 联合,Text 无 content/attrs,
- * 断言为 any 窄化(本测试只构造块节点场景)。
- */
-function firstBlock(editor: Editor): any {
-  return editor.getJSON().content?.[0]
 }
 
 function makeEditor() {
@@ -44,12 +37,24 @@ function makeEditor() {
   })
 }
 
-/** 在文档开头（段落内 pos 1）插入文本并触发 input rule。 */
+/**
+ * 在当前选区插入文本,贴近真实逐字符输入的时序。
+ * 若文本是列表 marker(如 "- " "* "),用 applyInputRules 触发 BulletList input rule;
+ * 否则普通插入——后续靠 appendTransaction 接力升级。
+ */
 function typeText(editor: Editor, text: string) {
-  editor.commands.insertContentAt(1, text, { applyInputRules: true })
+  const isListMarker = /^\s*[-+*]\s$/.test(text)
+  editor.commands.insertContentAt(editor.state.selection.from, text, {
+    applyInputRules: isListMarker,
+  })
 }
 
-describe('TaskInputRule', () => {
+/** 取 JSON 文档首个块节点。getJSON content 是 Node|Text 联合,断言 any 窄化。 */
+function firstBlock(editor: Editor): any {
+  return editor.getJSON().content?.[0]
+}
+
+describe('TaskInputRule (appendTransaction 升级方案)', () => {
   let editor: Editor
 
   beforeEach(() => {
@@ -57,59 +62,67 @@ describe('TaskInputRule', () => {
     editor = makeEditor()
   })
 
-  it('打 "- [ ] " 时创建未勾选任务列表项', async () => {
-    typeText(editor, '- [ ] ')
-    await flushInputRules()
+  it('打 "- " 再打 "[ ] " 后升级成未勾选任务列表', async () => {
+    // 步骤 1:打 "- " → BulletList input rule 触发
+    typeText(editor, '- ')
+    await flush()
+    expect(firstBlock(editor).type).toBe('bulletList')
+
+    // 步骤 2:在 listItem 内打 "[ ] " → appendTransaction 升级成 taskList
+    typeText(editor, '[ ] ')
+    await flush()
 
     const block = firstBlock(editor)
     expect(block.type).toBe('taskList')
     const taskItem = block.content?.[0]
     expect(taskItem?.type).toBe('taskItem')
     expect(taskItem?.attrs?.checked).toBe(false)
+    // 前缀 "[ ] " 应被删除,不残留为文本
+    expect(taskItem?.content?.[0]?.content?.[0]?.text).not.toContain('[')
   })
 
-  it('打 "- [x] " 时创建已勾选任务列表项', async () => {
-    typeText(editor, '- [x] ')
-    await flushInputRules()
+  it('打 "[x] " 升级成已勾选任务列表项', async () => {
+    typeText(editor, '- ')
+    await flush()
+    typeText(editor, '[x] ')
+    await flush()
 
     const block = firstBlock(editor)
     expect(block.type).toBe('taskList')
-    const taskItem = block.content?.[0]
-    expect(taskItem?.type).toBe('taskItem')
-    expect(taskItem?.attrs?.checked).toBe(true)
+    expect(block.content?.[0]?.attrs?.checked).toBe(true)
   })
 
-  it('打 "- [X] "（大写 X）也算已勾选', async () => {
-    typeText(editor, '- [X] ')
-    await flushInputRules()
-
-    const block = firstBlock(editor)
-    const taskItem = block.content?.[0]
-    expect(taskItem?.type).toBe('taskItem')
-    expect(taskItem?.attrs?.checked).toBe(true)
-  })
-
-  it('打 "- 文本" 时是普通无序列表(不误判为任务)', async () => {
-    // 模拟逐段输入:先 "- " 触发 BulletList,再补 "文本"(真实用户是逐字符)
+  it('打 "[X] "(大写)也算已勾选', async () => {
     typeText(editor, '- ')
-    await flushInputRules()
-    typeText(editor, '文本')
-    await flushInputRules()
+    await flush()
+    typeText(editor, '[X] ')
+    await flush()
 
     const block = firstBlock(editor)
-    expect(block.type).toBe('bulletList')
-    expect(block.content?.[0].type).toBe('listItem')
+    expect(block.type).toBe('taskList')
+    expect(block.content?.[0]?.attrs?.checked).toBe(true)
   })
 
-  it('打 "* [ ] " 时是普通无序列表(星号 marker 不识别成任务)', async () => {
-    // 用户选定仅识别减号 marker,* 仍走 BulletList
-    typeText(editor, '* ')
-    await flushInputRules()
-    typeText(editor, '[ ] ')
-    await flushInputRules()
+  it('打普通文本不升级(保持 bulletList)', async () => {
+    typeText(editor, '- ')
+    await flush()
+    typeText(editor, '普通项')
+    await flush()
 
     const block = firstBlock(editor)
     expect(block.type).toBe('bulletList')
-    expect(block.content?.[0].type).toBe('listItem')
+    expect(block.content?.[0]?.type).toBe('listItem')
+  })
+
+  it('星号 marker 列表打 "[ ] " 也升级(* 触发的是 bulletList)', async () => {
+    // BulletList 对 * + - 三种 marker 都创建 bulletList 节点,
+    // appendTransaction 识别到 listItem 内的 [ ] 前缀即升级,与 marker 无关。
+    typeText(editor, '* ')
+    await flush()
+    typeText(editor, '[ ] ')
+    await flush()
+
+    const block = firstBlock(editor)
+    expect(block.type).toBe('taskList')
   })
 })
