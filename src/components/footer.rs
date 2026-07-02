@@ -3,9 +3,9 @@
 //! 提供站点版权信息，并在用户向下滚动超过一屏后显示"回到顶部"悬浮按钮。
 //! 回到顶部的滚动监听与平滑滚动逻辑仅在 WASM 前端生效。
 
+#[cfg(target_arch = "wasm32")]
+use crate::hooks::event_listener::use_event_listener;
 use dioxus::prelude::*;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 /// 页脚与回到顶部按钮组件。
 ///
@@ -19,67 +19,38 @@ use std::rc::Rc;
 pub fn Footer() -> Element {
     let mut visible = use_signal(|| false);
 
-    // WASM 下保存 scroll 事件闭包与 window，用于后续清理
-    #[cfg(target_arch = "wasm32")]
-    let listener_state = use_hook(|| {
-        Rc::new(RefCell::new(
-            None::<(wasm_bindgen::prelude::Closure<dyn FnMut()>, web_sys::Window)>,
-        ))
-    });
-
-    // 非 WASM 下保持类型一致，避免编译错误
-    #[cfg(not(target_arch = "wasm32"))]
-    let _listener_state = use_hook(|| Rc::new(RefCell::new(None::<()>)));
-
-    #[cfg(target_arch = "wasm32")]
-    let listener_state_for_effect = listener_state.clone();
-
-    // 挂载时注册 scroll 监听器，并根据当前滚动位置初始化按钮可见性
-    use_effect(move || {
+    // 根据 window 当前滚动位置同步 visible（注册监听后立即调用一次，避免首屏漏判）。
+    // 滚动事件回调里也复用同一份判断逻辑。
+    let sync_visible = move || {
         #[cfg(target_arch = "wasm32")]
         {
-            if let Some(window) = web_sys::window() {
-                let closure = wasm_bindgen::prelude::Closure::wrap(Box::new(move || {
-                    if let Some(w) = web_sys::window() {
-                        let threshold = w
-                            .inner_height()
-                            .ok()
-                            .and_then(|h| h.as_f64())
-                            .unwrap_or(0.0);
-                        let scroll_y = w.scroll_y().unwrap_or(0.0);
-                        let new_visible = scroll_y > threshold;
-                        visible.set(new_visible);
-                    }
-                })
-                    as Box<dyn FnMut()>);
-
-                let _ = window.add_event_listener_with_callback(
-                    "scroll",
-                    wasm_bindgen::JsCast::unchecked_ref(closure.as_ref()),
-                );
-
-                let threshold = window
+            if let Some(w) = web_sys::window() {
+                let threshold = w
                     .inner_height()
                     .ok()
                     .and_then(|h| h.as_f64())
                     .unwrap_or(0.0);
-                let scroll_y = window.scroll_y().unwrap_or(0.0);
+                let scroll_y = w.scroll_y().unwrap_or(0.0);
                 visible.set(scroll_y > threshold);
-
-                *listener_state_for_effect.borrow_mut() = Some((closure, window));
             }
         }
-    });
+    };
 
-    // 卸载时移除 scroll 监听器，防止内存泄漏
+    // 注册 scroll 监听：注册 / 卸载清理由 use_event_listener 负责。
+    // 仅 WASM 端调用（server 端 use_event_listener 是 noop，但 acquire 闭包内的
+    // web_sys 在非 wasm 下不可解析，故整块 cfg；hook 数量在 server build 中不影响，
+    // 因为 server 端该组件只跑一次 SSR）。
     #[cfg(target_arch = "wasm32")]
-    use_drop(move || {
-        if let Some((closure, window)) = listener_state.borrow_mut().take() {
-            let _ = window.remove_event_listener_with_callback(
-                "scroll",
-                wasm_bindgen::JsCast::unchecked_ref(closure.as_ref()),
-            );
-        }
+    use_event_listener(
+        || web_sys::window(),
+        "scroll",
+        // 滚动事件触发时复用同样的阈值判断。
+        move || sync_visible(),
+    );
+
+    // 挂载时根据当前滚动位置初始化一次按钮可见性。
+    use_effect(move || {
+        sync_visible();
     });
 
     // 根据 visible 动态切换按钮显示/隐藏样式

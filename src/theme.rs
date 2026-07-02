@@ -196,48 +196,28 @@ pub fn use_theme_provider() -> Signal<Theme> {
 
     // WASM 端监听系统颜色偏好变化（仅 System 模式有意义，但无论何种模式都更新
     // system_dark signal；resolved memo 会决定是否真正改变 ResolvedTheme）。
-    // 用 use_hook 持有 Closure + MediaQueryList，use_drop 时清理，防止泄漏。
+    // 注册 / 卸载清理由 use_event_listener 统一负责，target 在其内部 use_effect
+    // 首次运行时通过 acquire 闭包获取（此时 DOM 一定可用）。
     #[cfg(target_arch = "wasm32")]
     {
-        use std::cell::RefCell;
-        use std::rc::Rc;
+        use crate::hooks::event_listener::use_event_listener;
 
-        let listener_state = use_hook(|| {
-            Rc::new(RefCell::new(None::<(
-                wasm_bindgen::prelude::Closure<dyn FnMut()>,
-                web_sys::MediaQueryList,
-            )>))
-        });
-        let listener_state_for_effect = listener_state.clone();
-
-        use_effect(move || {
-            let Some(window) = web_sys::window() else {
-                return;
-            };
-            let Ok(Some(media)) = window.match_media("(prefers-color-scheme: dark)") else {
-                return;
-            };
-            // 初始化时同步一次（read_system_dark 已设过初值，这里保持一致即可）。
-            let media_for_closure = media.clone();
-            let closure = wasm_bindgen::prelude::Closure::wrap(Box::new(move || {
-                system_dark.set(media_for_closure.matches());
-            })
-                as Box<dyn FnMut()>);
-            let _ = media.add_event_listener_with_callback(
-                "change",
-                wasm_bindgen::JsCast::unchecked_ref(closure.as_ref()),
-            );
-            *listener_state_for_effect.borrow_mut() = Some((closure, media));
-        });
-
-        use_drop(move || {
-            if let Some((closure, media)) = listener_state.borrow_mut().take() {
-                let _ = media.remove_event_listener_with_callback(
-                    "change",
-                    wasm_bindgen::JsCast::unchecked_ref(closure.as_ref()),
-                );
-            }
-        });
+        use_event_listener(
+            || {
+                let window = web_sys::window()?;
+                window.match_media("(prefers-color-scheme: dark)").ok().flatten()
+            },
+            "change",
+            move || {
+                // handler 需要重新读取当前 matches 值（MediaQueryList 的事件回调
+                // 不带参，只能自行重新查询）。
+                if let Some(window) = web_sys::window() {
+                    if let Ok(Some(media)) = window.match_media("(prefers-color-scheme: dark)") {
+                        system_dark.set(media.matches());
+                    }
+                }
+            },
+        );
     }
 
     use_context_provider(|| theme);
