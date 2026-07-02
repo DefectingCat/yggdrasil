@@ -337,8 +337,7 @@ pub async fn restore_backup(filename: String, confirm: bool) -> Result<String, S
             return Err(AppError::BadRequest("需确认恢复（会覆盖现有数据）".to_string()).into());
         }
         // 路径穿越防护
-        let re = regex::Regex::new(FILENAME_RE).unwrap();
-        if !re.is_match(&filename) {
+        if !is_valid_backup_filename(&filename) {
             return Err(AppError::BadRequest("无效的文件名".to_string()).into());
         }
         let path = backup_path(&filename);
@@ -347,11 +346,8 @@ pub async fn restore_backup(filename: String, confirm: bool) -> Result<String, S
         }
 
         // 签名校验：首行需含签名
-        let head = std::fs::read_to_string(&path)
-            .ok()
-            .and_then(|s| s.lines().next().map(|l| l.trim().to_string()))
-            .unwrap_or_default();
-        if !head.contains(BACKUP_SIGNATURE) {
+        let content = std::fs::read_to_string(&path).unwrap_or_default();
+        if !has_valid_signature(&content) {
             return Err(AppError::BadRequest("非本系统生成的备份文件，拒绝恢复".to_string()).into());
         }
 
@@ -470,13 +466,8 @@ pub async fn list_backups() -> Result<Vec<BackupInfo>, ServerFnError> {
                     Err(_) => continue,
                 };
                 let mode = std::fs::read_to_string(entry.path())
-                    .ok()
-                    .and_then(|s| {
-                        s.lines()
-                            .find(|l| l.starts_with("-- mode:"))
-                            .map(|l| l.trim_start_matches("-- mode: ").trim().to_string())
-                    })
-                    .unwrap_or_else(|| "unknown".to_string());
+                    .map(|s| parse_backup_mode(&s))
+                    .unwrap_or_else(|_| "unknown".to_string());
                 let created_at = meta
                     .modified()
                     .ok()
@@ -510,8 +501,7 @@ pub async fn delete_backup(filename: String) -> Result<(), ServerFnError> {
     let _user = get_current_admin_user().await?;
     #[cfg(feature = "server")]
     {
-        let re = regex::Regex::new(FILENAME_RE).unwrap();
-        if !re.is_match(&filename) {
+        if !is_valid_backup_filename(&filename) {
             return Err(AppError::BadRequest("无效的文件名".to_string()).into());
         }
         let path = backup_path(&filename);
@@ -528,17 +518,64 @@ pub async fn delete_backup(filename: String) -> Result<(), ServerFnError> {
 }
 
 /// 构造 backups/ 下的安全路径（额外防御：校验规范化后仍在 BACKUP_DIR 内）。
+///
+/// 纵深防御：即便第一道白名单 `is_valid_backup_filename` 被绕过，这里也要
+/// 保证结果不逃出 BACKUP_DIR。直接对 filename 做 components 检查——
+/// 含 `..`（ParentDir）、绝对路径前缀（RootDir/Prefix，如 `/etc` 或 `C:\`）
+/// 的 filename 一律降级为 BACKUP_DIR 本身。
+///
+/// 注意：不能用 `[BACKUP_DIR, filename].collect::<PathBuf>()` 后再检——
+/// 当 filename 是绝对路径时，PathBuf 语义会丢弃 BACKUP_DIR 前缀（如
+/// `["backups", "/etc/passwd"]` → `/etc/passwd`），导致 components 检查
+/// 在错位的路径上运行而漏判。必须先检 filename 本身。
 #[cfg(feature = "server")]
 fn backup_path(filename: &str) -> PathBuf {
-    let raw: PathBuf = [BACKUP_DIR, filename].iter().collect();
-    // 确保规范化后首两段仍是 BACKUP_DIR/filename（防任何路径穿越残留）
-    let mut it = raw.components();
-    let _ = it.next(); // BACKUP_DIR
-    if it.all(|c| !matches!(c, Component::ParentDir | Component::RootDir)) {
-        raw
+    // 直接检查 filename 的 components：只允许 Normal 段。
+    let filename_is_safe = std::path::Path::new(filename)
+        .components()
+        .all(|c| matches!(c, Component::Normal(_)));
+    if filename_is_safe {
+        let mut p = PathBuf::from(BACKUP_DIR);
+        p.push(filename);
+        p
     } else {
+        // 命中 ParentDir/RootDir/Prefix/CurDir → 降级为 BACKUP_DIR
         PathBuf::from(BACKUP_DIR)
     }
+}
+
+/// 校验备份文件名是否符合白名单（仅字母数字下划线点连字符）。
+/// 返回 true 表示安全可用。提取为纯函数便于单测覆盖路径穿越边界。
+#[cfg(feature = "server")]
+fn is_valid_backup_filename(filename: &str) -> bool {
+    // regex::Regex::new 在 FILENAME_RE 是常量正则,编译期可验证不会 panic。
+    regex::Regex::new(FILENAME_RE)
+        .map(|re| re.is_match(filename))
+        .unwrap_or(false)
+}
+
+/// 从备份文件全文提取 `-- mode: <value>` 行的值（如 "pg_dump"/"sql-fallback"）。
+/// 提取为纯函数:把文件内容作为参数传入,便于单测。
+/// 缺失或格式不符返回 "unknown"。
+#[cfg(feature = "server")]
+fn parse_backup_mode(content: &str) -> String {
+    content
+        .lines()
+        .find(|l| l.starts_with("-- mode:"))
+        .map(|l| l.trim_start_matches("-- mode:").trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+/// 校验备份文件首行是否含本系统签名头。
+/// 提取为纯函数:把首行(或全文)作为参数传入,便于单测。
+#[cfg(feature = "server")]
+fn has_valid_signature(content: &str) -> bool {
+    content
+        .lines()
+        .next()
+        .map(|l| l.trim().contains(BACKUP_SIGNATURE))
+        .unwrap_or(false)
 }
 
 /// Axum 处理器：下载备份文件（admin 鉴权 + 路径白名单）。
@@ -569,8 +606,7 @@ pub async fn download_backup(
     }
 
     // 路径白名单
-    let re = regex::Regex::new(FILENAME_RE).unwrap();
-    if !re.is_match(&filename) {
+    if !is_valid_backup_filename(&filename) {
         return Err((StatusCode::BAD_REQUEST, "无效的文件名".to_string()));
     }
     let path = backup_path(&filename);
@@ -593,4 +629,155 @@ pub async fn download_backup(
         ],
         axum::body::Body::from(bytes),
     ))
+}
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+
+    // ── is_valid_backup_filename:文件名白名单(路径穿越第一道防线) ──
+
+    #[test]
+    fn filename_accepts_normal_names() {
+        for name in [
+            "backup_20260702_120000.sql",
+            "backup_20260702_120000_sqlfallback.sql",
+            "a.sql",
+            "A-B_C.123",
+        ] {
+            assert!(
+                is_valid_backup_filename(name),
+                "正常文件名应通过: {name}"
+            );
+        }
+    }
+
+    #[test]
+    fn filename_rejects_path_traversal() {
+        // 路径穿越:白名单只允许字母数字下划线点连字符,/ 和 .. 都应被拒。
+        for evil in [
+            "../etc/passwd",
+            "..\\windows\\win.ini",
+            "/etc/passwd",
+            "a/../../b",
+            "backup.sql/../../etc",
+        ] {
+            assert!(
+                !is_valid_backup_filename(evil),
+                "路径穿越应被拒: {evil}"
+            );
+        }
+    }
+
+    #[test]
+    fn filename_rejects_spaces_and_special_chars() {
+        // 空格、中文、shell 元字符等都不在白名单。
+        for evil in [
+            "backup with space.sql",
+            "备份.sql",
+            "a;rm -rf.sql",
+            r"a\$b.sql",
+            "a`b`.sql",
+            "",
+        ] {
+            assert!(
+                !is_valid_backup_filename(evil),
+                "特殊字符应被拒: {evil:?}"
+            );
+        }
+    }
+
+    // ── backup_path:路径穿越纵深防御(白名单之外的二次防御) ────────
+
+    #[test]
+    fn backup_path_stays_in_backup_dir_for_normal_name() {
+        let p = backup_path("backup_20260702.sql");
+        assert!(p.starts_with(BACKUP_DIR), "应在 {BACKUP_DIR}/ 下");
+        assert_eq!(p.file_name().and_then(|n| n.to_str()), Some("backup_20260702.sql"));
+    }
+
+    #[test]
+    fn backup_path_collapses_traversal_to_backup_dir() {
+        // 即便绕过白名单调用 backup_path(纵深防御),../ 也应被规约回 BACKUP_DIR,
+        // 而非指向 backups/ 之外。Component::ParentDir / RootDir 命中即降级。
+        for evil in ["../etc/passwd", "../../etc/shadow"] {
+            let p = backup_path(evil);
+            // 不应逃出 BACKUP_DIR(应为 BACKUP_DIR 本身,不含文件名)
+            assert_eq!(
+                p, PathBuf::from(BACKUP_DIR),
+                "穿越应被规约回 {BACKUP_DIR}: {evil}"
+            );
+        }
+    }
+
+    #[test]
+    fn backup_path_rejects_absolute_path() {
+        // Component::RootDir 命中也应降级。
+        let p = backup_path("/etc/passwd");
+        assert_eq!(p, PathBuf::from(BACKUP_DIR));
+    }
+
+    // ── has_valid_signature:备份签名校验(拒绝非本系统文件) ───────
+
+    #[test]
+    fn signature_matches_exact_header() {
+        let content = "-- YGGDRASIL BACKUP v1\n-- mode: pg_dump\nSELECT 1;\n";
+        assert!(has_valid_signature(content));
+    }
+
+    #[test]
+    fn signature_matches_with_leading_whitespace() {
+        // 首行允许前导空白(trim 后匹配),容忍编辑器缩进。
+        let content = "  -- YGGDRASIL BACKUP v1\nrest\n";
+        assert!(has_valid_signature(content));
+    }
+
+    #[test]
+    fn signature_rejects_non_system_file() {
+        // 普通 SQL 文件首行不含签名 → 拒绝恢复(防任意文件读取/执行)。
+        let content = "SELECT * FROM users;\n-- YGGDRASIL BACKUP v1\n";
+        // 注意:签名必须在首行。第二行有签名不算。
+        assert!(!has_valid_signature(content));
+    }
+
+    #[test]
+    fn signature_rejects_empty_and_garbage() {
+        assert!(!has_valid_signature(""));
+        assert!(!has_valid_signature("garbage\n"));
+        assert!(!has_valid_signature("\n\n-- YGGDRASIL BACKUP v1"));
+    }
+
+    // ── parse_backup_mode:模式解析(列表展示用) ───────────────────
+
+    #[test]
+    fn parse_mode_pg_dump() {
+        let content = "-- YGGDRASIL BACKUP v1\n-- mode: pg_dump\n...\n";
+        assert_eq!(parse_backup_mode(content), "pg_dump");
+    }
+
+    #[test]
+    fn parse_mode_sql_fallback() {
+        let content = "-- YGGDRASIL BACKUP v1\n-- mode: sql-fallback\n\n-- table: posts\n";
+        assert_eq!(parse_backup_mode(content), "sql-fallback");
+    }
+
+    #[test]
+    fn parse_mode_unknown_when_absent() {
+        let content = "-- YGGDRASIL BACKUP v1\nSELECT 1;\n";
+        assert_eq!(parse_backup_mode(content), "unknown");
+    }
+
+    #[test]
+    fn parse_mode_unknown_when_empty_value() {
+        // "-- mode:" 后无值 → unknown(防空字符串显示)
+        let content = "-- mode:\nrest\n";
+        assert_eq!(parse_backup_mode(content), "unknown");
+    }
+
+    #[test]
+    fn parse_mode_only_matches_first_occurrence() {
+        // 多个 -- mode: 行取第一个。
+        let content = "-- mode: pg_dump\n-- mode: sql-fallback\n";
+        assert_eq!(parse_backup_mode(content), "pg_dump");
+    }
 }
