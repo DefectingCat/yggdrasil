@@ -44,6 +44,11 @@ export const TaskInputRule = Extension.create({
       new Plugin({
         key: pluginKey,
         appendTransaction: (transactions, _oldState, newState) => {
+          // 跳过由本插件产生的 transaction,避免重入(Enter 等操作产生的文档变化
+          // 不应再次触发升级判断,否则可能覆盖 splitListItem 的结果)。
+          const ownTr = transactions.some((tr) => tr.getMeta(pluginKey))
+          if (ownTr) return null
+
           // 仅在文档实际变化时检查;非文档变化(选区移动)直接跳过。
           const docChanged = transactions.some((tr) => tr.docChanged)
           if (!docChanged) return null
@@ -124,6 +129,8 @@ export const TaskInputRule = Extension.create({
           const paragraphTextLen = paragraph ? paragraph.content.size : 0
           cursorPos += 1 + paragraphTextLen
           replaceTr.setSelection(TextSelection.near(replaceTr.doc.resolve(cursorPos)))
+          // 标记为本插件产生的 transaction,防止 appendTransaction 重入。
+          replaceTr.setMeta(pluginKey, { converted: true })
 
           return replaceTr
         },

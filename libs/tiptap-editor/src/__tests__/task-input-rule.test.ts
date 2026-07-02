@@ -128,4 +128,31 @@ describe('TaskInputRule (appendTransaction 升级方案)', () => {
     const block = firstBlock(editor)
     expect(block.type).toBe('taskList')
   })
+
+  it('升级后 Enter 行为与斜杠命令创建的一致', async () => {
+    // 场景:升级成含内容的 taskList,Enter 新建空项,空项再 Enter 退出。
+    // 用 splitListItem 命令直接模拟(TaskItem 的 Enter 快捷键即绑定此命令)。
+    typeText(editor, '- ')
+    await flush()
+    typeText(editor, '[ ] 未完成')
+    await flush()
+
+    const taskList = firstBlock(editor)
+    expect(taskList.type).toBe('taskList')
+    expect(taskList.content?.[0]?.attrs?.checked).toBe(false)
+
+    // 第一次 Enter(splitListItem):有内容项 → 分裂出新的空 taskItem
+    editor.commands.splitListItem('taskItem')
+    const after1 = firstBlock(editor)
+    expect(after1.content?.length).toBe(2)
+    expect(after1.content?.[1]?.attrs?.checked).toBe(false)
+
+    // 第二次 Enter(splitListItem):空 taskItem(最后一项,段落为空)→ 应退出列表
+    editor.commands.splitListItem('taskItem')
+
+    // 退出后:taskList 保留原项,文档末尾新增普通段落
+    const json = editor.getJSON()
+    const lastType = json.content?.[json.content.length - 1]?.type
+    expect(lastType).toBe('paragraph')
+  })
 })
