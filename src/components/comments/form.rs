@@ -155,21 +155,10 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>, parent_indent: Option<i
                             disabled: submitting(),
                             oninput: move |e| content_md.set(e.value()),
                         }
-                        {
-                            // 无内容时半透明(60%)；有内容或聚焦时淡出(10%)。
-                            // content_md 由 oninput 实时维护，输入即触发重渲染。
-                            let bg_opacity = if content_md().trim().is_empty() {
-                                "opacity-60"
-                            } else {
-                                "opacity-10"
-                            };
-                            rsx! {
-                                img {
-                                    src: "/images/xiantiaoxiaogou_input_bg.webp",
-                                    alt: "",
-                                    class: "absolute bottom-1.5 right-1.5 w-24 pointer-events-none peer-focus:opacity-10 transition-opacity duration-300 z-0 {bg_opacity}",
-                                }
-                            }
+                        img {
+                            src: "/images/xiantiaoxiaogou_input_bg.webp",
+                            alt: "",
+                            class: "absolute bottom-1.5 right-1.5 w-24 opacity-10 pointer-events-none z-0",
                         }
                     }
                 }
