@@ -140,6 +140,9 @@ fn detect_initial_theme() -> Theme {
         }
     }
 
+    // wasm 分支末尾已无条件 return Theme::System，不会到达这里；
+    // 此兜底仅服务 server 分支（cookie 未命中）或其他边角构建。
+    #[cfg(not(target_arch = "wasm32"))]
     Theme::System
 }
 
