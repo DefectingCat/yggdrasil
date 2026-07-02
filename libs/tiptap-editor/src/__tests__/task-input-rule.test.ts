@@ -77,8 +77,9 @@ describe('TaskInputRule (appendTransaction 升级方案)', () => {
     const taskItem = block.content?.[0]
     expect(taskItem?.type).toBe('taskItem')
     expect(taskItem?.attrs?.checked).toBe(false)
-    // 前缀 "[ ] " 应被删除,不残留为文本
-    expect(taskItem?.content?.[0]?.content?.[0]?.text).not.toContain('[')
+    // 前缀 "[ ] " 应被删除,不残留为文本(空段落时 content 为空,也满足不含 [)
+    const paraText = taskItem?.content?.[0]?.textContent ?? ''
+    expect(paraText).not.toContain('[')
     // 光标应落在命中 taskItem 的段落内(pos 3 = doc>taskList>taskItem>paragraph 内),
     // 而非被甩到下一行(替换区域之后)。
     expect(editor.state.selection.from).toBe(3)
@@ -129,28 +130,41 @@ describe('TaskInputRule (appendTransaction 升级方案)', () => {
     expect(block.type).toBe('taskList')
   })
 
-  it('升级后 Enter 行为与斜杠命令创建的一致', async () => {
-    // 场景:升级成含内容的 taskList,Enter 新建空项,空项再 Enter 退出。
-    // 用 splitListItem 命令直接模拟(TaskItem 的 Enter 快捷键即绑定此命令)。
+  it('升级后段落文本不含前缀残留(畸形文档会导致后续 Enter 异常)', async () => {
+    // 核心回归:stripPrefix 必须作用在段落 content 而非 listItem content,
+    // 否则 cut 会切进段落标签边界,产生畸形文档(文本前缀残留、nodeSize 异常)。
     typeText(editor, '- ')
     await flush()
     typeText(editor, '[ ] 未完成')
     await flush()
 
-    const taskList = firstBlock(editor)
-    expect(taskList.type).toBe('taskList')
-    expect(taskList.content?.[0]?.attrs?.checked).toBe(false)
+    const taskItem = firstBlock(editor).content?.[0]
+    const paraText = taskItem?.content?.[0]?.content?.[0]?.text
+    // 段落文本应严格为"未完成",无前导空格或残留方括号
+    expect(paraText).toBe('未完成')
+  })
 
-    // 第一次 Enter(splitListItem):有内容项 → 分裂出新的空 taskItem
+  it('升级后空项 Enter 退出列表(与斜杠命令行为一致)', async () => {
+    // 完整 Enter 链路:升级 → Enter 新建空项 → Enter 退出
+    typeText(editor, '- ')
+    await flush()
+    typeText(editor, '[ ] 123')
+    await flush()
+    expect(firstBlock(editor).type).toBe('taskList')
+
+    // 第一次 Enter:在内容项末尾分裂出空 taskItem
     editor.commands.splitListItem('taskItem')
     const after1 = firstBlock(editor)
     expect(after1.content?.length).toBe(2)
-    expect(after1.content?.[1]?.attrs?.checked).toBe(false)
+    // 第二项应为空 taskItem:段落无文本内容(getJSON 对空段落省略 content 数组)
+    const secondItem = after1.content?.[1]
+    const secondParaContent = secondItem?.content?.[0]?.content
+    expect(secondParaContent === undefined || secondParaContent?.length === 0).toBe(true)
 
-    // 第二次 Enter(splitListItem):空 taskItem(最后一项,段落为空)→ 应退出列表
+    // 第二次 Enter:空 taskItem(列表最后一项)→ splitListItem return false,
+    // 由 Enter 的 fallback(ProseMirror baseKeymap)退出列表,产生普通段落。
     editor.commands.splitListItem('taskItem')
 
-    // 退出后:taskList 保留原项,文档末尾新增普通段落
     const json = editor.getJSON()
     const lastType = json.content?.[json.content.length - 1]?.type
     expect(lastType).toBe('paragraph')

@@ -96,10 +96,19 @@ export const TaskInputRule = Extension.create({
           listParent.forEach((itemNode) => {
             const isMatched = itemNode === listItem
             if (isMatched) matchedIndex = i
-            // 复用原 listItem 的子节点(段落等),命中的去掉前缀文本。
+            // 复用原 listItem 的子节点(段落等);命中的去掉段落文本前缀。
+            // strip 必须作用在「段落内部的 content」上,而非 listItem 的 content:
+            // 后者把段落节点当成原子,cut(N) 会切进段落的标签边界,产生畸形文档,
+            // 导致后续 splitListItem 行为异常(空项 Enter 不退出)。
             let children = itemNode.content
             if (isMatched) {
-              children = stripPrefix(children, match[0].length)
+              const para = itemNode.firstChild!
+              const stripped = para.type.create(
+                para.attrs,
+                stripPrefix(para.content, match[0].length),
+              )
+              // 用切除前缀后的段落替换第一个子节点;保留其余嵌套块(若有)。
+              children = itemNode.content.replaceChild(0, stripped)
             }
             newItems.push(
               taskItemType.create(
@@ -113,21 +122,21 @@ export const TaskInputRule = Extension.create({
           const newTaskList = taskListType.create(null, newItems)
           const replaceTr = tr.replaceWith(listPos, listPos + listParent.nodeSize, newTaskList)
 
-          // 显式重设光标:整段 replaceWith 后,ProseMirror 的选区映射无法把原 listItem
-          // 内的光标正确映射到新 taskItem 内(默认落到替换区域之后=下一行)。
-          // 这里算出命中的 taskItem 在新文档中的位置,把光标设到其段落文本末尾。
-          const newMatchedItem = newTaskList.child(matchedIndex)
-          // taskItem 的第一个子节点是段落(textblock);光标落在段落内容末尾。
-          const itemPos = listPos + 1 // taskList 起始后进入第一个 taskItem
-          let cursorPos = itemPos
-          for (let k = 0; k < matchedIndex; k++) {
-            cursorPos += newTaskList.child(k).nodeSize
+          // 显式重设光标:整段 replaceWith 后,选区映射会把光标甩到替换区域之后。
+          // 基于新文档(replaceTr.doc)精确计算命中 taskItem 的段落末尾位置:
+          //   taskList 起始 listPos → 内容 listPos+1 → 偏移 matchedIndex 个 taskItem → +1 进段落 → +段落 size
+          const resolvedList = replaceTr.doc.resolve(listPos + 1)
+          const taskListNode = resolvedList.node()
+          let offset = 0
+          for (let k = 0; k < matchedIndex && k < taskListNode.childCount; k++) {
+            offset += taskListNode.child(k).nodeSize
           }
-          // cursorPos 现在指向命中 taskItem 的起始;+1 进入其第一个段落,
-          // +段落文本长度 = 段落末尾(用户继续输入的位置)。
-          const paragraph = newMatchedItem.firstChild
-          const paragraphTextLen = paragraph ? paragraph.content.size : 0
-          cursorPos += 1 + paragraphTextLen
+          const hitItem = taskListNode.child(matchedIndex)
+          const hitParaTextLen = hitItem.firstChild ? hitItem.firstChild.content.size : 0
+          // 位置拆解:taskList 节点在 listPos;+1 进内容(第一个 taskItem 节点位置);
+          // +offset 到命中 taskItem 节点;+1 跨 taskItem 开标签进其内容(段落节点位置);
+          // +1 跨段落开标签进文本;+文本长度到末尾。
+          const cursorPos = listPos + 1 + offset + 1 + 1 + hitParaTextLen
           replaceTr.setSelection(TextSelection.near(replaceTr.doc.resolve(cursorPos)))
           // 标记为本插件产生的 transaction,防止 appendTransaction 重入。
           replaceTr.setMeta(pluginKey, { converted: true })
