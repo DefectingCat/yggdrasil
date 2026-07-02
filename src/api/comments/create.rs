@@ -212,10 +212,10 @@ pub async fn create_comment(
         // 在开事务前完成纯计算（Markdown 渲染、字段转义、IP/UA 提取），避免
         // 在事务持锁期间做无谓工作，缩短关键排他锁窗口。
         let content_html = crate::api::comments::markdown::render_comment_markdown(&content_md);
-        let author_name_safe = crate::api::comments::helpers::escape_html(author_name.trim());
+        let author_name_safe = crate::utils::html::escape_html(author_name.trim());
         let author_url_safe = author_url
             .as_ref()
-            .map(|u| crate::api::comments::helpers::escape_html(u.trim()))
+            .map(|u| crate::utils::html::escape_html(u.trim()))
             .filter(|u| !u.is_empty());
         let ip_address = if let Some(ctx) = dioxus::fullstack::FullstackContext::current() {
             let parts = ctx.parts_mut();

@@ -15,17 +15,6 @@ pub fn md5_hash(input: &str) -> String {
     hex::encode(hash)
 }
 
-/// 对用于 HTML 展示的文本做基础转义，防止 XSS。
-#[cfg(feature = "server")]
-pub fn escape_html(input: &str) -> String {
-    input
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#x27;")
-}
-
 /// 根据邮箱生成 Cravatar（Gravatar 国内镜像）头像 URL。
 #[cfg(feature = "server")]
 pub fn gravatar_url(email: &str) -> String {
@@ -79,14 +68,14 @@ pub fn row_to_admin_comment(row: &tokio_postgres::Row) -> AdminComment {
 
 /// 将 UTC 时间格式化为相对时间（刚刚 / N 分钟前 / N 小时前 / N 天前 / 日期）。
 ///
-/// 分档规则与前端 `crate::hooks::comment_storage::relative_label_from_millis` 完全一致，
+/// 分档规则与前端 `crate::utils::time::relative_label_from_millis` 完全一致，
 /// 通过共享分档函数保证服务端预渲染与前端实时计算的口径统一。
 #[cfg(feature = "server")]
 pub fn format_relative_time(dt: chrono::DateTime<chrono::Utc>) -> String {
     let now = chrono::Utc::now();
     let delta_millis = now.signed_duration_since(dt).num_milliseconds();
     let iso = dt.to_rfc3339();
-    crate::hooks::comment_storage::relative_label_from_millis(delta_millis, &iso).0
+    crate::utils::time::relative_label_from_millis(delta_millis, &iso).0
 }
 
 /// 校验评论作者昵称：非空且不超过 50 字符。
@@ -189,18 +178,6 @@ pub fn compute_content_hash(
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use super::*;
-
-    #[test]
-    fn escape_html_escapes_special_chars() {
-        assert_eq!(
-            escape_html("<script>alert(1)</script>"),
-            "&lt;script&gt;alert(1)&lt;/script&gt;"
-        );
-        assert_eq!(
-            escape_html("\"quoted' & ampersand"),
-            "&quot;quoted&#x27; &amp; ampersand"
-        );
-    }
 
     #[test]
     fn md5_hash_known_value() {

@@ -15,11 +15,11 @@ pub fn clean_html(input: &str) -> String {
 #[cfg(feature = "server")]
 /// 将标题纯文本转义，用于安全地拼进 TOC 的 `aria-label="..."` 与 `<a>` 正文。
 ///
-/// 复用 `hooks::comment_storage::escape_html`（转义 `& < > " '`），避免在仓库内
+/// 复用 `utils::html::escape_html`（转义 `& < > " '`），避免在仓库内
 /// 维护第二份转义实现。原先用 `clean_html` 处理属性上下文会漏掉 `"`，标题形如
 /// `" onmouseover="alert(1)` 会越出属性边界。
 fn escape_heading_text(s: &str) -> String {
-    crate::hooks::comment_storage::escape_html(s)
+    crate::utils::html::escape_html(s)
 }
 
 #[derive(Debug, Clone)]

@@ -1,9 +1,13 @@
 //! 通用工具函数子模块。
 //!
-//! `text` 模块仅在 `server` feature 启用时编译；`time` 模块同时提供 WASM 与原生异步版本。
+//! - `html`：HTML 转义（两端通用）。
+//! - `text`：Markdown / 纯文本处理（仅 `server` feature）。
+//! - `time`：跨平台时间/睡眠工具（WASM 与原生异步版本）。
 
+/// HTML 转义工具（前端后端通用）。
+pub mod html;
 /// Markdown / 纯文本处理工具。
 #[cfg(feature = "server")]
 pub mod text;
-/// 跨平台的异步睡眠等时间工具。
+/// 跨平台时间/睡眠工具。
 pub mod time;
