@@ -21,7 +21,7 @@ pub fn Footer() -> Element {
 
     // 根据 window 当前滚动位置同步 visible（注册监听后立即调用一次，避免首屏漏判）。
     // 滚动事件回调里也复用同一份判断逻辑。
-    let sync_visible = move || {
+    let mut sync_visible = move || {
         #[cfg(target_arch = "wasm32")]
         {
             if let Some(w) = web_sys::window() {

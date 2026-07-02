@@ -30,12 +30,13 @@
 /// );
 /// ```
 #[cfg(target_arch = "wasm32")]
-pub fn use_event_listener<T, A, F>(acquire: A, event: &'static str, mut handler: F)
+pub fn use_event_listener<T, A, F>(acquire: A, event: &'static str, handler: F)
 where
     T: AsRef<web_sys::EventTarget> + Clone + 'static,
-    A: FnOnce() -> Option<T>,
+    A: FnOnce() -> Option<T> + 'static,
     F: FnMut() + 'static,
 {
+    use dioxus::prelude::*;
     use std::cell::RefCell;
     use std::rc::Rc;
 
@@ -45,7 +46,14 @@ where
         use_hook(|| Rc::new(RefCell::new(None)));
     let state_for_drop = state.clone();
 
+    // use_effect 的回调是 FnMut（可能多次运行），但 acquire 是 FnOnce、handler 要
+    // move 进事件闭包。用 Option 包裹后 take()，首次运行消费掉，避免重复 move。
+    let mut acquire = Some(acquire);
+    let mut handler = Some(handler);
+
     use_effect(move || {
+        let Some(acquire) = acquire.take() else { return };
+        let Some(mut handler) = handler.take() else { return };
         let Some(target) = acquire() else { return };
         let target_clone = target.clone();
         let closure = wasm_bindgen::prelude::Closure::wrap(Box::new(move || {
@@ -77,7 +85,7 @@ where
 pub fn use_event_listener<T, A, F>(acquire: A, event: &'static str, handler: F)
 where
     T: Clone + 'static,
-    A: FnOnce() -> Option<T>,
+    A: FnOnce() -> Option<T> + 'static,
     F: FnMut() + 'static,
 {
     // SSR 无 DOM，空实现。

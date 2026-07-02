@@ -46,6 +46,7 @@ pub struct PaginatedState<T> {
 ///     },
 /// );
 /// ```
+#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut))]
 #[allow(unused_variables)]
 pub fn use_paginated<T, P, F, Fut, E>(
     page: P,
@@ -60,8 +61,8 @@ where
     E: std::fmt::Display + 'static,
 {
     let mut loading = use_signal(|| true);
-    let items = use_signal(Vec::new);
-    let total = use_signal(|| 0_i64);
+    let mut items = use_signal(Vec::new);
+    let mut total = use_signal(|| 0_i64);
     let mut error: Signal<Option<String>> = use_signal(|| None);
 
     use_effect(move || {
