@@ -296,10 +296,11 @@ fn sanitize(input: &str, config: &SanitizerConfig) -> String {
                     }
                     // input 的 type 必须是 checkbox，其余取值（image/text/...）一概删除；
                     // 缺失 type 的 input 由下面的兜底逻辑整标签移除。
-                    if tag == "input" && name_lower == "type" {
-                        if attr.value().trim().to_lowercase() != "checkbox" {
-                            return Some(name);
-                        }
+                    if tag == "input"
+                        && name_lower == "type"
+                        && attr.value().trim().to_lowercase() != "checkbox"
+                    {
+                        return Some(name);
                     }
                     None
                 } else {
