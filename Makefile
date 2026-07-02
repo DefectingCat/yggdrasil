@@ -123,7 +123,7 @@ build-codemirror:
 build-codemirror-incremental:
 	@cd libs/codemirror-editor && pnpm run build
 
-dev: build-editor-incremental build-lightbox-incremental build-core-incremental build-codemirror-incremental
+dev: build-editor-incremental build-lightbox-incremental build-core-incremental build-codemirror-incremental highlight-css
 	@echo "Cleaning static/..."
 	@rm -rf static/
 	@echo "Building CSS..."
