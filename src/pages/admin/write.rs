@@ -297,7 +297,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
             // 将逗号分隔的标签字符串转换为列表。
             // 同时支持半角/全角逗号与分号，避免中文输入法下的全角标点被误并入单个标签。
             let tags_list: Vec<String> = tags()
-                .split(|c| matches!(c, ',' | '，' | ';' | '；'))
+                .split([',', '，', ';', '；'])
                 .map(|t| t.trim().to_string())
                 .filter(|t| !t.is_empty())
                 .collect();

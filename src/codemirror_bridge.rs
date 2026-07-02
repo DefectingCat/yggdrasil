@@ -179,7 +179,7 @@ pub mod wasm {
         fn drop(&mut self) {
             // 销毁 JS 侧编辑器；随后 _on_change/_on_ready 字段按声明顺序释放，
             // 释放 wasm-bindgen 函数表槽位。
-            let _ = self.instance.destroy();
+            self.instance.destroy();
         }
     }
 }

@@ -721,12 +721,9 @@ fn SqlConsoleTab() -> Element {
             opts.set_on_change(&on_change);
             opts.set_on_ready(&on_ready);
 
-            match codemirror_bridge::get_module().create("sql-editor", &opts) {
-                Ok(Some(inst)) => {
-                    let handle = codemirror_bridge::EditorHandle::new(inst, on_change, on_ready);
-                    editor_handle.set(Some(handle));
-                }
-                _ => {}
+            if let Ok(Some(inst)) = codemirror_bridge::get_module().create("sql-editor", &opts) {
+                let handle = codemirror_bridge::EditorHandle::new(inst, on_change, on_ready);
+                editor_handle.set(Some(handle));
             }
 
             // 异步拉取 schema 注入补全
@@ -1197,9 +1194,8 @@ fn BackupTab() -> Element {
                             active_progress.set(Some(p));
                             if done {
                                 // 刷新列表（备份完成后新文件出现）并清理任务态
-                                match list_backups().await {
-                                    Ok(list) => backups_f.set(list),
-                                    _ => {}
+                                if let Ok(list) = list_backups().await {
+                                    backups_f.set(list);
                                 }
                                 active_task_id.set(None);
                                 busy_f.set(false);

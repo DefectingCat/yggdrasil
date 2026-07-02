@@ -42,8 +42,9 @@ where
 
     // 用 use_hook 持有 (Closure, target)，在整个组件生命周期内复用；
     // use_drop 时 take 出来移除监听，防止泄漏。
-    let state: Rc<RefCell<Option<(wasm_bindgen::prelude::Closure<dyn FnMut()>, T)>>> =
-        use_hook(|| Rc::new(RefCell::new(None)));
+    type ListenerState<T> =
+        Rc<RefCell<Option<(wasm_bindgen::prelude::Closure<dyn FnMut()>, T)>>>;
+    let state: ListenerState<T> = use_hook(|| Rc::new(RefCell::new(None)));
     let state_for_drop = state.clone();
 
     // use_effect 的回调是 FnMut（可能多次运行），但 acquire 是 FnOnce、handler 要

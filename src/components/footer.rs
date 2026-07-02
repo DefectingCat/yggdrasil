@@ -42,10 +42,10 @@ pub fn Footer() -> Element {
     // 因为 server 端该组件只跑一次 SSR）。
     #[cfg(target_arch = "wasm32")]
     use_event_listener(
-        || web_sys::window(),
+        web_sys::window,
         "scroll",
         // 滚动事件触发时复用同样的阈值判断。
-        move || sync_visible(),
+        sync_visible,
     );
 
     // 挂载时根据当前滚动位置初始化一次按钮可见性。
@@ -101,7 +101,7 @@ fn scroll_to_top() {
             let options = web_sys::ScrollToOptions::new();
             options.set_top(0.0);
             options.set_behavior(web_sys::ScrollBehavior::Smooth);
-            let _ = window.scroll_to_with_scroll_to_options(&options);
+            window.scroll_to_with_scroll_to_options(&options);
 
             if let Ok(history) = window.history() {
                 let _ = history.replace_state_with_url(&wasm_bindgen::JsValue::NULL, "", Some(" "));
