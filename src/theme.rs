@@ -284,26 +284,23 @@ pub fn ThemePreload() -> Element {
 
 /// 主题切换按钮组件（三态循环：Light → Dark → System → Light）。
 ///
-/// 点击根据当前模式取下一个 `Theme`。仅当**实际生效明暗**（ResolvedTheme）
-/// 因切换而翻转时才触发圆形展开动画；若切换前后明暗不变（如 Light → System
-/// 且系统当前为浅色），直接更新 Signal，无动画无延迟。
+/// 点击后**立即**切换图标（theme.set 不再延迟），让用户即时获得反馈；
+/// 图标自身的进入动画（缩放+淡入）由 CSS `.theme-toggle svg` 的 keyframe
+/// 驱动，配合 SVG 元素的 `key` 属性——theme 变化时 Dioxus 重新挂载 SVG，
+/// 进入动画随之重新触发。
+///
+/// 仅当**实际生效明暗**（ResolvedTheme）因切换而翻转时，才额外触发圆形展开
+/// VT 动画（颜色过渡）；明暗不变时（如 Light → System 且系统浅色）只换图标。
 ///
 // evt 仅在 wasm32 用于取点击坐标,服务端构建剥离,故允许非 wasm 的 unused_variables。
 #[cfg_attr(not(target_arch = "wasm32"), allow(unused_variables))]
 #[component]
 pub fn ThemeToggle() -> Element {
-    // theme 仅在非 wasm（server）构建的 theme.set(next) 需要 mut；wasm 端该分支
-    // 被 cfg 剥离，写操作转移到副本 theme_clone，故 wasm 下标注 unused_mut。
-    #[cfg_attr(target_arch = "wasm32", allow(unused_mut))]
-    let mut theme = use_theme();
-    // generation:每次点击递增。延迟回调检查自己的 gen 是否最新,过期则跳过 set。
-    // 解决连续点击时多个 spawn_local 堆积导致的状态错乱。
-    // click_gen 仅在 wasm 分支被 set（连续点击防抖）；server 构建剥离该分支，
-    // 故非 wasm 端标注 unused_mut。
+    // theme 在 wasm 与 server 两侧都需要 mut（onclick 内 theme.set）。
     #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut))]
-    let mut click_gen = use_signal(|| 0u32);
-    // resolved / system_dark 用于判断切换前后实际明暗是否翻转。
-    // resolved 仅在 wasm 分支读取，system_dark 同理；非 wasm 端用 _ 引用避免警告。
+    let mut theme = use_theme();
+    // resolved / system_dark 用于判断切换前后实际明暗是否翻转（决定是否触发 VT）。
+    // 仅在 wasm 分支读取；非 wasm 端用占位值避免 unused 警告。
     #[cfg(target_arch = "wasm32")]
     let resolved = use_resolved_theme();
     #[cfg(target_arch = "wasm32")]
@@ -324,7 +321,7 @@ pub fn ThemeToggle() -> Element {
                     let prev_resolved = resolved();
                     let new_resolved = next.resolve(system_dark());
                     if prev_resolved != new_resolved {
-                        // 实际明暗翻转 → 触发圆形展开动画。
+                        // 实际明暗翻转 → 触发圆形展开 VT 动画（颜色过渡）。
                         // JS 从 DOM 现状推导目标主题(不传 isDark),避免与 Signal 状态不同步。
                         let coords = evt.client_coordinates();
                         let x = coords.x;
@@ -332,25 +329,16 @@ pub fn ThemeToggle() -> Element {
                         let _ = js_sys::eval(
                             &format!(
                                 "if (window.__startThemeTransition) \
-                                     window.__startThemeTransition({x}, {y});", // theme.set 推迟到动画结束:其触发的 Dioxus 微任务重渲染会打断 VT。
+                                     window.__startThemeTransition({x}, {y});",
                                 x = x,
                                 y = y,
                             ),
                         );
-                        let gen = click_gen() + 1;
-                        click_gen.set(gen);
-                        let mut theme_clone = theme;
-                        let gen_clone = click_gen;
-                        wasm_bindgen_futures::spawn_local(async move {
-                            crate::utils::time::sleep_ms(450).await;
-                            if gen_clone() == gen {
-                                theme_clone.set(next);
-                            }
-                        });
-                    } else {
-                        // 切换前后明暗不变（如 Light → System 且系统浅色）：直接更新，无动画。
-                        theme.set(next);
                     }
+                    // 立即切换图标：theme.set 触发重渲染换 SVG，配合 key 触发 CSS 进入动画。
+                    // VT 的伪元素快照在 __startThemeTransition 内已同步拍好，不受后续真实
+                    // DOM 变化影响，故无需推迟 theme.set。
+                    theme.set(next);
                     return;
                 }
                 #[cfg(not(target_arch = "wasm32"))]
@@ -359,37 +347,49 @@ pub fn ThemeToggle() -> Element {
                 }
             },
             // 图标按当前主题意图（而非 resolved）选择，用户能看出自己在哪种模式。
-            match theme() {
-                Theme::Dark => rsx! {
-                    svg {
-                        xmlns: "http://www.w3.org/2000/svg",
-                        height: "24px",
-                        view_box: "0 -960 960 960",
-                        width: "24px",
-                        fill: "currentColor",
-                        path { d: "M484-80q-84 0-157.5-32t-128-86.5Q144-253 112-326.5T80-484q0-146 93-257.5T410-880q-18 99 11 193.5T521-521q71 71 165.5 100T880-410q-26 144-138 237T484-80Zm0-80q88 0 163-44t118-121q-86-8-163-43.5T464-465q-61-61-97-138t-43-163q-77 43-120.5 118.5T160-484q0 135 94.5 229.5T484-160Zm-20-305Z" }
-                    }
-                },
-                Theme::Light => rsx! {
-                    svg {
-                        xmlns: "http://www.w3.org/2000/svg",
-                        height: "24px",
-                        view_box: "0 -960 960 960",
-                        width: "24px",
-                        fill: "currentColor",
-                        path { d: "M440-800v-120h80v120h-80Zm0 760v-120h80v120h-80Zm360-400v-80h120v80H800Zm-760 0v-80h120v80H40Zm708-252-56-56 70-72 58 58-72 70ZM198-140l-58-58 72-70 56 56-70 72Zm564 0-70-72 56-56 72 70-58 58ZM212-692l-72-70 58-58 70 72-56 56Zm98 382q-70-70-70-170t70-170q70-70 170-70t170 70q70 70 70 170t-70 170q-70 70-170 70t-170-70Zm283.5-56.5Q640-413 640-480t-46.5-113.5Q547-640 480-640t-113.5 46.5Q320-547 320-480t46.5 113.5Q413-320 480-320t113.5-46.5ZM480-480Z" }
-                    }
-                },
-                Theme::System => rsx! {
-                    svg {
-                        xmlns: "http://www.w3.org/2000/svg",
-                        height: "24px",
-                        view_box: "0 -960 960 960",
-                        width: "24px",
-                        fill: "currentColor",
-                        path { d: "M40-120v-80h880v80H40Zm120-120q-33 0-56.5-23.5T80-320v-440q0-33 23.5-56.5T160-840h640q33 0 56.5 23.5T880-760v440q0 33-23.5 56.5T800-240H160Zm0-80h640v-440H160v440Zm0 0v-440 440Z" }
-                    }
-                },
+            // key 强制 theme 变化时 Dioxus 重新挂载 SVG，从而重新触发 CSS 进入动画。
+            // （Dioxus 要求 key 为格式化字符串，故用 {icon_key} 占位。）
+            {
+                let icon_key: &str = match theme() {
+                    Theme::Dark => "dark",
+                    Theme::Light => "light",
+                    Theme::System => "system",
+                };
+                match theme() {
+                    Theme::Dark => rsx! {
+                        svg {
+                            key: "icon-{icon_key}",
+                            xmlns: "http://www.w3.org/2000/svg",
+                            height: "24px",
+                            view_box: "0 -960 960 960",
+                            width: "24px",
+                            fill: "currentColor",
+                            path { d: "M484-80q-84 0-157.5-32t-128-86.5Q144-253 112-326.5T80-484q0-146 93-257.5T410-880q-18 99 11 193.5T521-521q71 71 165.5 100T880-410q-26 144-138 237T484-80Zm0-80q88 0 163-44t118-121q-86-8-163-43.5T464-465q-61-61-97-138t-43-163q-77 43-120.5 118.5T160-484q0 135 94.5 229.5T484-160Zm-20-305Z" }
+                        }
+                    },
+                    Theme::Light => rsx! {
+                        svg {
+                            key: "icon-{icon_key}",
+                            xmlns: "http://www.w3.org/2000/svg",
+                            height: "24px",
+                            view_box: "0 -960 960 960",
+                            width: "24px",
+                            fill: "currentColor",
+                            path { d: "M440-800v-120h80v120h-80Zm0 760v-120h80v120h-80Zm360-400v-80h120v80H800Zm-760 0v-80h120v80H40Zm708-252-56-56 70-72 58 58-72 70ZM198-140l-58-58 72-70 56 56-70 72Zm564 0-70-72 56-56 72 70-58 58ZM212-692l-72-70 58-58 70 72-56 56Zm98 382q-70-70-70-170t70-170q70-70 170-70t170 70q70 70 70 170t-70 170q-70 70-170 70t-170-70Zm283.5-56.5Q640-413 640-480t-46.5-113.5Q547-640 480-640t-113.5 46.5Q320-547 320-480t46.5 113.5Q413-320 480-320t113.5-46.5ZM480-480Z" }
+                        }
+                    },
+                    Theme::System => rsx! {
+                        svg {
+                            key: "icon-{icon_key}",
+                            xmlns: "http://www.w3.org/2000/svg",
+                            height: "24px",
+                            view_box: "0 -960 960 960",
+                            width: "24px",
+                            fill: "currentColor",
+                            path { d: "M40-120v-80h880v80H40Zm120-120q-33 0-56.5-23.5T80-320v-440q0-33 23.5-56.5T160-840h640q33 0 56.5 23.5T880-760v440q0 33-23.5 56.5T800-240H160Zm0-80h640v-440H160v440Zm0 0v-440 440Z" }
+                        }
+                    },
+                }
             }
         }
     }
