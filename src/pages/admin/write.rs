@@ -469,10 +469,21 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     div {
                         class: "relative group flex-1 min-h-0 w-full border border-[var(--color-paper-border)] rounded-xl overflow-hidden bg-[var(--color-paper-entry)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none",
                         id: "tiptap-editor",
-                        img {
-                            src: "/images/xiantiaoxiaogou_input_bg.webp",
-                            alt: "",
-                            class: "absolute bottom-1.5 right-1.5 opacity-60 group-focus-within:opacity-10 transition-opacity duration-300 pointer-events-none z-0",
+                        {
+                            // 无内容时半透明(60%)；有内容或聚焦时淡出(10%)。
+                            // content 是 onUpdate 回调实时维护的 signal，编辑即触发重渲染。
+                            let bg_opacity = if content().trim().is_empty() {
+                                "opacity-60"
+                            } else {
+                                "opacity-10"
+                            };
+                            rsx! {
+                                img {
+                                    src: "/images/xiantiaoxiaogou_input_bg.webp",
+                                    alt: "",
+                                    class: "absolute bottom-1.5 right-1.5 group-focus-within:opacity-10 transition-opacity duration-300 pointer-events-none z-0 {bg_opacity}",
+                                }
+                            }
                         }
                     }
                 }
