@@ -10,15 +10,23 @@
 use chrono::DateTime;
 
 /// 异步睡眠指定毫秒数。
+///
+/// 用 `js_sys::Promise` + `web_sys::Window::set_timeout_*` 构造，与
+/// `pages/admin/system.rs::wasm_sleep` 同款写法，避免 `js_sys::eval` 字符串求值。
 #[cfg(target_arch = "wasm32")]
 pub async fn sleep_ms(ms: u32) {
     use wasm_bindgen::JsCast;
-    let js_code = format!("new Promise(r => setTimeout(r, {}))", ms);
-    if let Ok(promise_val) = js_sys::eval(&js_code) {
-        if let Ok(promise) = promise_val.dyn_into::<js_sys::Promise>() {
-            let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
-        }
-    }
+    use wasm_bindgen_futures::JsFuture;
+    let promise = js_sys::Promise::new(&mut |resolve, _| {
+        web_sys::window()
+            .expect("no window")
+            .set_timeout_with_callback_and_timeout_and_arguments_0(
+                &resolve.unchecked_into(),
+                ms.try_into().unwrap(),
+            )
+            .expect("set_timeout failed");
+    });
+    let _ = JsFuture::from(promise).await;
 }
 
 /// 异步睡眠指定毫秒数（原生 tokio 版本）。

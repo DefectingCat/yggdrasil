@@ -115,7 +115,7 @@ fn detect_initial_theme() -> Theme {
             }
         }
         // 无持久化值：跟随系统。
-        return Theme::System;
+        Theme::System
     }
 
     #[cfg(feature = "server")]
@@ -304,25 +304,27 @@ pub fn ThemeToggle() -> Element {
                     let prev_resolved = resolved();
                     let new_resolved = next.resolve(system_dark());
                     if prev_resolved != new_resolved {
+                        use wasm_bindgen::JsCast;
                         // 实际明暗翻转 → 触发圆形展开 VT 动画（颜色过渡）。
                         // JS 从 DOM 现状推导目标主题(不传 isDark),避免与 Signal 状态不同步。
+                        // 用 Reflect::get 取 window.__startThemeTransition 再 call2 调用,
+                        // 替代旧版 format!-into-eval 字符串拼贴(无注入面、与 bridge 风格一致)。
                         let coords = evt.client_coordinates();
                         let x = coords.x;
                         let y = coords.y;
-                        let _ = js_sys::eval(
-                            &format!(
-                                "if (window.__startThemeTransition) \
-                                     window.__startThemeTransition({x}, {y});",
-                                x = x,
-                                y = y,
-                            ),
-                        );
+                        let window = web_sys::window().unwrap();
+                        let key = "__startThemeTransition".into();
+                        if let Ok(fn_val) = js_sys::Reflect::get(&window, &key) {
+                            if !fn_val.is_undefined() && !fn_val.is_null() {
+                                let fn_obj = fn_val.unchecked_into::<js_sys::Function>();
+                                let _ = fn_obj.call2(&window, &x.into(), &y.into());
+                            }
+                        }
                     }
                     // 立即切换图标：theme.set 触发重渲染换 SVG，配合 key 触发 CSS 进入动画。
                     // VT 的伪元素快照在 __startThemeTransition 内已同步拍好，不受后续真实
                     // DOM 变化影响，故无需推迟 theme.set。
                     theme.set(next);
-                    return;
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 {
