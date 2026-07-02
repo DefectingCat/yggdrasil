@@ -470,7 +470,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
                         class: "relative group flex-1 min-h-0 w-full border border-[var(--color-paper-border)] rounded-xl overflow-hidden bg-[var(--color-paper-entry)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none",
                         id: "tiptap-editor",
                         img {
-                            src: "/images/xiantiaoxiaogou_03.webp",
+                            src: "/images/xiantiaoxiaogou_input_bg.webp",
                             alt: "",
                             class: "absolute bottom-1.5 right-1.5 opacity-60 group-focus-within:opacity-10 transition-opacity duration-300 pointer-events-none z-0",
                         }
