@@ -600,4 +600,26 @@ mod tests {
         );
         assert!(result.html.contains("alt=\"alt\""));
     }
+
+    #[test]
+    fn render_markdown_task_list() {
+        // 端到端验证：pulldown-cmark 解析任务列表 → sanitizer 清理后 checkbox 不丢失。
+        // 覆盖「编辑器写入 → 入库 → 服务端重渲染」链路的最终 HTML 形态。
+        let result = render_markdown_enhanced("- [ ] 未完成\n- [x] 已完成\n");
+        // 两个 checkbox 都应保留
+        assert!(
+            result.html.contains(r#"type="checkbox""#),
+            "checkbox type 应保留, got: {}",
+            result.html
+        );
+        // 已勾选项的 checked 属性应保留
+        assert!(
+            result.html.contains("checked"),
+            "checked 属性应保留, got: {}",
+            result.html
+        );
+        // 文本内容保留
+        assert!(result.html.contains("未完成"));
+        assert!(result.html.contains("已完成"));
+    }
 }

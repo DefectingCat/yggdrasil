@@ -300,6 +300,26 @@
     margin-bottom: 0;
   }
 
+  /* 任务列表：pulldown-cmark 把 - [ ] / - [x] 渲染成裸 <li><input type="checkbox">…
+   * （无 <label> 包裹，也无 data-type 标记）。用 :has() 识别含 checkbox 的 li，
+   * 布局成 flex 让复选框与文本对齐；不支持 :has() 的浏览器降级为普通列表，仍可读。 */
+  .md-content li:has(> input[type="checkbox"]) {
+    list-style: none;
+    margin-left: -1.25rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .md-content li > input[type="checkbox"] {
+    flex-shrink: 0;
+    width: 1rem;
+    height: 1rem;
+    margin: 0.35rem 0 0;
+    accent-color: var(--color-paper-accent);
+    cursor: default;
+  }
+
   .md-content hr {
     margin: 30px 0;
     height: 2px;

@@ -56,6 +56,9 @@ static DEFAULT_ALLOWED_TAGS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| 
         "i",
         "img",
         "ins",
+        // input 仅用于 pulldown-cmark 任务列表渲染的 checkbox;
+        // element_handler 会强制校验 type="checkbox",其余 type 一律整体移除。
+        "input",
         "kbd",
         "li",
         "map",
@@ -291,6 +294,13 @@ fn sanitize(input: &str, config: &SanitizerConfig) -> String {
                             return Some(name);
                         }
                     }
+                    // input 的 type 必须是 checkbox，其余取值（image/text/...）一概删除；
+                    // 缺失 type 的 input 由下面的兜底逻辑整标签移除。
+                    if tag == "input" && name_lower == "type" {
+                        if attr.value().trim().to_lowercase() != "checkbox" {
+                            return Some(name);
+                        }
+                    }
                     None
                 } else {
                     Some(name)
@@ -308,6 +318,20 @@ fn sanitize(input: &str, config: &SanitizerConfig) -> String {
                 if existing != rel {
                     el.set_attribute("rel", rel).ok();
                 }
+            }
+        }
+
+        // input 兜底：属性白名单 + type 值校验后，仍可能残留「无 type 属性」的 input。
+        // （例如 <input checked> 经属性过滤后 type 被删或缺省。）这种 input 整体移除——
+        // 它是 void 元素无文本内容，remove() 不丢正文，且能彻底封堵缺省 type 的滥用。
+        if tag == "input" {
+            let type_ok = el
+                .get_attribute("type")
+                .map(|v| v.trim().to_lowercase() == "checkbox")
+                .unwrap_or(false);
+            if !type_ok {
+                el.remove();
+                return Ok(());
             }
         }
 
@@ -345,6 +369,8 @@ pub fn clean_html(input: &str) -> String {
         extra_tag_attrs: vec![
             ("a", vec!["class", "aria-hidden", "aria-label"]),
             ("img", vec!["data-src", "class", "style"]),
+            // input 仅放行 checkbox 必备属性;type 的具体取值由 element_handler 强校验为 checkbox。
+            ("input", vec!["type", "checked", "disabled"]),
             ("span", vec!["class", "style"]),
             ("h1", vec!["id", "class"]),
             ("h2", vec!["id", "class"]),
@@ -568,5 +594,80 @@ mod tests {
         // scheme 大小写不敏感：HTTPS 与 https 等价。
         assert!(is_safe_url("HTTPS://example.com", &schemes, false));
         assert!(!is_safe_url("JAVASCRIPT:alert(1)", &schemes, false));
+    }
+
+    // ---- input / 任务列表 checkbox 白名单与 XSS 边界 ----
+
+    #[test]
+    fn clean_html_allows_task_list_checkbox() {
+        // pulldown-cmark 对 - [ ] / - [x] 的实际输出结构
+        let input = r#"<ul>
+<li><input disabled="" type="checkbox"/> 未完成</li>
+<li><input disabled="" type="checkbox" checked=""/> 已完成</li>
+</ul>"#;
+        let result = clean_html(input);
+        // input 标签保留
+        assert!(result.contains("<input"), "input 应保留, got: {result}");
+        // type=checkbox 保留
+        assert!(
+            result.contains(r#"type="checkbox""#),
+            "type=checkbox 应保留, got: {result}"
+        );
+        // checked 保留(体现勾选状态)
+        assert!(
+            result.contains("checked"),
+            "checked 属性应保留, got: {result}"
+        );
+        // disabled 保留
+        assert!(
+            result.contains("disabled"),
+            "disabled 属性应保留, got: {result}"
+        );
+    }
+
+    #[test]
+    fn clean_html_input_rejects_type_image() {
+        // type=image 是已知的 input 滥用面（可配合 src 触发请求），必须整体移除
+        let input = r#"<ul><li><input type="image" src="https://evil.example/x.png">文本</li></ul>"#;
+        let result = clean_html(input);
+        assert!(
+            !result.contains("input"),
+            "type=image 的 input 必须被整体移除, got: {result}"
+        );
+        assert!(
+            !result.contains("evil.example"),
+            "残留的 src 也应随 input 一并移除, got: {result}"
+        );
+        // 文本内容保留
+        assert!(result.contains("文本"));
+    }
+
+    #[test]
+    fn clean_html_input_rejects_type_text() {
+        let result = clean_html(r#"<input type="text">"#);
+        assert!(
+            !result.contains("input"),
+            "type=text 的 input 应被移除, got: {result}"
+        );
+    }
+
+    #[test]
+    fn clean_html_input_without_type_removed() {
+        // 缺省 type 属性的 input（如 <input checked> 经属性过滤后 type 缺省）必须整体移除
+        let result = clean_html("<input checked>");
+        assert!(
+            !result.contains("input"),
+            "无 type 属性的 input 应被整体移除, got: {result}"
+        );
+    }
+
+    #[test]
+    fn clean_comment_html_input_stripped() {
+        // 评论白名单本就不含 input，任务列表 checkbox 在评论侧不放开
+        let result = clean_comment_html(r#"<input type="checkbox" checked>"#);
+        assert!(
+            !result.contains("input"),
+            "评论侧 input 应被剥离, got: {result}"
+        );
     }
 }
