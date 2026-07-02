@@ -10,26 +10,33 @@
 ## Development Commands
 
 ```bash
-make dev           # tailwindcss watch + dx serve (needs PostgreSQL)
-make build         # build-editor → highlight-css → tailwindcss → doc → dx build --release
-make build-linux   # same as build but targets x86_64-unknown-linux-musl
-make build-freebsd # cross-compile FreeBSD x86_64 server binary (clang + lld + sysroot)
+make dev           # 增量构建 4 个 libs + tailwindcss watch + dx serve (needs PostgreSQL, SSR_CACHE_SECS=0)
+make build         # build-editor → build-lightbox → build-core → build-codemirror → highlight-css → tailwindcss → doc → dx build --release → restore-webp
+make build-linux   # 客户端 + 服务端分离构建,target x86_64-unknown-linux-musl
+make build-freebsd # cross-compile FreeBSD x86_64 server binary (clang + lld + sysroot, via cargo, not dx)
 make freebsd-sysroot # download/extract FreeBSD base.txz → .freebsd-sysroot/ (idempotent)
-make css           # one-shot CSS
-make css-watch     # watch mode
-make test          # cargo test + vitest (tiptap-editor + lightbox + yggdrasil-core libs)
+make css           # one-shot Tailwind build
+make css-watch     # Tailwind watch mode
+make test          # cargo test + pnpm test in all 4 libs (tiptap-editor / lightbox / yggdrasil-core / codemirror-editor)
 make doc           # cargo doc (ayu 主题) → 拷贝到 public/doc/，随 build 发布
 make doc-open      # 同 doc，生成后自动用浏览器打开（本地预览，不拷贝）
-make clean         # cargo clean + rm public/style.css
+make clippy        # cargo clippy --all-targets --all-features -- -D warnings (严格模式,warning 即失败)
+make fix           # cargo fix --allow-dirty
+make clean         # cargo clean + rm public/{style.css,highlight.css,doc} + rm -rf uploads/.cache
 ```
 
-**Build order matters**: `make build` runs `build-editor` → `highlight-css` (`cargo run --bin generate_highlight_css`) → `tailwindcss --minify` → `doc` (`cargo doc` + 拷贝到 `public/doc/`) → `dx build --release`. Do not run `dx build --release` alone.
+**Build order matters**: `make build` runs all 4 lib builds → `highlight-css` (`cargo run --bin generate_highlight_css`) → `tailwindcss --minify` → `doc` → `dx build --release` → `restore-webp`. Do not run `dx build --release` alone.
+
+**`restore-webp` workaround**: dx build 0.7.9 re-encodes `public/*.webp` into VP8L lossless stills (drops animation frames, 7-8× larger), contradicting the "verbatim copy" promise. `restore-webp` overwrites `.webp` in `target/dx/**/web/public/` from source `public/`. SVG/ICO are unaffected. Remove once upstream fixes it.
+
+**Libs use pnpm, not npm**: every lib has `pnpm-lock.yaml`; Makefile recipes use `pnpm ci`/`pnpm install`/`pnpm run`. The `*-incremental` targets skip install (assume `node_modules` present) for faster `make dev`.
 
 ## Prerequisites
 
 - Rust 1.95+ with `wasm32-unknown-unknown` target
 - `dx` CLI (`cargo install dioxus-cli`)
 - `tailwindcss` CLI v4 — install via `npm install -g @tailwindcss/cli` (v4 splits the CLI into its own package; the `tailwindcss` core package has no `bin`), or use the standalone binary
+- `pnpm` (all 4 `libs/` subprojects use it)
 - PostgreSQL running locally
 
 ## Environment
@@ -40,6 +47,10 @@ Create `.env` (not committed):
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/yggdrasil
 RUST_LOG=info
 ```
+
+**Migrations run automatically at startup** — there is no `migrate.sh`. On boot `src/main.rs` calls `db::migrate::run_on_conn`, which applies `migrations/*.sql` in order (tracked in the `MIGRATIONS` array in `src/db/migrate.rs`). Before the pool is touched, `db::pool.rs::ensure_database_exists` connects to the `postgres` maintenance DB and `CREATE`s the target DB if missing (zero manual setup). The migration step is serialized across instances via an advisory lock and waits up to `MIGRATE_STARTUP_TIMEOUT_SECS` for PostgreSQL.
+
+**Adding a migration**: create `migrations/NNN_name.sql`, then add a `(version, include_str!("./../migrations/NNN_name.sql"))` row to the `MIGRATIONS` array in `src/db/migrate.rs`. A compile-time test asserts every `.sql` file on disk has a matching row (and vice versa), so forgetting the row fails the build.
 
 Optional tuning via env vars (all have sane defaults):
 
@@ -61,7 +72,8 @@ RATE_LIMIT_UNKNOWN_BURST=100
 DB_POOL_SIZE=20             # database connection pool size
 MIGRATE_STARTUP_TIMEOUT_SECS=30  # how long startup waits for PostgreSQL before giving up
 STATEMENT_TIMEOUT_SECS=30   # per-query timeout; slow queries are canceled to protect the pool
-SSR_CACHE_SECS=3600         # incremental SSR cache TTL
+SSR_CACHE_SECS=3600         # incremental SSR cache TTL (set 0 in dev)
+SYSINFO_SAMPLE_SECS=0.5     # sysinfo sampling interval in seconds, supports decimals
 ```
 
 Session / security tuning:
@@ -72,19 +84,13 @@ TRUSTED_PROXY_COUNT=0       # number of reverse proxies in front of the app; use
 APP_BASE_URL=               # e.g. https://your-domain.example — trusted origin for CSRF checks on write requests; unset falls back to Host header + X-Forwarded-Proto
 ```
 
-Run migrations before first dev server start:
-
-```bash
-./migrate.sh       # auto-creates DB, runs migrations/ in order
-```
-
 ## Architecture: Conditional Compilation
 
 Dioxus 0.7 fullstack project with **two independent gates** — the most common source of compilation errors.
 
 | Gate | Applies to | Used for |
 |------|-----------|----------|
-| `#[cfg(feature = "server")]` | Server binary only | DB, env loading, background tasks, server function bodies, highlight, WebP, caching |
+| `#[cfg(feature = "server")]` | Server binary only | DB, env loading, background tasks, server function bodies, highlight, WebP, caching, sysinfo |
 | `#[cfg(target_arch = "wasm32")]` | WASM frontend only | localStorage, DOM APIs, web_sys calls, theme detection |
 
 **Critical**: Both default features (`web` + `server`) are enabled in `Cargo.toml`. The `dx` CLI handles feature selection during builds.
@@ -93,13 +99,15 @@ Dioxus 0.7 fullstack project with **two independent gates** — the most common 
 
 **Server-only helpers**: `src/auth/password.rs`, `src/auth/session.rs`, `src/api/auth.rs`, `src/api/comments/helpers.rs`, and several model helper methods are gated with `#[cfg(feature = "server")]` because they are only called from server function bodies, which are stripped in WASM builds.
 
-**Server-only dependencies**: Crates that are only used behind `#[cfg(feature = "server")]` (e.g., `argon2`, `uuid`, `regex`, `pulldown-cmark`, `rand`, `http`, `sha2`, `hex`, plus the pre-existing optional server stack) are declared as `optional = true` in `Cargo.toml` and enabled only through the `server` feature. They are not compiled into the WASM frontend.
+**Server-only dependencies**: Crates that are only used behind `#[cfg(feature = "server")]` (e.g., `argon2`, `uuid`, `regex`, `pulldown-cmark`, `rand`, `http`, `sha2`, `hex`, `sysinfo`, `sqlparser`, `dashmap`, plus the rest of the server stack) are declared as `optional = true` in `Cargo.toml` and enabled only through the `server` feature. They are not compiled into the WASM frontend. The `generate_highlight_css` binary is `required-features = ["server"]` (uses `syntect`).
+
+**Shared types that compile on both targets**: bridges like `src/tiptap_bridge.rs` and `src/codemirror_bridge.rs` keep shared structs (e.g. `UploadsInFlight`, `SqlSchema`/`SqlTable`) outside cfg gates, while wasm-bindgen externs + `EditorHandle` live in inner `#[cfg(target_arch = "wasm32")] mod wasm`. Similarly `src/sysinfo_sampler.rs` exposes `SystemSnapshot` on both targets but gates the actual sampler + `RwLock` behind `server`.
 
 ## Dual API Architecture
 
 The server exposes two distinct API patterns:
 
-1. **Dioxus server functions** (`#[server(Name, "/api")]` in `src/api/`) — auto-routed, callable from both client and server Rust. Spread across `src/api/auth.rs`, `src/api/posts/`, `src/api/comments/`, and `src/api/settings.rs`.
+1. **Dioxus server functions** (`#[server(Name, "/api")]` in `src/api/`) — auto-routed, callable from both client and server Rust. Spread across `src/api/auth.rs`, `src/api/posts/`, `src/api/comments/`, `src/api/settings.rs`, and `src/api/database/`.
 
 2. **Axum routes** (registered in `src/main.rs`) — manual `axum::Router` for endpoints that don't fit the server-function model:
    - `POST /api/upload` — image upload (multipart, auth-required, rate-limited)
@@ -111,6 +119,7 @@ The server exposes two distinct API patterns:
 src/api/          — server functions + Axum handlers
   auth.rs         — login, register, session validation
   comments/       — comment CRUD + approval/spam/trash server functions
+  database/       — /admin/system backend (status/system_status/sql_console/schema/export/backup/tasks)
   markdown.rs     — Markdown→HTML rendering (pulldown-cmark + ammonia sanitization)
   image.rs        — image serving with processing pipeline + disk+memory cache
   upload.rs       — image upload, auto-converts to WebP
@@ -120,63 +129,35 @@ src/api/          — server functions + Axum handlers
   posts/          — CRUD server functions for blog posts
 src/auth/         — password hashing (Argon2) + session token management
 src/bin/          — generate_highlight_css (build-time CSS generation)
-src/cache.rs      — moka future-based caches for posts, tags, stats
+src/cache.rs      — moka future-based caches for posts, tags, stats + cache_stats()
 src/components/   — Dioxus UI components
-src/db/           — PostgreSQL pool (deadpool-postgres, LazyLock global)
+src/context.rs    — shared Dioxus context/state
+src/db/           — PostgreSQL pool (deadpool-postgres, LazyLock global) + migrate.rs + pool.rs (ensure_database_exists)
 src/hooks/        — shared Dioxus hooks
 src/models/       — Post, User, Tag data models
 src/pages/        — route page components (frontend + admin)
+src/router.rs     — Dioxus Router route definitions
+src/ssr_cache.rs  — SSR generation invalidation state (server feature only)
+src/sysinfo_sampler.rs — host metrics snapshot; SystemSnapshot on both targets, sampler+RwLock server-only
 src/tasks/        — background tokio tasks (session cleanup)
 src/theme.rs      — light/dark theme with SSR cookie + WASM localStorage
 src/webp.rs       — zenwebp encode/decode (image crate has no WebP)
+src/tiptap_bridge.rs    — wasm-bindgen bindings for Tiptap editor
+src/codemirror_bridge.rs — wasm-bindgen bindings for CodeMirror editor (mirrors tiptap_bridge)
 ```
 
-## Tiptap Editor Subproject
+## Frontend Lib Subprojects
 
-Rich-text editor in `libs/tiptap-editor/`, built as an IIFE library exposing `window.TiptapEditor`.
+Four Vite-built IIFE libraries under `libs/`, each with `pnpm-lock.yaml`. Built artifacts go to `public/<name>/` — **do not edit `public/<name>/` files; they are build artifacts**. Each `build` script is `tsc --noEmit && vite build` (type-check before bundle). Output is IIFE because Dioxus `[web.resource] script` injects bare `<script src>` without `type="module"` support. Registered globally in `Dioxus.toml` `script`/`style` arrays.
 
-- Output: `public/tiptap/`
-- `make build` runs `npm ci --include=dev && npm run build` inside `libs/tiptap-editor`; the `build` script is `tsc --noEmit && vite build` (Vite 8 / Rolldown, type-check before bundle)
-- Unit tests: `npm test` (Vitest 4 + happy-dom), covering `UploadCoordinator` counts/lifecycle, `UploadImageNodeView` rendering/callbacks, and `isValidUrl`
-- `src/pages/admin/write.rs` initializes via `src/tiptap_bridge.rs` (wasm-bindgen bindings): injects `Closure` callbacks (`onUpdate`/`onReady`/`onUploadEvent`/`onImageUpload`) into `TiptapEditor.create`, holds the instance + closures in `EditorHandle` (Drop calls `destroy()`). No `js_sys::eval`, no `window` globals, no polling.
+| Lib | Output dir | Exposes | Wiring |
+|-----|-----------|---------|--------|
+| `libs/tiptap-editor/` | `public/tiptap/` (`editor.js`/`.css`/`.map`) | `window.TiptapEditor` | wasm-bindgen via `src/tiptap_bridge.rs` — injects `Closure` callbacks (`onUpdate`/`onReady`/`onUploadEvent`/`onImageUpload`) into `TiptapEditor.create`, holds instance + closures in `EditorHandle` (Drop → `destroy()`). No `js_sys::eval`, no `window` globals, no polling. |
+| `libs/codemirror-editor/` | `public/codemirror/` (`editor.js`/`.map`, **no CSS**) | `window.CodeMirrorEditor` (object literal `{ create }`) + `window.EditorOptions` (class, survives TS erasure) | `src/codemirror_bridge.rs` mirrors tiptap — `get_module()` uses `Reflect::get` + `unchecked_into` (object literal, NOT a constructor extern). Themes are JS `Extension`s from `@catppuccin/codemirror` (Latte/Mocha), hot-swapped via `Compartment.reconfigure`. |
+| `libs/lightbox/` | `public/lightbox/` (`lightbox.js`/`.css`/`.map`) | self-initializing IIFE | **Not** wasm-bindgen. `src/components/post/post_content.rs` sets `window.__lightboxSelectors` before load; IIFE tail reads it and self-initializes. Direct fallback call if already loaded. |
+| `libs/yggdrasil-core/` | `public/yggdrasil-core/` (`yggdrasil-core.js`/`.css`/`.map`) | `window.__initPostContent`, `window.__startThemeTransition` | Designated home for all new core JS — add here, not to `public/js/`. Rust calls entry points via `js_sys::eval("window.__xxx(...)")` guarded by `if (window.__xxx)`. Theme reveal uses View Transitions API (`startViewTransition` + `@keyframes tt-reveal` `clip-path` expand); falls back to instant switch when VT / `prefers-reduced-motion`. |
 
-Do not edit `public/tiptap/` — they are build artifacts.
-
-## Lightbox Subproject
-
-Image lightbox (click-to-zoom) in `libs/lightbox/`, built as an IIFE library. Unlike the Tiptap editor, it is **not** wired through wasm-bindgen; the built `lightbox.js` is injected globally via `Dioxus.toml` (`script = ["/lightbox/lightbox.js"]`), and `src/components/post/post_content.rs` sets `window.__lightboxSelectors` (e.g. `['.post-content', '.entry-cover']`) before the script loads. The IIFE tail reads this config and self-initializes; `post_content.rs` also calls it directly as a fallback if the script was already loaded.
-
-- Output: `public/lightbox/` (`lightbox.js`, `lightbox.css`, `lightbox.js.map`)
-- `make build` runs `npm ci --include=dev && npm run build` inside `libs/lightbox`; the `build` script is `tsc --noEmit && vite build`
-- Unit tests: `npm test` (Vitest, 23 tests), covering `geometry` math and `lightbox` rendering/lifecycle
-
-Do not edit `public/lightbox/` — they are build artifacts.
-
-## Yggdrasil-Core Subproject
-
-Core JavaScript bundle in `libs/yggdrasil-core/`, built as an IIFE library exposing `window.__initPostContent` and `window.__startThemeTransition` (and future core JS entry points). This is the designated home for all new core JS — add to it rather than creating new `public/js/` scripts.
-
-- Output: `public/yggdrasil-core/` (`yggdrasil-core.js`, `yggdrasil-core.css`, `yggdrasil-core.js.map`)
-- `make build` runs `npm ci --include=dev && npm run build` inside `libs/yggdrasil-core`; the `build` script is `tsc --noEmit && vite build` (Vite 8 / Rolldown, type-check before bundle). Source is ES module, output is IIFE (`formats: ['iife']` in `vite.config.ts`) because Dioxus `[web.resource] script` injects bare `<script src>` without `type="module"` support.
-- Injected globally via `Dioxus.toml` (`script` + `style` arrays). Rust calls the entry points via `js_sys::eval("window.__xxx(...)")` with an `if (window.__xxx)` guard to survive script-load ordering races.
-- Unit tests: `npm test` (Vitest 4 + happy-dom), covering `post-content` copy-button lifecycle and `theme-transition` fallback paths (happy-dom lacks `startViewTransition`, naturally covering the degradation path).
-- Theme reveal animation uses the View Transitions API: JS synchronously toggles the `dark` class inside `startViewTransition`'s callback (so the browser snapshots the new state), CSS `@keyframes tt-reveal` expands `::view-transition-new(root)` via `clip-path: circle()` from the click point; Rust's `theme.set()` aligns state afterward (idempotent — `use_effect` sets the same class again). `prefers-reduced-motion` and browsers without VT fall back to instant switch.
-
-Do not edit `public/yggdrasil-core/` — they are build artifacts.
-
-## CodeMirror Editor Subproject
-
-CodeMirror 6 code editor in `libs/codemirror-editor/`, built as an IIFE library exposing `window.CodeMirrorEditor` (object literal `{ create(containerId, options) }`) and `window.EditorOptions` (a class so `new EditorOptions()` survives TS erasure from wasm). Mirrors the tiptap-editor packaging pattern exactly.
-
-- Output: `public/codemirror/` (`editor.js`, `editor.js.map`). No CSS file — themes are JS `Extension`s from `@catppuccin/codemirror` (Latte light / Mocha dark, matching the syntax-highlighting `themes/`).
-- `make build` runs `pnpm ci --include=dev && pnpm run build` inside `libs/codemirror-editor`; the `build` script is `tsc --noEmit && vite build` (Vite 8 / Rolldown, type-check before bundle). Output is IIFE (`formats: ['iife']`, `exports: 'default'`).
-- Features: `@codemirror/lang-sql` with live schema autocomplete (schema injected via `set_schema` from `get_db_schema` server function), `@replit/codemirror-vim` keymap (injected before other keymaps), Catppuccin theme hot-swap via `Compartment.reconfigure` (no instance rebuild — preserves Vim state/cursor/undo).
-- Rust bridge: `src/codemirror_bridge.rs` mirrors `src/tiptap_bridge.rs` — `get_module()` uses `js_sys::Reflect::get` + `unchecked_into` (object literal, not a constructor, so NOT an extern fn call and NOT `dyn_into`); `EditorHandle` holds the instance + all `Closure`s; `impl Drop` calls `destroy()`.
-- Shared data types `SqlSchema`/`SqlTable` (serde) compile on both targets; the wasm-bindgen externs live in a `#[cfg(target_arch = "wasm32")] mod wasm`.
-- Unit tests: `pnpm test` (Vitest 4 + happy-dom), covering getValue/setValue, setTheme (Compartment), setSchema, vim toggle, onChange.
-- Injected via `Dioxus.toml` `script` array (`/codemirror/editor.js`).
-
-Do not edit `public/codemirror/` — they are build artifacts.
+Run a single lib's tests: `cd libs/<name> && pnpm test` (Vitest + happy-dom). Watch mode: `pnpm test:watch`.
 
 ## Database Management (`/admin/system`)
 
@@ -185,8 +166,6 @@ Admin area at `/admin/system` (menu "系统") with 5 tabs: 数据库状态 / 服
 - **SQL 控制台** is full read-write with 4 guards: (1) `sqlparser` AST gates — `DROP DATABASE`/`DROP SCHEMA`/`CREATE DATABASE` absolutely forbidden (string pre-check); `DROP`/`TRUNCATE`/`ALTER` require a `confirm_dangerous` checkbox; (2) `UPDATE`/`DELETE` without `WHERE` rejected; (3) `STATEMENT_TIMEOUT_SECS` query timeout (pool-level GUC); (4) frontend write-confirm dialog. Multi-statement disabled by default. Results capped at 500 rows.
 - **备份恢复** uses `dashmap` task-progress table; `create_backup`/`restore_backup` return a task_id immediately and poll `get_task_progress`. Backup prefers `pg_dump` (full, incl. schema), falls back to per-table `COPY TO STDOUT` (data only) when `pg_dump` is unavailable. Backup files carry a `-- YGGDRASIL BACKUP v1` signature header; restore rejects non-system files. `backups/` is gitignored and served only via `GET /api/database/backups/{filename}` (admin-gated, path-allowlist).
 - **服务器状态** uses `sysinfo` (optional, server feature) with a background sampler (`SYSINFO_SAMPLE_SECS`, default 0.5s) writing to a `RwLock<SystemSnapshot>`; server functions read the snapshot (zero sampling cost), so frontend can poll high-frequency. `src/cache.rs` exposes moka hit-rate via `AtomicU64` hit/miss counters per cache + `cache_stats()`.
-- New env var: `SYSINFO_SAMPLE_SECS` (sysinfo sampling interval in seconds, supports decimals).
-- New deps (all `optional = true`, server feature): `sysinfo`, `sqlparser`, `dashmap`.
 
 ## Syntax Highlighting Pipeline
 
@@ -207,16 +186,17 @@ Admin area at `/admin/system` (menu "系统") with 5 tabs: 数据库状态 / 服
 
 - **Post/tag caches** (`src/cache.rs`): moka future-based, TTL varies by data type (60s–600s). Invalidated on writes.
 - **Image processing cache** (`src/api/image.rs`): two-tier — in-memory moka cache + disk cache in `uploads/.cache/`. Keyed by path + query params.
+- **SSR cache** (`IncrementalRendererConfig` in `src/main.rs`): default TTL `SSR_CACHE_SECS` (3600s prod, 0 in `make dev`); invalidation generation tracked in `src/ssr_cache.rs`.
 
 ## Testing
 
 ```bash
-make test          # cargo test (Rust, 402 tests) + vitest (tiptap-editor 46 tests, lightbox 23 tests, yggdrasil-core 9 tests)
-dx check          # Dioxus type-check (catches component/Router issues)
-cargo clippy      # lint
+make test   # cargo test (Rust) + pnpm test in all 4 libs
+make clippy # cargo clippy --all-targets --all-features -- -D warnings
+dx check    # Dioxus type-check (catches component/Router issues)
 ```
 
-Most tests use `#[cfg(all(test, feature = "server"))]` — they only run when the server feature is active (which is the default). No integration tests requiring a database connection. The two `libs/` subprojects (tiptap-editor, lightbox) run their own vitest suites.
+Most Rust tests use `#[cfg(all(test, feature = "server"))]` — they only run when the server feature is active (which is the default). No integration tests requiring a database connection; the migration `.sql`↔`MIGRATIONS`-array parity is enforced by a compile-time test. The 4 `libs/` subprojects run their own vitest suites (Vitest + happy-dom).
 
 ## Image Processing Constraints
 
@@ -229,15 +209,16 @@ Most tests use `#[cfg(all(test, feature = "server"))]` — they only run when th
 
 - `public/style.css` — Tailwind output
 - `public/highlight.css` — generated by `generate_highlight_css` binary
-- `public/tiptap/` — Vite build output (editor)
-- `public/lightbox/` — Vite build output (lightbox)
-- `public/yggdrasil-core/` — Vite build output (core JS bundle)
-- `/dist`, `/.dioxus`, `/target`
-- `node_modules` (inside `libs/tiptap-editor/`, `libs/lightbox/`, and `libs/yggdrasil-core/`)
+- `public/{tiptap,codemirror,lightbox,yggdrasil-core}/` — Vite build outputs
+- `public/doc/` — cargo doc output (copied by `make doc`)
+- `/dist`, `/.dioxus`, `/target`, `/static`
+- `node_modules` (inside each `libs/` subproject)
 - `uploads/.cache/` — image processing disk cache
+- `backups/` — admin DB backup files
+- `.freebsd-sysroot/` — FreeBSD cross-compile sysroot (machine-local)
 
 ## Notes
 
 - `rand` is optional and only enabled by the `server` feature; it is not compiled into the WASM frontend.
 - `#[allow(unused_mut, unused_variables)]` on `Write` component is intentional — `mut` signals are used in `#[cfg(target_arch = "wasm32")]` blocks stripped in server builds.
-- Server uses incremental rendering with 300s cache (`IncrementalRendererConfig` in `src/main.rs`).
+- Release profile: `panic = "abort"` (drops WASM unwind metadata; server errors go through `Result` + `?`, process crashes restarted by systemd/k8s).

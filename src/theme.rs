@@ -161,7 +161,11 @@ fn detect_initial_theme() -> Theme {
 /// 初始 class 由 `ThemePreload` 首屏脚本设置,避免闪烁。
 pub fn use_theme_provider() -> Signal<Theme> {
     let theme = use_signal(detect_initial_theme);
-    let system_dark = use_signal(read_system_dark);
+    // system_dark 仅在 wasm32 监听闭包里 .set()；非 wasm 构建剥离该闭包，
+    // 此处统一标注 mut 以满足 wasm32 的借用检查（非 wasm 端会触发 unused_mut，
+    // 由下方 cfg_attr 抑制）。
+    #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut))]
+    let mut system_dark = use_signal(read_system_dark);
     // resolved 是 theme 与 system_dark 的派生态：任一变化都自动重算。
     let resolved = use_memo(move || theme().resolve(system_dark()));
 
