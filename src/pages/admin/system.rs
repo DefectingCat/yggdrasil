@@ -677,11 +677,12 @@ fn SqlConsoleTab() -> Element {
     use crate::components::ui::ADMIN_TABLE_CLASS;
     #[cfg(target_arch = "wasm32")]
     use crate::codemirror_bridge;
-    use crate::theme::use_theme;
+    // use_resolved_theme 两种构建都用：resolved() 在 wasm 块内消费，非 wasm 仅引用避免警告。
+    use crate::theme::use_resolved_theme;
     #[cfg(target_arch = "wasm32")]
-    use crate::theme::Theme;
+    use crate::theme::ResolvedTheme;
 
-    let theme = use_theme();
+    let resolved = use_resolved_theme();
     let sql_text = use_signal(String::new);
     let mut result = use_signal(|| Option::<SqlResult>::None);
     let mut error = use_signal(|| Option::<String>::None);
@@ -690,9 +691,9 @@ fn SqlConsoleTab() -> Element {
     let mut with_explain = use_signal(|| false);
     let mut allow_multi = use_signal(|| false);
     let mut confirm_dangerous = use_signal(|| false);
-    // theme/sql_text 仅在 wasm32 块内使用；server 构建时显式引用避免 unused 警告。
+    // resolved/sql_text 仅在 wasm32 块内使用；server 构建时显式引用避免 unused 警告。
     #[cfg(not(target_arch = "wasm32"))]
-    let _ = (&theme, &sql_text);
+    let _ = (&resolved, &sql_text);
 
     // CodeMirror 实例句柄（仅 WASM）。
     #[cfg(target_arch = "wasm32")]
@@ -712,7 +713,7 @@ fn SqlConsoleTab() -> Element {
             });
             let on_ready = Closure::new(|| {});
 
-            let theme_name = if theme() == Theme::Dark { "dark" } else { "light" };
+            let theme_name = if resolved() == ResolvedTheme::Dark { "dark" } else { "light" };
             let opts = codemirror_bridge::EditorOptions::new();
             opts.set_language("sql");
             opts.set_theme(theme_name);
@@ -742,11 +743,12 @@ fn SqlConsoleTab() -> Element {
             });
         });
 
-        // 主题切换时同步编辑器主题
+        // 主题切换（含 System 模式下系统偏好变化）时同步编辑器主题。
+        // resolved 是 theme + system_dark 的派生 memo，任一变化都自动触发此 effect。
         use_effect(move || {
-            let t = theme();
+            let r = resolved();
             if let Some(h) = editor_handle.read().as_ref() {
-                h.instance().set_theme(if t == Theme::Dark { "dark" } else { "light" });
+                h.instance().set_theme(if r == ResolvedTheme::Dark { "dark" } else { "light" });
             }
         });
     }
