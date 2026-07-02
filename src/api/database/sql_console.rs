@@ -55,8 +55,49 @@ const MAX_ROWS: usize = 500;
 
 /// 绝对禁止的语句关键词（字符串预检，sqlparser 无 ObjectType::Database/Schema）。
 /// 命中即拒，不可放行。
+///
+/// 注意：这里存的是「关键字序列」，由 [`is_absolutely_forbidden`] 做 token 级
+/// 匹配——而非原始 `contains()` 子串。这样 `DROP   DATABASE`（多空格）、
+/// `DROP\tDATABASE`、`DROP\nDATABASE` 等绕过单空格子串的写法都能命中。
+/// 关键背景：sqlparser 的 PostgreSqlDialect 无法解析 DROP/CREATE DATABASE，
+/// 这类语句【没有 AST 兜底】，字符串预检是唯一防线，故必须 token 级鲁棒。
 #[cfg(feature = "server")]
-const ABSOLUTELY_FORBIDDEN: &[&str] = &["drop database", "drop schema", "create database"];
+const ABSOLUTELY_FORBIDDEN: &[&[&str]] = &[
+    &["drop", "database"],
+    &["drop", "schema"],
+    &["create", "database"],
+];
+
+/// 护栏 1 的字符串预检（token 序列匹配）。
+///
+/// 把 SQL 按空白拆成 token（小写、去逗号/分号尾缀），再扫描是否出现
+/// `ABSOLUTELY_FORBIDDEN` 里任一连续关键字序列。返回命中的序列描述供报错。
+///
+/// 用 token 序列而非 `contains()` 是为了拦多空格/制表符/换行绕过——
+/// `drop   database` 在子串匹配下漏，在 token 序列下命中。
+#[cfg(feature = "server")]
+fn is_absolutely_forbidden(sql: &str) -> Option<&'static str> {
+    // 规范化：小写 + 按任意空白拆分 + 去掉 token 尾部的 , ; ( )
+    let lowered = sql.to_lowercase();
+    let tokens: Vec<&str> = lowered
+        .split_whitespace()
+        .map(|t| t.trim_end_matches([',', ';', '(', ')']))
+        .collect();
+    for forbidden in ABSOLUTELY_FORBIDDEN {
+        // 在 token 流里滑窗查连续序列
+        for window in tokens.windows(forbidden.len()) {
+            if window == *forbidden {
+                return Some(match forbidden {
+                    ["drop", "database"] => "DROP DATABASE",
+                    ["drop", "schema"] => "DROP SCHEMA",
+                    ["create", "database"] => "CREATE DATABASE",
+                    _ => "未知高危操作",
+                });
+            }
+        }
+    }
+    None
+}
 
 /// 护栏检查返回值。
 #[cfg(feature = "server")]
@@ -80,13 +121,19 @@ fn check_guards(
     for stmt in asts {
         match stmt {
             // 护栏 1（绝禁）：DROP SCHEMA 永远禁止（ObjectType 无 Database 变体，
-            // DROP DATABASE 由字符串预检 + AST 双重拦截——见上方 ABSOLUTELY_FORBIDDEN）。
+            // DROP DATABASE 仅字符串预检拦截——见 is_absolutely_forbidden）。
             // 这里在 AST 层结构性禁止 DROP SCHEMA，防 SQL 注释/空白绕过字符串预检。
             Statement::Drop {
                 object_type: ObjectType::Schema,
                 ..
             } => {
                 return GuardResult::Forbidden("禁止 DROP SCHEMA".to_string());
+            }
+            // 护栏 1（绝禁）：CREATE DATABASE 永远禁止。sqlparser 能解析它，
+            // 故在 AST 层补上结构禁止——这是字符串预检之外的第二道防线，
+            // 防多空格/注释绕过 is_absolutely_forbidden 的 token 匹配。
+            Statement::CreateDatabase { .. } => {
+                return GuardResult::Forbidden("禁止 CREATE DATABASE".to_string());
             }
             // 护栏 1：需确认的高危语句（DROP TABLE/VIEW/INDEX 等、TRUNCATE、ALTER）
             Statement::Drop { .. } | Statement::Truncate { .. } | Statement::AlterTable { .. } => {
@@ -204,15 +251,9 @@ pub async fn execute_sql(sql: String, opts: ExecuteSqlOpts) -> Result<SqlResult,
         use sqlparser::parser::Parser;
 
         // 护栏 1（绝禁）：字符串预检 DROP/CREATE DATABASE、DROP SCHEMA
-        let normalized = sql.to_lowercase();
-        for forbidden in ABSOLUTELY_FORBIDDEN {
-            if normalized.contains(forbidden) {
-                return Err(AppError::BadRequest(format!(
-                    "禁止的操作：{}",
-                    forbidden.to_uppercase()
-                ))
-                .into());
-            }
+        // （token 序列匹配，防多空格绕过；这类语句无 AST 兜底）
+        if let Some(name) = is_absolutely_forbidden(&sql) {
+            return Err(AppError::BadRequest(format!("禁止的操作：{}", name)).into());
         }
 
         // 解析 SQL
@@ -346,5 +387,302 @@ async fn execute_one(
             elapsed_ms: start().elapsed().as_millis() as u64,
             ..Default::default()
         })
+    }
+}
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+
+    /// 用 PostgreSql 方言解析 SQL 为 AST 列表,供测试复用。
+    fn parse(sql: &str) -> Vec<sqlparser::ast::Statement> {
+        use sqlparser::dialect::PostgreSqlDialect;
+        use sqlparser::parser::Parser;
+        Parser::parse_sql(&PostgreSqlDialect {}, sql).unwrap_or_default()
+    }
+
+    // ── 护栏 1:绝对禁止(token 序列字符串预检层) ──────────────────
+    // is_absolutely_forbidden 做 token 级匹配,防多空格/制表符/换行绕过。
+    // 关键背景:sqlparser 无法解析 DROP/CREATE DATABASE,这一层是唯一防线。
+
+    #[test]
+    fn absolutely_forbidden_targets_database_and_schema() {
+        // 锁定关键字序列集合:任何改动都应是有意识的。
+        assert_eq!(
+            ABSOLUTELY_FORBIDDEN,
+            &[
+                &["drop", "database"],
+                &["drop", "schema"],
+                &["create", "database"],
+            ]
+        );
+    }
+
+    #[test]
+    fn precheck_catches_forbidden_regardless_of_case() {
+        for sql in [
+            "DROP DATABASE yggdrasil",
+            "drop schema public",
+            "CREATE DATABASE evil",
+            "Drop Database x",
+        ] {
+            assert!(
+                is_absolutely_forbidden(sql).is_some(),
+                "应拦截: {sql:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn precheck_catches_multi_space_bypass() {
+        // token 序列匹配必须命中多空格/制表符/换行绕过——
+        // 这是改用 is_absolutely_forbidden(替代旧 contains)的核心动机:
+        // sqlparser 无法解析 DROP/CREATE DATABASE,这一层是唯一防线。
+        for sql in [
+            "DROP   DATABASE x",
+            "drop\tdatabase\tx",
+            "DROP\nDATABASE\nx",
+            "DROP\t\tDATABASE x;",
+        ] {
+            assert!(
+                is_absolutely_forbidden(sql).is_some(),
+                "多空格绕过应被拦截: {sql:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn precheck_returns_canonical_name_for_error_message() {
+        assert_eq!(is_absolutely_forbidden("DROP DATABASE x"), Some("DROP DATABASE"));
+        assert_eq!(is_absolutely_forbidden("drop schema public"), Some("DROP SCHEMA"));
+        assert_eq!(is_absolutely_forbidden("CREATE DATABASE evil"), Some("CREATE DATABASE"));
+    }
+
+    #[test]
+    fn create_database_is_blocked_at_both_string_and_ast_layers() {
+        // CREATE DATABASE 能被 sqlparser 解析(→ AST),故有双重防线:
+        // 1. is_absolutely_forbidden(字符串 token 预检)
+        // 2. check_guards 的 Statement::CreateDatabase 分支(AST 层绝禁)
+        // 本测试锁定两道防线都生效,且确认 CREATE DATABASE 确实可被解析
+        // (若未来它变得不可解析,字符串预检就成唯一防线,需另作加固)。
+        assert!(is_absolutely_forbidden("CREATE DATABASE x").is_some());
+        let asts = parse("CREATE DATABASE x");
+        assert!(!asts.is_empty(), "CREATE DATABASE 应可被 sqlparser 解析");
+        assert!(matches!(
+            check_guards(&asts, true),
+            GuardResult::Forbidden(_)
+        ));
+    }
+
+    #[test]
+    fn drop_database_cannot_be_parsed_so_precheck_is_sole_guard() {
+        // 安全不变量:sqlparser 的 PostgreSqlDialect 无法解析 DROP DATABASE。
+        // 故 is_absolutely_forbidden 是 DROP DATABASE 的唯一防线。
+        // 若未来 sqlparser 升级后能解析它,必须在 check_guards 补 AST 分支。
+        assert!(parse("DROP DATABASE x").is_empty());
+        assert!(is_absolutely_forbidden("DROP DATABASE x").is_some());
+    }
+
+    #[test]
+    fn precheck_ignores_benign_statements() {
+        for sql in [
+            "SELECT * FROM users",
+            "DROP TABLE old_logs",
+            "CREATE TABLE t (id int)",
+            "DELETE FROM t WHERE id = 1",
+            "CREATE INDEX idx ON t (col)",
+        ] {
+            assert!(
+                is_absolutely_forbidden(sql).is_none(),
+                "不应误拦: {sql:?}"
+            );
+        }
+    }
+
+    // ── 护栏 1:AST 层 DROP SCHEMA 绝禁(防注释/空白绕过字符串预检) ──
+
+    #[test]
+    fn guard_forbids_drop_schema_even_though_string_precheck_is_bypassable() {
+        // 即使字符串预检被某种方式绕过,AST 层仍绝禁 DROP SCHEMA。
+        let asts = parse("DROP SCHEMA public");
+        match check_guards(&asts, true) {
+            GuardResult::Forbidden(msg) => assert!(
+                msg.contains("SCHEMA"),
+                "DROP SCHEMA 应被禁止, 得到: {msg}"
+            ),
+            other => panic!("DROP SCHEMA 应 Forbidden, 得到 {other:?}"),
+        }
+    }
+
+    #[test]
+    fn guard_drop_schema_ignores_confirm_flag() {
+        // 即便勾选了 confirm_dangerous,DROP SCHEMA 仍绝禁。
+        let asts = parse("DROP SCHEMA public");
+        assert!(matches!(
+            check_guards(&asts, true),
+            GuardResult::Forbidden(_)
+        ));
+    }
+
+    // ── 护栏 1:DROP/TRUNCATE/ALTER 需确认 ─────────────────────────
+
+    #[test]
+    fn guard_drop_table_needs_confirm() {
+        let asts = parse("DROP TABLE old_logs");
+        assert!(matches!(
+            check_guards(&asts, false),
+            GuardResult::NeedsConfirm
+        ));
+    }
+
+    #[test]
+    fn guard_drop_table_allowed_with_confirm() {
+        let asts = parse("DROP TABLE old_logs");
+        assert!(matches!(check_guards(&asts, true), GuardResult::Allowed));
+    }
+
+    #[test]
+    fn guard_truncate_needs_confirm() {
+        let asts = parse("TRUNCATE TABLE sessions");
+        assert!(matches!(
+            check_guards(&asts, false),
+            GuardResult::NeedsConfirm
+        ));
+    }
+
+    #[test]
+    fn guard_alter_table_needs_confirm() {
+        let asts = parse("ALTER TABLE posts ADD COLUMN foo text");
+        assert!(matches!(
+            check_guards(&asts, false),
+            GuardResult::NeedsConfirm
+        ));
+    }
+
+    #[test]
+    fn guard_alter_table_allowed_with_confirm() {
+        let asts = parse("ALTER TABLE posts ADD COLUMN foo text");
+        assert!(matches!(check_guards(&asts, true), GuardResult::Allowed));
+    }
+
+    // ── 护栏 2:UPDATE/DELETE 无 WHERE 绝禁 ────────────────────────
+
+    #[test]
+    fn guard_update_without_where_is_forbidden() {
+        let asts = parse("UPDATE posts SET title = 'x'");
+        match check_guards(&asts, true) {
+            GuardResult::Forbidden(msg) => assert!(msg.contains("WHERE")),
+            other => panic!("无 WHERE 的 UPDATE 应 Forbidden, 得到 {other:?}"),
+        }
+    }
+
+    #[test]
+    fn guard_delete_without_where_is_forbidden() {
+        let asts = parse("DELETE FROM posts");
+        match check_guards(&asts, true) {
+            GuardResult::Forbidden(msg) => assert!(msg.contains("WHERE")),
+            other => panic!("无 WHERE 的 DELETE 应 Forbidden, 得到 {other:?}"),
+        }
+    }
+
+    #[test]
+    fn guard_update_with_where_allowed() {
+        let asts = parse("UPDATE posts SET title = 'x' WHERE id = 1");
+        assert!(matches!(check_guards(&asts, false), GuardResult::Allowed));
+    }
+
+    #[test]
+    fn guard_delete_with_where_allowed() {
+        let asts = parse("DELETE FROM posts WHERE id = 1");
+        assert!(matches!(check_guards(&asts, false), GuardResult::Allowed));
+    }
+
+    #[test]
+    fn guard_update_with_where_not_rescued_by_confirm() {
+        // confirm_dangerous 不应放行无 WHERE 的 UPDATE/DELETE——这是不可协商的安全护栏。
+        let asts = parse("UPDATE posts SET title = 'x'");
+        assert!(matches!(
+            check_guards(&asts, true),
+            GuardResult::Forbidden(_)
+        ));
+    }
+
+    // ── 正常语句 ───────────────────────────────────────────────────
+
+    #[test]
+    fn guard_allows_select_insert_create() {
+        for sql in [
+            "SELECT * FROM posts",
+            "INSERT INTO posts (title) VALUES ('x')",
+            "CREATE TABLE t (id int)",
+        ] {
+            let asts = parse(sql);
+            assert!(
+                matches!(check_guards(&asts, false), GuardResult::Allowed),
+                "应放行: {sql}"
+            );
+        }
+    }
+
+    // ── 多语句:任一命中即拒 ───────────────────────────────────────
+
+    #[test]
+    fn guard_checks_all_statements_in_batch() {
+        // 第二条是无 WHERE 的 DELETE,即便第一条正常,整体也应被拦。
+        let asts = parse("SELECT 1; DELETE FROM posts");
+        assert!(matches!(
+            check_guards(&asts, false),
+            GuardResult::Forbidden(_)
+        ));
+    }
+
+    #[test]
+    fn guard_first_dangerous_short_circuits() {
+        // 第一条 DROP TABLE 未确认,应在 NeedsConfirm 处停下。
+        let asts = parse("DROP TABLE a; SELECT 1");
+        assert!(matches!(
+            check_guards(&asts, false),
+            GuardResult::NeedsConfirm
+        ));
+    }
+
+    // ── statement_type_name ───────────────────────────────────────
+
+    #[test]
+    fn statement_type_name_maps_variants() {
+        assert_eq!(statement_type_name(&parse("SELECT 1")[0]), "Select");
+        assert_eq!(
+            statement_type_name(&parse("INSERT INTO t (a) VALUES (1)")[0]),
+            "Insert"
+        );
+        assert_eq!(
+            statement_type_name(&parse("UPDATE t SET a = 1 WHERE id = 1")[0]),
+            "Update"
+        );
+        assert_eq!(
+            statement_type_name(&parse("DELETE FROM t WHERE id = 1")[0]),
+            "Delete"
+        );
+        assert_eq!(
+            statement_type_name(&parse("CREATE TABLE t (id int)")[0]),
+            "CreateTable"
+        );
+        assert_eq!(
+            statement_type_name(&parse("ALTER TABLE t ADD COLUMN x int")[0]),
+            "AlterTable"
+        );
+        assert_eq!(statement_type_name(&parse("DROP TABLE t")[0]), "Drop");
+        assert_eq!(statement_type_name(&parse("TRUNCATE t")[0]), "Truncate");
+    }
+
+    // ── is_read_only ──────────────────────────────────────────────
+
+    #[test]
+    fn is_read_only_classifies_correctly() {
+        assert!(is_read_only(&parse("SELECT 1")[0]));
+        assert!(is_read_only(&parse("EXPLAIN SELECT 1")[0]));
+        assert!(!is_read_only(&parse("UPDATE t SET a = 1 WHERE id = 1")[0]));
+        assert!(!is_read_only(&parse("DELETE FROM t WHERE id = 1")[0]));
+        assert!(!is_read_only(&parse("INSERT INTO t (a) VALUES (1)")[0]));
     }
 }
