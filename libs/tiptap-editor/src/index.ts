@@ -5,6 +5,7 @@ import { TableKit } from '@tiptap/extension-table'
 import { TaskList, TaskItem } from '@tiptap/extension-list'
 import { FileHandler } from '@tiptap/extension-file-handler'
 import { SlashCommand } from './slash-command'
+import { TaskInputRule } from './task-input-rule'
 import { UploadCoordinator, UPLOAD_COORDINATOR_STORAGE_KEY, type UploadEvent } from './upload-coordinator'
 import { UploadImage } from './upload-image'
 import './style.css'
@@ -100,6 +101,8 @@ class TiptapEditorInstance {
         UploadImage,
         TaskList,
         TaskItem.configure({ nested: true }),
+        // 让手动输入 - [ ] / - [x] 直接创建任务列表(priority 1000 抢在 BulletList 前)
+        TaskInputRule,
         // 把宿主注入的图片上传回调透传给斜杠命令扩展，使 /上传图片 命令可用。
         // 注意：闭包延迟读取 this.coordinator（它在 editor 创建后才实例化）。
         SlashCommand.configure({
