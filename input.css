@@ -307,7 +307,7 @@
     list-style: none;
     margin-left: -1.25rem;
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 0.5rem;
   }
 
@@ -315,7 +315,7 @@
     flex-shrink: 0;
     width: 1rem;
     height: 1rem;
-    margin: 0.35rem 0 0;
+    margin: 0;
     accent-color: var(--color-paper-accent);
     cursor: default;
   }
