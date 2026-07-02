@@ -24,7 +24,7 @@ importers:
         specifier: ^4.1.9
         version: 4.1.9(@types/node@26.0.1)(happy-dom@20.10.6)(vite@8.1.2(@types/node@26.0.1))
 
-  libs/codemirror-editor:
+  codemirror-editor:
     dependencies:
       '@catppuccin/codemirror':
         specifier: ^1.0.3
@@ -54,9 +54,9 @@ importers:
         specifier: ^6.0.1
         version: 6.0.2
 
-  libs/lightbox: {}
+  lightbox: {}
 
-  libs/tiptap-editor:
+  tiptap-editor:
     dependencies:
       '@tiptap/core':
         specifier: ^3.27.1
@@ -89,7 +89,7 @@ importers:
         specifier: ^3.27.1
         version: 3.27.1(@floating-ui/dom@1.7.6)(@tiptap/core@3.27.1(@tiptap/pm@3.27.1))(@tiptap/pm@3.27.1)
 
-  libs/yggdrasil-core: {}
+  yggdrasil-core: {}
 
 packages:
 

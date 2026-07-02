@@ -80,7 +80,7 @@ class TiptapEditorInstance {
     this.sourceTextarea.addEventListener('input', () => {
       // 源码模式下通过 onUpdate 回调同步内容（替代旧版 window.__tiptap_content 缓存）
       if (this.options.onUpdate) {
-        this.options.onUpdate(this.sourceTextarea?.value);
+        this.options.onUpdate(this.sourceTextarea!.value);
       }
     });
     el.appendChild(this.sourceTextarea);

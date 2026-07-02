@@ -1,10 +1,8 @@
-.PHONY: dev build build-linux build-freebsd freebsd-sysroot docker css css-watch clean build-editor build-editor-incremental build-lightbox build-lightbox-incremental build-core build-core-incremental build-codemirror build-codemirror-incremental highlight-css test doc doc-open start clippy fix restore-webp
+.PHONY: dev build build-linux build-freebsd freebsd-sysroot docker css css-watch clean build-libs build-editor build-codemirror build-lightbox build-core highlight-css test doc doc-open start lint fix restore-webp
 
 build:
-	@$(MAKE) build-editor
-	@$(MAKE) build-lightbox
-	@$(MAKE) build-core
-	@$(MAKE) build-codemirror
+	@cd libs && pnpm install --frozen-lockfile
+	@$(MAKE) build-libs
 	@$(MAKE) highlight-css
 	@tailwindcss -i input.css -o public/style.css --minify
 	@$(MAKE) doc
@@ -12,10 +10,8 @@ build:
 	@$(MAKE) restore-webp
 
 build-linux:
-	@$(MAKE) build-editor
-	@$(MAKE) build-lightbox
-	@$(MAKE) build-core
-	@$(MAKE) build-codemirror
+	@cd libs && pnpm install --frozen-lockfile
+	@$(MAKE) build-libs
 	@$(MAKE) highlight-css
 	@tailwindcss -i input.css -o public/style.css --minify
 	@dx build @client --release --debug-symbols=false --wasm-js-cfg false
@@ -86,44 +82,19 @@ restore-webp:
 highlight-css:
 	@cargo run --bin generate_highlight_css
 
-build-editor:
-	@echo "Building Tiptap editor..."
-	@cd libs/tiptap-editor && pnpm ci --include=dev && pnpm run build
-	@echo "Tiptap editor built."
+# 并行构建全部 4 个 libs/ 子项目（pnpm -r 拓扑顺序，无相互依赖则并发）。
+# 依赖安装由调用方负责（build/build-linux 用 pnpm install --frozen-lockfile，
+# dev 假设 node_modules 已存在）。
+build-libs:
+	@cd libs && pnpm -r run build
 
-# dev 用的增量构建：跳过 pnpm ci（假设 node_modules 已存在），仅 vite build。
-# 与 build-editor 分开，避免每次 make dev 都重装依赖。
-build-editor-incremental:
-	@cd libs/tiptap-editor && pnpm run build
+# 单库便利 target（替代旧的 build-<name>，用 pnpm --filter 精确定位）。
+build-editor:     ; @cd libs && pnpm --filter @yggdrasil/tiptap-editor run build
+build-codemirror: ; @cd libs && pnpm --filter @yggdrasil/codemirror-editor run build
+build-lightbox:   ; @cd libs && pnpm --filter @yggdrasil/lightbox run build
+build-core:       ; @cd libs && pnpm --filter @yggdrasil/core run build
 
-build-lightbox:
-	@echo "Building Lightbox..."
-	@cd libs/lightbox && pnpm install && pnpm run build
-	@echo "Lightbox built."
-
-# dev 用的增量构建：跳过 pnpm ci（假设 node_modules 已存在），仅 vite build。
-build-lightbox-incremental:
-	@cd libs/lightbox && pnpm run build
-
-build-core:
-	@echo "Building yggdrasil-core..."
-	@cd libs/yggdrasil-core && pnpm install && pnpm run build
-	@echo "yggdrasil-core built."
-
-# dev 用的增量构建：跳过 pnpm install（假设 node_modules 已存在），仅 vite build。
-build-core-incremental:
-	@cd libs/yggdrasil-core && pnpm run build
-
-build-codemirror:
-	@echo "Building CodeMirror editor..."
-	@cd libs/codemirror-editor && pnpm ci --include=dev && pnpm run build
-	@echo "CodeMirror editor built."
-
-# dev 用的增量构建：跳过 pnpm ci（假设 node_modules 已存在），仅 vite build。
-build-codemirror-incremental:
-	@cd libs/codemirror-editor && pnpm run build
-
-dev: build-editor-incremental build-lightbox-incremental build-core-incremental build-codemirror-incremental highlight-css
+dev: build-libs highlight-css
 	@echo "Cleaning static/..."
 	@rm -rf static/
 	@echo "Building CSS..."
@@ -139,15 +110,20 @@ css-watch:
 
 test:
 	@cargo test
-	@cd libs/tiptap-editor && pnpm test
-	@cd libs/lightbox && pnpm test
-	@cd libs/yggdrasil-core && pnpm test
-	@cd libs/codemirror-editor && pnpm test
+	@cd libs && pnpm -r run test
 
-clippy:
+# JS + Rust 一次性检查（不改动文件）。
+lint:
+	@echo "==> Biome check (libs)"
+	@cd libs && pnpm exec biome check .
+	@echo "==> Cargo clippy (Rust)"
 	@cargo clippy --all-targets --all-features -- -D warnings
 
+# JS + Rust 自动修复（直接写入文件）。
 fix:
+	@echo "==> Biome format (libs, 写入文件)"
+	@cd libs && pnpm exec biome format --write .
+	@echo "==> Cargo fix (Rust)"
 	@cargo fix --allow-dirty
 
 # 只编译当前 crate 的文档（--no-deps 跳过依赖，--document-private-items
@@ -183,3 +159,4 @@ clean:
 	@rm -f public/style.css public/highlight.css
 	@rm -rf public/doc
 	@rm -rf uploads/.cache
+	@rm -rf libs/node_modules libs/*/node_modules
