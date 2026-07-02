@@ -1,6 +1,6 @@
 // @vitest-environment node
-import { describe, it, expect } from 'vitest';
-import { fitCentered, transformFor, originalUrl, type Rect } from './geometry';
+import { describe, expect, it } from 'vitest';
+import { fitCentered, originalUrl, type Rect, transformFor } from './geometry';
 
 describe('fitCentered', () => {
   // 大图受 maxW=vw*0.92 / maxH=vh*0.88 约束,scale 取较小者
@@ -64,7 +64,9 @@ describe('transformFor', () => {
   it('字符串格式为 translate(Xpx,Ypx) scale(SX,SY)', () => {
     const rect: Rect = { x: 10, y: 20, w: 100, h: 50 };
     const t = transformFor(rect, 200, 100);
-    expect(t).toMatch(/^translate\(\d+(\.\d+)?px,\d+(\.\d+)?px\) scale\(\d+(\.\d+)?,\d+(\.\d+)?\)$/);
+    expect(t).toMatch(
+      /^translate\(\d+(\.\d+)?px,\d+(\.\d+)?px\) scale\(\d+(\.\d+)?,\d+(\.\d+)?\)$/,
+    );
   });
 });
 

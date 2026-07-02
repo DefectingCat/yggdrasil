@@ -1,9 +1,9 @@
-import { EditorState, Compartment } from '@codemirror/state';
+import { PostgreSQL, sql } from '@codemirror/lang-sql';
+import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { basicSetup } from 'codemirror';
-import { sql, PostgreSQL } from '@codemirror/lang-sql';
 import { vim } from '@replit/codemirror-vim';
-import { themeExtension, type ThemeName } from './themes';
+import { basicSetup } from 'codemirror';
+import { type ThemeName, themeExtension } from './themes';
 
 /** SQL 补全用 schema 数据（由 Rust 侧从实时库拉取注入）。 */
 export interface SqlSchema {

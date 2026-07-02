@@ -22,8 +22,12 @@
 
 /* CSS 变量由 JS 注入到 html style 中 */
 @keyframes tt-expand {
-  from { clip-path: circle(0px at var(--tt-x) var(--tt-y)); }
-  to   { clip-path: circle(var(--tt-r) at var(--tt-x) var(--tt-y)); }
+  from {
+    clip-path: circle(0px at var(--tt-x) var(--tt-y));
+  }
+  to {
+    clip-path: circle(var(--tt-r) at var(--tt-x) var(--tt-y));
+  }
 }
 
 /* 在 View Transition 期间强制禁用所有 CSS 过渡,
@@ -32,5 +36,5 @@ html.is-theme-transitioning,
 html.is-theme-transitioning *,
 html.is-theme-transitioning *::before,
 html.is-theme-transitioning *::after {
-  transition: none !important;
+  transition: none;
 }

@@ -2,7 +2,7 @@
  * post-content 测试:钉住代码块 copy 按钮的生成与复制行为。
  * 黑盒驱动:只通过 window.__initPostContent 入口。
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import './index';
 
 describe('initPostContent', () => {
@@ -32,8 +32,7 @@ describe('initPostContent', () => {
   it('已有 .copy-code 的 pre 不重复注入', () => {
     const root = document.createElement('div');
     root.className = 'post-content';
-    root.innerHTML =
-      '<pre><code>x</code><button class="copy-code">copy</button></pre>';
+    root.innerHTML = '<pre><code>x</code><button class="copy-code">copy</button></pre>';
     document.body.appendChild(root);
 
     window.__initPostContent('.post-content');

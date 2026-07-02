@@ -1,5 +1,5 @@
-import { fitCentered, transformFor, originalUrl, type Rect } from "./geometry";
-import "./style.css";
+import { fitCentered, originalUrl, type Rect, transformFor } from './geometry';
+import './style.css';
 
 interface LightboxState {
   overlay: HTMLDivElement;
@@ -31,15 +31,10 @@ declare global {
   }
 }
 
-export {};
-
 // ============ 工具函数 ============
 
 function prefersReducedMotion(): boolean {
-  return (
-    !!window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
+  return !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 // 读取元素当前在视口里的 rect（用于飞行起点/终点）。
@@ -63,13 +58,13 @@ function rectOf(el: Element): Rect {
 // 为单个 .blur-img 容器初始化高清图懒加载。
 // IO 进入视口后把 data-src 写入 src，加载完成加 is-loaded 触发 CSS 淡入。
 function initLazyLoad(container: Element): void {
-  const raw = container.querySelector(".blur-img-full");
+  const raw = container.querySelector('.blur-img-full');
   if (!(raw instanceof HTMLImageElement)) return;
   const fullImg: HTMLImageElement = raw;
-  if (container.getAttribute("data-blur-init")) return;
-  container.setAttribute("data-blur-init", "true");
+  if (container.getAttribute('data-blur-init')) return;
+  container.setAttribute('data-blur-init', 'true');
 
-  const fullSrc = fullImg.getAttribute("data-src");
+  const fullSrc = fullImg.getAttribute('data-src');
   if (!fullSrc) return;
 
   const onFullLoaded = (): void => {
@@ -77,18 +72,18 @@ function initLazyLoad(container: Element): void {
     // 直接把 full 层 opacity 设为 1（清掉 transition），不依赖 CSS 的 opacity
     // 过渡：合成层重绘时机不稳定，可能导致 full 层卡在 opacity:0，直到一次
     // 强制重排才更新。
-    container.classList.add("is-loaded");
-    fullImg.style.transition = "none";
-    fullImg.style.opacity = "1";
+    container.classList.add('is-loaded');
+    fullImg.style.transition = 'none';
+    fullImg.style.opacity = '1';
   };
-  fullImg.addEventListener("load", onFullLoaded);
+  fullImg.addEventListener('load', onFullLoaded);
   // 缓存兜底：若设 src 时图片已在缓存（load 几乎立即触发，可能早于监听注册），
   // 用 complete 补一次。注意无 src 的 img complete 也为 true，故先判 src。
-  if (fullImg.getAttribute("src") && fullImg.complete) {
+  if (fullImg.getAttribute('src') && fullImg.complete) {
     onFullLoaded();
   }
 
-  if ("IntersectionObserver" in window) {
+  if ('IntersectionObserver' in window) {
     const io = new IntersectionObserver(
       (entries: IntersectionObserverEntry[]): void => {
         for (const entry of entries) {
@@ -98,7 +93,7 @@ function initLazyLoad(container: Element): void {
           }
         }
       },
-      { rootMargin: "200px" }
+      { rootMargin: '200px' },
     );
     io.observe(container);
   } else {
@@ -114,10 +109,10 @@ function collectImages(roots: Element[]): { gallery: HTMLElement[]; singles: HTM
   const gallery: HTMLElement[] = [];
   const singles: HTMLElement[] = [];
   for (const root of roots) {
-    const nodes = root.querySelectorAll(".blur-img");
+    const nodes = root.querySelectorAll('.blur-img');
     for (const n of nodes) {
       if (!(n instanceof HTMLElement)) continue;
-      if (n.classList.contains("lightbox-single")) {
+      if (n.classList.contains('lightbox-single')) {
         singles.push(n);
       } else {
         gallery.push(n);
@@ -135,46 +130,44 @@ let state: LightboxState | null = null;
 function openLightbox(originNode: HTMLElement, gallery: HTMLElement[], index: number | null): void {
   if (state) closeLightbox(true);
 
-  const fullImgEl = originNode.querySelector(".blur-img-full");
+  const fullImgEl = originNode.querySelector('.blur-img-full');
   if (!(fullImgEl instanceof HTMLImageElement)) return;
-  const dataSrc = fullImgEl.getAttribute("data-src") || "";
+  const dataSrc = fullImgEl.getAttribute('data-src') || '';
   const origSrc = originalUrl(dataSrc);
-  const altText = fullImgEl.getAttribute("alt") || "";
-  const isSingle =
-    originNode.classList.contains("lightbox-single") ||
-    gallery.length === 0;
+  const altText = fullImgEl.getAttribute('alt') || '';
+  const isSingle = originNode.classList.contains('lightbox-single') || gallery.length === 0;
 
   const vw = window.innerWidth;
   const vh = window.innerHeight;
 
   // 建 DOM
-  const overlay = document.createElement("div");
-  overlay.className = "lightbox-overlay";
-  overlay.setAttribute("role", "dialog");
-  overlay.setAttribute("aria-modal", "true");
-  overlay.setAttribute("aria-label", "图片预览");
-  overlay.setAttribute("tabindex", "-1");
+  const overlay = document.createElement('div');
+  overlay.className = 'lightbox-overlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-label', '图片预览');
+  overlay.setAttribute('tabindex', '-1');
   // 创建后立即设 opacity 0：append 到 DOM 时是透明的，避免在图片加载期间
   // （start() 执行前）显示全黑背景造成闪烁。start() 的渐变会把 opacity 升到 1。
-  overlay.style.opacity = "0";
+  overlay.style.opacity = '0';
 
-  const img = document.createElement("img");
-  img.className = "lightbox-img";
-  img.setAttribute("alt", altText);
+  const img = document.createElement('img');
+  img.className = 'lightbox-img';
+  img.setAttribute('alt', altText);
   // 加载前先占 0 尺寸，避免原图（可能数千 px）在加载期间撑大文档
   // 可滚动区、触发非预期的 scroll 事件。start() 拿到 natural 尺寸后再设真实值。
-  img.style.width = "0px";
-  img.style.height = "0px";
+  img.style.width = '0px';
+  img.style.height = '0px';
 
-  const caption = document.createElement("figcaption");
-  caption.className = "lightbox-caption";
+  const caption = document.createElement('figcaption');
+  caption.className = 'lightbox-caption';
   caption.textContent = altText;
-  if (!altText) caption.style.display = "none";
+  if (!altText) caption.style.display = 'none';
 
-  const counter = document.createElement("div");
-  counter.className = "lightbox-counter";
+  const counter = document.createElement('div');
+  counter.className = 'lightbox-counter';
   if (isSingle || gallery.length === 0) {
-    counter.style.display = "none";
+    counter.style.display = 'none';
   } else {
     counter.textContent = `${(index ?? 0) + 1} / ${gallery.length}`;
   }
@@ -183,17 +176,17 @@ function openLightbox(originNode: HTMLElement, gallery: HTMLElement[], index: nu
   let prevBtn: HTMLButtonElement | null = null;
   let nextBtn: HTMLButtonElement | null = null;
   if (!isSingle && gallery.length > 1) {
-    prevBtn = document.createElement("button");
-    prevBtn.className = "lightbox-nav lightbox-prev";
-    prevBtn.setAttribute("type", "button");
-    prevBtn.setAttribute("aria-label", "上一张");
-    prevBtn.textContent = "\u2039";
+    prevBtn = document.createElement('button');
+    prevBtn.className = 'lightbox-nav lightbox-prev';
+    prevBtn.setAttribute('type', 'button');
+    prevBtn.setAttribute('aria-label', '上一张');
+    prevBtn.textContent = '\u2039';
 
-    nextBtn = document.createElement("button");
-    nextBtn.className = "lightbox-nav lightbox-next";
-    nextBtn.setAttribute("type", "button");
-    nextBtn.setAttribute("aria-label", "下一张");
-    nextBtn.textContent = "\u203a";
+    nextBtn = document.createElement('button');
+    nextBtn.className = 'lightbox-nav lightbox-next';
+    nextBtn.setAttribute('type', 'button');
+    nextBtn.setAttribute('aria-label', '下一张');
+    nextBtn.textContent = '\u203a';
   }
 
   overlay.appendChild(img);
@@ -252,29 +245,29 @@ function openLightbox(originNode: HTMLElement, gallery: HTMLElement[], index: nu
 
     // reduced-motion：直接淡入居中
     if (state.reduced) {
-      img.style.opacity = "0";
+      img.style.opacity = '0';
       img.style.transform = transformFor(target, baseW, baseH);
-      img.style.left = "0";
-      img.style.top = "0";
-      overlay.style.opacity = "0";
+      img.style.left = '0';
+      img.style.top = '0';
+      overlay.style.opacity = '0';
       // 下一帧淡入
       requestAnimationFrame((): void => {
         if (!state) return;
-        overlay.style.transition = "opacity 200ms ease-out";
-        img.style.transition = "opacity 200ms ease-out";
-        overlay.style.opacity = "1";
-        img.style.opacity = "1";
+        overlay.style.transition = 'opacity 200ms ease-out';
+        img.style.transition = 'opacity 200ms ease-out';
+        overlay.style.opacity = '1';
+        img.style.opacity = '1';
       });
       return;
     }
 
     // 首帧：文章位置 + 原尺寸（scale=1），透明，且关闭 transition
-    img.style.transition = "none";
-    img.style.left = "0";
-    img.style.top = "0";
+    img.style.transition = 'none';
+    img.style.left = '0';
+    img.style.top = '0';
     img.style.transform = transformFor(originRect, baseW, baseH);
-    img.style.opacity = "0";
-    overlay.style.opacity = "0";
+    img.style.opacity = '0';
+    overlay.style.opacity = '0';
     // 强制 reflow，确保首帧的 transform 已提交到渲染层。
     // 否则单层 rAF 里浏览器可能合并首帧与目标帧，动画从错误位置起跳。
     void img.offsetHeight;
@@ -284,12 +277,11 @@ function openLightbox(originNode: HTMLElement, gallery: HTMLElement[], index: nu
       if (!state) return;
       requestAnimationFrame((): void => {
         if (!state) return;
-        img.style.transition =
-          "transform 250ms ease-out, opacity 250ms ease-out";
-        overlay.style.transition = "opacity 250ms ease-out";
+        img.style.transition = 'transform 250ms ease-out, opacity 250ms ease-out';
+        overlay.style.transition = 'opacity 250ms ease-out';
         img.style.transform = transformFor(target, baseW, baseH);
-        img.style.opacity = "1";
-        overlay.style.opacity = "1";
+        img.style.opacity = '1';
+        overlay.style.opacity = '1';
       });
     });
   };
@@ -297,7 +289,7 @@ function openLightbox(originNode: HTMLElement, gallery: HTMLElement[], index: nu
   if (img.complete && img.naturalWidth) {
     start();
   } else {
-    img.addEventListener("load", start, { once: true });
+    img.addEventListener('load', start, { once: true });
   }
   img.src = origSrc;
 }
@@ -320,12 +312,11 @@ function closeLightbox(immediate: boolean): void {
   }
 
   // 飞回 originRect：scale 从 1 缩到 originRect.w/baseW
-  s.img.style.transition =
-    "transform 250ms ease-out, opacity 250ms ease-out";
-  s.overlay.style.transition = "opacity 250ms ease-out";
+  s.img.style.transition = 'transform 250ms ease-out, opacity 250ms ease-out';
+  s.overlay.style.transition = 'opacity 250ms ease-out';
   s.img.style.transform = transformFor(originRect, baseW, baseH);
-  s.img.style.opacity = "0";
-  s.overlay.style.opacity = "0";
+  s.img.style.opacity = '0';
+  s.overlay.style.opacity = '0';
 
   const done = (): void => {
     removeOverlay();
@@ -333,19 +324,19 @@ function closeLightbox(immediate: boolean): void {
   // 250ms 兜底，避免 transitionend 不触发
   const timer = setTimeout(done, 280);
   s.img.addEventListener(
-    "transitionend",
+    'transitionend',
     (): void => {
       clearTimeout(timer);
       done();
     },
-    { once: true }
+    { once: true },
   );
 }
 
 function removeOverlay(): void {
   if (!state) return;
   const prev = state.originNode;
-  if (state.overlay && state.overlay.parentNode) {
+  if (state.overlay?.parentNode) {
     state.overlay.parentNode.removeChild(state.overlay);
   }
   state = null;
@@ -353,9 +344,9 @@ function removeOverlay(): void {
   // 用 preventScroll 抑制 focus() 默认的 scrollIntoView 行为——否则关闭灯箱后
   // 页面会自动滚动把原图完整纳入视口（用户只点了一半露出的图时尤其明显）。
   if (prev) {
-    const f = prev.querySelector(".blur-img-full");
+    const f = prev.querySelector('.blur-img-full');
     if (f instanceof HTMLImageElement) {
-      f.setAttribute("tabindex", "-1");
+      f.setAttribute('tabindex', '-1');
       f.focus({ preventScroll: true });
     }
   }
@@ -374,33 +365,33 @@ function gotoIndex(rawIndex: number): void {
   if (newIndex === s.index) return;
 
   const newNode = s.gallery[newIndex];
-  const fullImgEl = newNode.querySelector(".blur-img-full");
+  const fullImgEl = newNode.querySelector('.blur-img-full');
   if (!(fullImgEl instanceof HTMLImageElement)) return;
-  const origSrc = originalUrl(fullImgEl.getAttribute("data-src") || "");
-  const altText = fullImgEl.getAttribute("alt") || "";
+  const origSrc = originalUrl(fullImgEl.getAttribute('data-src') || '');
+  const altText = fullImgEl.getAttribute('alt') || '';
 
   // 淡出当前图
-  s.img.style.transition = "opacity 150ms ease-out";
-  s.img.style.opacity = "0";
+  s.img.style.transition = 'opacity 150ms ease-out';
+  s.img.style.opacity = '0';
 
   // 150ms 后换图淡入
   const swap = (): void => {
     if (!state) return; // 切换中可能已关闭
     const fade = (): void => {
       if (!state) return;
-      s.img.style.transition = "opacity 150ms ease-out";
-      s.img.style.opacity = "1";
+      s.img.style.transition = 'opacity 150ms ease-out';
+      s.img.style.opacity = '1';
     };
     if (s.img.complete && s.img.naturalWidth) {
       // 缓存命中，直接淡入
       s.img.src = origSrc;
       fade();
     } else {
-      s.img.addEventListener("load", fade, { once: true });
+      s.img.addEventListener('load', fade, { once: true });
       s.img.src = origSrc;
     }
     s.caption.textContent = altText;
-    s.caption.style.display = altText ? "" : "none";
+    s.caption.style.display = altText ? '' : 'none';
     s.counter.textContent = `${newIndex + 1} / ${s.gallery.length}`;
     // 更新 originNode 为新图，使后续关闭/滚动关闭飞回新图位置
     s.originNode = newNode;
@@ -417,7 +408,7 @@ function bindInteractions(): void {
   if (!s) return;
 
   // 点背景关闭（点图片本身不关，因箭头在图上、避免误关）
-  s.overlay.addEventListener("click", (ev: MouseEvent): void => {
+  s.overlay.addEventListener('click', (ev: MouseEvent): void => {
     if (state && ev.target === state.overlay) closeLightbox(false);
   });
 
@@ -446,7 +437,7 @@ function bindInteractions(): void {
       w: target.w + (originRect.w - target.w) * progress,
       h: target.h + (originRect.h - target.h) * progress,
     };
-    st.img.style.transition = "none";
+    st.img.style.transition = 'none';
     st.img.style.transform = transformFor(cur, baseW, baseH);
     st.img.style.opacity = String(1 - progress);
     st.overlay.style.opacity = String(1 - progress);
@@ -457,31 +448,31 @@ function bindInteractions(): void {
       removeOverlay();
     }
   };
-  window.addEventListener("scroll", s.scrollHandler, { passive: true });
+  window.addEventListener('scroll', s.scrollHandler, { passive: true });
 
   // 键盘：Esc 关；图集模式 ←→ 切换
   s.keyHandler = (ev: KeyboardEvent): void => {
     if (!state) return;
-    if (ev.key === "Escape") {
+    if (ev.key === 'Escape') {
       closeLightbox(false);
     } else if (!state.isSingle && state.gallery.length > 1) {
-      if (ev.key === "ArrowLeft") {
+      if (ev.key === 'ArrowLeft') {
         ev.preventDefault();
         gotoIndex((state.index ?? 0) - 1);
-      } else if (ev.key === "ArrowRight") {
+      } else if (ev.key === 'ArrowRight') {
         ev.preventDefault();
         gotoIndex((state.index ?? 0) + 1);
       }
     }
   };
-  document.addEventListener("keydown", s.keyHandler);
+  document.addEventListener('keydown', s.keyHandler);
 
   // 图集导航箭头点击（stopPropagation 防止冒泡到 overlay 触发关闭）
-  s.prevBtn?.addEventListener("click", (ev: MouseEvent): void => {
+  s.prevBtn?.addEventListener('click', (ev: MouseEvent): void => {
     ev.stopPropagation();
     if (state) gotoIndex((state.index ?? 0) - 1);
   });
-  s.nextBtn?.addEventListener("click", (ev: MouseEvent): void => {
+  s.nextBtn?.addEventListener('click', (ev: MouseEvent): void => {
     ev.stopPropagation();
     if (state) gotoIndex((state.index ?? 0) + 1);
   });
@@ -490,11 +481,11 @@ function bindInteractions(): void {
 function cleanupInteractions(): void {
   if (!state) return;
   if (state.scrollHandler) {
-    window.removeEventListener("scroll", state.scrollHandler);
+    window.removeEventListener('scroll', state.scrollHandler);
     state.scrollHandler = null;
   }
   if (state.keyHandler) {
-    document.removeEventListener("keydown", state.keyHandler);
+    document.removeEventListener('keydown', state.keyHandler);
     state.keyHandler = null;
   }
 }
@@ -520,14 +511,14 @@ window.__initLightbox = (selectors: string | string[]): void => {
   // 无需旧 IIFE 包装（旧 var 循环闭包必须立即执行函数固定变量）。
   const gallery = collected.gallery;
   gallery.forEach((node, idx) => {
-    node.addEventListener("click", (e: MouseEvent) => {
+    node.addEventListener('click', (e: MouseEvent) => {
       e.preventDefault();
       openLightbox(node, gallery, idx);
     });
   });
   // 单张图（封面）：index = null，gallery 传空数组表示单张
   for (const node of collected.singles) {
-    node.addEventListener("click", (e: MouseEvent) => {
+    node.addEventListener('click', (e: MouseEvent) => {
       e.preventDefault();
       openLightbox(node, [], null);
     });

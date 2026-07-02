@@ -10,7 +10,7 @@
  * 不覆盖：飞行动画的几何计算（依赖 img naturalWidth + load 事件，happy-dom
  * 不真实加载图片），那部分由 geometry.test.ts 的纯函数测试覆盖。
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import './index';
 
 // ============ 测试夹具 ============
@@ -194,10 +194,7 @@ describe('lightbox 黑盒行为', () => {
 
   describe('图集 gotoIndex 循环边界', () => {
     it('第 1 张按 ← 跳到最后一张（循环）', () => {
-      const imgs = [
-        makeGalleryImage('/a.webp', 'A'),
-        makeGalleryImage('/b.webp', 'B'),
-      ];
+      const imgs = [makeGalleryImage('/a.webp', 'A'), makeGalleryImage('/b.webp', 'B')];
       mountRoot(imgs);
       window.__initLightbox('.post-content');
 
@@ -210,10 +207,7 @@ describe('lightbox 黑盒行为', () => {
     });
 
     it('最后一张按 → 跳到第 1 张（循环）', () => {
-      const imgs = [
-        makeGalleryImage('/a.webp', 'A'),
-        makeGalleryImage('/b.webp', 'B'),
-      ];
+      const imgs = [makeGalleryImage('/a.webp', 'A'), makeGalleryImage('/b.webp', 'B')];
       mountRoot(imgs);
       window.__initLightbox('.post-content');
 
@@ -226,10 +220,7 @@ describe('lightbox 黑盒行为', () => {
     });
 
     it('切换后 originNode 更新：关闭后焦点归还到新图', () => {
-      const imgs = [
-        makeGalleryImage('/a.webp', 'A'),
-        makeGalleryImage('/b.webp', 'B'),
-      ];
+      const imgs = [makeGalleryImage('/a.webp', 'A'), makeGalleryImage('/b.webp', 'B')];
       mountRoot(imgs);
       window.__initLightbox('.post-content');
 

@@ -19,7 +19,7 @@ function initCopyButtons(root: Element): void {
 
     const codeText = code.textContent || '';
     btn.addEventListener('click', () => {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
+      if (navigator.clipboard?.writeText) {
         navigator.clipboard.writeText(codeText);
       } else {
         const ta = document.createElement('textarea');

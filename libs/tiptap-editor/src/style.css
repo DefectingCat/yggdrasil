@@ -4,7 +4,8 @@
   position: relative;
   width: 100%;
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 16px;
   line-height: 1.75;
   color: #2c2c2c;
@@ -24,7 +25,8 @@
 }
 
 /* Placeholder - shown when document has only one empty paragraph */
-.tiptap-editor .ProseMirror p:first-child:last-child:has(br.ProseMirror-trailingBreak:only-child)::before {
+.tiptap-editor .ProseMirror
+  p:first-child:last-child:has(br.ProseMirror-trailingBreak:only-child)::before {
   content: '在此输入内容...';
   float: left;
   color: #999;
@@ -267,7 +269,8 @@
   min-width: 260px;
   max-height: 320px;
   overflow-y: auto;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
 .slash-command-list {
@@ -323,19 +326,19 @@
 }
 
 /* ========== Task List (Enhanced) ========== */
-.tiptap-editor ul[data-type="taskList"] {
+.tiptap-editor ul[data-type='taskList'] {
   list-style: none;
   padding-left: 0;
 }
 
-.tiptap-editor ul[data-type="taskList"] li {
+.tiptap-editor ul[data-type='taskList'] li {
   display: flex;
   align-items: center;
   gap: 0.5em;
   margin: 0.3em 0;
 }
 
-.tiptap-editor ul[data-type="taskList"] li > label {
+.tiptap-editor ul[data-type='taskList'] li > label {
   flex-shrink: 0;
   cursor: pointer;
   user-select: none;
@@ -347,24 +350,24 @@
   line-height: 0;
 }
 
-.tiptap-editor ul[data-type="taskList"] li > label input[type="checkbox"] {
+.tiptap-editor ul[data-type='taskList'] li > label input[type='checkbox'] {
   width: 16px;
   height: 16px;
   accent-color: #0366d6;
   cursor: pointer;
 }
 
-.tiptap-editor ul[data-type="taskList"] li > div {
+.tiptap-editor ul[data-type='taskList'] li > div {
   flex: 1;
 }
 
 /* task list 项内的段落去掉上下 margin（.tiptap-editor p 默认 .6em 0），
    否则 margin 会撑高 div，使 checkbox 与文本垂直中线错位、项间距过大。 */
-.tiptap-editor ul[data-type="taskList"] li > div > p {
+.tiptap-editor ul[data-type='taskList'] li > div > p {
   margin: 0;
 }
 
-.tiptap-editor ul[data-type="taskList"] li[data-checked="true"] > div {
+.tiptap-editor ul[data-type='taskList'] li[data-checked='true'] > div {
   text-decoration: line-through;
   opacity: 0.6;
 }
@@ -433,7 +436,9 @@
   animation: upload-spin 0.8s linear infinite;
 }
 @keyframes upload-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 .upload-overlay-text {
   color: #fff;
@@ -536,7 +541,7 @@
 }
 
 /* ========== Dark Theme: Task List ========== */
-.dark .tiptap-editor ul[data-type="taskList"] li > label input[type="checkbox"] {
+.dark .tiptap-editor ul[data-type='taskList'] li > label input[type='checkbox'] {
   accent-color: #58a6ff;
 }
 
@@ -561,7 +566,9 @@
   line-height: 1;
   cursor: pointer;
   opacity: 0.55;
-  transition: opacity 0.15s, background 0.15s;
+  transition:
+    opacity 0.15s,
+    background 0.15s;
 }
 
 .tiptap-toggle-btn:hover {

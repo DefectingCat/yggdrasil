@@ -29,20 +29,10 @@ export function fitCentered(naturalW: number, naturalH: number, vw: number, vh: 
 export function transformFor(rect: Rect, baseW: number, baseH: number): string {
   var sx = baseW > 0 ? rect.w / baseW : 1;
   var sy = baseH > 0 ? rect.h / baseH : 1;
-  return (
-    "translate(" +
-    rect.x +
-    "px," +
-    rect.y +
-    "px) scale(" +
-    sx +
-    "," +
-    sy +
-    ")"
-  );
+  return 'translate(' + rect.x + 'px,' + rect.y + 'px) scale(' + sx + ',' + sy + ')';
 }
 
 // 原图 URL = data-src 去 query。data-src 形如 "/uploads/x.webp?w=800"。
 export function originalUrl(dataSrc: string | null): string {
-  return (dataSrc || "").split("?")[0];
+  return (dataSrc || '').split('?')[0];
 }

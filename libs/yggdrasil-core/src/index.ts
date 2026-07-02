@@ -11,5 +11,3 @@ declare global {
 
 window.__initPostContent = initPostContent;
 window.__startThemeTransition = startThemeTransition;
-
-export {};

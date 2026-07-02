@@ -1,12 +1,12 @@
-import { Extension, type Editor, type Range } from '@tiptap/core'
-import { Suggestion, type SuggestionProps, type SuggestionKeyDownProps } from '@tiptap/suggestion'
-import { PluginKey } from '@tiptap/pm/state'
+import { type Editor, Extension, type Range } from '@tiptap/core';
+import { PluginKey } from '@tiptap/pm/state';
+import { Suggestion, type SuggestionKeyDownProps, type SuggestionProps } from '@tiptap/suggestion';
 
 interface CommandItem {
-  title: string
-  description: string
-  icon: string
-  command: (props: { editor: Editor; range: Range }) => void
+  title: string;
+  description: string;
+  icon: string;
+  command: (props: { editor: Editor; range: Range }) => void;
 }
 
 /**
@@ -17,12 +17,12 @@ interface CommandItem {
  * 只保留"图片链接"（手动填 URL）。
  */
 export interface SlashCommandOptions {
-  onImageUpload?: (file: File) => Promise<string>
+  onImageUpload?: (file: File) => Promise<string>;
   /** 由 index.ts 注入：直接调 coordinator.insertUploading（走占位符 + 上传）。 */
-  onInsertUploading?: (file: File) => void
+  onInsertUploading?: (file: File) => void;
 }
 
-const SlashCommandPluginKey = new PluginKey('slashCommand')
+const SlashCommandPluginKey = new PluginKey('slashCommand');
 
 /**
  * 斜杠命令扩展。
@@ -36,19 +36,19 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
     return {
       onImageUpload: undefined,
       onInsertUploading: undefined,
-    }
+    };
   },
 
   addProseMirrorPlugins() {
     // 依据是否提供上传回调，决定可用命令集。
-    const uploadFn = this.options.onImageUpload
+    const uploadFn = this.options.onImageUpload;
     const COMMANDS: CommandItem[] = [
       {
         title: '标题 1',
         description: '大标题',
         icon: 'H1',
         command: ({ editor, range }) => {
-          editor.chain().focus().deleteRange(range).setHeading({ level: 1 }).run()
+          editor.chain().focus().deleteRange(range).setHeading({ level: 1 }).run();
         },
       },
       {
@@ -56,7 +56,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         description: '中标题',
         icon: 'H2',
         command: ({ editor, range }) => {
-          editor.chain().focus().deleteRange(range).setHeading({ level: 2 }).run()
+          editor.chain().focus().deleteRange(range).setHeading({ level: 2 }).run();
         },
       },
       {
@@ -64,7 +64,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         description: '小标题',
         icon: 'H3',
         command: ({ editor, range }) => {
-          editor.chain().focus().deleteRange(range).setHeading({ level: 3 }).run()
+          editor.chain().focus().deleteRange(range).setHeading({ level: 3 }).run();
         },
       },
       {
@@ -72,7 +72,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         description: '创建无序列表',
         icon: '•',
         command: ({ editor, range }) => {
-          editor.chain().focus().deleteRange(range).toggleBulletList().run()
+          editor.chain().focus().deleteRange(range).toggleBulletList().run();
         },
       },
       {
@@ -80,7 +80,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         description: '创建有序列表',
         icon: '1.',
         command: ({ editor, range }) => {
-          editor.chain().focus().deleteRange(range).toggleOrderedList().run()
+          editor.chain().focus().deleteRange(range).toggleOrderedList().run();
         },
       },
       {
@@ -88,7 +88,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         description: '创建任务列表',
         icon: '☑',
         command: ({ editor, range }) => {
-          editor.chain().focus().deleteRange(range).toggleTaskList().run()
+          editor.chain().focus().deleteRange(range).toggleTaskList().run();
         },
       },
       {
@@ -96,7 +96,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         description: '插入引用块',
         icon: '❝',
         command: ({ editor, range }) => {
-          editor.chain().focus().deleteRange(range).toggleBlockquote().run()
+          editor.chain().focus().deleteRange(range).toggleBlockquote().run();
         },
       },
       {
@@ -104,7 +104,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         description: '插入代码块',
         icon: '<>',
         command: ({ editor, range }) => {
-          editor.chain().focus().deleteRange(range).toggleCodeBlock().run()
+          editor.chain().focus().deleteRange(range).toggleCodeBlock().run();
         },
       },
       {
@@ -112,7 +112,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         description: '插入水平分割线',
         icon: '—',
         command: ({ editor, range }) => {
-          editor.chain().focus().deleteRange(range).setHorizontalRule().run()
+          editor.chain().focus().deleteRange(range).setHorizontalRule().run();
         },
       },
       {
@@ -120,10 +120,15 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         description: '插入 3×3 表格',
         icon: '▦',
         command: ({ editor, range }) => {
-          editor.chain().focus().deleteRange(range).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+          editor
+            .chain()
+            .focus()
+            .deleteRange(range)
+            .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+            .run();
         },
       },
-    ]
+    ];
 
     // 图片相关命令：上传命令仅在上传回调可用时才出现。
     if (uploadFn) {
@@ -133,31 +138,31 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         icon: '📤',
         command: ({ editor, range }) => {
           // 必须先删掉 /命令 文本，文件选择对话框会阻塞，关闭后 range 可能失效。
-          editor.chain().focus().deleteRange(range).run()
-          const input = document.createElement('input')
-          input.type = 'file'
-          input.accept = 'image/jpeg,image/png,image/gif,image/webp'
+          editor.chain().focus().deleteRange(range).run();
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = 'image/jpeg,image/png,image/gif,image/webp';
           input.addEventListener('change', () => {
-            const file = input.files?.[0]
-            if (!file) return
+            const file = input.files?.[0];
+            if (!file) return;
             // 优先走 coordinator（占位符 + 上传），否则退回直接上传（无占位符）
             if (this.options.onInsertUploading) {
-              this.options.onInsertUploading(file)
+              this.options.onInsertUploading(file);
             } else if (uploadFn) {
               uploadFn(file)
                 .then((url) => {
-                  editor.chain().focus().setImage({ src: url }).run()
+                  editor.chain().focus().setImage({ src: url }).run();
                 })
                 .catch((err) => {
-                  const msg = err instanceof Error ? err.message : String(err)
-                  console.error('[SlashCommand] Upload failed:', msg)
-                })
+                  const msg = err instanceof Error ? err.message : String(err);
+                  console.error('[SlashCommand] Upload failed:', msg);
+                });
             }
-          })
+          });
           // click() 会立即触发原生文件选择器；回调在用户选择文件后异步执行。
-          input.click()
+          input.click();
         },
-      })
+      });
     }
 
     COMMANDS.push(
@@ -166,9 +171,9 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         description: '通过 URL 插入图片',
         icon: '🖼',
         command: ({ editor, range }) => {
-          const url = window.prompt('输入图片 URL')
+          const url = window.prompt('输入图片 URL');
           if (url && isValidUrl(url)) {
-            editor.chain().focus().deleteRange(range).setImage({ src: url }).run()
+            editor.chain().focus().deleteRange(range).setImage({ src: url }).run();
           }
         },
       },
@@ -177,21 +182,22 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         description: '插入链接',
         icon: '🔗',
         command: ({ editor, range }) => {
-          const url = window.prompt('输入链接 URL')
-          if (!url || !isValidUrl(url)) return
+          const url = window.prompt('输入链接 URL');
+          if (!url || !isValidUrl(url)) return;
           // deleteRange 后光标停在 range.to；先插入 URL 文本，再选中刚插入的范围设 link
           // （setLink 需要非空选区才生效，原顺序 setLink 在空选区无效）。
-          const insertFrom = range.to
-          editor.chain()
+          const insertFrom = range.to;
+          editor
+            .chain()
             .focus()
             .deleteRange(range)
             .insertContent(url)
             .setTextSelection({ from: insertFrom, to: insertFrom + url.length })
             .setLink({ href: url })
-            .run()
+            .run();
         },
       },
-    )
+    );
 
     return [
       Suggestion<CommandItem>({
@@ -202,75 +208,75 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
           return COMMANDS.filter(
             (item) =>
               item.title.toLowerCase().includes(query.toLowerCase()) ||
-              item.description.toLowerCase().includes(query.toLowerCase())
-          )
+              item.description.toLowerCase().includes(query.toLowerCase()),
+          );
         },
         render() {
-          let popup: SlashPopup | null = null
+          let popup: SlashPopup | null = null;
 
           return {
             onStart(props) {
-              popup = createPopup(props)
+              popup = createPopup(props);
             },
             onUpdate(props) {
-              if (!popup) return
-              popup.updateItems(props.items)
-              popup.updatePosition()
+              if (!popup) return;
+              popup.updateItems(props.items);
+              popup.updatePosition();
             },
             onKeyDown(props) {
-              if (!popup) return false
-              return popup.onKeyDown(props)
+              if (!popup) return false;
+              return popup.onKeyDown(props);
             },
             onExit() {
               if (popup) {
-                popup.destroy()
-                popup = null
+                popup.destroy();
+                popup = null;
               }
             },
-          }
+          };
         },
         command: ({ editor, range, props: item }) => {
-          item.command({ editor, range })
+          item.command({ editor, range });
         },
       }),
-    ]
+    ];
   },
-})
+});
 
 /** 斜杠命令浮层实例:供 Suggestion render 生命周期驱动。 */
 interface SlashPopup {
-  component: HTMLElement
-  updateItems(items: CommandItem[]): void
-  updatePosition(): void
-  onKeyDown(props: SuggestionKeyDownProps): boolean
-  destroy(): void
+  component: HTMLElement;
+  updateItems(items: CommandItem[]): void;
+  updatePosition(): void;
+  onKeyDown(props: SuggestionKeyDownProps): boolean;
+  destroy(): void;
 }
 
 /** 校验图片/链接 URL:只允许 http(s) 和 data:image。拒绝 javascript: 等。 */
 export function isValidUrl(url: string): boolean {
-  return /^https?:\/\//i.test(url) || /^data:image\//i.test(url)
+  return /^https?:\/\//i.test(url) || /^data:image\//i.test(url);
 }
 
 function createPopup(props: SuggestionProps<CommandItem>): SlashPopup {
-  const component = document.createElement('div')
-  component.classList.add('slash-command')
+  const component = document.createElement('div');
+  component.classList.add('slash-command');
 
-  const list = document.createElement('div')
-  list.classList.add('slash-command-list')
-  component.appendChild(list)
+  const list = document.createElement('div');
+  list.classList.add('slash-command-list');
+  component.appendChild(list);
 
-  let selectedIndex = 0
-  let currentItems: CommandItem[] = []
+  let selectedIndex = 0;
+  let currentItems: CommandItem[] = [];
 
   function renderItems(items: CommandItem[]) {
-    currentItems = items
-    list.innerHTML = ''
-    selectedIndex = 0
+    currentItems = items;
+    list.innerHTML = '';
+    selectedIndex = 0;
 
     items.forEach((item, index) => {
-      const el = document.createElement('div')
-      el.classList.add('slash-command-item')
-      if (index === 0) el.classList.add('is-selected')
+      const el = document.createElement('div');
+      el.classList.add('slash-command-item');
+      if (index === 0) el.classList.add('is-selected');
 
       el.innerHTML = `
         <div class="slash-command-item-icon">${item.icon}</div>
@@ -278,82 +284,82 @@ function createPopup(props: SuggestionProps<CommandItem>): SlashPopup {
           <div class="slash-command-item-title">${item.title}</div>
           <div class="slash-command-item-desc">${item.description}</div>
         </div>
-      `
+      `;
 
       el.addEventListener('click', () => {
-        props.command(item)
-      })
+        props.command(item);
+      });
 
       el.addEventListener('mouseenter', () => {
-        selectedIndex = index
-        updateSelection()
-      })
+        selectedIndex = index;
+        updateSelection();
+      });
 
-      list.appendChild(el)
-    })
+      list.appendChild(el);
+    });
   }
 
   function updateSelection() {
-    const children = list.children
+    const children = list.children;
     for (let i = 0; i < children.length; i++) {
       if (i === selectedIndex) {
-        children[i].classList.add('is-selected')
+        children[i].classList.add('is-selected');
       } else {
-        children[i].classList.remove('is-selected')
+        children[i].classList.remove('is-selected');
       }
     }
-    children[selectedIndex]?.scrollIntoView({ block: 'nearest' })
+    children[selectedIndex]?.scrollIntoView({ block: 'nearest' });
   }
 
   function selectItem() {
     if (currentItems[selectedIndex]) {
-      props.command(currentItems[selectedIndex])
+      props.command(currentItems[selectedIndex]);
     }
   }
 
   function updatePosition() {
-    const rect = props.clientRect?.()
-    if (!rect) return
-    component.style.left = `${rect.left}px`
-    component.style.top = `${rect.bottom + 4}px`
+    const rect = props.clientRect?.();
+    if (!rect) return;
+    component.style.left = `${rect.left}px`;
+    component.style.top = `${rect.bottom + 4}px`;
   }
 
-  renderItems(props.items)
-  document.body.appendChild(component)
-  updatePosition()
+  renderItems(props.items);
+  document.body.appendChild(component);
+  updatePosition();
 
   return {
     component,
     updateItems(items: CommandItem[]) {
-      renderItems(items)
+      renderItems(items);
     },
     updatePosition,
     onKeyDown({ event }: SuggestionKeyDownProps): boolean {
       if (event.key === 'ArrowUp') {
-        event.preventDefault()
-        selectedIndex = (selectedIndex - 1 + currentItems.length) % currentItems.length
-        updateSelection()
-        return true
+        event.preventDefault();
+        selectedIndex = (selectedIndex - 1 + currentItems.length) % currentItems.length;
+        updateSelection();
+        return true;
       }
       if (event.key === 'ArrowDown') {
-        event.preventDefault()
-        selectedIndex = (selectedIndex + 1) % currentItems.length
-        updateSelection()
-        return true
+        event.preventDefault();
+        selectedIndex = (selectedIndex + 1) % currentItems.length;
+        updateSelection();
+        return true;
       }
       if (event.key === 'Enter') {
-        event.preventDefault()
-        selectItem()
-        return true
+        event.preventDefault();
+        selectItem();
+        return true;
       }
       if (event.key === 'Escape') {
-        event.preventDefault()
-        return true
+        event.preventDefault();
+        return true;
       }
-      return false
+      return false;
     },
     destroy() {
-      component.remove()
+      component.remove();
     },
-  }
+  };
 }

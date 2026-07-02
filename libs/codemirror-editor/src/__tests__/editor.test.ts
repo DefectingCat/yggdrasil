@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { EditorOptions, CodeMirrorInstance } from '../editor';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { CodeMirrorInstance, EditorOptions } from '../editor';
 
 describe('CodeMirrorInstance', () => {
   let container: HTMLElement;

@@ -7,7 +7,7 @@
  * 注意:startThemeTransition 只接收 (x, y),目标主题(亮/暗)从 DOM 的 dark class
  * 现状推导(取反),不依赖外部传入——避免与调用方状态不同步。
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import './index';
 
 describe('startThemeTransition', () => {
@@ -66,7 +66,7 @@ describe('startThemeTransition', () => {
     expect(document.documentElement.classList.contains('is-theme-transitioning')).toBe(true);
 
     // callback 里根据 DOM 现状(无 dark)切到 dark
-    cbRef.cb!();
+    cbRef.cb?.();
     expect(document.documentElement.classList.contains('dark')).toBe(true);
 
     // finished 后移除 is-theme-transitioning 和 CSS 变量
@@ -81,22 +81,29 @@ describe('startThemeTransition', () => {
   });
 
   it('reduced-motion:即使有 startViewTransition 也走降级(瞬切)', () => {
-    const startVT = vi.fn(() => ({ ready: Promise.resolve(), finished: Promise.resolve(), skipTransition: () => {} }));
+    const startVT = vi.fn(() => ({
+      ready: Promise.resolve(),
+      finished: Promise.resolve(),
+      skipTransition: () => {},
+    }));
     Object.defineProperty(document, 'startViewTransition', {
       value: startVT,
       configurable: true,
       writable: true,
     });
-    vi.stubGlobal('matchMedia', vi.fn((q: string) => ({
-      matches: q.includes('reduce'),
-      media: q,
-      onchange: null,
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      addListener: () => {},
-      removeListener: () => {},
-      dispatchEvent: () => false,
-    })));
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((q: string) => ({
+        matches: q.includes('reduce'),
+        media: q,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      })),
+    );
 
     window.__startThemeTransition(0, 0);
 

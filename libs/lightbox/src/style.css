@@ -61,11 +61,17 @@
   cursor: pointer;
   z-index: 2;
   border-radius: 0.5rem;
-  transition: color 0.2s ease-out, background 0.2s ease-out;
+  transition:
+    color 0.2s ease-out,
+    background 0.2s ease-out;
 }
 .lightbox-nav:hover {
   color: #fff;
   background: rgba(255, 255, 255, 0.1);
 }
-.lightbox-prev { left: 1rem; }
-.lightbox-next { right: 1rem; }
+.lightbox-prev {
+  left: 1rem;
+}
+.lightbox-next {
+  right: 1rem;
+}

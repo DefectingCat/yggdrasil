@@ -5,16 +5,13 @@
  * 核心策略:始终让"暗色层"在上方,通过 clip-path 揭示下方的"亮色层"。
  * - 亮 -> 暗: NEW 是暗色(在上方),从小圆扩大(`tt-expand`)覆盖底部的 OLD。
  * - 暗 -> 亮: OLD 是暗色(在上方),从大圆缩小(`tt-shrink`)揭开底部的 NEW。
- * 
+ *
  * 相比 WAAPI 或动态注入 <style>,这种方式完全没有特异性冲突、DOM 残留或
  * API 优先级 bug,是目前最稳定的 VT 主题切换方案。
  */
 
 function prefersReducedMotion(): boolean {
-  return (
-    !!window.matchMedia &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
+  return !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 function maxCornerDistance(x: number, y: number): number {
@@ -75,10 +72,10 @@ export function startThemeTransition(x: number, y: number): void {
   vt.ready.catch(() => {});
 
   vt.finished.finally(() => {
-      html.classList.remove('is-theme-transitioning');
-      // 清理 CSS 变量
-      html.style.removeProperty('--tt-x');
-      html.style.removeProperty('--tt-y');
-      html.style.removeProperty('--tt-r');
-    });
+    html.classList.remove('is-theme-transitioning');
+    // 清理 CSS 变量
+    html.style.removeProperty('--tt-x');
+    html.style.removeProperty('--tt-y');
+    html.style.removeProperty('--tt-r');
+  });
 }

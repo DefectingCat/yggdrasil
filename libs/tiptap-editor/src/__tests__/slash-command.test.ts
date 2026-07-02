@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { isValidUrl } from '../slash-command'
+import { describe, expect, it } from 'vitest';
+import { isValidUrl } from '../slash-command';
 
 /**
  * isValidUrl 纯函数测试。
@@ -21,9 +21,9 @@ describe('isValidUrl', () => {
       ['data:image/svg+xml,<svg/>', 'data URL svg'],
       ['data:image/', 'data:image 前缀（最小匹配）'],
     ])('%s (%s)', (url) => {
-      expect(isValidUrl(url)).toBe(true)
-    })
-  })
+      expect(isValidUrl(url)).toBe(true);
+    });
+  });
 
   describe('拒绝', () => {
     it.each([
@@ -43,14 +43,14 @@ describe('isValidUrl', () => {
       [' https://example.com', '前导空格（^ 锚定，不匹配）'],
       ['', '空字符串'],
     ])('%s (%s)', (url) => {
-      expect(isValidUrl(url)).toBe(false)
-    })
-  })
+      expect(isValidUrl(url)).toBe(false);
+    });
+  });
 
   describe('正则边界（scheme 前缀校验，不锚定结尾）', () => {
     it('https:// 后含末尾空格仍被接受（只校验前缀）', () => {
       // 有意为之：isValidUrl 只校验 scheme 前缀，URL 其余部分由浏览器/服务端校验
-      expect(isValidUrl('https://example.com ')).toBe(true)
-    })
-  })
-})
+      expect(isValidUrl('https://example.com ')).toBe(true);
+    });
+  });
+});
