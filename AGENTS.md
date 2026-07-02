@@ -7,6 +7,10 @@
 - 提交信息遵循现有风格:`type(scope): 简述`,正文(可选)说明动机与关键改动。常见 type:`feat` / `fix` / `docs` / `refactor` / `chore` / `perf`。
 - 只在用户明确要求时才 `git push`。提交到本地即可,不主动推送。
 
+## JavaScript 库
+
+在 libs 目录下都是 JavaScript 库，他们的包管理器都是 pnpm。
+
 ## Development Commands
 
 ```bash
@@ -88,10 +92,10 @@ APP_BASE_URL=               # e.g. https://your-domain.example — trusted origi
 
 Dioxus 0.7 fullstack project with **two independent gates** — the most common source of compilation errors.
 
-| Gate | Applies to | Used for |
-|------|-----------|----------|
-| `#[cfg(feature = "server")]` | Server binary only | DB, env loading, background tasks, server function bodies, highlight, WebP, caching, sysinfo |
-| `#[cfg(target_arch = "wasm32")]` | WASM frontend only | localStorage, DOM APIs, web_sys calls, theme detection |
+| Gate                             | Applies to         | Used for                                                                                     |
+| -------------------------------- | ------------------ | -------------------------------------------------------------------------------------------- |
+| `#[cfg(feature = "server")]`     | Server binary only | DB, env loading, background tasks, server function bodies, highlight, WebP, caching, sysinfo |
+| `#[cfg(target_arch = "wasm32")]` | WASM frontend only | localStorage, DOM APIs, web_sys calls, theme detection                                       |
 
 **Critical**: Both default features (`web` + `server`) are enabled in `Cargo.toml`. The `dx` CLI handles feature selection during builds.
 
@@ -150,12 +154,12 @@ src/codemirror_bridge.rs — wasm-bindgen bindings for CodeMirror editor (mirror
 
 Four Vite-built IIFE libraries under `libs/`, each with `pnpm-lock.yaml`. Built artifacts go to `public/<name>/` — **do not edit `public/<name>/` files; they are build artifacts**. Each `build` script is `tsc --noEmit && vite build` (type-check before bundle). Output is IIFE because Dioxus `[web.resource] script` injects bare `<script src>` without `type="module"` support. Registered globally in `Dioxus.toml` `script`/`style` arrays.
 
-| Lib | Output dir | Exposes | Wiring |
-|-----|-----------|---------|--------|
-| `libs/tiptap-editor/` | `public/tiptap/` (`editor.js`/`.css`/`.map`) | `window.TiptapEditor` | wasm-bindgen via `src/tiptap_bridge.rs` — injects `Closure` callbacks (`onUpdate`/`onReady`/`onUploadEvent`/`onImageUpload`) into `TiptapEditor.create`, holds instance + closures in `EditorHandle` (Drop → `destroy()`). No `js_sys::eval`, no `window` globals, no polling. |
-| `libs/codemirror-editor/` | `public/codemirror/` (`editor.js`/`.map`, **no CSS**) | `window.CodeMirrorEditor` (object literal `{ create }`) + `window.EditorOptions` (class, survives TS erasure) | `src/codemirror_bridge.rs` mirrors tiptap — `get_module()` uses `Reflect::get` + `unchecked_into` (object literal, NOT a constructor extern). Themes are JS `Extension`s from `@catppuccin/codemirror` (Latte/Mocha), hot-swapped via `Compartment.reconfigure`. |
-| `libs/lightbox/` | `public/lightbox/` (`lightbox.js`/`.css`/`.map`) | self-initializing IIFE | **Not** wasm-bindgen. `src/components/post/post_content.rs` sets `window.__lightboxSelectors` before load; IIFE tail reads it and self-initializes. Direct fallback call if already loaded. |
-| `libs/yggdrasil-core/` | `public/yggdrasil-core/` (`yggdrasil-core.js`/`.css`/`.map`) | `window.__initPostContent`, `window.__startThemeTransition` | Designated home for all new core JS — add here, not to `public/js/`. Rust calls entry points via `js_sys::eval("window.__xxx(...)")` guarded by `if (window.__xxx)`. Theme reveal uses View Transitions API (`startViewTransition` + `@keyframes tt-reveal` `clip-path` expand); falls back to instant switch when VT / `prefers-reduced-motion`. |
+| Lib                       | Output dir                                                   | Exposes                                                                                                       | Wiring                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `libs/tiptap-editor/`     | `public/tiptap/` (`editor.js`/`.css`/`.map`)                 | `window.TiptapEditor`                                                                                         | wasm-bindgen via `src/tiptap_bridge.rs` — injects `Closure` callbacks (`onUpdate`/`onReady`/`onUploadEvent`/`onImageUpload`) into `TiptapEditor.create`, holds instance + closures in `EditorHandle` (Drop → `destroy()`). No `js_sys::eval`, no `window` globals, no polling.                                                                    |
+| `libs/codemirror-editor/` | `public/codemirror/` (`editor.js`/`.map`, **no CSS**)        | `window.CodeMirrorEditor` (object literal `{ create }`) + `window.EditorOptions` (class, survives TS erasure) | `src/codemirror_bridge.rs` mirrors tiptap — `get_module()` uses `Reflect::get` + `unchecked_into` (object literal, NOT a constructor extern). Themes are JS `Extension`s from `@catppuccin/codemirror` (Latte/Mocha), hot-swapped via `Compartment.reconfigure`.                                                                                  |
+| `libs/lightbox/`          | `public/lightbox/` (`lightbox.js`/`.css`/`.map`)             | self-initializing IIFE                                                                                        | **Not** wasm-bindgen. `src/components/post/post_content.rs` sets `window.__lightboxSelectors` before load; IIFE tail reads it and self-initializes. Direct fallback call if already loaded.                                                                                                                                                       |
+| `libs/yggdrasil-core/`    | `public/yggdrasil-core/` (`yggdrasil-core.js`/`.css`/`.map`) | `window.__initPostContent`, `window.__startThemeTransition`                                                   | Designated home for all new core JS — add here, not to `public/js/`. Rust calls entry points via `js_sys::eval("window.__xxx(...)")` guarded by `if (window.__xxx)`. Theme reveal uses View Transitions API (`startViewTransition` + `@keyframes tt-reveal` `clip-path` expand); falls back to instant switch when VT / `prefers-reduced-motion`. |
 
 Run a single lib's tests: `cd libs/<name> && pnpm test` (Vitest + happy-dom). Watch mode: `pnpm test:watch`.
 
