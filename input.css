@@ -5,19 +5,23 @@
 @theme {
   --font-serif: 'Source Serif 4', 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', Georgia, serif;
 
-  --color-paper-theme: #faf9f6;
-  --color-paper-entry: #ffffff;
-  --color-paper-primary: #1c1917;
-  --color-paper-secondary: #78716c;
-  --color-paper-tertiary: #d6d3d1;
-  --color-paper-content: #292524;
-  --color-paper-code-block: #eff1f5;
-  --color-paper-code-bg: #f5f4f0;
-  --color-paper-border: #e7e5e0;
-  --color-paper-accent: #5c7a5e;
-  --color-paper-accent-soft: #e8f0e8;
-  --color-paper-accent-2: #83495b;
-  --color-paper-accent-2-soft: #f3e8eb;
+  /* Catppuccin Latte（亮色）。语义 token → 调色板角色：
+     theme=base  entry=mantle  primary=text  secondary=subtext1
+     tertiary=overlay0  content=subtext0  code-block=crust  code-bg=surface0
+     border=surface1  accent=green  accent-2=teal（主/次强调色） */
+  --color-paper-theme: #eff1f5;
+  --color-paper-entry: #e6e9ef;
+  --color-paper-primary: #4c4f69;
+  --color-paper-secondary: #5c5f77;
+  --color-paper-tertiary: #9ca0b0;
+  --color-paper-content: #6c6f85;
+  --color-paper-code-block: #dce0e8;
+  --color-paper-code-bg: #ccd0da;
+  --color-paper-border: #bcc0cc;
+  --color-paper-accent: #40a02b;
+  --color-paper-accent-soft: #ccd0da;
+  --color-paper-accent-2: #179299;
+  --color-paper-accent-2-soft: #ccd0da;
 
   --radius-paper: 8px;
   --gap-paper: 24px;
@@ -41,19 +45,21 @@
   }
 
   .dark {
-    --color-paper-theme: #141416;
-    --color-paper-entry: #1e1f22;
-    --color-paper-primary: #e7e5df;
-    --color-paper-secondary: #8c8981;
-    --color-paper-tertiary: #3a3a3d;
-    --color-paper-content: #d4d2cc;
-    --color-paper-code-block: #1e1e2e;
-    --color-paper-code-bg: #28292d;
-    --color-paper-border: #2a2b2e;
-    --color-paper-accent: #7da97f;
-    --color-paper-accent-soft: #1e2e1e;
-    --color-paper-accent-2: #cca4b0;
-    --color-paper-accent-2-soft: #331f25;
+    /* Catppuccin Mocha（暗色）。accent-soft 带绿调、accent-2-soft 带 teal 调，
+       在 surface0 暗底上透出微弱主/次强调色。 */
+    --color-paper-theme: #1e1e2e;
+    --color-paper-entry: #181825;
+    --color-paper-primary: #cdd6f4;
+    --color-paper-secondary: #bac2de;
+    --color-paper-tertiary: #6c7086;
+    --color-paper-content: #a6adc8;
+    --color-paper-code-block: #313244;
+    --color-paper-code-bg: #313244;
+    --color-paper-border: #45475a;
+    --color-paper-accent: #a6e3a1;
+    --color-paper-accent-soft: #1e2e22;
+    --color-paper-accent-2: #94e2d5;
+    --color-paper-accent-2-soft: #1e2a28;
   }
 }
 
@@ -263,7 +269,7 @@
   }
 
   .md-content a:not(.anchor):hover {
-    color: #4a6249;
+    color: var(--color-paper-accent-2);
   }
 
   .md-content p {
@@ -421,8 +427,8 @@
     position: absolute;
     top: 8px;
     right: 8px;
-    color: rgba(255, 255, 255, 0.8);
-    background: rgba(78, 78, 78, 0.8);
+    color: var(--color-paper-theme);
+    background: var(--color-paper-tertiary);
     border-radius: var(--radius-paper);
     padding: 4px 8px;
     font-size: 12px;
@@ -434,7 +440,7 @@
   }
 
   .copy-code:hover {
-    background: rgba(92, 122, 94, 0.9);
+    background: var(--color-paper-accent);
   }
 
   pre:hover .copy-code,
@@ -620,7 +626,7 @@
     overflow: hidden;
     aspect-ratio: var(--ar);
     /* 加载中灰底（占位图未加载完时） */
-    background: var(--color-paper-code-bg, #f5f5f5);
+    background: var(--color-paper-code-bg);
     border-radius: 6px;
     margin: 1em 0;
   }
