@@ -9,6 +9,8 @@
 pub mod admin_layout;
 /// 后台页面骨架屏组件。
 pub mod admin_skeleton;
+/// 代码运行器组件（可运行代码块 UI）。
+pub mod code_runner;
 /// 评论相关组件。
 pub mod comments;
 /// 空状态组件（无数据时的插画配图 + 文案）。

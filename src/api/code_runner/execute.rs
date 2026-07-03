@@ -6,31 +6,46 @@
 //!
 //! 错误脱敏：匿名可见错误（不支持的语言、超限、限流）返回中文消息；系统内部
 //! 异常（容器拉起失败等）记服务端日志，对前端返回统一「系统暂时不可用」。
+//!
+//! 双目标可见性：本模块**不** cfg-gate（server function 需对 WASM 可见以便客户端
+//! 调用），但所有 server-only 的 `use` 与全局静态量都单独 gate，使 WASM 侧仅保留
+//! 函数签名（body 被 server 宏剥离）。与 posts 模块的约定一致。
 
 // 与 posts / settings 模块一致：Dioxus `#[server]` 宏触发 deprecated/unit 提示，按项目惯例放行。
 #![allow(clippy::unused_unit, deprecated)]
 
-use std::sync::{Arc, LazyLock};
-use std::time::Duration;
-
-use chrono::Utc;
 use dioxus::prelude::*;
-use tokio::sync::Semaphore;
 
+// 共享数据类型在函数签名中出现，双目标可见，不 gate。
+use crate::api::code_runner::{ExecRequest, ExecResult, ExecStatus, ExecTask};
+
+// server-only 辅助模块与依赖：仅在 server function body（被宏剥离到 WASM 之外）内使用。
+#[cfg(feature = "server")]
 use crate::api::code_runner::languages::{is_supported_lang, LANGUAGES};
+#[cfg(feature = "server")]
 use crate::api::code_runner::progress::{
     gc_old_tasks, insert_task, update_task_result, update_task_stage, EXEC_TASKS,
 };
-use crate::api::code_runner::{ExecRequest, ExecResult, ExecStatus, ExecTask};
+#[cfg(feature = "server")]
 use crate::api::rate_limit::{check_code_exec_limit, get_client_ip};
+#[cfg(feature = "server")]
 use crate::infra::docker::run_in_container;
+#[cfg(feature = "server")]
 use crate::infra::runner_config::{clamp_limits, RUNNER_CONFIG};
+#[cfg(feature = "server")]
+use std::sync::{Arc, LazyLock};
+#[cfg(feature = "server")]
+use std::time::Duration;
+#[cfg(feature = "server")]
+use tokio::sync::Semaphore;
 
 /// 并发容器控制信号量，限制同时在跑的容器数量（`CODE_RUNNER_MAX_CONCURRENT`）。
+#[cfg(feature = "server")]
 pub static RUNNER_SEMAPHORE: LazyLock<Arc<Semaphore>> =
     LazyLock::new(|| Arc::new(Semaphore::new(RUNNER_CONFIG.max_concurrent)));
 
 /// 从 FullstackContext 提取客户端 IP（无上下文时退回 "unknown"）。
+#[cfg(feature = "server")]
 fn client_ip() -> String {
     match dioxus::fullstack::FullstackContext::current() {
         Some(ctx) => {
@@ -107,8 +122,7 @@ pub async fn start_exec(req: ExecRequest) -> Result<String, ServerFnError> {
             .unwrap_or_else(|| lang_def.default_limits.clone());
         let final_limits = clamp_limits(base_limits, lang_def.allow_network);
 
-        let start_time = Utc::now();
-
+        let start_time = chrono::Utc::now();
         let res = run_in_container(
             &lang_def.image,
             &lang_def.run_cmd,
@@ -117,8 +131,7 @@ pub async fn start_exec(req: ExecRequest) -> Result<String, ServerFnError> {
             final_limits,
         )
         .await;
-
-        let duration_ms = (Utc::now() - start_time)
+        let duration_ms = (chrono::Utc::now() - start_time)
             .num_milliseconds()
             .max(0) as u64;
 
@@ -155,7 +168,7 @@ pub async fn start_exec(req: ExecRequest) -> Result<String, ServerFnError> {
                 };
                 let exec_res = ExecResult {
                     status: status.clone(),
-                    stdout: "".to_string(),
+                    stdout: String::new(),
                     stderr: if is_timeout {
                         "执行超时".to_string()
                     } else {

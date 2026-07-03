@@ -71,10 +71,10 @@ pub struct ExecTask {
     pub result: Option<ExecResult>,
 }
 
-// 子模块在后续任务中实现：
-#[cfg(feature = "server")]
-pub mod execute;
+// execute.rs 含 server function，需对双目标可见（不能 cfg-gate）；其 server-only
+// 依赖在文件内单独 gate。languages / progress 是纯 server 辅助，整体 gate。
 #[cfg(feature = "server")]
 pub mod languages;
 #[cfg(feature = "server")]
 pub mod progress;
+pub mod execute;
