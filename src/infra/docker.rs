@@ -118,9 +118,9 @@ pub async fn run_in_container(
     };
 
     // Start container
-    if let Err(e) = docker.start_container(&container_id, None::<StartContainerOptions<String>>).await {
-        return Err(e);
-    }
+    docker
+        .start_container(&container_id, None::<StartContainerOptions<String>>)
+        .await?;
 
     // Write source code to stdin and drop/close the writer
     use tokio::io::AsyncWriteExt;
@@ -130,7 +130,7 @@ pub async fn run_in_container(
         let _ = writer.shutdown().await;
     };
 
-    if let Err(_) = timeout(Duration::from_secs(5), write_fut).await {
+    if timeout(Duration::from_secs(5), write_fut).await.is_err() {
         return Err(bollard::errors::Error::IOError {
             err: std::io::Error::new(std::io::ErrorKind::TimedOut, "Writing to stdin timed out")
         });
@@ -366,10 +366,8 @@ mod tests {
         let mut leaked = Vec::new();
         for c in after {
             let id = c.id.unwrap();
-            if !before_ids.contains(&id) {
-                if c.image.as_deref() == Some("alpine:latest") {
-                    leaked.push(id);
-                }
+            if !before_ids.contains(&id) && c.image.as_deref() == Some("alpine:latest") {
+                leaked.push(id);
             }
         }
 

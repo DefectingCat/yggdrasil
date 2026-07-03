@@ -60,10 +60,10 @@ pub fn PostsPage(page: i32) -> Element {
     // 删除中 / 重建中文章 ID 集合：均由本组件持有（业务逻辑不归 hook 管）。
     // 改为非乐观删除后行会保留至请求完成，可并发点多个删除，故用 HashSet
     // 与 rebuilding 同形，按行通过 contains 判断 loading 态。
-    let mut deleting = use_signal(|| std::collections::HashSet::<i32>::new());
+    let mut deleting = use_signal(std::collections::HashSet::<i32>::new);
     // 重建中文章 ID 集合：支持多篇文章并发重建（行不会随点击消失，单值会被后点
     // 的覆盖先点的，故用 HashSet），按行通过 contains 判断 loading 态。
-    let mut rebuilding = use_signal(|| std::collections::HashSet::<i32>::new());
+    let mut rebuilding = use_signal(std::collections::HashSet::<i32>::new);
     // 重建缓存的状态由本组件持有并下发给 RebuildCacheBar：结果消息也在本组件
     // 渲染（header 与表格之间的独立行），既不撑高 header 触发 items-center 重排，
     // 也不脱离文档流溢进表格。rebuilding 仅按钮态用，不在此渲染。

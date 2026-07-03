@@ -31,8 +31,8 @@ pub fn Runner() -> Element {
     let mut lang = use_signal(|| "python".to_string());
     // 语言切换时刷新示例源码（首次进入也有默认值）。
     let mut source = use_signal(|| default_source("python"));
-    let mut overrides_json = use_signal(|| String::new());
-    let mut override_error = use_signal(|| String::new());
+    let mut overrides_json = use_signal(String::new);
+    let mut override_error = use_signal(String::new);
 
     let current_source = source();
     let current_lang = lang();

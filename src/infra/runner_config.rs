@@ -56,7 +56,7 @@ pub static RUNNER_CONFIG: LazyLock<RunnerConfig> = LazyLock::new(|| {
 
 #[cfg(feature = "server")]
 pub fn clamp_limits(merged: ResourceLimits, lang_allows_network: bool) -> ResourceLimits {
-    clamp_limits_impl(merged, lang_allows_network, &*RUNNER_CONFIG)
+    clamp_limits_impl(merged, lang_allows_network, &RUNNER_CONFIG)
 }
 
 #[cfg(feature = "server")]
@@ -102,7 +102,7 @@ mod tests {
         assert!(clamped.memory_mb <= 1024);
         assert!(clamped.timeout_secs <= 30);
         assert!(clamped.output_bytes <= 1048576);
-        assert_eq!(clamped.allow_network, false);
+        assert!(!clamped.allow_network);
     }
 
     #[test]
@@ -132,7 +132,7 @@ mod tests {
         assert_eq!(clamped.memory_mb, 8);
         assert_eq!(clamped.timeout_secs, 0);
         assert_eq!(clamped.output_bytes, 50);
-        assert_eq!(clamped.allow_network, true);
+        assert!(clamped.allow_network);
     }
 
     #[test]

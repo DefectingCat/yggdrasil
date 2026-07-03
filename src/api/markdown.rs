@@ -90,9 +90,9 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
     let mut in_heading = false;
     let mut in_codeblock = false;
     let mut code_lang: Option<String> = None;
-    /// 可运行代码块的 (lang, html-escaped overrides JSON)。
-    /// 为 None 表示普通代码块。原始源码在 End 处从 code_buffer 转义后存入 data-source，
-    /// 供阅读器无损提取（避免从高亮 HTML 反解）。
+    // 可运行代码块的 (lang, html-escaped overrides JSON)。
+    // 为 None 表示普通代码块。原始源码在 End 处从 code_buffer 转义后存入 data-source，
+    // 供阅读器无损提取（避免从高亮 HTML 反解）。
     let mut code_runnable: Option<(String, String)> = None;
     let mut code_buffer = String::new();
     let mut non_heading_events: Vec<Event> = Vec::new();
@@ -157,23 +157,20 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
                 };
                 // 解析围栏 info：识别 `runnable` 标记与可选 ResourceLimits JSON 覆盖。
                 // 仅在「标记为 runnable 且语言受支持」时挂 data-*，供阅读器扫描挂载运行器。
-                code_runnable = code_lang
-                    .as_deref()
-                    .map(|info| {
-                        let (lang, runnable, overrides) =
-                            crate::api::code_runner::languages::parse_fence_info(info);
-                        if runnable && crate::api::code_runner::languages::is_supported_lang(&lang) {
-                            // overrides 序列化为 JSON 后 HTML 转义，避免属性注入。
-                            let ov_json = overrides
-                                .map(|o| serde_json::to_string(&o).unwrap_or_default())
-                                .unwrap_or_default();
-                            let overrides_escaped = crate::utils::html::escape_html(&ov_json);
-                            Some((lang, overrides_escaped))
-                        } else {
-                            None
-                        }
-                    })
-                    .flatten();
+                code_runnable = code_lang.as_deref().and_then(|info| {
+                    let (lang, runnable, overrides) =
+                        crate::api::code_runner::languages::parse_fence_info(info);
+                    if runnable && crate::api::code_runner::languages::is_supported_lang(&lang) {
+                        // overrides 序列化为 JSON 后 HTML 转义，避免属性注入。
+                        let ov_json = overrides
+                            .map(|o| serde_json::to_string(&o).unwrap_or_default())
+                            .unwrap_or_default();
+                        let overrides_escaped = crate::utils::html::escape_html(&ov_json);
+                        Some((lang, overrides_escaped))
+                    } else {
+                        None
+                    }
+                });
                 code_buffer.clear();
             }
             Event::Text(text) if in_codeblock => {

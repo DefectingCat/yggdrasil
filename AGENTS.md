@@ -75,12 +75,32 @@ RATE_LIMIT_COMMENT_PER_SEC=1          # comment posting
 RATE_LIMIT_COMMENT_BURST=5
 RATE_LIMIT_UNKNOWN_PER_SEC=30         # fallback bucket when real client IP can't be determined
 RATE_LIMIT_UNKNOWN_BURST=100
+RATE_LIMIT_CODE_EXEC_PER_SEC=1        # code runner per-IP burst (governor: integer only, no decimals)
+RATE_LIMIT_CODE_EXEC_BURST=3
+RATE_LIMIT_CODE_EXEC_DAILY=50          # code runner per-IP daily cap
 DB_POOL_SIZE=20             # database connection pool size
 MIGRATE_STARTUP_TIMEOUT_SECS=30  # how long startup waits for PostgreSQL before giving up
 STATEMENT_TIMEOUT_SECS=30   # per-query timeout; slow queries are canceled to protect the pool
 SSR_CACHE_SECS=3600         # incremental SSR cache TTL (set 0 in dev)
 SYSINFO_SAMPLE_SECS=0.5     # sysinfo sampling interval in seconds, supports decimals
 ```
+
+Code Runner tuning (all optional, sane defaults):
+
+```
+CODE_RUNNER_ALLOW_NETWORK=false        # global network switch; AND-ed with per-language allow_network
+CODE_RUNNER_MAX_CONCURRENT=4           # tokio Semaphore for in-flight containers
+CODE_RUNNER_MAX_CPU_CORES=2.0          # upper clamp for cpu_cores (lower bound 0.1)
+CODE_RUNNER_MAX_MEMORY_MB=1024         # upper clamp for memory_mb (lower bound 16)
+CODE_RUNNER_MAX_TIMEOUT_SECS=30        # upper clamp for timeout_secs (lower bound 1)
+CODE_RUNNER_MAX_OUTPUT_BYTES=1048576   # hard cap on stdout+stderr captured
+CODE_RUNNER_MAX_SOURCE_BYTES=65536     # max source size accepted by StartExec
+CODE_RUNNER_QUEUE_TIMEOUT_SECS=30      # how long a task waits for a container slot before failing
+CODE_RUNNER_TASK_TTL_SECS=300          # DashMap task entry lifetime (gc_old_tasks)
+CODE_RUNNER_LANGUAGES=python,node      # ops whitelist (must also exist in LANGUAGES registry)
+DOCKER_SOCKET_PATH=/var/run/docker.sock
+```
+
 
 Session / security tuning:
 
@@ -129,10 +149,11 @@ src/api/          — server functions + Axum handlers
   markdown.rs     — Markdown→HTML rendering (pulldown-cmark + ammonia sanitization)
   image.rs        — image serving with processing pipeline + disk+memory cache
   upload.rs       — image upload, auto-converts to WebP
-  rate_limit.rs   — governor-based rate limiting (5 tiers: strict/upload/image/comment/unknown)
+  rate_limit.rs   — governor-based rate limiting (6 tiers: strict/upload/image/comment/unknown/code_exec)
   settings.rs     — site settings server functions (trash retention, etc.)
   slug.rs         — URL slug generation
   posts/          — CRUD server functions for blog posts
+  code_runner/    — runnable code-block server functions + data structures (see Code Runner section)
 src/auth/         — password hashing (Argon2) + session token management
 src/bin/          — generate_highlight_css (build-time CSS generation)
 src/cache.rs      — moka future-based caches for posts, tags, stats + cache_stats()
@@ -150,7 +171,22 @@ src/theme.rs      — light/dark theme with SSR cookie + WASM localStorage
 src/webp.rs       — zenwebp encode/decode (image crate has no WebP)
 src/tiptap_bridge.rs    — wasm-bindgen bindings for Tiptap editor
 src/codemirror_bridge.rs — wasm-bindgen bindings for CodeMirror editor (mirrors tiptap_bridge)
+src/infra/        — Docker execution layer + runner config (server-only); see Code Runner section
 ```
+
+## Code Runner (` ```lang runnable ` code blocks)
+
+Readers can execute fenced code blocks in isolated Docker containers; authors get a `/admin/runner` trial sandbox. Three-layer architecture, all Docker interaction gated behind `#[cfg(feature = "server")]`:
+
+- **Execution layer** (`src/infra/docker.rs`, server-only): `bollard` client over Unix socket (`DOCKER_CLIENT` LazyLock). `run_in_container` creates a read-only-rootfs container (tmpfs `/code`,`/tmp`,`/run`; cpu/memory/pids/ulimits cap; `cap_drop=ALL`; `no-new-privileges`; non-root `1000:1000`; `network_mode` none/bridge), injects source via stdin, waits with timeout, captures stdout/stderr (truncated to `output_bytes`), inspects OOM, force-removes via `ContainerGuard` Drop. `src/infra/runner_config.rs` (`RUNNER_CONFIG`) reads all `CODE_RUNNER_*` env vars; `clamp_limits` AND-merges request overrides × language `allow_network` × global switch.
+- **API layer** (`src/api/code_runner/`): shared `ExecRequest`/`ExecResult`/`ExecStatus`/`ExecTask` structs (compile on both targets); `progress.rs` = DashMap task registry + `gc_old_tasks`; `languages.rs` = `LANGUAGES` registry + `parse_fence_info`; `execute.rs` = `StartExec`/`GetExecResult` server functions (double rate-limit → whitelist → size check → enqueue → `tokio::spawn` + `RUNNER_SEMAPHORE` concurrency cap → clamp → run_in_container). System errors are sanitized to 「系统暂时不可用」 for anonymous callers; full errors in server logs only.
+- **Markdown/render layer**: a fenced block ` ```python runnable {...overrides} ` renders to `<pre data-runnable="true" data-lang="python" data-overrides="..." data-source="...">` (sanitizer whitelists these 4 attrs on `<pre>`). `PostContent` (`src/components/post/post_content.rs`) splits `content_html` into `Html`/`Runnable` fragments so each runnable block renders as a real `<CodeRunner>` vdom element (no manual DOM mutation → no hydration conflict). `CodeRunner` component polls `GetExecResult` via WASM-friendly `sleep_ms`.
+
+**Critical WASM-visibility rule**: `code_runner/execute.rs` is **not** cfg-gated (server functions must be visible to the client), but every server-only `use`/static inside it is individually `#[cfg(feature = "server")]`. The shared `use` of `ExecRequest`/`ExecTask` (used in signatures) stays ungated. `code_runner/languages.rs` and `code_runner/progress.rs` (pure server helpers) are wholly gated. Mirrors the `posts/` module convention.
+
+**Governor 0.8 caveat**: `Quota::per_day` does not exist; `CODE_EXEC_DAILY_LIMITER` uses `Quota::with_period(24h).allow_burst(daily)`. `RATE_LIMIT_CODE_EXEC_PER_SEC` must be an integer (governor's `per_second` takes `NonZeroU32`; decimals in `.env` fall back to the default 1).
+
+**Runner images** (`docker/`): `build-runners.sh` builds `yggdrasil-runner-base` → `yggdrasil-runner-python` → `yggdrasil-runner-node`; tags must match `LANGUAGES` image fields. Python image symlinks `python`→`python3` to match `run_cmd`. `runner.toml` files are image self-descriptions only — runtime config is the Rust `LANGUAGES` registry + `CODE_RUNNER_*` env, not parsed from toml.
 
 ## Frontend Lib Subprojects
 

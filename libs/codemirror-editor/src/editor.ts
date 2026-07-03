@@ -78,9 +78,7 @@ export class CodeMirrorInstance {
           // vim 必须在 keymap 最前（@replit/codemirror-vim 仓库要求）
           this.vimCompartment.of(options.vim ? [vim()] : []),
           this.themeCompartment.of(themeExtension(theme)),
-          this.languageCompartment.of(
-            buildLanguageExtension(this.language, schema),
-          ),
+          this.languageCompartment.of(buildLanguageExtension(this.language, schema)),
           EditorView.updateListener.of((v) => {
             if (v.docChanged) {
               options.onChange?.(this.view.state.doc.toString());
@@ -115,9 +113,7 @@ export class CodeMirrorInstance {
   setLanguage(lang: string): void {
     this.language = lang;
     this.view.dispatch({
-      effects: this.languageCompartment.reconfigure(
-        buildLanguageExtension(lang, this.schema),
-      ),
+      effects: this.languageCompartment.reconfigure(buildLanguageExtension(lang, this.schema)),
     });
   }
 
@@ -128,9 +124,7 @@ export class CodeMirrorInstance {
     // 仅当当前是 SQL 语言时才重配 extension（其它语言不消费 schema）。
     if ((this.language ?? '').toLowerCase() === 'sql' || !this.language) {
       this.view.dispatch({
-        effects: this.languageCompartment.reconfigure(
-          buildLanguageExtension('sql', schema),
-        ),
+        effects: this.languageCompartment.reconfigure(buildLanguageExtension('sql', schema)),
       });
     }
   }

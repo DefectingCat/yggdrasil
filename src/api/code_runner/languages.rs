@@ -12,9 +12,8 @@ use std::sync::LazyLock;
 
 use crate::infra::runner_config::{ResourceLimits, RUNNER_CONFIG};
 
-/// 单个语言的运行定义。
+/// 单个语言的运行定义。语言名即 [`LANGUAGES`] 的 key，不再冗余存字段。
 pub struct LanguageDef {
-    pub name: String,
     /// 容器镜像（task 12 的 docker build 产出，如 `yggdrasil-runner-python:latest`）。
     pub image: String,
     /// 容器内执行命令（源码会注入到 `/code/main.{ext}`）。
@@ -33,7 +32,6 @@ pub static LANGUAGES: LazyLock<HashMap<String, LanguageDef>> = LazyLock::new(|| 
     m.insert(
         "python".to_string(),
         LanguageDef {
-            name: "python".to_string(),
             image: "yggdrasil-runner-python:latest".to_string(),
             run_cmd: "python /code/main.py".to_string(),
             extension: "py".to_string(),
@@ -51,7 +49,6 @@ pub static LANGUAGES: LazyLock<HashMap<String, LanguageDef>> = LazyLock::new(|| 
     m.insert(
         "node".to_string(),
         LanguageDef {
-            name: "node".to_string(),
             image: "yggdrasil-runner-node:latest".to_string(),
             run_cmd: "node /code/main.js".to_string(),
             extension: "js".to_string(),

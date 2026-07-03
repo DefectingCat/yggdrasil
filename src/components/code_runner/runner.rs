@@ -29,10 +29,10 @@ pub fn CodeRunner(
     overrides: Option<ResourceLimits>,
 ) -> Element {
     let mut running = use_signal(|| false);
-    let mut stage = use_signal(|| String::new());
-    let mut output = use_signal(|| String::new());
-    let mut exit_info = use_signal(|| String::new());
-    let mut error_msg = use_signal(|| String::new());
+    let mut stage = use_signal(String::new);
+    let mut output = use_signal(String::new);
+    let mut exit_info = use_signal(String::new);
+    let mut error_msg = use_signal(String::new);
 
     // 为每个实例生成稳定的容器 id（CodeMirror 容器，由调用方在 WASM 端挂载）。
     // use_id 在 Dioxus 0.7 提供 scope 内稳定的 id；退回 use_hook 保证只算一次。
