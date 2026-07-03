@@ -5,7 +5,7 @@ use tokio::time::timeout;
 use futures::StreamExt;
 
 use bollard::Docker;
-use bollard::container::{Config, CreateContainerOptions, StartContainerOptions, RemoveContainerOptions, LogOutput, LogsOptions, WaitContainerOptions};
+use bollard::container::{Config, CreateContainerOptions, StartContainerOptions, RemoveContainerOptions, LogOutput, WaitContainerOptions};
 use bollard::models::{HostConfig, ResourcesUlimits};
 use crate::infra::runner_config::{ResourceLimits, RUNNER_CONFIG};
 
@@ -42,6 +42,25 @@ pub fn build_host_config(limits: &ResourceLimits) -> HostConfig {
     }
 }
 
+struct ContainerGuard {
+    container_id: String,
+    docker: Docker,
+}
+
+impl Drop for ContainerGuard {
+    fn drop(&mut self) {
+        let docker = self.docker.clone();
+        let container_id = self.container_id.clone();
+        tokio::spawn(async move {
+            let remove_options = Some(RemoveContainerOptions {
+                force: true,
+                ..Default::default()
+            });
+            let _ = docker.remove_container(&container_id, remove_options).await;
+        });
+    }
+}
+
 pub async fn run_in_container(
     image_name: &str,
     run_cmd: &str,
@@ -75,11 +94,15 @@ pub async fn run_in_container(
         config
     ).await?;
 
-    let container_id = &container.id;
+    let container_id = container.id;
+    let _guard = ContainerGuard {
+        container_id: container_id.clone(),
+        docker: docker.clone(),
+    };
 
     // Attach to container to stream stdin, stdout, and stderr
     let attach_res = docker.attach_container(
-        container_id,
+        &container_id,
         Some(bollard::container::AttachContainerOptions::<String> {
             stdin: Some(true),
             stdout: Some(true),
@@ -89,32 +112,34 @@ pub async fn run_in_container(
         })
     ).await;
 
-    let (write_half, read_half) = match attach_res {
-        Ok(res) => (Some(res.input), Some(res.output)),
-        Err(e) => {
-            let _ = docker.remove_container(container_id, None::<RemoveContainerOptions>).await;
-            return Err(e);
-        }
+    let (mut writer, mut stream) = match attach_res {
+        Ok(res) => (res.input, res.output),
+        Err(e) => return Err(e),
     };
 
     // Start container
-    if let Err(e) = docker.start_container(container_id, None::<StartContainerOptions<String>>).await {
-        let _ = docker.remove_container(container_id, None::<RemoveContainerOptions>).await;
+    if let Err(e) = docker.start_container(&container_id, None::<StartContainerOptions<String>>).await {
         return Err(e);
     }
 
     // Write source code to stdin and drop/close the writer
-    if let Some(mut writer) = write_half {
-        use tokio::io::AsyncWriteExt;
+    use tokio::io::AsyncWriteExt;
+    let write_fut = async {
         let _ = writer.write_all(source.as_bytes()).await;
         let _ = writer.flush().await;
         let _ = writer.shutdown().await;
-        drop(writer);
+    };
+
+    if let Err(_) = timeout(Duration::from_secs(5), write_fut).await {
+        return Err(bollard::errors::Error::IOError {
+            err: std::io::Error::new(std::io::ErrorKind::TimedOut, "Writing to stdin timed out")
+        });
     }
+    drop(writer);
 
     // Wait for execution with timeout control
     let wait_future = async {
-        let mut wait_stream = docker.wait_container(container_id, None::<WaitContainerOptions<String>>);
+        let mut wait_stream = docker.wait_container(&container_id, None::<WaitContainerOptions<String>>);
         wait_stream.next().await
     };
 
@@ -131,52 +156,50 @@ pub async fn run_in_container(
         Err(_) => {
             // timeout, kill container
             timed_out = true;
-            let _ = docker.kill_container::<String>(container_id, None).await;
+            let _ = docker.kill_container::<String>(&container_id, None).await;
         }
     }
 
     // Collect logs
-    let log_options = Some(LogsOptions::<String> {
-        stdout: true,
-        stderr: true,
-        ..Default::default()
-    });
-
     let mut stdout_buf = Vec::new();
     let mut stderr_buf = Vec::new();
 
-    if let Some(mut stream) = read_half {
-        while let Some(Ok(chunk)) = stream.next().await {
-            match chunk {
-                LogOutput::StdOut { message } => stdout_buf.extend_from_slice(&message),
-                LogOutput::StdErr { message } => stderr_buf.extend_from_slice(&message),
-                _ => {}
+    while let Some(item) = stream.next().await {
+        match item {
+            Ok(chunk) => {
+                match chunk {
+                    LogOutput::StdOut { message } => {
+                        let remaining = (limits.output_bytes as usize).saturating_sub(stdout_buf.len() + stderr_buf.len());
+                        if remaining > 0 {
+                            let to_add = message.len().min(remaining);
+                            stdout_buf.extend_from_slice(&message[..to_add]);
+                        }
+                    }
+                    LogOutput::StdErr { message } => {
+                        let remaining = (limits.output_bytes as usize).saturating_sub(stdout_buf.len() + stderr_buf.len());
+                        if remaining > 0 {
+                            let to_add = message.len().min(remaining);
+                            stderr_buf.extend_from_slice(&message[..to_add]);
+                        }
+                    }
+                    _ => {}
+                }
+                if stdout_buf.len() + stderr_buf.len() >= limits.output_bytes as usize {
+                    break;
+                }
             }
-        }
-    } else {
-        // if attach failed to stream, fall back to logs api
-        let mut log_stream = docker.logs(container_id, log_options);
-        while let Some(Ok(chunk)) = log_stream.next().await {
-            match chunk {
-                LogOutput::StdOut { message } => stdout_buf.extend_from_slice(&message),
-                LogOutput::StdErr { message } => stderr_buf.extend_from_slice(&message),
-                _ => {}
+            Err(e) => {
+                tracing::error!("Error reading container log stream: {:?}", e);
+                break;
             }
         }
     }
 
     // Check OOM status
-    let inspect = docker.inspect_container(container_id, None).await;
+    let inspect = docker.inspect_container(&container_id, None).await;
     let oom_killed = inspect.ok().and_then(|info| {
         info.state.and_then(|s| s.oom_killed)
     }).unwrap_or(false);
-
-    // Remove container
-    let remove_options = Some(RemoveContainerOptions {
-        force: true,
-        ..Default::default()
-    });
-    let _ = docker.remove_container(container_id, remove_options).await;
 
     // Truncate output to limits.output_bytes
     let limit_bytes = limits.output_bytes as usize;
@@ -217,6 +240,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_run_in_container_success() {
         let limits = ResourceLimits {
             cpu_cores: 1.0,
@@ -242,6 +266,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_run_in_container_output_truncation() {
         let limits = ResourceLimits {
             cpu_cores: 1.0,
@@ -267,6 +292,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_run_in_container_timeout() {
         let limits = ResourceLimits {
             cpu_cores: 1.0,
@@ -292,5 +318,69 @@ mod tests {
             }
             _ => panic!("Expected IOError(TimedOut), got {:?}", err),
         }
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_run_in_container_cancellation() {
+        let docker = &*DOCKER_CLIENT;
+        
+        let before = docker.list_containers(Some(bollard::container::ListContainersOptions::<String> {
+            all: true,
+            ..Default::default()
+        })).await.unwrap();
+        let before_ids: std::collections::HashSet<String> = before.into_iter().map(|c| c.id.unwrap()).collect();
+
+        let limits = ResourceLimits {
+            cpu_cores: 1.0,
+            memory_mb: 128,
+            timeout_secs: 10,
+            output_bytes: 1024,
+            allow_network: false,
+        };
+
+        let run_fut = run_in_container(
+            "alpine:latest",
+            "sleep 100",
+            "",
+            "txt",
+            limits,
+        );
+
+        tokio::select! {
+            _ = run_fut => {
+                panic!("Should have been cancelled");
+            }
+            _ = tokio::time::sleep(Duration::from_secs(1)) => {
+                // Cancelled!
+            }
+        }
+
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        let after = docker.list_containers(Some(bollard::container::ListContainersOptions::<String> {
+            all: true,
+            ..Default::default()
+        })).await.unwrap();
+
+        let mut leaked = Vec::new();
+        for c in after {
+            let id = c.id.unwrap();
+            if !before_ids.contains(&id) {
+                if c.image.as_deref() == Some("alpine:latest") {
+                    leaked.push(id);
+                }
+            }
+        }
+
+        let leaked_count = leaked.len();
+        for id in leaked {
+            let _ = docker.remove_container(&id, Some(bollard::container::RemoveContainerOptions {
+                force: true,
+                ..Default::default()
+            })).await;
+        }
+
+        assert_eq!(leaked_count, 0, "Found {} leaked containers", leaked_count);
     }
 }
