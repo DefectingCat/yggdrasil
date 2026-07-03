@@ -52,21 +52,21 @@ pub fn Admin() -> Element {
     rsx! {
         div { class: "w-full max-w-7xl mx-auto space-y-8",
             // 顶部标题和全局操作栏
-            div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-paper-border",
+            div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[var(--color-paper-border)]",
                 div {
-                    h1 { class: "text-2xl font-semibold tracking-tight text-paper-primary", "SYSTEM_DASHBOARD" }
-                    p { class: "text-sm text-paper-secondary mt-1 font-mono uppercase tracking-widest", "Overview & Recent Activities" }
+                    h1 { class: "text-3xl font-bold tracking-tight text-[var(--color-paper-primary)]", "仪表盘" }
+                    p { class: "text-base text-[var(--color-paper-secondary)] mt-1", "数据概览与近期活动" }
                 }
                 div { class: "flex items-center gap-3",
                     Link {
                         class: "{BTN_SECONDARY}",
                         to: Route::Posts {},
-                        "MANAGE_POSTS"
+                        "管理文章"
                     }
                     Link {
-                        class: "px-6 py-3 rounded-sm text-xs font-mono uppercase tracking-widest text-paper-theme bg-paper-primary hover:bg-paper-primary/90 transition-all cursor-pointer",
+                        class: "px-6 py-2 rounded-full text-sm font-medium text-[var(--color-paper-theme)] bg-[var(--color-paper-primary)] hover:opacity-90 shadow-sm transition-all cursor-pointer",
                         to: Route::Write {},
-                        "+ NEW_POST"
+                        "发布文章"
                     }
                 }
             }
@@ -76,9 +76,9 @@ pub fn Admin() -> Element {
                 match stats() {
                     Some(s) => {
                         rsx! {
-                            StatCard { value: s.total.to_string(), label: "TOTAL_POSTS", trend: "+12%" }
-                            StatCard { value: s.published.to_string(), label: "PUBLISHED", trend: "Active" }
-                            StatCard { value: s.drafts.to_string(), label: "DRAFTS", trend: "Pending" }
+                            StatCard { value: s.total.to_string(), label: "总文章数".to_string(), trend: "+12%".to_string() }
+                            StatCard { value: s.published.to_string(), label: "已发布".to_string(), trend: "活跃".to_string() }
+                            StatCard { value: s.drafts.to_string(), label: "草稿".to_string(), trend: "待处理".to_string() }
                         }
                     }
                     None => {
@@ -102,13 +102,13 @@ pub fn Admin() -> Element {
                             let (color_class, text_class) = if count > 0 {
                                 ("text-amber-500", "text-amber-500")
                             } else {
-                                ("text-paper-secondary", "text-paper-primary")
+                                ("text-[var(--color-paper-secondary)]", "text-[var(--color-paper-primary)]")
                             };
                             rsx! {
-                                div { class: "text-[11px] font-mono tracking-widest uppercase {color_class}", "PENDING_COMMENTS" }
-                                div { class: "flex items-baseline justify-between",
+                                div { class: "text-sm font-medium {color_class}", "待审评论" }
+                                div { class: "flex items-baseline justify-between mt-4",
                                     div { class: "text-4xl font-light tracking-tight {text_class}", "{count}" }
-                                    div { class: "text-xs font-mono text-paper-secondary group-hover:text-paper-primary transition-colors", "REVIEW ->" }
+                                    div { class: "text-xs font-medium text-[var(--color-paper-secondary)] group-hover:text-[var(--color-paper-primary)] transition-colors", "去审核 →" }
                                 }
                             }
                         }
@@ -122,10 +122,10 @@ pub fn Admin() -> Element {
                 }
             }
 
-            // 最近文章列表 (紧凑表格样式)
+            // 最近文章列表
             div { class: "mt-8",
                 div { class: "flex items-center justify-between mb-4",
-                    h2 { class: "text-sm font-mono tracking-widest text-paper-secondary uppercase", "RECENT_PUBLICATIONS" }
+                    h2 { class: "text-lg font-bold text-[var(--color-paper-primary)]", "近期文章" }
                 }
                 div { class: "{ADMIN_CARD_CLASS} overflow-hidden",
                     match recent_posts() {
@@ -160,13 +160,12 @@ pub fn Admin() -> Element {
 #[component]
 fn StatCard(value: String, label: String, trend: String) -> Element {
     rsx! {
-        div { class: "{ADMIN_CARD_CLASS} p-6 flex flex-col justify-between h-32 relative overflow-hidden group",
-            div { class: "absolute top-0 left-0 w-1 h-full bg-paper-border group-hover:bg-paper-primary transition-colors" }
-            div { class: "flex justify-between items-start pl-2",
-                div { class: "text-[11px] font-mono tracking-widest text-paper-secondary uppercase", "{label}" }
-                div { class: "text-[10px] font-mono px-1.5 py-0.5 rounded-sm border border-paper-border text-paper-tertiary", "{trend}" }
+        div { class: "{ADMIN_CARD_CLASS} p-6 flex flex-col justify-between h-32 relative overflow-hidden group hover:shadow-md transition-shadow",
+            div { class: "flex justify-between items-start",
+                div { class: "text-sm font-medium text-[var(--color-paper-secondary)]", "{label}" }
+                div { class: "text-xs px-2 py-0.5 rounded-full border border-[var(--color-paper-border)] text-[var(--color-paper-tertiary)]", "{trend}" }
             }
-            div { class: "text-4xl font-light tracking-tight text-paper-primary pl-2 mt-4", "{value}" }
+            div { class: "text-4xl font-light tracking-tight text-[var(--color-paper-primary)] mt-4", "{value}" }
         }
     }
 }
@@ -175,17 +174,16 @@ fn StatCard(value: String, label: String, trend: String) -> Element {
 fn RecentPostItem(post: PostListItem) -> Element {
     let date_str = post.formatted_date();
     let status_label = post.status_label();
-    // 把圆角的 badge 换成控制台风格的方角 badge
-    let status_class = post.status_class().replace("rounded-full", "rounded-sm border border-paper-border");
+    let status_class = post.status_class();
 
     rsx! {
-        div { class: "flex flex-col sm:flex-row sm:justify-between sm:items-center px-6 py-4 hover:bg-paper-theme transition-colors cursor-pointer group",
+        div { class: "flex flex-col sm:flex-row sm:justify-between sm:items-center px-6 py-4 hover:bg-[var(--color-paper-accent-soft)] transition-colors cursor-pointer group",
             div { class: "flex items-center gap-4",
-                span { class: "text-[11px] font-mono text-paper-tertiary w-12 hidden sm:block", "#{post.id:04}" }
-                span { class: "text-sm font-medium text-paper-primary group-hover:text-paper-accent transition-colors", "{post.title}" }
-                span { class: "text-[10px] font-mono px-2 py-0.5 {status_class} uppercase tracking-wider", "{status_label}" }
+                span { class: "text-xs text-[var(--color-paper-tertiary)] w-12 hidden sm:block", "#{post.id:04}" }
+                span { class: "text-sm font-medium text-[var(--color-paper-primary)] group-hover:text-[var(--color-paper-accent)] transition-colors", "{post.title}" }
+                span { class: "text-xs px-2 py-0.5 {status_class}", "{status_label}" }
             }
-            span { class: "text-xs font-mono text-paper-secondary mt-2 sm:mt-0", "{date_str}" }
+            span { class: "text-xs text-[var(--color-paper-secondary)] mt-2 sm:mt-0", "{date_str}" }
         }
     }
 }

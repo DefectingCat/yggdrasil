@@ -36,9 +36,9 @@ use dioxus::web::{WebEventExt, WebFileExt};
 /// 元信息表单复用的样式常量（label 与 input 各一份，避免多处重复粘贴）。
 /// 提升到模块级以便 write_editor 与 CoverUploader 共用。
 const META_LABEL_CLASS: &str =
-    "block text-[10px] font-mono text-[var(--color-paper-secondary)] uppercase tracking-widest mb-2";
+    "block text-sm font-medium text-[var(--color-paper-secondary)] mb-2";
 const META_INPUT_CLASS: &str =
-    "w-full text-sm font-mono bg-transparent text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border-b border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] transition-colors pb-1.5";
+    "w-full text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-xl px-4 py-2.5 shadow-sm transition-all";
 
 /// 新建文章页面组件。
 ///
@@ -413,10 +413,10 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     // 页面标题与状态
                     div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[var(--color-paper-border)]",
                         div {
-                            h1 { class: "text-2xl font-semibold tracking-tight text-[var(--color-paper-primary)] uppercase", 
-                                if is_edit { "EDIT_DOCUMENT" } else { "NEW_DOCUMENT" } 
+                            h1 { class: "text-3xl font-bold tracking-tight text-[var(--color-paper-primary)]", 
+                                if is_edit { "编辑文章" } else { "撰写新文章" }
                             }
-                            p { class: "text-sm text-[var(--color-paper-secondary)] mt-1 font-mono uppercase tracking-widest", "Content Editor System" }
+                            p { class: "text-base text-[var(--color-paper-secondary)] mt-1", "内容编辑器" }
                         }
                     }
 
@@ -528,14 +528,14 @@ fn write_editor(post_id: Option<i32>) -> Element {
             // 底部操作栏 - 跟随页面滚动
             div { class: "flex items-center gap-4 pt-4 pb-4 border-t border-[var(--color-paper-border)]",
                 button {
-                    class: "px-4 py-2 text-xs font-mono uppercase tracking-widest text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors cursor-pointer",
+                    class: "px-6 py-2 rounded-full text-sm font-medium text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors cursor-pointer",
                     onclick: move |_| {
                         let _ = dioxus::router::navigator().push(Route::Posts {});
                     },
-                    "CANCEL"
+                    "取消"
                 }
                 div { class: "w-px h-5 bg-[var(--color-paper-border)]" }
-                div { class: "relative inline-flex items-center px-4 py-2 text-xs font-mono uppercase tracking-widest text-[var(--color-paper-secondary)] cursor-pointer",
+                div { class: "relative inline-flex items-center px-4 py-2 rounded-full text-sm font-medium text-[var(--color-paper-secondary)] border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] cursor-pointer hover:bg-[var(--color-paper-theme)] transition-colors",
                     select {
                         class: "absolute inset-0 w-full h-full opacity-0 cursor-pointer",
                         style: "appearance: none; -webkit-appearance: none;",
@@ -565,10 +565,10 @@ fn write_editor(post_id: Option<i32>) -> Element {
                 }
                 div { class: "w-px h-5 bg-[var(--color-paper-border)]" }
                 button {
-                    class: if saving() { "px-6 py-2 text-xs font-mono uppercase tracking-widest bg-[var(--color-paper-tertiary)] text-[var(--color-paper-secondary)] rounded-sm cursor-not-allowed" } else { "px-6 py-2 text-xs font-mono uppercase tracking-widest bg-[var(--color-paper-primary)] text-[var(--color-paper-theme)] rounded-sm hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer" },
+                    class: if saving() { "px-6 py-2 rounded-full text-sm font-medium bg-[var(--color-paper-tertiary)] text-[var(--color-paper-secondary)] cursor-not-allowed shadow-sm" } else { "px-6 py-2 rounded-full text-sm font-medium bg-[var(--color-paper-primary)] text-[var(--color-paper-theme)] hover:opacity-90 shadow-sm transition-all cursor-pointer" },
                     disabled: saving(),
                     onclick: on_submit,
-                    if saving() { "SAVING..." } else if is_edit { "UPDATE" } else { "PUBLISH" }
+                    if saving() { "保存中..." } else if is_edit { "更新文章" } else { "发布文章" }
                 }
             }
         }
@@ -677,7 +677,7 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
             // —— 上传中：骨架占位 + 文案 ——
             if cover_uploading() {
                 div { class: "absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--color-paper-tertiary)]/30 animate-pulse",
-                    span { class: "text-[10px] font-mono tracking-widest uppercase text-[var(--color-paper-secondary)]", "UPLOADING..." }
+                    span { class: "text-sm font-medium text-[var(--color-paper-secondary)]", "正在上传..." }
                 }
             }
 
@@ -731,7 +731,7 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
                 }
                 // 底部渐变遮罩 + "更换封面"提示（hover 出现）。
                 div { class: "absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-end justify-center pb-2 pointer-events-none",
-                    span { class: "text-[10px] font-mono uppercase tracking-widest text-white/90", "CLICK_TO_REPLACE" }
+                    span { class: "text-sm font-medium text-white/90 drop-shadow-md", "点击更换封面" }
                 }
             }
 
@@ -758,19 +758,19 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
                             y2: "15",
                         }
                     }
-                    span { class: "text-[10px] font-mono uppercase tracking-widest text-[var(--color-paper-secondary)] shrink-0",
-                        "DRAG / DROP / PASTE / BROWSE"
+                    span { class: "text-sm font-medium text-[var(--color-paper-secondary)] shrink-0",
+                        "拖拽 / 粘贴 / 点击上传"
                     }
                     // URL 文字链：阻止 label 的默认 file 触发，切换到 URL 输入模式。
                     span {
-                        class: "text-[10px] font-mono uppercase tracking-widest text-[var(--color-paper-tertiary)] hover:text-[var(--color-paper-primary)] transition-colors ml-auto shrink-0",
+                        class: "text-sm font-medium text-[var(--color-paper-tertiary)] hover:text-[var(--color-paper-primary)] transition-colors ml-auto shrink-0",
                         onclick: move |evt| {
                             evt.prevent_default();
                             evt.stop_propagation();
                             cover_url_mode.set(true);
                             cover_url_input.set(cover_image());
                         },
-                        "USE_URL"
+                        "输入链接"
                     }
                     // 隐藏的 file input，由 label 点击触发。
                     input {
@@ -799,7 +799,7 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
             div { class: "flex items-center gap-2 mt-2",
                 input {
                     class: "flex-1 {META_INPUT_CLASS}",
-                    placeholder: "PASTE_IMAGE_URL...",
+                    placeholder: "粘贴图片链接...",
                     value: "{cover_url_input}",
                     oninput: move |evt| cover_url_input.set(evt.value()),
                     onkeydown: move |evt| {
@@ -814,7 +814,7 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
                     },
                 }
                 button {
-                    class: "shrink-0 px-3 py-1 text-[10px] font-mono uppercase tracking-widest text-[var(--color-paper-theme)] bg-[var(--color-paper-primary)] rounded-sm hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer",
+                    class: "shrink-0 px-4 py-1.5 rounded-full text-sm font-medium text-[var(--color-paper-theme)] bg-[var(--color-paper-primary)] hover:opacity-90 shadow-sm transition-all cursor-pointer",
                     onclick: move |_| {
                         let v = cover_url_input().trim().to_string();
                         if !v.is_empty() {
@@ -823,15 +823,15 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
                             cover_url_mode.set(false);
                         }
                     },
-                    "CONFIRM"
+                    "确认"
                 }
                 button {
-                    class: "shrink-0 px-3 py-1 text-[10px] font-mono uppercase tracking-widest text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors cursor-pointer",
+                    class: "shrink-0 px-4 py-1.5 rounded-full text-sm font-medium text-[var(--color-paper-secondary)] hover:bg-[var(--color-paper-entry)] transition-colors cursor-pointer",
                     onclick: move |_| {
                         cover_url_mode.set(false);
                         cover_url_input.set(String::new());
                     },
-                    "CANCEL"
+                    "取消"
                 }
             }
         }

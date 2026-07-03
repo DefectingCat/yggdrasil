@@ -15,15 +15,15 @@ use crate::router::Route;
 // 样式常量
 // ===========================================================================
 
-/// Admin 卡片容器：锐利直角/微小圆角，工业控制台风格。
-pub const ADMIN_CARD_CLASS: &str = "bg-paper-entry border border-paper-border rounded-sm";
+/// Admin 卡片容器：大圆角，柔和阴影，Catppuccin 风格。
+pub const ADMIN_CARD_CLASS: &str = "bg-paper-entry border border-paper-border rounded-2xl shadow-sm";
 
-/// Admin 表格容器：锐利直角/微小圆角，与控制台一致。
-pub const ADMIN_TABLE_CLASS: &str = "bg-paper-entry border border-paper-border rounded-sm";
+/// Admin 表格容器：大圆角，柔和阴影，与卡片一致。
+pub const ADMIN_TABLE_CLASS: &str = "bg-paper-entry border border-paper-border rounded-2xl shadow-sm";
 
 /// Admin 表格行 hover 态：底部分割线 + 悬停背景。
 pub const ADMIN_ROW_HOVER: &str =
-    "border-b border-paper-border last:border-0 hover:bg-paper-entry transition-colors";
+    "border-b border-paper-border last:border-b-0 hover:bg-[var(--color-paper-accent-soft)] transition-colors";
 
 /// 列表复选框统一样式（全选表头 + 行内）。
 pub const CHECKBOX_CLASS: &str = "rounded border-paper-border";
@@ -42,13 +42,13 @@ pub const BADGE_BASE: &str =
 
 /// 绿色实心小按钮（批量通过、批量恢复）。
 pub const BTN_SOLID_GREEN: &str =
-    "px-3 py-1.5 text-[11px] uppercase tracking-wider font-mono bg-green-600 text-white rounded-sm hover:bg-green-700 transition-colors";
+    "px-4 py-1.5 text-sm font-medium bg-green-500/10 text-green-600 dark:text-green-400 rounded-full hover:bg-green-500/20 transition-colors cursor-pointer";
 /// 琥珀色实心小按钮（批量标为垃圾）。
 pub const BTN_SOLID_AMBER: &str =
-    "px-3 py-1.5 text-[11px] uppercase tracking-wider font-mono bg-amber-600 text-white rounded-sm hover:bg-amber-700 transition-colors";
+    "px-4 py-1.5 text-sm font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-full hover:bg-amber-500/20 transition-colors cursor-pointer";
 /// 红色实心小按钮（批量删除、批量彻底删除）。
 pub const BTN_SOLID_RED: &str =
-    "px-3 py-1.5 text-[11px] uppercase tracking-wider font-mono bg-red-600 text-white rounded-sm hover:bg-red-700 transition-colors";
+    "px-4 py-1.5 text-sm font-medium bg-red-500/10 text-red-600 dark:text-red-400 rounded-full hover:bg-red-500/20 transition-colors cursor-pointer";
 
 // --- 文字小按钮（表格行内操作：通过 / 垃圾 / 删除 / 恢复） ---
 
@@ -65,9 +65,9 @@ pub const BTN_TEXT_ACCENT: &str =
 
 // --- 次要按钮（Teal 第二色，ghost 描边风格，从属于主色 Green） ---
 
-/// 次要按钮：细线勾勒的极简风格，控制台质感。
+/// 次要按钮：柔和胶囊形状。
 pub const BTN_SECONDARY: &str =
-    "px-6 py-3 rounded-sm text-xs font-mono uppercase tracking-widest text-center text-paper-secondary border border-paper-border hover:border-paper-primary hover:text-paper-primary transition-all cursor-pointer";
+    "px-6 py-2 rounded-full text-sm font-medium text-center text-[var(--color-paper-secondary)] bg-[var(--color-paper-entry)] border border-[var(--color-paper-border)] hover:bg-[var(--color-paper-theme)] hover:text-[var(--color-paper-primary)] shadow-sm transition-all cursor-pointer";
 
 // ===========================================================================
 // 组件

@@ -78,8 +78,8 @@ pub fn PostsPage(page: i32) -> Element {
         div { class: "w-full max-w-7xl mx-auto space-y-6",
             div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-paper-border mb-6",
                 div {
-                    h1 { class: "text-2xl font-semibold tracking-tight text-paper-primary uppercase", "POST_MANAGEMENT" }
-                    p { class: "text-sm text-paper-secondary mt-1 font-mono uppercase tracking-widest", "All Publications & Drafts" }
+                    h1 { class: "text-3xl font-bold tracking-tight text-[var(--color-paper-primary)]", "管理文章" }
+                    p { class: "text-base text-[var(--color-paper-secondary)] mt-1", "所有文章及草稿" }
                 }
                 div { class: "flex items-center gap-3",
                     // 重建缓存工具条（抽取为子组件 RebuildCacheBar，见文件末尾）。
@@ -88,9 +88,9 @@ pub fn PostsPage(page: i32) -> Element {
                         rebuild_result: rebuild_result,
                     }
                     Link {
-                        class: "px-6 py-3 rounded-sm text-xs font-mono uppercase tracking-widest text-paper-theme bg-paper-primary hover:bg-paper-primary/90 transition-all cursor-pointer",
+                        class: "px-6 py-2 rounded-full text-sm font-medium text-[var(--color-paper-theme)] bg-[var(--color-paper-primary)] hover:opacity-90 shadow-sm transition-all cursor-pointer",
                         to: Route::Write {},
-                        "+ NEW_POST"
+                        "发布文章"
                     }
                 }
             }

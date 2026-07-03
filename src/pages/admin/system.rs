@@ -58,10 +58,11 @@ pub fn System() -> Element {
 
     rsx! {
         div { class: "w-full max-w-7xl mx-auto space-y-6",
-            div { class: "flex items-end justify-between pb-6 border-b border-paper-border mb-6",
+            // 页面标题
+            div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[var(--color-paper-border)] mb-6",
                 div {
-                    h1 { class: "text-2xl font-semibold tracking-tight text-paper-primary uppercase", "SYSTEM_CONTROL_PANEL" }
-                    p { class: "text-sm text-paper-secondary mt-1 font-mono uppercase tracking-widest", "Database & Server Diagnostics" }
+                    h1 { class: "text-3xl font-bold tracking-tight text-[var(--color-paper-primary)]", "系统面板" }
+                    p { class: "text-base text-[var(--color-paper-secondary)] mt-1", "数据库与服务器诊断" }
                 }
             }
 

@@ -1,8 +1,7 @@
 //! 后台管理布局组件
 //!
-//! 提供全新设计的工业/极简风格的管理员专属后台布局。
-//! 采用 Linear-style / Vercel-style 全宽顶部导航，去除冗余圆角与阴影，
-//! 突出数据密度与严谨性（工业/控制台美学）。
+//! 提供全新设计的柔和/软扁平化风格的管理员专属后台布局。
+//! 采用圆角矩形、大空间距与友好的交互设计。
 
 use dioxus::prelude::*;
 use dioxus::router::components::Link;
@@ -67,9 +66,9 @@ pub fn AdminLayout() -> Element {
                 div { class: "flex items-center gap-8",
                     // 品牌标识 / 回前台
                     Link {
-                        class: "font-bold text-sm tracking-widest uppercase hover:text-paper-accent transition-colors",
+                        class: "font-bold text-lg hover:text-[var(--color-paper-accent)] transition-colors tracking-tight",
                         to: Route::Home {},
-                        "Yggdrasil // Admin"
+                        "Yggdrasil"
                     }
                     // 导航链接
                     nav { class: "hidden md:flex items-center gap-6",
@@ -93,7 +92,7 @@ pub fn AdminLayout() -> Element {
                 div { class: "flex items-center gap-4",
                     ThemeToggle {}
                     button {
-                        class: "text-xs font-mono px-3 py-1.5 border border-paper-border rounded hover:bg-paper-entry transition-colors cursor-pointer text-paper-secondary hover:text-paper-primary",
+                        class: "text-sm font-medium px-4 py-1.5 bg-[var(--color-paper-entry)] border border-[var(--color-paper-border)] rounded-full shadow-sm hover:shadow-md transition-all cursor-pointer text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)]",
                         onclick: move |_| {
                             spawn(async move {
                                 let _ = logout().await;
@@ -102,7 +101,7 @@ pub fn AdminLayout() -> Element {
                                 let _ = navigator.push(Route::Login {});
                             });
                         },
-                        "LOGOUT"
+                        "登出"
                     }
                 }
             }
@@ -121,8 +120,8 @@ pub fn AdminLayout() -> Element {
         (true, None) => {
             rsx! {
                 div { class: "{root_class}",
-                    div { class: "flex-1 flex items-center justify-center font-mono text-xs text-paper-secondary tracking-widest",
-                        "AUTHENTICATING..."
+                    div { class: "flex-1 flex items-center justify-center font-medium text-sm text-[var(--color-paper-secondary)]",
+                        "正在验证身份..."
                     }
                 }
             }
