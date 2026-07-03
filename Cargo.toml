@@ -48,6 +48,7 @@ dashmap = { version = "6.2", optional = true }
 md-5 = { version = "0.10", optional = true }
 futures = { version = "0.3", optional = true }
 bytes = { version = "1", optional = true }
+bollard = { version = "0.18", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = ["Document", "Window", "Storage", "Element", "HtmlElement", "DomTokenList", "MediaQueryList", "HtmlImageElement", "MouseEvent", "KeyboardEvent", "Node", "EventTarget", "Navigator", "File", "FileList", "FormData", "Request", "RequestInit", "Response", "Headers", "ClipboardEvent", "DataTransfer", "HtmlInputElement"] }
@@ -105,4 +106,5 @@ server = [
     "dep:md-5",
     "dep:futures",
     "dep:bytes",
+    "dep:bollard",
 ]

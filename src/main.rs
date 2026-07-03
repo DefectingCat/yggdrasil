@@ -16,6 +16,7 @@ mod cache;
 mod components;
 mod context;
 mod db;
+pub mod infra;
 // highlight 模块仅在服务端构建时编译
 #[cfg(feature = "server")]
 mod highlight;
