@@ -309,7 +309,7 @@ fn PostRow(
             }
             td { class: "px-4 py-3 text-paper-secondary", "{date_str}" }
             td { class: "px-4 py-3 text-right",
-                div { class: "flex justify-end gap-3",
+                div { class: "flex justify-end items-center gap-3",
                     Link {
                         class: "text-xs text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer",
                         to: Route::WriteEdit { id: post.id },

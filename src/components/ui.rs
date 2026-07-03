@@ -222,7 +222,7 @@ pub fn Tooltip(
         "bottom-full mb-2"
     };
     rsx! {
-        div { class: "group relative",
+        div { class: "group relative inline-flex",
             {children}
             div { class: "{TOOLTIP_STYLE} {position_class}", "{tip}" }
         }
