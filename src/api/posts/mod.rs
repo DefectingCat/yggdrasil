@@ -36,6 +36,8 @@ pub use list::{get_posts_by_tag, list_published_posts};
 pub use read::{get_post_by_id, get_post_by_slug};
 /// 重新渲染文章的 Markdown HTML 与目录。
 pub use rebuild::rebuild_content_html;
+/// 重新渲染指定文章的 Markdown HTML 与目录（单篇）。
+pub use rebuild::rebuild_post_content_html;
 /// 全文搜索已发布文章。
 pub use search::search_posts;
 /// 获取文章统计信息。

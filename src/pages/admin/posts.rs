@@ -9,12 +9,14 @@ use dioxus::router::components::Link;
 // 分页数据接口：list_posts 是 server function，两端都生成（wasm 端为 client stub，
 // server 端为真实实现），故无需 cfg。实际请求只在 use_paginated 的 wasm 分支发出。
 use crate::api::posts::{list_posts, PostListResponse};
-use crate::api::posts::{delete_post, rebuild_content_html, CreatePostResponse, RebuildResult};
+use crate::api::posts::{
+    delete_post, rebuild_content_html, rebuild_post_content_html, CreatePostResponse, RebuildResult,
+};
 use crate::components::empty_state::{EmptyState, EmptyStateAction};
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::posts_skeleton::PostsSkeleton;
 use crate::components::ui::{
-    Pagination, StatusBadge, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_TEXT_RED,
+    Pagination, StatusBadge, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_TEXT_ACCENT, BTN_TEXT_RED,
 };
 use crate::hooks::query::use_paginated;
 use crate::models::post::PostListItem;
@@ -56,12 +58,14 @@ pub fn PostsPage(page: i32) -> Element {
 
     // 删除中 ID、重建缓存状态与结果仍由本组件持有（业务逻辑不归 hook 管）。
     let mut deleting = use_signal(|| None::<i32>);
+    // 单篇重建中 ID：与 deleting 同形，按行禁用按钮并切换文案。
+    let mut rebuilding = use_signal(|| None::<i32>);
     // 重建缓存的状态由本组件持有并下发给 RebuildCacheBar：结果消息也在本组件
     // 渲染（header 与表格之间的独立行），既不撑高 header 触发 items-center 重排，
     // 也不脱离文档流溢进表格。rebuilding 仅按钮态用，不在此渲染。
     // 不加 mut：本组件只读信号并下发，.set() 都在 RebuildCacheBar 的 spawn 块里，
     // 走 Signal 的内部可变性；SSR target 下那些 set 不可见，mut 会触发 unused_mut。
-    let rebuilding = use_signal(|| false);
+    let batch_rebuilding = use_signal(|| false);
     let rebuild_result = use_signal(|| Option::<String>::None);
 
     let get_posts = move || -> Vec<PostListItem> { posts() };
@@ -73,7 +77,7 @@ pub fn PostsPage(page: i32) -> Element {
                 div { class: "flex items-center gap-3",
                     // 重建缓存工具条（抽取为子组件 RebuildCacheBar，见文件末尾）。
                     RebuildCacheBar {
-                        rebuilding: rebuilding,
+                        rebuilding: batch_rebuilding,
                         rebuild_result: rebuild_result,
                     }
                     Link {
@@ -125,6 +129,7 @@ pub fn PostsPage(page: i32) -> Element {
                                     key: "{post.id}",
                                     post: post.clone(),
                                     deleting: deleting() == Some(post.id),
+                                    rebuilding: rebuilding() == Some(post.id),
                                     // 删除文章：先乐观更新本地列表，再调用 server function，失败时弹出浏览器提示。
                                     on_delete: move |id| {
                                         deleting.set(Some(id));
@@ -144,6 +149,31 @@ pub fn PostsPage(page: i32) -> Element {
                                                 _ => {}
                                             }
                                             deleting.set(None);
+                                        });
+                                    },
+                                    // 重建单篇文章内容：调用 server function 重新渲染 content_html，
+                                    // 成功/失败均弹出浏览器提示（与删除一致的非乐观反馈）。
+                                    on_rebuild: move |id| {
+                                        rebuilding.set(Some(id));
+                                        spawn(async move {
+                                            match rebuild_post_content_html(id).await {
+                                                Ok(CreatePostResponse { success: true, .. }) => {
+                                                    #[cfg(target_arch = "wasm32")]
+                                                    web_sys::window()
+                                                        .map(|w| w.alert_with_message("重建成功").ok());
+                                                }
+                                                Ok(CreatePostResponse { success: false, message: _message, .. }) => {
+                                                    #[cfg(target_arch = "wasm32")]
+                                                    web_sys::window()
+                                                        .map(|w| w.alert_with_message(&_message).ok());
+                                                }
+                                                Err(_e) => {
+                                                    #[cfg(target_arch = "wasm32")]
+                                                    web_sys::window()
+                                                        .map(|w| w.alert_with_message("重建失败").ok());
+                                                }
+                                            }
+                                            rebuilding.set(None);
                                         });
                                     },
                                 }
@@ -253,7 +283,13 @@ fn RebuildCacheBar(
 
 /// 文章表格行组件，展示单篇文章的标题、状态、日期与操作按钮。
 #[component]
-fn PostRow(post: PostListItem, deleting: bool, on_delete: EventHandler<i32>) -> Element {
+fn PostRow(
+    post: PostListItem,
+    deleting: bool,
+    rebuilding: bool,
+    on_delete: EventHandler<i32>,
+    on_rebuild: EventHandler<i32>,
+) -> Element {
     let date_str = post.formatted_date();
 
     rsx! {
@@ -280,6 +316,16 @@ fn PostRow(post: PostListItem, deleting: bool, on_delete: EventHandler<i32>) -> 
                         class: "text-xs text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer",
                         to: Route::WriteEdit { id: post.id },
                         "编辑"
+                    }
+                    button {
+                        class: if rebuilding { "text-xs text-paper-secondary cursor-not-allowed" } else { BTN_TEXT_ACCENT },
+                        disabled: rebuilding,
+                        onclick: move |_| on_rebuild.call(post.id),
+                        if rebuilding {
+                            "重建中..."
+                        } else {
+                            "重建内容"
+                        }
                     }
                     button {
                         class: if deleting { "text-xs text-paper-secondary cursor-not-allowed" } else { BTN_TEXT_RED },
