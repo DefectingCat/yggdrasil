@@ -59,8 +59,9 @@ pub fn PostsPage(page: i32) -> Element {
 
     // 删除中 ID、重建缓存状态与结果仍由本组件持有（业务逻辑不归 hook 管）。
     let mut deleting = use_signal(|| None::<i32>);
-    // 单篇重建中 ID：与 deleting 同形，按行禁用按钮并切换文案。
-    let mut rebuilding = use_signal(|| None::<i32>);
+    // 重建中文章 ID 集合：支持多篇文章并发重建（行不会随点击消失，单值会被后点
+    // 的覆盖先点的，故用 HashSet），按行通过 contains 判断 loading 态。
+    let mut rebuilding = use_signal(|| std::collections::HashSet::<i32>::new());
     // 重建缓存的状态由本组件持有并下发给 RebuildCacheBar：结果消息也在本组件
     // 渲染（header 与表格之间的独立行），既不撑高 header 触发 items-center 重排，
     // 也不脱离文档流溢进表格。rebuilding 仅按钮态用，不在此渲染。
@@ -130,7 +131,7 @@ pub fn PostsPage(page: i32) -> Element {
                                     key: "{post.id}",
                                     post: post.clone(),
                                     deleting: deleting() == Some(post.id),
-                                    rebuilding: rebuilding() == Some(post.id),
+                                    rebuilding: rebuilding().contains(&post.id),
                                     // 删除文章：先乐观更新本地列表，再调用 server function，失败时弹出浏览器提示。
                                     on_delete: move |id| {
                                         deleting.set(Some(id));
@@ -154,11 +155,12 @@ pub fn PostsPage(page: i32) -> Element {
                                     },
                                     // 重建单篇文章内容：调用 server function 重新渲染 content_html。
                                     // 静默执行，仅按行切换 rebuilding 按钮态，不弹窗。
+                                    // 用 HashSet 记录在途 ID，支持多篇并发重建。
                                     on_rebuild: move |id| {
-                                        rebuilding.set(Some(id));
+                                        rebuilding.write().insert(id);
                                         spawn(async move {
                                             let _ = rebuild_post_content_html(id).await;
-                                            rebuilding.set(None);
+                                            rebuilding.write().remove(&id);
                                         });
                                     },
                                 }
@@ -304,19 +306,21 @@ fn PostRow(
                     }
                     button {
                         class: if rebuilding {
-                            "inline-flex items-center gap-1 text-xs text-paper-secondary cursor-not-allowed"
+                            "relative inline-flex items-center text-xs text-paper-accent cursor-not-allowed"
                         } else {
                             BTN_TEXT_ACCENT
                         },
                         disabled: rebuilding,
                         onclick: move |_| on_rebuild.call(post.id),
-                        if rebuilding {
-                            {rsx! {
-                                span { dangerous_inner_html: SPINNER_SVG }
-                                "重建中"
-                            }}
-                        } else {
+                        span {
+                            class: if rebuilding { "opacity-40" } else { "" },
                             "重建"
+                        }
+                        if rebuilding {
+                            span {
+                                class: "absolute inset-0 flex items-center justify-center",
+                                dangerous_inner_html: SPINNER_SVG,
+                            }
                         }
                     }
                     button {
