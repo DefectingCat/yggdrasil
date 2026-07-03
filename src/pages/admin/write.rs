@@ -36,9 +36,9 @@ use dioxus::web::{WebEventExt, WebFileExt};
 /// 元信息表单复用的样式常量（label 与 input 各一份，避免多处重复粘贴）。
 /// 提升到模块级以便 write_editor 与 CoverUploader 共用。
 const META_LABEL_CLASS: &str =
-    "block text-[11px] font-medium text-[var(--color-paper-secondary)] tracking-wider mb-2";
+    "block text-[10px] font-mono text-[var(--color-paper-secondary)] uppercase tracking-widest mb-2";
 const META_INPUT_CLASS: &str =
-    "w-full text-sm bg-transparent text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border-b border-[var(--color-paper-tertiary)] focus:border-[var(--color-paper-primary)] transition-colors pb-1.5";
+    "w-full text-sm font-mono bg-transparent text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border-b border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] transition-colors pb-1.5";
 
 /// 新建文章页面组件。
 ///
@@ -409,50 +409,65 @@ fn write_editor(post_id: Option<i32>) -> Element {
             // 整页自然滚动：元信息 + 编辑器 + 错误提示 + 底部操作栏一起随浏览器滚动。
             div { class: "flex flex-col",
                 // 顶部元信息区域
-                div { class: "flex-shrink-0 space-y-5 pt-8",
-                    // 标题区域 - 大字号无框输入
-                    div {
+                div { class: "flex-shrink-0 flex flex-col gap-6 pt-8",
+                    // 页面标题与状态
+                    div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[var(--color-paper-border)]",
+                        div {
+                            h1 { class: "text-2xl font-semibold tracking-tight text-[var(--color-paper-primary)] uppercase", 
+                                if is_edit { "EDIT_DOCUMENT" } else { "NEW_DOCUMENT" } 
+                            }
+                            p { class: "text-sm text-[var(--color-paper-secondary)] mt-1 font-mono uppercase tracking-widest", "Content Editor System" }
+                        }
+                    }
+
+                    // 核心文本域
+                    div { class: "flex flex-col gap-6",
+                        // 标题输入
                         input {
                             class: "w-full text-3xl md:text-4xl font-bold bg-transparent text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none tracking-tight leading-tight",
-                            placeholder: "文章标题",
+                            placeholder: "ENTER_TITLE_HERE...",
                             value: "{title}",
                             oninput: move |evt| title.set(evt.value()),
                         }
-                    }
-
-                    // 摘要
-                    textarea {
-                        class: "w-full text-base bg-transparent text-[var(--color-paper-secondary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none resize-none leading-relaxed mb-0",
-                        placeholder: "摘要（留空则自动生成）",
-                        rows: "2",
-                        value: "{summary}",
-                        oninput: move |evt| summary.set(evt.value()),
-                    }
-
-                    // 元数据行 - 紧凑精致
-                    div { class: "flex flex-wrap items-end gap-x-8 gap-y-4 text-sm",
-                        div { class: "flex-1 min-w-[140px]",
-                            label { class: "{META_LABEL_CLASS}", "Slug" }
-                            input {
-                                class: "{META_INPUT_CLASS}",
-                                placeholder: "自动生成",
-                                value: "{slug}",
-                                oninput: move |evt| slug.set(evt.value()),
-                            }
-                        }
-                        div { class: "flex-1 min-w-[140px]",
-                            label { class: "{META_LABEL_CLASS}", "标签" }
-                            input {
-                                class: "{META_INPUT_CLASS}",
-                                placeholder: "逗号分隔",
-                                value: "{tags}",
-                                oninput: move |evt| tags.set(evt.value()),
-                            }
+                        
+                        // 摘要
+                        textarea {
+                            class: "w-full text-sm font-mono bg-transparent text-[var(--color-paper-secondary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none resize-none leading-relaxed mb-2 border-b border-[var(--color-paper-border)] pb-4 focus:border-[var(--color-paper-primary)] transition-colors",
+                            placeholder: "SUMMARY (OPTIONAL)...",
+                            rows: "2",
+                            value: "{summary}",
+                            oninput: move |evt| summary.set(evt.value()),
                         }
                     }
 
-                    // 封面图上传区（抽取为子组件 CoverUploader，见文件末尾）。
-                    CoverUploader { cover_image, cover_uploading }
+                    // 元信息放在控制面板网格
+                    div { class: "grid grid-cols-1 md:grid-cols-2 gap-6",
+                        div { class: "flex flex-col gap-6 p-6 border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)]",
+                            div {
+                                label { class: "{META_LABEL_CLASS}", "SLUG_IDENTIFIER" }
+                                input {
+                                    class: "{META_INPUT_CLASS}",
+                                    placeholder: "AUTO_GENERATED",
+                                    value: "{slug}",
+                                    oninput: move |evt| slug.set(evt.value()),
+                                }
+                            }
+                            div {
+                                label { class: "{META_LABEL_CLASS}", "TAG_SYSTEM" }
+                                input {
+                                    class: "{META_INPUT_CLASS}",
+                                    placeholder: "COMMA_SEPARATED...",
+                                    value: "{tags}",
+                                    oninput: move |evt| tags.set(evt.value()),
+                                }
+                            }
+                        }
+                        // 封面图放右边
+                        div { class: "flex flex-col p-6 border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)]",
+                            label { class: "{META_LABEL_CLASS}", "COVER_ASSET" }
+                            CoverUploader { cover_image, cover_uploading }
+                        }
+                    }
                 }
 
                 // 编辑器区域 - 整页滚动下用视口高度，保证充裕的编辑空间。
@@ -606,10 +621,10 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
         // 21:9 与首页卡片封面统一比例，比 16:9 更扁，适合宽屏横幅式封面。
         // 容器统一绑定拖拽与粘贴事件；内部按 cover_image / cover_uploading 切换空态、上传中、预览。
         div {
-            class: "relative w-full rounded-xl border border-dashed overflow-hidden transition-all duration-200 group/cover",
+            class: "relative w-full border border-dashed overflow-hidden transition-all duration-200 group/cover",
             // 空态矮横条；有图/上传中展开成 21:9。
             class: if cover_image().is_empty() && !cover_uploading() { "h-14" } else { "aspect-[21/9]" },
-            class: if cover_drag_active() { "border-[var(--color-paper-accent)] bg-[var(--color-paper-accent-soft)]" } else if cover_image().is_empty() { "border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] hover:border-[var(--color-paper-accent)] hover:bg-[var(--color-paper-accent-soft)]" } else { "border-[var(--color-paper-border)] bg-[var(--color-paper-entry)]" },
+            class: if cover_drag_active() { "border-[var(--color-paper-primary)] bg-[var(--color-paper-entry)]" } else if cover_image().is_empty() { "border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] hover:border-[var(--color-paper-primary)]" } else { "border-[var(--color-paper-border)] bg-[var(--color-paper-entry)]" },
 
             // 整个容器可接收拖拽与粘贴（ondragover 必须 prevent_default，否则浏览器直接打开文件）。
             ondragover: move |evt| {
@@ -662,7 +677,7 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
             // —— 上传中：骨架占位 + 文案 ——
             if cover_uploading() {
                 div { class: "absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--color-paper-tertiary)]/30 animate-pulse",
-                    span { class: "text-sm text-[var(--color-paper-secondary)]", "上传中..." }
+                    span { class: "text-[10px] font-mono tracking-widest uppercase text-[var(--color-paper-secondary)]", "UPLOADING..." }
                 }
             }
 
@@ -716,7 +731,7 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
                 }
                 // 底部渐变遮罩 + "更换封面"提示（hover 出现）。
                 div { class: "absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-end justify-center pb-2 pointer-events-none",
-                    span { class: "text-xs text-white/90", "点击下方区域可重新上传" }
+                    span { class: "text-[10px] font-mono uppercase tracking-widest text-white/90", "CLICK_TO_REPLACE" }
                 }
             }
 
@@ -743,19 +758,19 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
                             y2: "15",
                         }
                     }
-                    span { class: "text-sm text-[var(--color-paper-secondary)] shrink-0",
-                        "拖拽 · 点击 · 粘贴封面图"
+                    span { class: "text-[10px] font-mono uppercase tracking-widest text-[var(--color-paper-secondary)] shrink-0",
+                        "DRAG / DROP / PASTE / BROWSE"
                     }
                     // URL 文字链：阻止 label 的默认 file 触发，切换到 URL 输入模式。
                     span {
-                        class: "text-[11px] font-medium tracking-wider text-[var(--color-paper-tertiary)] hover:text-[var(--color-paper-accent)] transition-colors ml-auto shrink-0",
+                        class: "text-[10px] font-mono uppercase tracking-widest text-[var(--color-paper-tertiary)] hover:text-[var(--color-paper-primary)] transition-colors ml-auto shrink-0",
                         onclick: move |evt| {
                             evt.prevent_default();
                             evt.stop_propagation();
                             cover_url_mode.set(true);
                             cover_url_input.set(cover_image());
                         },
-                        "或使用图片 URL"
+                        "USE_URL"
                     }
                     // 隐藏的 file input，由 label 点击触发。
                     input {
@@ -784,7 +799,7 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
             div { class: "flex items-center gap-2 mt-2",
                 input {
                     class: "flex-1 {META_INPUT_CLASS}",
-                    placeholder: "粘贴图片 URL",
+                    placeholder: "PASTE_IMAGE_URL...",
                     value: "{cover_url_input}",
                     oninput: move |evt| cover_url_input.set(evt.value()),
                     onkeydown: move |evt| {
@@ -799,7 +814,7 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
                     },
                 }
                 button {
-                    class: "shrink-0 px-3 py-1 text-xs text-[var(--color-paper-theme)] bg-[var(--color-paper-accent)] rounded-full hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer",
+                    class: "shrink-0 px-3 py-1 text-[10px] font-mono uppercase tracking-widest text-[var(--color-paper-theme)] bg-[var(--color-paper-primary)] rounded-sm hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer",
                     onclick: move |_| {
                         let v = cover_url_input().trim().to_string();
                         if !v.is_empty() {
@@ -808,15 +823,15 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
                             cover_url_mode.set(false);
                         }
                     },
-                    "确认"
+                    "CONFIRM"
                 }
                 button {
-                    class: "shrink-0 px-3 py-1 text-xs text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors cursor-pointer",
+                    class: "shrink-0 px-3 py-1 text-[10px] font-mono uppercase tracking-widest text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors cursor-pointer",
                     onclick: move |_| {
                         cover_url_mode.set(false);
                         cover_url_input.set(String::new());
                     },
-                    "取消"
+                    "CANCEL"
                 }
             }
         }
