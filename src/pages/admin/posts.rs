@@ -78,8 +78,8 @@ pub fn PostsPage(page: i32) -> Element {
         div { class: "w-full max-w-7xl mx-auto space-y-6",
             div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-paper-border mb-6",
                 div {
-                    h1 { class: "text-3xl font-bold tracking-tight text-[var(--color-paper-primary)]", "管理文章" }
-                    p { class: "text-base text-[var(--color-paper-secondary)] mt-1", "所有文章及草稿" }
+                    h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]", "管理文章" }
+                    p { class: "text-base text-[var(--color-paper-secondary)] mt-2", "所有文章及草稿" }
                 }
                 div { class: "flex items-center gap-3",
                     // 重建缓存工具条（抽取为子组件 RebuildCacheBar，见文件末尾）。

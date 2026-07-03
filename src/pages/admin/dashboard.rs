@@ -13,7 +13,7 @@ use crate::api::posts::{get_post_stats, list_posts};
 #[cfg(target_arch = "wasm32")]
 use crate::api::posts::{PostListResponse, PostStatsResponse};
 use crate::components::skeletons::atoms::SkeletonBox;
-use crate::components::ui::{ADMIN_CARD_CLASS, BTN_SECONDARY};
+use crate::components::ui::{ADMIN_CARD_CLASS, ADMIN_TABLE_CLASS, BTN_SECONDARY};
 use crate::models::post::{PostListItem, PostStats};
 use crate::router::Route;
 
@@ -52,10 +52,10 @@ pub fn Admin() -> Element {
     rsx! {
         div { class: "w-full max-w-7xl mx-auto space-y-8",
             // 顶部标题和全局操作栏
-            div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[var(--color-paper-border)]",
+            div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8 border-b border-[var(--color-paper-border)]/50",
                 div {
-                    h1 { class: "text-3xl font-bold tracking-tight text-[var(--color-paper-primary)]", "仪表盘" }
-                    p { class: "text-base text-[var(--color-paper-secondary)] mt-1", "数据概览与近期活动" }
+                    h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]", "仪表盘" }
+                    p { class: "text-base text-[var(--color-paper-secondary)] mt-2", "数据概览与近期活动" }
                 }
                 div { class: "flex items-center gap-3",
                     Link {
@@ -95,7 +95,7 @@ pub fn Admin() -> Element {
 
                 // 评论待办卡片 (独立色块突出)
                 Link {
-                    class: "block {ADMIN_CARD_CLASS} p-6 bg-paper-entry hover:bg-paper-entry/80 transition-colors h-32 flex flex-col justify-between group",
+                    class: "block {ADMIN_CARD_CLASS} p-8 bg-[var(--color-paper-entry)] hover:bg-[var(--color-paper-border)]/20 transition-all h-36 flex flex-col justify-between group hover:-translate-y-1 hover:shadow-md duration-300",
                     to: Route::AdminComments {},
                     match pending_count() {
                         Some(count) => {
@@ -123,11 +123,11 @@ pub fn Admin() -> Element {
             }
 
             // 最近文章列表
-            div { class: "mt-8",
-                div { class: "flex items-center justify-between mb-4",
-                    h2 { class: "text-lg font-bold text-[var(--color-paper-primary)]", "近期文章" }
+            div { class: "mt-12",
+                div { class: "flex items-center justify-between mb-6",
+                    h2 { class: "text-xl font-bold text-[var(--color-paper-primary)] tracking-tight", "近期文章" }
                 }
-                div { class: "{ADMIN_CARD_CLASS} overflow-hidden",
+                div { class: "{ADMIN_TABLE_CLASS}",
                     match recent_posts() {
                         Some(posts) => {
                             rsx! {
@@ -160,7 +160,7 @@ pub fn Admin() -> Element {
 #[component]
 fn StatCard(value: String, label: String, trend: String) -> Element {
     rsx! {
-        div { class: "{ADMIN_CARD_CLASS} p-6 flex flex-col justify-between h-32 relative overflow-hidden group hover:shadow-md transition-shadow",
+        div { class: "{ADMIN_CARD_CLASS} p-8 flex flex-col justify-between h-36 relative group hover:-translate-y-1 hover:shadow-md transition-all duration-300",
             div { class: "flex justify-between items-start",
                 div { class: "text-sm font-medium text-[var(--color-paper-secondary)]", "{label}" }
                 div { class: "text-xs px-2 py-0.5 rounded-full border border-[var(--color-paper-border)] text-[var(--color-paper-tertiary)]", "{trend}" }
@@ -177,13 +177,13 @@ fn RecentPostItem(post: PostListItem) -> Element {
     let status_class = post.status_class();
 
     rsx! {
-        div { class: "flex flex-col sm:flex-row sm:justify-between sm:items-center px-6 py-4 hover:bg-[var(--color-paper-accent-soft)] transition-colors cursor-pointer group",
-            div { class: "flex items-center gap-4",
-                span { class: "text-xs text-[var(--color-paper-tertiary)] w-12 hidden sm:block", "#{post.id:04}" }
-                span { class: "text-sm font-medium text-[var(--color-paper-primary)] group-hover:text-[var(--color-paper-accent)] transition-colors", "{post.title}" }
-                span { class: "text-xs px-2 py-0.5 {status_class}", "{status_label}" }
+        div { class: "flex flex-col sm:flex-row sm:justify-between sm:items-center px-8 py-5 hover:bg-[var(--color-paper-accent-soft)] transition-colors cursor-pointer group",
+            div { class: "flex items-center gap-6",
+                span { class: "text-xs font-mono text-[var(--color-paper-tertiary)] w-12 hidden sm:block", "#{post.id:04}" }
+                span { class: "text-base font-semibold text-[var(--color-paper-primary)] group-hover:text-[var(--color-paper-accent)] transition-colors", "{post.title}" }
+                span { class: "text-xs px-3 py-1 font-medium rounded-full {status_class}", "{status_label}" }
             }
-            span { class: "text-xs text-[var(--color-paper-secondary)] mt-2 sm:mt-0", "{date_str}" }
+            span { class: "text-sm text-[var(--color-paper-secondary)] mt-2 sm:mt-0", "{date_str}" }
         }
     }
 }

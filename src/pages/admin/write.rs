@@ -413,10 +413,10 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     // 页面标题与状态
                     div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[var(--color-paper-border)]",
                         div {
-                            h1 { class: "text-3xl font-bold tracking-tight text-[var(--color-paper-primary)]", 
+                            h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]", 
                                 if is_edit { "编辑文章" } else { "撰写新文章" }
                             }
-                            p { class: "text-base text-[var(--color-paper-secondary)] mt-1", "内容编辑器" }
+                            p { class: "text-base text-[var(--color-paper-secondary)] mt-2", "内容编辑器" }
                         }
                     }
 

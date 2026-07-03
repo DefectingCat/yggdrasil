@@ -53,56 +53,59 @@ pub fn AdminLayout() -> Element {
         matches!(route, Route::Write {}) || matches!(route, Route::WriteEdit { .. });
 
     let main_class = if is_write_route {
-        "flex-1 w-full flex flex-col relative"
+        "flex-1 flex flex-col relative w-full h-full overflow-hidden rounded-[2rem] bg-[var(--color-paper-theme)] shadow-sm border border-[var(--color-paper-border)]"
     } else {
-        "flex-1 w-full max-w-7xl mx-auto px-6 py-10"
+        "flex-1 w-full max-w-7xl mx-auto px-10 py-12 overflow-y-auto"
     };
 
-    let root_class = "min-h-dvh flex flex-col bg-paper-theme text-paper-primary font-sans";
+    let root_class = "min-h-dvh flex bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] font-sans";
 
     let nav_content = rsx! {
-        header { class: "w-full border-b border-paper-border bg-paper-theme sticky top-0 z-40",
-            div { class: "w-full max-w-7xl mx-auto px-6 h-14 flex items-center justify-between",
-                div { class: "flex items-center gap-8",
-                    // 品牌标识 / 回前台
-                    Link {
-                        class: "font-bold text-lg hover:text-[var(--color-paper-accent)] transition-colors tracking-tight",
-                        to: Route::Home {},
-                        "Yggdrasil"
-                    }
-                    // 导航链接
-                    nav { class: "hidden md:flex items-center gap-6",
-                        for (dest, label) in admin_nav_items {
-                            {
-                                let is_active = route == dest || (label == "写文章" && is_write_route) || (label == "回收站" && matches!(route, Route::TrashPage { .. }));
-                                let text_class = if is_active { "text-paper-primary" } else { "text-paper-secondary hover:text-paper-primary" };
-                                rsx! {
-                                    Link {
-                                        key: "{label}",
-                                        class: "text-sm font-medium transition-colors {text_class}",
-                                        to: dest,
-                                        "{label}"
-                                    }
-                                }
+        aside { class: "w-64 flex-shrink-0 hidden md:flex flex-col h-screen sticky top-0 p-6 bg-[var(--color-paper-entry)]",
+            // Logo
+            div { class: "mb-10 px-4",
+                Link {
+                    class: "font-extrabold text-2xl tracking-tight text-[var(--color-paper-primary)] hover:text-[var(--color-paper-accent)] transition-colors",
+                    to: Route::Home {},
+                    "Yggdrasil."
+                }
+            }
+            // Nav Items
+            nav { class: "flex-1 flex flex-col gap-2",
+                for (dest, label) in admin_nav_items {
+                    {
+                        let is_active = route == dest || (label == "写文章" && is_write_route) || (label == "回收站" && matches!(route, Route::TrashPage { .. }));
+                        let base_class = "flex items-center px-4 py-3 rounded-2xl text-sm font-medium transition-all";
+                        let text_class = if is_active {
+                            "bg-[var(--color-paper-theme)] text-[var(--color-paper-primary)] shadow-sm border border-[var(--color-paper-border)]"
+                        } else {
+                            "text-[var(--color-paper-secondary)] hover:bg-[var(--color-paper-theme)]/50 hover:text-[var(--color-paper-primary)] border border-transparent"
+                        };
+                        rsx! {
+                            Link {
+                                key: "{label}",
+                                class: "{base_class} {text_class}",
+                                to: dest,
+                                "{label}"
                             }
                         }
                     }
                 }
-                // 右侧操作
-                div { class: "flex items-center gap-4",
-                    ThemeToggle {}
-                    button {
-                        class: "text-sm font-medium px-4 py-1.5 bg-[var(--color-paper-entry)] border border-[var(--color-paper-border)] rounded-full shadow-sm hover:shadow-md transition-all cursor-pointer text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)]",
-                        onclick: move |_| {
-                            spawn(async move {
-                                let _ = logout().await;
-                                ctx.user.set(None);
-                                ctx.checked.set(false);
-                                let _ = navigator.push(Route::Login {});
-                            });
-                        },
-                        "登出"
-                    }
+            }
+            // Bottom Tools
+            div { class: "mt-auto pt-6 border-t border-[var(--color-paper-border)] flex items-center justify-between px-4",
+                ThemeToggle {}
+                button {
+                    class: "text-sm font-medium px-4 py-2 rounded-xl bg-[var(--color-paper-theme)] border border-[var(--color-paper-border)] shadow-sm hover:shadow-md transition-all text-[var(--color-paper-secondary)] hover:text-red-500 cursor-pointer",
+                    onclick: move |_| {
+                        spawn(async move {
+                            let _ = logout().await;
+                            ctx.user.set(None);
+                            ctx.checked.set(false);
+                            let _ = navigator.push(Route::Login {});
+                        });
+                    },
+                    "退出"
                 }
             }
         }
@@ -113,7 +116,15 @@ pub fn AdminLayout() -> Element {
             rsx! {
                 div { class: "{root_class}",
                     {nav_content}
-                    main { class: "{main_class}", Outlet::<Route> {} }
+                    div { class: "flex-1 flex flex-col min-w-0 h-screen p-2 md:p-4",
+                        if !is_write_route {
+                            div { class: "flex-1 bg-[var(--color-paper-theme)] rounded-[2rem] shadow-sm border border-[var(--color-paper-border)] overflow-y-auto relative flex flex-col",
+                                main { class: "{main_class}", Outlet::<Route> {} }
+                            }
+                        } else {
+                            main { class: "{main_class}", Outlet::<Route> {} }
+                        }
+                    }
                 }
             }
         }
@@ -130,12 +141,16 @@ pub fn AdminLayout() -> Element {
             rsx! {
                 div { class: "{root_class}",
                     {nav_content}
-                    main { class: "{main_class}",
-                        div { class: if show_skeleton() { "" } else { "opacity-0" },
-                            {
-                                match route {
-                                    Route::Write {} => rsx! { WriteSkeleton {} },
-                                    _ => rsx! { AdminDashboardSkeleton {} },
+                    div { class: "flex-1 flex flex-col min-w-0 h-screen p-2 md:p-4",
+                        div { class: "flex-1 bg-[var(--color-paper-theme)] rounded-[2rem] shadow-sm border border-[var(--color-paper-border)] overflow-hidden relative flex flex-col",
+                            main { class: "{main_class}",
+                                div { class: if show_skeleton() { "p-10" } else { "opacity-0" },
+                                    {
+                                        match route {
+                                            Route::Write {} => rsx! { WriteSkeleton {} },
+                                            _ => rsx! { AdminDashboardSkeleton {} },
+                                        }
+                                    }
                                 }
                             }
                         }

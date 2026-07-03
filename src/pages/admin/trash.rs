@@ -82,8 +82,8 @@ pub fn TrashPage(page: i32) -> Element {
             // 页面标题
             div { class: "flex items-end justify-between pb-6 border-b border-paper-border mb-6",
                 div {
-                    h1 { class: "text-3xl font-bold tracking-tight text-[var(--color-paper-primary)]", "回收站" }
-                    p { class: "text-base text-[var(--color-paper-secondary)] mt-1", "已删除文章 ({total()})" }
+                    h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]", "回收站" }
+                    p { class: "text-base text-[var(--color-paper-secondary)] mt-2", "已删除文章 ({total()})" }
                 }
             }
 

@@ -15,11 +15,11 @@ use crate::router::Route;
 // 样式常量
 // ===========================================================================
 
-/// Admin 卡片容器：大圆角，柔和阴影，Catppuccin 风格。
-pub const ADMIN_CARD_CLASS: &str = "bg-paper-entry border border-paper-border rounded-2xl shadow-sm";
+/// Admin 卡片容器：大圆角，极简风，现代简约。
+pub const ADMIN_CARD_CLASS: &str = "bg-[var(--color-paper-entry)] rounded-3xl shadow-sm border border-transparent hover:border-[var(--color-paper-border)] transition-colors";
 
-/// Admin 表格容器：大圆角，柔和阴影，与卡片一致。
-pub const ADMIN_TABLE_CLASS: &str = "bg-paper-entry border border-paper-border rounded-2xl shadow-sm";
+/// Admin 表格容器：大圆角，现代简约，与卡片一致。
+pub const ADMIN_TABLE_CLASS: &str = "bg-[var(--color-paper-entry)] rounded-3xl shadow-sm border border-transparent hover:border-[var(--color-paper-border)] transition-colors overflow-hidden";
 
 /// Admin 表格行 hover 态：底部分割线 + 悬停背景。
 pub const ADMIN_ROW_HOVER: &str =
@@ -65,9 +65,9 @@ pub const BTN_TEXT_ACCENT: &str =
 
 // --- 次要按钮（Teal 第二色，ghost 描边风格，从属于主色 Green） ---
 
-/// 次要按钮：柔和胶囊形状。
+/// 次要按钮：极简风次要操作。
 pub const BTN_SECONDARY: &str =
-    "px-6 py-2 rounded-full text-sm font-medium text-center text-[var(--color-paper-secondary)] bg-[var(--color-paper-entry)] border border-[var(--color-paper-border)] hover:bg-[var(--color-paper-theme)] hover:text-[var(--color-paper-primary)] shadow-sm transition-all cursor-pointer";
+    "px-6 py-2.5 rounded-full text-sm font-medium text-center text-[var(--color-paper-secondary)] bg-[var(--color-paper-entry)] hover:bg-[var(--color-paper-border)] hover:text-[var(--color-paper-primary)] transition-all cursor-pointer";
 
 // ===========================================================================
 // 组件
