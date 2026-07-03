@@ -53,7 +53,7 @@ pub fn AdminLayout() -> Element {
         matches!(route, Route::Write {}) || matches!(route, Route::WriteEdit { .. });
 
     let main_class = if is_write_route {
-        "flex-1 flex flex-col relative w-full h-full overflow-hidden rounded-[2rem] bg-[var(--color-paper-theme)] shadow-sm border border-[var(--color-paper-border)]"
+        "flex-1 flex flex-col relative w-full h-full overflow-y-auto px-10 py-12 rounded-[2rem] bg-[var(--color-paper-theme)] shadow-sm border border-[var(--color-paper-border)]"
     } else {
         "flex-1 w-full max-w-7xl mx-auto px-10 py-12 overflow-y-auto"
     };
