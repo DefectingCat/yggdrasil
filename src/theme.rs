@@ -197,6 +197,66 @@ pub fn use_theme_provider() -> Signal<Theme> {
         let _ = current;
     });
 
+    // WASM 端：System 模式下系统颜色偏好变化时，把新明暗同步到 <html> 的 dark class。
+    //
+    // 这是原始实现的关键缺口：系统偏好变化时 system_dark signal 与 resolved memo 都
+    // 会更新，下游（CodeMirror 等）能跟随，但 <html> 的 dark class 原本只有「首屏预
+    // 加载脚本」与「手动点击 ThemeToggle」两个写入点，自动场景下无人同步，页面配色
+    // 纹丝不动。
+    //
+    // 仅在 System 模式（theme == System）且 resolved 实际翻转时触发：Light/Dark 显式
+    // 模式下 resolved 由 theme 决定，DOM 已由 ThemeToggle::onclick 全权处理，effect
+    // 不介入，避免与手动点击的 VT 动画重复触发。以视口中心为圆心复用同一条 JS 路径
+    // （__startThemeTransition 从 DOM 现状推导目标明暗）。
+    //
+    // 首次挂载自然跳过：effect 通过 prev 信号记录上一次 resolved，初次运行 prev 为
+    // None，此时 DOM 已由 ThemePreload 脚本设为正确状态，直接对齐 prev 后返回。
+    #[cfg(target_arch = "wasm32")]
+    {
+        let mut prev_resolved: Signal<Option<ResolvedTheme>> = use_signal(|| None);
+        use_effect(move || {
+            // 仅 System 模式需要自动同步；Light/Dark 由 ThemeToggle::onclick 负责。
+            if theme() != Theme::System {
+                return;
+            }
+            let current = resolved();
+            // 首次运行：DOM 已由 ThemePreload 设好，仅记录基线，不触发动画。
+            let Some(prev) = prev_resolved() else {
+                prev_resolved.set(Some(current));
+                return;
+            };
+            // 未翻转（如 signal 因无关读取重算）直接跳过。
+            if prev == current {
+                return;
+            }
+            prev_resolved.set(Some(current));
+            // resolved 翻转 → 以视口中心为圆心触发 VT 圆形展开动画。
+            let Some(window) = web_sys::window() else {
+                return;
+            };
+            let x = window
+                .inner_width()
+                .ok()
+                .and_then(|v| v.as_f64())
+                .map(|w| w / 2.0)
+                .unwrap_or(0.0);
+            let y = window
+                .inner_height()
+                .ok()
+                .and_then(|v| v.as_f64())
+                .map(|h| h / 2.0)
+                .unwrap_or(0.0);
+            let key = "__startThemeTransition".into();
+            if let Ok(fn_val) = js_sys::Reflect::get(&window, &key) {
+                if !fn_val.is_undefined() && !fn_val.is_null() {
+                    use wasm_bindgen::JsCast;
+                    let fn_obj = fn_val.unchecked_into::<js_sys::Function>();
+                    let _ = fn_obj.call2(&window, &x.into(), &y.into());
+                }
+            }
+        });
+    }
+
     // WASM 端监听系统颜色偏好变化（仅 System 模式有意义，但无论何种模式都更新
     // system_dark signal；resolved memo 会决定是否真正改变 ResolvedTheme）。
     // 注册 / 卸载清理由 use_event_listener 统一负责，target 在其内部 use_effect
