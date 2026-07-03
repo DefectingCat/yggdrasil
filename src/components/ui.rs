@@ -192,6 +192,43 @@ pub fn EmptyState(message: &'static str, variant: &'static str) -> Element {
     }
 }
 
+/// Tooltip 定位样式（胶囊：黑底白字，hover 显现）。
+const TOOLTIP_STYLE: &str =
+    "pointer-events-none absolute left-1/2 -translate-x-1/2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-paper-primary text-paper-theme shadow-lg z-50";
+
+/// Tooltip 包裹组件。
+///
+/// 将任意触发器（按钮等）包裹后，鼠标 hover 时在上方或下方居中弹出提示。
+/// 用 CSS `group` + `group-hover:opacity-100` 实现，无 JS 状态，`pointer-events-none`
+/// 保证不拦截点击。
+///
+/// Props：
+/// - `tip`：提示文案
+/// - `children`：触发器元素（按钮 / 链接等）
+/// - `placement`：弹出方向，`"top"`（默认）或 `"bottom"`
+///
+/// 注意：父容器若有 `overflow-hidden` 会裁掉 tooltip，此时应选朝外的方向
+/// （如表格行在 `overflow-hidden` 容器内，朝上的 tooltip 才不会被裁）。
+#[component]
+pub fn Tooltip(
+    tip: String,
+    children: Element,
+    #[props(default = "top")] placement: &'static str,
+) -> Element {
+    // 朝上：tooltip 在触发器上方（bottom-full + mb-2）；朝下：在下方（top-full + mt-2）。
+    let position_class = if placement == "bottom" {
+        "top-full mt-2"
+    } else {
+        "bottom-full mb-2"
+    };
+    rsx! {
+        div { class: "group relative",
+            {children}
+            div { class: "{TOOLTIP_STYLE} {position_class}", "{tip}" }
+        }
+    }
+}
+
 static TAB_GROUP_ID: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 /// 筛选选项卡组件。

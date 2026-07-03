@@ -16,8 +16,8 @@ use crate::components::empty_state::{EmptyState, EmptyStateAction};
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::posts_skeleton::PostsSkeleton;
 use crate::components::ui::{
-    Pagination, StatusBadge, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_TEXT_ACCENT, BTN_TEXT_RED,
-    SPINNER_SVG,
+    Pagination, StatusBadge, Tooltip, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_TEXT_ACCENT,
+    BTN_TEXT_RED, SPINNER_SVG,
 };
 use crate::hooks::query::use_paginated;
 use crate::models::post::PostListItem;
@@ -237,7 +237,9 @@ fn RebuildCacheBar(
     rsx! {
         // 仅渲染按钮行本身：结果消息已上提到 PostsPage，作为独立状态行进入文档流。
         div { class: "flex items-center gap-3",
-            div { class: "group relative",
+            Tooltip {
+                tip: "重建 content_html 为空的文章渲染缓存".to_string(),
+                placement: "bottom",
                 button {
                     class: if rebuilding() { "relative px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all" },
                     disabled: rebuilding(),
@@ -253,11 +255,10 @@ fn RebuildCacheBar(
                         }
                     }
                 }
-                div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-paper-primary text-paper-theme shadow-lg z-50",
-                    "重建 content_html 为空的文章渲染缓存"
-                }
             }
-            div { class: "group relative",
+            Tooltip {
+                tip: "重建所有文章的渲染缓存（含已有内容）".to_string(),
+                placement: "bottom",
                 button {
                     class: if rebuilding() { "relative px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all" },
                     disabled: rebuilding(),
@@ -272,9 +273,6 @@ fn RebuildCacheBar(
                             dangerous_inner_html: SPINNER_SVG,
                         }
                     }
-                }
-                div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-paper-primary text-paper-theme shadow-lg z-50",
-                    "重建所有文章的渲染缓存（含已有内容）"
                 }
             }
         }
@@ -317,22 +315,25 @@ fn PostRow(
                         to: Route::WriteEdit { id: post.id },
                         "编辑"
                     }
-                    button {
-                        class: if rebuilding {
-                            "relative inline-flex items-center text-xs text-paper-accent cursor-not-allowed"
-                        } else {
-                            BTN_TEXT_ACCENT
-                        },
-                        disabled: rebuilding,
-                        onclick: move |_| on_rebuild.call(post.id),
-                        span {
-                            class: if rebuilding { "opacity-40" } else { "" },
-                            "重建"
-                        }
-                        if rebuilding {
+                    Tooltip {
+                        tip: "重新渲染这篇文章的 HTML".to_string(),
+                        button {
+                            class: if rebuilding {
+                                "relative inline-flex items-center text-xs text-paper-accent cursor-not-allowed"
+                            } else {
+                                BTN_TEXT_ACCENT
+                            },
+                            disabled: rebuilding,
+                            onclick: move |_| on_rebuild.call(post.id),
                             span {
-                                class: "absolute inset-0 flex items-center justify-center",
-                                dangerous_inner_html: SPINNER_SVG,
+                                class: if rebuilding { "opacity-40" } else { "" },
+                                "重建"
+                            }
+                            if rebuilding {
+                                span {
+                                    class: "absolute inset-0 flex items-center justify-center",
+                                    dangerous_inner_html: SPINNER_SVG,
+                                }
                             }
                         }
                     }
