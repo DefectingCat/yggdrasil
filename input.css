@@ -292,6 +292,16 @@
     margin-bottom: var(--content-gap-paper);
   }
 
+  /* Tailwind Preflight 把 list-style 清成 none,这里恢复被清掉的 marker。
+   * 任务列表项（含 checkbox 的 li）另有规则覆盖为 none，不受影响。 */
+  .md-content ul {
+    list-style-type: disc;
+  }
+
+  .md-content ol {
+    list-style-type: decimal;
+  }
+
   .md-content li {
     margin-top: 0.3rem;
   }
