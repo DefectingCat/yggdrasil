@@ -28,7 +28,7 @@ pub fn WriteSkeleton() -> Element {
             }
 
             div { class: "flex-1 min-h-0 flex flex-col my-4",
-                div { class: "flex-1 min-h-0 w-full border border-[var(--color-paper-border)] rounded-xl overflow-hidden bg-white dark:bg-[#2e2e33] shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none space-y-4 p-4",
+                div { class: "flex-1 min-h-0 w-full border border-[var(--color-paper-border)] rounded-xl overflow-hidden bg-white dark:bg-gray-800 shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none space-y-4 p-4",
                     div { class: "flex gap-2 pb-3 border-b border-[var(--color-paper-border)]",
                         for _ in 0..8 {
                             SkeletonBox { class: "w-8 h-8 rounded" }

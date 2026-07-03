@@ -12,7 +12,7 @@ use crate::components::skeletons::atoms::SkeletonBox;
 #[component]
 pub fn PostCardSkeleton() -> Element {
     rsx! {
-        article { class: "mb-6 p-6 bg-white dark:bg-[#2e2e33] rounded-lg border border-gray-200 dark:border-[#333]",
+        article { class: "mb-6 p-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700",
             // 标题占位 (模拟 h2 text-2xl font-bold)
             SkeletonBox { class: "h-7 w-3/4 rounded mb-3" }
             // 摘要第一行

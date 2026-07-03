@@ -26,7 +26,7 @@ pub fn ArchiveSkeleton() -> Element {
 
                     // 月份分组
                     for _ in 0..2 {
-                        div { class: "archive-month flex flex-col md:flex-row md:items-start py-2.5 border-b border-gray-100 dark:border-[#333]/50",
+                        div { class: "archive-month flex flex-col md:flex-row md:items-start py-2.5 border-b border-gray-100 dark:border-gray-700/50",
                             // 月份标题 (h3 text-lg, md:w-[200px])
                             SkeletonBox { class: "h-6 w-32 md:w-[200px] shrink-0 rounded mb-2 md:mb-0 md:py-1.5" }
 

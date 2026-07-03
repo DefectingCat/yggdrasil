@@ -62,7 +62,7 @@ pub fn CommentItem(comment: PublicComment, post_id: i32) -> Element {
                     alt: "{comment.author_name} 的头像",
                     loading: "lazy",
                     decoding: "async",
-                    class: "w-8 h-8 rounded-full shrink-0 mt-0.5 bg-gray-200 dark:bg-[#2a2a2a]",
+                    class: "w-8 h-8 rounded-full shrink-0 mt-0.5 bg-gray-200 dark:bg-gray-800",
                 }
 
                 div { class: "flex-1 min-w-0",

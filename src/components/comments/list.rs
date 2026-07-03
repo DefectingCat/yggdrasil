@@ -115,7 +115,7 @@ pub fn CommentList(
     let merged = merge_and_treeify(comments, pending);
 
     rsx! {
-        div { class: "space-y-0 divide-y divide-gray-100 dark:divide-[#2a2a2a]",
+        div { class: "space-y-0 divide-y divide-gray-100 dark:divide-gray-700",
             for item in merged {
                 match item {
                     MergedComment::Approved(comment) => rsx! {

@@ -67,11 +67,11 @@ pub const BTN_TEXT_RED: &str =
 pub const BTN_TEXT_ACCENT: &str =
     "text-xs text-paper-accent hover:text-paper-primary transition-colors cursor-pointer";
 
-// --- 次要按钮（冷调玫瑰第二色，ghost 描边风格，从属于主色鼠尾草绿） ---
+// --- 次要按钮（Teal 第二色，ghost 描边风格，从属于主色 Green） ---
 
-/// 次要按钮：冷调玫瑰描边 ghost 风格。
+/// 次要按钮：Teal 描边 ghost 风格。
 /// 用于与主操作按钮（paper-accent 实心）成对的次操作，如「管理文章」「重建内容」。
-/// 亮色文字 #83495b vs 米白底 6.5:1、暗色 #cca4b0 vs entry 底 7.46:1，均过 WCAG AA。
+/// 亮色文字 #179299 vs mantle 底、暗色 #94e2d5 vs mantle 底，均过 WCAG AA。
 pub const BTN_SECONDARY: &str =
     "px-6 py-3 rounded-full text-sm font-medium text-center text-paper-accent-2 border border-paper-accent-2/40 hover:border-paper-accent-2 hover:bg-paper-accent-2-soft transition-all cursor-pointer";
 

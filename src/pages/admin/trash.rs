@@ -367,7 +367,7 @@ fn AutoPurgeSettings(settings: Signal<TrashSettings>) -> Element {
                 // 状态指示灯
                 {
                     let dot_class = if settings().auto_purge_enabled {
-                        "w-2 h-2 rounded-full bg-paper-accent shadow-[0_0_0_3px_rgba(92,122,94,0.15)]"
+                        "w-2 h-2 rounded-full bg-paper-accent shadow-[0_0_0_3px_rgba(64,160,43,0.15)]"
                     } else {
                         "w-2 h-2 rounded-full bg-paper-tertiary"
                     };

@@ -60,7 +60,7 @@ pub fn PostDetail(slug: String) -> Element {
 
                     // 仅对已发布文章展示评论区域，使用 SuspenseBoundary 处理加载状态。
                     if post.status == crate::models::post::PostStatus::Published {
-                        div { class: "mt-12 border-t border-gray-200 dark:border-[#333] pt-8",
+                        div { class: "mt-12 border-t border-gray-200 dark:border-gray-700 pt-8",
                             SuspenseBoundary {
                                 fallback: move |_| rsx! {
                                     crate::components::skeletons::comment_skeleton::CommentListSkeleton {}

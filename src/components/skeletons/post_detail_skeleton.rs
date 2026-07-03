@@ -49,7 +49,7 @@ pub fn PostDetailSkeleton() -> Element {
             }
 
             // PostFooter 占位
-            div { class: "border-t border-gray-200 dark:border-[#333] pt-6 mt-8",
+            div { class: "border-t border-gray-200 dark:border-gray-700 pt-6 mt-8",
                 div { class: "flex items-center justify-between",
                     SkeletonBox { class: "h-4 w-32 rounded" }
                     SkeletonBox { class: "h-4 w-24 rounded" }

@@ -78,7 +78,7 @@ pub fn CommentForm(post_id: i32, parent_id: Option<i64>, parent_indent: Option<i
 
     rsx! {
         div {
-            class: if is_reply { "mt-3 pt-3 border-t border-gray-100 dark:border-[#333]" } else { "" },
+            class: if is_reply { "mt-3 pt-3 border-t border-gray-100 dark:border-gray-700" } else { "" },
             style: "{negative_margin}",
             role: "form",
             aria_label: if is_reply { "回复评论" } else { "发表评论" },

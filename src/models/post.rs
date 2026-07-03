@@ -143,7 +143,7 @@ impl PostListItem {
     pub fn status_class(&self) -> &'static str {
         match self.status {
             PostStatus::Published => "text-green-600 dark:text-green-400",
-            PostStatus::Draft => "text-gray-400 dark:text-[#9b9c9d]",
+            PostStatus::Draft => "text-gray-400 dark:text-gray-500",
         }
     }
 
@@ -153,7 +153,7 @@ impl PostListItem {
             PostStatus::Published => {
                 "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
             }
-            PostStatus::Draft => "bg-gray-100 dark:bg-[#333] text-gray-600 dark:text-[#9b9c9d]",
+            PostStatus::Draft => "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400",
         }
     }
 }
@@ -304,7 +304,7 @@ mod tests {
         post.status = PostStatus::Published;
         assert_eq!(post.status_class(), "text-green-600 dark:text-green-400");
         post.status = PostStatus::Draft;
-        assert_eq!(post.status_class(), "text-gray-400 dark:text-[#9b9c9d]");
+        assert_eq!(post.status_class(), "text-gray-400 dark:text-gray-500");
     }
 
     #[test]
@@ -318,7 +318,7 @@ mod tests {
         post.status = PostStatus::Draft;
         assert_eq!(
             post.status_badge_class(),
-            "bg-gray-100 dark:bg-[#333] text-gray-600 dark:text-[#9b9c9d]"
+            "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
         );
     }
 
