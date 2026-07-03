@@ -151,28 +151,12 @@ pub fn PostsPage(page: i32) -> Element {
                                             deleting.set(None);
                                         });
                                     },
-                                    // 重建单篇文章内容：调用 server function 重新渲染 content_html，
-                                    // 成功/失败均弹出浏览器提示（与删除一致的非乐观反馈）。
+                                    // 重建单篇文章内容：调用 server function 重新渲染 content_html。
+                                    // 静默执行，仅按行切换 rebuilding 按钮态，不弹窗。
                                     on_rebuild: move |id| {
                                         rebuilding.set(Some(id));
                                         spawn(async move {
-                                            match rebuild_post_content_html(id).await {
-                                                Ok(CreatePostResponse { success: true, .. }) => {
-                                                    #[cfg(target_arch = "wasm32")]
-                                                    web_sys::window()
-                                                        .map(|w| w.alert_with_message("重建成功").ok());
-                                                }
-                                                Ok(CreatePostResponse { success: false, message: _message, .. }) => {
-                                                    #[cfg(target_arch = "wasm32")]
-                                                    web_sys::window()
-                                                        .map(|w| w.alert_with_message(&_message).ok());
-                                                }
-                                                Err(_e) => {
-                                                    #[cfg(target_arch = "wasm32")]
-                                                    web_sys::window()
-                                                        .map(|w| w.alert_with_message("重建失败").ok());
-                                                }
-                                            }
+                                            let _ = rebuild_post_content_html(id).await;
                                             rebuilding.set(None);
                                         });
                                     },
@@ -324,7 +308,7 @@ fn PostRow(
                         if rebuilding {
                             "重建中..."
                         } else {
-                            "重建内容"
+                            "重建"
                         }
                     }
                     button {
