@@ -89,6 +89,11 @@ pub mod wasm {
         #[wasm_bindgen(method, js_name = setTheme)]
         pub fn set_theme(this: &EditorInstance, theme: &str);
 
+        /// 热切换语言（python/node/javascript/sql，Compartment.reconfigure）。
+        /// 由 CodeRunner 组件在挂载时按 data-lang 调用。
+        #[wasm_bindgen(method, js_name = setLanguage)]
+        pub fn set_language(this: &EditorInstance, lang: &str);
+
         /// 更新 SQL 补全 schema（Compartment.reconfigure）。
         /// 参数为 serde_wasm_bindgen::to_value 序列化后的 JsValue
         ///（SqlSchema 是 serde 类型，非 wasm-bindgen 类型，故不能直接传 &SqlSchema）。

@@ -1,5 +1,7 @@
+import { javascript } from '@codemirror/lang-javascript';
+import { python } from '@codemirror/lang-python';
 import { PostgreSQL, sql } from '@codemirror/lang-sql';
-import { Compartment, EditorState } from '@codemirror/state';
+import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { vim } from '@replit/codemirror-vim';
 import { basicSetup } from 'codemirror';
@@ -26,19 +28,47 @@ export class EditorOptions {
 }
 
 /**
+ * 把语言标识映射成 CodeMirror 语言 Extension。
+ * - `python` → @codemirror/lang-python
+ * - `node` / `javascript` / `js` → @codemirror/lang-javascript
+ * - `sql` / 缺省 → @codemirror/lang-sql（PostgreSQL 方言 + schema 补全）
+ *
+ * SQL 分支使用 schema 补全；非 SQL 语言忽略 schema（补全仅对 SQL 有意义）。
+ */
+function buildLanguageExtension(lang: string, schema: SqlSchema): Extension {
+  const normalized = (lang ?? '').toLowerCase();
+  if (normalized === 'python') {
+    return python();
+  }
+  if (normalized === 'node' || normalized === 'javascript' || normalized === 'js') {
+    return javascript();
+  }
+  // sql / 缺省：保留原有 PostgreSQL + schema 补全行为
+  return sql({
+    dialect: PostgreSQL,
+    schema: schemaToCompletions(schema),
+    upperCaseKeywords: true,
+  });
+}
+
+/**
  * CodeMirror 实例封装。
- * create() 时用三个 Compartment 注入 theme/schema/vim，
+ * create() 时用四个 Compartment 注入 theme/language/schema/vim，
  * 支持后续热切换（reconfigure）而不重建实例——保留 Vim 状态、光标、撤销栈。
  */
 export class CodeMirrorInstance {
   private view: EditorView;
   private themeCompartment = new Compartment();
-  private schemaCompartment = new Compartment();
+  private languageCompartment = new Compartment();
   private vimCompartment = new Compartment();
+  private language: string;
+  private schema: SqlSchema;
 
   constructor(container: HTMLElement, options: EditorOptions) {
     const theme: ThemeName = options.theme ?? 'light';
     const schema = options.schema ?? { tables: [] };
+    this.schema = schema;
+    this.language = options.language ?? 'sql';
 
     this.view = new EditorView({
       state: EditorState.create({
@@ -48,12 +78,8 @@ export class CodeMirrorInstance {
           // vim 必须在 keymap 最前（@replit/codemirror-vim 仓库要求）
           this.vimCompartment.of(options.vim ? [vim()] : []),
           this.themeCompartment.of(themeExtension(theme)),
-          this.schemaCompartment.of(
-            sql({
-              dialect: PostgreSQL,
-              schema: schemaToCompletions(schema),
-              upperCaseKeywords: true,
-            }),
+          this.languageCompartment.of(
+            buildLanguageExtension(this.language, schema),
           ),
           EditorView.updateListener.of((v) => {
             if (v.docChanged) {
@@ -85,17 +111,28 @@ export class CodeMirrorInstance {
     });
   }
 
-  /** 更新 SQL 补全 schema（Compartment.reconfigure）。 */
-  setSchema(schema: SqlSchema): void {
+  /** 热切换语言（python/node/javascript/sql），不重建实例（Compartment.reconfigure）。 */
+  setLanguage(lang: string): void {
+    this.language = lang;
     this.view.dispatch({
-      effects: this.schemaCompartment.reconfigure(
-        sql({
-          dialect: PostgreSQL,
-          schema: schemaToCompletions(schema),
-          upperCaseKeywords: true,
-        }),
+      effects: this.languageCompartment.reconfigure(
+        buildLanguageExtension(lang, this.schema),
       ),
     });
+  }
+
+  /** 更新 SQL 补全 schema（Compartment.reconfigure）。
+   *  当前语言为 SQL 时立即生效；非 SQL 语言会缓存 schema，切回 SQL 时生效。 */
+  setSchema(schema: SqlSchema): void {
+    this.schema = schema;
+    // 仅当当前是 SQL 语言时才重配 extension（其它语言不消费 schema）。
+    if ((this.language ?? '').toLowerCase() === 'sql' || !this.language) {
+      this.view.dispatch({
+        effects: this.languageCompartment.reconfigure(
+          buildLanguageExtension('sql', schema),
+        ),
+      });
+    }
   }
 
   focus(): void {
