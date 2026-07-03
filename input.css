@@ -393,8 +393,6 @@
   .md-content table {
     margin-bottom: var(--content-gap-paper);
     width: 100%;
-    display: block;
-    overflow-x: auto;
     border-collapse: separate;
     border-spacing: 0;
     border-radius: 16px;
