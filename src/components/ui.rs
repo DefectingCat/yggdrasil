@@ -18,9 +18,12 @@ use crate::router::Route;
 /// Admin 卡片容器：白底圆角描边，亮/暗双模式。用于 stat 卡片、面板等。
 pub const ADMIN_CARD_CLASS: &str = "bg-paper-entry rounded-xl border border-paper-border";
 
-/// Admin 表格容器：在卡片基础上加 `overflow-hidden`，圆角裁剪表格。
-pub const ADMIN_TABLE_CLASS: &str =
-    "bg-paper-entry rounded-xl border border-paper-border overflow-hidden";
+/// Admin 表格容器：白底圆角描边，亮/暗双模式。
+///
+/// 不加 `overflow-hidden`：它会裁掉表格行内按钮的 tooltip 等溢出内容。
+/// 圆角裁剪由 `<table>` 的 `rounded-xl` + 行 hover 背景与容器同色
+/// (`bg-paper-entry`) 自然收敛，去掉后视觉无差异。
+pub const ADMIN_TABLE_CLASS: &str = "bg-paper-entry rounded-xl border border-paper-border";
 
 /// Admin 表格行 hover 态：底部分割线 + 悬停背景。
 pub const ADMIN_ROW_HOVER: &str =
