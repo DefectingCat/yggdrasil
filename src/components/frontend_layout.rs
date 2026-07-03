@@ -53,12 +53,13 @@ pub fn FrontendLayout() -> Element {
     rsx! {
         div { class: "min-h-screen flex flex-col bg-paper-theme",
             Header {
+                max_width: "max-w-4xl",
                 nav_items,
                 right_content: rsx! {
                     ThemeToggle {}
                 },
             }
-            main { class: "flex-1 w-full max-w-3xl mx-auto px-6 py-6",
+            main { class: "flex-1 w-full max-w-4xl mx-auto px-6 py-6 md:py-12",
                 SuspenseBoundary { fallback: move |_| route_skeleton(&route), Outlet::<Route> {} }
             }
             Footer {}

@@ -93,32 +93,39 @@
   }
 
   .post-header {
-    margin: 24px auto var(--content-gap-paper) auto;
+    margin: 48px auto 48px auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
   }
 
   .post-title {
-    font-size: 40px;
-    line-height: 1.2;
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    font-weight: 800;
+    line-height: 1.1;
     color: var(--color-paper-primary);
     word-break: break-word;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.04em;
+    margin: 0;
   }
 
   .post-description {
-    margin-top: 10px;
     color: var(--color-paper-secondary);
-    font-size: 16px;
+    font-size: 1.125rem;
+    font-weight: 500;
     line-height: 1.7;
+    margin: 0;
   }
 
   .post-meta {
-    margin-top: 5px;
-    color: var(--color-paper-secondary);
-    font-size: 14px;
+    margin-top: 8px;
+    color: var(--color-paper-tertiary);
+    font-size: 15px;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.75rem;
     flex-wrap: wrap;
+    font-weight: 500;
   }
 
   .post-meta a {
@@ -235,7 +242,8 @@
   /* 封面用 blur-img 结构：去 margin、保持圆角，内层 img cover 填充 */
   .entry-cover .blur-img {
     margin: 0;
-    border-radius: var(--radius-paper);
+    border-radius: 2rem;
+    overflow: hidden;
   }
   .entry-cover img {
     width: 100%;

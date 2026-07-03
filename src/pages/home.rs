@@ -112,12 +112,12 @@ fn HomePosts(current_page: i32) -> Element {
 #[component]
 fn HomeInfo() -> Element {
     rsx! {
-        div { class: "mb-10 text-center",
-            h1 { class: "text-4xl font-bold leading-tight text-paper-primary tracking-tight",
-                "Yggdrasil"
+        div { class: "mt-12 mb-20 flex flex-col items-start gap-4",
+            h1 { class: "text-6xl md:text-[5rem] font-extrabold text-[var(--color-paper-primary)] tracking-tighter leading-none",
+                "Yggdrasil."
             }
-            p { class: "mt-3 text-base text-paper-secondary leading-relaxed",
-                "以文字为主的简约博客系统"
+            p { class: "text-lg md:text-xl text-[var(--color-paper-secondary)] font-medium max-w-lg leading-relaxed",
+                "极简、快速、现代。专注于文字本身的开源博客平台。"
             }
         }
     }

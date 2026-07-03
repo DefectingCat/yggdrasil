@@ -41,10 +41,10 @@ pub fn Header(
     let menu_id = use_memo(|| "mobile-nav-menu".to_string());
 
     rsx! {
-        header { class: "sticky top-0 z-40 w-full border-b border-paper-border bg-paper-theme/80 backdrop-blur-sm",
-            nav { class: "{max_width} mx-auto px-6 h-[60px] flex items-center justify-between",
+        header { class: "sticky top-0 z-40 w-full bg-[var(--color-paper-theme)]/70 backdrop-blur-md transition-all duration-300",
+            nav { class: "{max_width} mx-auto px-6 h-[80px] flex items-center justify-between",
                 Link {
-                    class: "text-2xl font-bold font-serif text-paper-primary hover:text-paper-accent transition-colors duration-200",
+                    class: "text-2xl font-extrabold tracking-tight text-[var(--color-paper-primary)] hover:text-[var(--color-paper-accent)] transition-colors duration-200",
                     to: Route::Home {},
                     "Yggdrasil"
                 }

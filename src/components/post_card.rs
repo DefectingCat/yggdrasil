@@ -32,10 +32,10 @@ pub fn PostCard(post: PostListItem) -> Element {
     let has_cover = post.cover_image.is_some();
 
     rsx! {
-        article { class: "group relative mb-6 p-6 bg-paper-entry rounded-lg border border-paper-border hover:-translate-y-0.5 hover:border-paper-accent/50 hover:shadow-sm transition-all duration-200",
+        article { class: "group relative mb-12 flex flex-col bg-[var(--color-paper-entry)] rounded-[2rem] border border-transparent hover:border-[var(--color-paper-border)] hover:shadow-sm overflow-hidden transition-all duration-300",
             if has_cover {
-                div { class: "mb-4 -mx-6 -mt-6 overflow-hidden rounded-t-lg",
-                    div { class: "blur-img post-card-cover-blur",
+                div { class: "w-full overflow-hidden",
+                    div { class: "blur-img post-card-cover-blur !rounded-none",
                         img {
                             class: "blur-img-placeholder",
                             src: "{cover_src}?w=20",
@@ -50,21 +50,21 @@ pub fn PostCard(post: PostListItem) -> Element {
                     }
                 }
             }
-            h2 { class: "text-2xl font-bold leading-tight text-paper-primary group-hover:text-paper-accent transition-colors duration-200",
-                "{post.title}"
-            }
-            div { class: "mt-2 text-sm text-paper-secondary leading-relaxed line-clamp-2",
-                "{post.summary.as_deref().unwrap_or_default()}"
-            }
-            div { class: "mt-3 flex items-center gap-3 text-[13px] text-paper-secondary",
-                span { "{date_str}" }
+            div { class: "p-8 flex flex-col gap-3",
+                h2 { class: "text-2xl md:text-3xl font-extrabold tracking-tight leading-tight text-[var(--color-paper-primary)] group-hover:text-[var(--color-paper-accent)] transition-colors duration-200",
+                    "{post.title}"
+                }
+                div { class: "mt-1 text-base text-[var(--color-paper-secondary)] leading-relaxed line-clamp-2",
+                    "{post.summary.as_deref().unwrap_or_default()}"
+                }
+                div { class: "mt-4 flex flex-wrap items-center gap-3 text-sm font-medium text-[var(--color-paper-tertiary)]",
+                    span { class: "tracking-wide", "{date_str}" }
                 if !post.tags.is_empty() {
                     span { "·" }
                     for tag in post.tags.clone().into_iter() {
                         span { key: "{tag}",
-                            // 标签叠在覆盖链接之上，点击进入标签详情页而非文章详情。
                             Link {
-                                class: "relative z-10 hover:text-paper-accent transition-colors duration-200",
+                                class: "relative z-10 px-3 py-1 rounded-full border border-[var(--color-paper-border)] hover:bg-[var(--color-paper-accent)] hover:border-[var(--color-paper-accent)] hover:text-white transition-all duration-200",
                                 to: Route::TagDetail {
                                     tag: tag.clone(),
                                 },
@@ -74,6 +74,7 @@ pub fn PostCard(post: PostListItem) -> Element {
                         }
                     }
                 }
+            }
             }
             // 覆盖层链接：铺满卡片，承担整卡跳转。
             // z-[2] 高于封面完整图 (.blur-img-full z-index:1, input.css:611)，
