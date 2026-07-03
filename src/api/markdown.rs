@@ -90,6 +90,8 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
     let mut in_heading = false;
     let mut in_codeblock = false;
     let mut code_lang: Option<String> = None;
+    /// 可运行代码块的 (lang, html-escaped overrides JSON)；为 None 表示普通代码块。
+    let mut code_runnable: Option<(String, String)> = None;
     let mut code_buffer = String::new();
     let mut non_heading_events: Vec<Event> = Vec::new();
 
@@ -151,6 +153,25 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
                     }
                     _ => None,
                 };
+                // 解析围栏 info：识别 `runnable` 标记与可选 ResourceLimits JSON 覆盖。
+                // 仅在「标记为 runnable 且语言受支持」时挂 data-*，供阅读器扫描挂载运行器。
+                code_runnable = code_lang
+                    .as_deref()
+                    .map(|info| {
+                        let (lang, runnable, overrides) =
+                            crate::api::code_runner::languages::parse_fence_info(info);
+                        if runnable && crate::api::code_runner::languages::is_supported_lang(&lang) {
+                            // overrides 序列化为 JSON 后 HTML 转义，避免属性注入。
+                            let ov_json = overrides
+                                .map(|o| serde_json::to_string(&o).unwrap_or_default())
+                                .unwrap_or_default();
+                            let escaped = crate::utils::html::escape_html(&ov_json);
+                            Some((lang, escaped))
+                        } else {
+                            None
+                        }
+                    })
+                    .flatten();
                 code_buffer.clear();
             }
             Event::Text(text) if in_codeblock => {
@@ -160,11 +181,24 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
                 // 使用 syntect 对代码块进行服务端语法高亮。
                 let highlighted =
                     crate::highlight::server::highlight_code(&code_buffer, code_lang.as_deref());
-                html.push_str("<pre><code");
-                if let Some(lang) = &code_lang {
-                    html.push_str(&format!(" class=\"language-{lang}\""));
+                // 可运行代码块：在 <pre> 上挂 data-runnable / data-lang / data-overrides，
+                // 阅读器（post_content.rs）客户端扫描这些标记原地挂载 CodeRunner 组件。
+                if let Some((lang, overrides_escaped)) = code_runnable.take() {
+                    html.push_str(&format!(
+                        r#"<pre data-runnable="true" data-lang="{lang}" data-overrides="{overrides_escaped}"><code class="language-{lang}">"#
+                    ));
+                } else {
+                    html.push_str("<pre><code");
+                    if let Some(lang) = &code_lang {
+                        // 围栏语言可能含 info 修饰（如 `python runnable {...}`），
+                        // 高亮的 language-xxx 取纯语言 token（首个空白前）。
+                        let clean_lang = lang.split_whitespace().next().unwrap_or("");
+                        if !clean_lang.is_empty() {
+                            html.push_str(&format!(" class=\"language-{clean_lang}\""));
+                        }
+                    }
+                    html.push('>');
                 }
-                html.push('>');
                 html.push_str(&highlighted);
                 html.push_str("</code></pre>");
                 in_codeblock = false;
@@ -629,6 +663,76 @@ mod tests {
         assert!(result.html.contains("<pre><code>"));
         assert!(!result.html.contains("class=\"language-"));
         assert!(result.html.contains("plain text"));
+    }
+
+    #[test]
+    fn render_markdown_runnable_block_emits_data_attrs() {
+        // `python runnable` 围栏：pre 上挂 data-runnable / data-lang / data-overrides，
+        // 阅读器据此原地挂载 CodeRunner 组件。
+        let result = render_markdown_enhanced("```python runnable\nprint('hi')\n```");
+        assert!(
+            result.html.contains(r#"data-runnable="true""#),
+            "应输出 data-runnable, got: {}",
+            result.html
+        );
+        assert!(
+            result.html.contains(r#"data-lang="python""#),
+            "应输出 data-lang=python, got: {}",
+            result.html
+        );
+        // 无 overrides 时 data-overrides 为空。
+        assert!(
+            result.html.contains(r#"data-overrides="""#),
+            "无 overrides 时 data-overrides 应为空, got: {}",
+            result.html
+        );
+        // 内部仍带高亮 code 与 language-python。
+        assert!(
+            result.html.contains(r#"<code class="language-python">"#),
+            "应保留高亮 code, got: {}",
+            result.html
+        );
+    }
+
+    #[test]
+    fn render_markdown_runnable_block_with_overrides() {
+        let result = render_markdown_enhanced(
+            r#"```node runnable {"timeout_secs":10,"memory_mb":512,"allow_network":false,"cpu_cores":1.0,"output_bytes":1024}
+console.log(1)
+```"#,
+        );
+        assert!(result.html.contains(r#"data-lang="node""#));
+        // overrides JSON 应被 HTML 转义后放入属性（双引号变 &quot;），不得出现裸引号越界。
+        // 字段顺序按 serde 派生默认（字母序），cpu_cores 在前。
+        assert!(
+            result.html.contains("data-overrides=\"{&quot;cpu_cores&quot;:1.0"),
+            "overrides 应 HTML 转义, got: {}",
+            result.html
+        );
+        // 安全：不得出现可越出属性边界的裸双引号 JSON。
+        assert!(
+            !result.html.contains(r#"data-overrides="{"timeout""#),
+            "overrides 裸引号越界, got: {}",
+            result.html
+        );
+    }
+
+    #[test]
+    fn render_markdown_runnable_marker_on_unsupported_lang_ignored() {
+        // 语言不在白名单：runnable 标记被忽略，输出普通代码块。
+        let result = render_markdown_enhanced("```rust runnable\nfn main(){}\n```");
+        assert!(
+            !result.html.contains("data-runnable"),
+            "不支持的语言不应挂 data-runnable, got: {}",
+            result.html
+        );
+    }
+
+    #[test]
+    fn render_markdown_plain_fence_without_runnable_no_data_attrs() {
+        let result = render_markdown_enhanced("```python\nprint(1)\n```");
+        assert!(!result.html.contains("data-runnable"));
+        assert!(result.html.contains(r#"<pre><code class="language-python">"#));
     }
 
     #[test]

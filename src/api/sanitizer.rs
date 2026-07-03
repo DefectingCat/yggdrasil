@@ -372,6 +372,12 @@ pub fn clean_html(input: &str) -> String {
             ("img", vec!["data-src", "class", "style"]),
             // input 仅放行 checkbox 必备属性;type 的具体取值由 element_handler 强校验为 checkbox。
             ("input", vec!["type", "checked", "disabled"]),
+            // pre 上的可运行代码块标记：data-runnable / data-lang / data-overrides。
+            // data-overrides 是 markdown 渲染时 HTML 转义后的 JSON（见 markdown.rs），不含未转义引号。
+            (
+                "pre",
+                vec!["data-runnable", "data-lang", "data-overrides"],
+            ),
             ("span", vec!["class", "style"]),
             ("h1", vec!["id", "class"]),
             ("h2", vec!["id", "class"]),
@@ -669,6 +675,37 @@ mod tests {
         assert!(
             !result.contains("input"),
             "评论侧 input 应被剥离, got: {result}"
+        );
+    }
+
+    #[test]
+    fn clean_html_preserves_runnable_pre_data_attrs() {
+        // 可运行代码块标记应完整保留，供阅读器扫描挂载 CodeRunner。
+        let input = r#"<pre data-runnable="true" data-lang="python" data-overrides="{&quot;timeout_secs&quot;:10}"><code class="language-python">print(1)</code></pre>"#;
+        let result = clean_html(input);
+        assert!(
+            result.contains(r#"data-runnable="true""#),
+            "data-runnable 应保留, got: {result}"
+        );
+        assert!(
+            result.contains(r#"data-lang="python""#),
+            "data-lang 应保留, got: {result}"
+        );
+        assert!(
+            result.contains("data-overrides="),
+            "data-overrides 应保留, got: {result}"
+        );
+    }
+
+    #[test]
+    fn clean_html_strips_unknown_data_attrs_on_pre() {
+        // 仅放行白名单的三个 data-* 属性，其它 data-*（如恶意 data-onclick）应被剥离。
+        let input = r#"<pre data-runnable="true" data-evil="x"><code>x</code></pre>"#;
+        let result = clean_html(input);
+        assert!(result.contains("data-runnable"), "白名单 data-runnable 应保留");
+        assert!(
+            !result.contains("data-evil"),
+            "未知 data-* 应被剥离, got: {result}"
         );
     }
 }
