@@ -1,8 +1,96 @@
 //! 文章内容组件
 //!
 //! 渲染由服务端生成的文章 HTML 内容，并在 WASM 前端初始化交互脚本。
+//!
+//! 可运行代码块（markdown 围栏 ` ```lang runnable `）在服务端渲染为带
+//! `data-runnable` / `data-lang` / `data-overrides` / `data-source` 的 `<pre>`。
+//! 本组件在渲染前把 `content_html` 拆成片段序列：普通 HTML 文本片段 +
+//! [`crate::components::code_runner::CodeRunner`] 组件，使可运行块作为
+//! Dioxus vdom 内的一等元素渲染（而非手动篡改 DOM，避免 hydration 冲突）。
 
 use dioxus::prelude::*;
+
+use crate::components::code_runner::CodeRunner;
+use crate::infra::runner_config::ResourceLimits;
+
+/// 内容片段：普通 HTML 文本，或一个可运行代码块。
+#[derive(Clone, PartialEq, Debug)]
+enum ContentFragment {
+    /// 原始 HTML 片段（含语法高亮等），直接以 `dangerous_inner_html` 渲染。
+    Html(String),
+    /// 可运行代码块：语言、源码、可选资源覆盖。
+    Runnable {
+        lang: String,
+        source: String,
+        overrides: Option<ResourceLimits>,
+    },
+}
+
+/// 把服务端渲染的文章 HTML 拆成 `Html` / `Runnable` 片段序列。
+///
+/// 仅识别带 `data-runnable="true"` 的 `<pre>`；其余内容原样作为 Html 片段返回。
+/// HTML 实体（`&quot;` `&#x27;` `&amp;` `&lt;` `&gt;`）会被解码还原为原始字符。
+fn split_content_fragments(html: &str) -> Vec<ContentFragment> {
+    let mut fragments = Vec::new();
+    let mut rest = html;
+
+    while let Some(start) = rest.find(r#"<pre data-runnable="true""#) {
+        // start 之前的内容作为 Html 片段（非空才推入）。
+        let (head, tail) = rest.split_at(start);
+        if !head.trim().is_empty() {
+            fragments.push(ContentFragment::Html(head.to_string()));
+        }
+
+        // 找到对应 </pre> 闭合。
+        let Some(end_offset) = tail.find("</pre>") else {
+            // 缺失闭合：剩余整体作为 Html 片段兜底，避免丢内容。
+            fragments.push(ContentFragment::Html(tail.to_string()));
+            rest = "";
+            break;
+        };
+        let pre_block = &tail[..end_offset + "</pre>".len()];
+        rest = &tail[end_offset + "</pre>".len()..];
+
+        // 从 pre_block 提取属性。
+        let lang = extract_attr(pre_block, "data-lang").unwrap_or_default();
+        let overrides = extract_attr(pre_block, "data-overrides")
+            .filter(|s| !s.is_empty())
+            .and_then(|s| serde_json::from_str::<ResourceLimits>(&s).ok());
+        let source = extract_attr(pre_block, "data-source").unwrap_or_default();
+
+        fragments.push(ContentFragment::Runnable {
+            lang,
+            source,
+            overrides,
+        });
+    }
+
+    if !rest.trim().is_empty() {
+        fragments.push(ContentFragment::Html(rest.to_string()));
+    }
+
+    fragments
+}
+
+/// 从 HTML 片段中提取首个 `name="value"` 属性值，并解码 HTML 实体。
+/// 仅在单个 `<pre>` 块内查找，足够本场景使用。
+fn extract_attr(block: &str, name: &str) -> Option<String> {
+    let needle = format!("{name}=\"");
+    let start = block.find(&needle)? + needle.len();
+    let rest = &block[start..];
+    let end = rest.find('"')?;
+    Some(decode_html_entities(&rest[..end]))
+}
+
+/// 解码本场景出现的 HTML 实体（属性值经 escape_html 转义产生）。
+fn decode_html_entities(s: &str) -> String {
+    s.replace("&quot;", "\"")
+        .replace("&#x27;", "'")
+        .replace("&#39;", "'")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&")
+}
 
 /// 读取 `window` 上的可选全局函数并调用;函数未定义/为 null 时静默跳过。
 ///
@@ -31,12 +119,17 @@ fn invoke_optional_global(window: &web_sys::Window, name: &str, args: &[wasm_bin
 /// - `content_html`：服务端渲染的文章 HTML 字符串
 ///
 /// 关键行为：
+/// - 把可运行代码块拆成 [`CodeRunner`] 组件穿插渲染，其余 HTML 片段照旧。
 /// - 在 `target_arch = "wasm32"` 环境下调用 `window.__initPostContent` 初始化代码块
 ///   复制按钮（`yggdrasil-core.js` 已由 `Dioxus.toml` 全局注入）。
 ///   灯箱（图片灯箱 + 懒加载）改由 `Dioxus.toml` 全局注入 `lightbox.js`，
 ///   这里仅设置其初始化配置 `__lightboxSelectors` 并兜底调用。
 #[component]
 pub fn PostContent(content_html: String) -> Element {
+    // 拆分片段：use_memo 避免每次渲染重复解析。
+    let fragments =
+        use_memo(move || split_content_fragments(&content_html));
+
     #[cfg(target_arch = "wasm32")]
     use_effect(move || {
         let window = web_sys::window().unwrap();
@@ -57,9 +150,99 @@ pub fn PostContent(content_html: String) -> Element {
     });
 
     rsx! {
-        div {
-            class: "post-content md-content",
-            dangerous_inner_html: "{content_html}",
+        div { class: "post-content md-content",
+            for (i, fragment) in fragments.read().iter().enumerate() {
+                {match fragment {
+                    ContentFragment::Html(html) => rsx! {
+                        div { key: "html-{i}", dangerous_inner_html: "{html}" }
+                    },
+                    ContentFragment::Runnable { lang, source, overrides } => rsx! {
+                        CodeRunner {
+                            key: "runner-{i}",
+                            source: source.clone(),
+                            language: lang.clone(),
+                            overrides: overrides.clone(),
+                        }
+                    },
+                }}
+            }
         }
+    }
+}
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn split_plain_html_has_no_runnable() {
+        let frags = split_content_fragments("<p>hello</p>");
+        assert_eq!(frags.len(), 1);
+        assert!(matches!(frags[0], ContentFragment::Html(_)));
+    }
+
+    #[test]
+    fn split_extracts_runnable_block() {
+        let html = r#"<p>intro</p><pre data-runnable="true" data-lang="python" data-overrides="" data-source="print(&#x27;hi&#x27;)"><code class="language-python">print('hi')</code></pre><p>outro</p>"#;
+        let frags = split_content_fragments(html);
+        // intro + runnable + outro = 3
+        assert_eq!(frags.len(), 3);
+        match &frags[1] {
+            ContentFragment::Runnable {
+                lang,
+                source,
+                overrides,
+            } => {
+                assert_eq!(lang, "python");
+                assert_eq!(source, "print('hi')");
+                assert!(overrides.is_none());
+            }
+            other => panic!("expected Runnable, got {other:?} (Html)"),
+        }
+    }
+
+    #[test]
+    fn split_parses_overrides_json() {
+        let html = r#"<pre data-runnable="true" data-lang="node" data-overrides="{&quot;timeout_secs&quot;:10,&quot;memory_mb&quot;512,&quot;allow_network&quot;:false,&quot;cpu_cores&quot;:1.0,&quot;output_bytes&quot;:1024}" data-source="console.log(1)"><code>x</code></pre>"#;
+        // 注意：上面 overrides 故意写成畸形 JSON（缺冒号）→ 解析失败 → overrides 为 None
+        let frags = split_content_fragments(html);
+        assert_eq!(frags.len(), 1);
+        match &frags[0] {
+            ContentFragment::Runnable { overrides, .. } => {
+                assert!(overrides.is_none(), "畸形 JSON 应解析失败为 None");
+            }
+            _ => panic!("expected Runnable"),
+        }
+    }
+
+    #[test]
+    fn split_valid_overrides_json() {
+        let html = r#"<pre data-runnable="true" data-lang="node" data-overrides="{&quot;timeout_secs&quot;:10,&quot;memory_mb&quot;:512,&quot;allow_network&quot;:false,&quot;cpu_cores&quot;:1.0,&quot;output_bytes&quot;:1024}" data-source="console.log(1)"><code>x</code></pre>"#;
+        let frags = split_content_fragments(html);
+        match &frags[0] {
+            ContentFragment::Runnable { overrides, .. } => {
+                let ov = overrides.as_ref().expect("overrides 应解析成功");
+                assert_eq!(ov.timeout_secs, 10);
+                assert_eq!(ov.memory_mb, 512);
+            }
+            _ => panic!("expected Runnable"),
+        }
+    }
+
+    #[test]
+    fn split_unclosed_pre_falls_back_to_html() {
+        let html = r#"<pre data-runnable="true" data-lang="python""#;
+        let frags = split_content_fragments(html);
+        assert_eq!(frags.len(), 1);
+        assert!(matches!(frags[0], ContentFragment::Html(_)));
+    }
+
+    #[test]
+    fn decode_html_entities_roundtrip() {
+        assert_eq!(decode_html_entities("print(&#x27;hi&#x27;)"), "print('hi')");
+        assert_eq!(
+            decode_html_entities("&quot;&lt;&gt;&amp;"),
+            "\"<>&"
+        );
     }
 }

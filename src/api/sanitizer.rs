@@ -372,11 +372,16 @@ pub fn clean_html(input: &str) -> String {
             ("img", vec!["data-src", "class", "style"]),
             // input 仅放行 checkbox 必备属性;type 的具体取值由 element_handler 强校验为 checkbox。
             ("input", vec!["type", "checked", "disabled"]),
-            // pre 上的可运行代码块标记：data-runnable / data-lang / data-overrides。
-            // data-overrides 是 markdown 渲染时 HTML 转义后的 JSON（见 markdown.rs），不含未转义引号。
+            // pre 上的可运行代码块标记：data-runnable / data-lang / data-overrides / data-source。
+            // data-overrides / data-source 是 markdown 渲染时 HTML 转义后的内容（见 markdown.rs），不含未转义引号。
             (
                 "pre",
-                vec!["data-runnable", "data-lang", "data-overrides"],
+                vec![
+                    "data-runnable",
+                    "data-lang",
+                    "data-overrides",
+                    "data-source",
+                ],
             ),
             ("span", vec!["class", "style"]),
             ("h1", vec!["id", "class"]),

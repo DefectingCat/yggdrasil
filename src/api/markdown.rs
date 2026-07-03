@@ -90,7 +90,9 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
     let mut in_heading = false;
     let mut in_codeblock = false;
     let mut code_lang: Option<String> = None;
-    /// 可运行代码块的 (lang, html-escaped overrides JSON)；为 None 表示普通代码块。
+    /// 可运行代码块的 (lang, html-escaped overrides JSON)。
+    /// 为 None 表示普通代码块。原始源码在 End 处从 code_buffer 转义后存入 data-source，
+    /// 供阅读器无损提取（避免从高亮 HTML 反解）。
     let mut code_runnable: Option<(String, String)> = None;
     let mut code_buffer = String::new();
     let mut non_heading_events: Vec<Event> = Vec::new();
@@ -165,8 +167,8 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
                             let ov_json = overrides
                                 .map(|o| serde_json::to_string(&o).unwrap_or_default())
                                 .unwrap_or_default();
-                            let escaped = crate::utils::html::escape_html(&ov_json);
-                            Some((lang, escaped))
+                            let overrides_escaped = crate::utils::html::escape_html(&ov_json);
+                            Some((lang, overrides_escaped))
                         } else {
                             None
                         }
@@ -181,11 +183,13 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
                 // 使用 syntect 对代码块进行服务端语法高亮。
                 let highlighted =
                     crate::highlight::server::highlight_code(&code_buffer, code_lang.as_deref());
-                // 可运行代码块：在 <pre> 上挂 data-runnable / data-lang / data-overrides，
+                // 可运行代码块：在 <pre> 上挂 data-runnable / data-lang / data-overrides / data-source，
                 // 阅读器（post_content.rs）客户端扫描这些标记原地挂载 CodeRunner 组件。
+                // data-source 为 HTML 转义后的原始源码，供阅读器无损提取（避免反解高亮 HTML）。
                 if let Some((lang, overrides_escaped)) = code_runnable.take() {
+                    let source_escaped = crate::utils::html::escape_html(&code_buffer);
                     html.push_str(&format!(
-                        r#"<pre data-runnable="true" data-lang="{lang}" data-overrides="{overrides_escaped}"><code class="language-{lang}">"#
+                        r#"<pre data-runnable="true" data-lang="{lang}" data-overrides="{overrides_escaped}" data-source="{source_escaped}"><code class="language-{lang}">"#
                     ));
                 } else {
                     html.push_str("<pre><code");
@@ -667,7 +671,7 @@ mod tests {
 
     #[test]
     fn render_markdown_runnable_block_emits_data_attrs() {
-        // `python runnable` 围栏：pre 上挂 data-runnable / data-lang / data-overrides，
+        // `python runnable` 围栏：pre 上挂 data-runnable / data-lang / data-overrides / data-source，
         // 阅读器据此原地挂载 CodeRunner 组件。
         let result = render_markdown_enhanced("```python runnable\nprint('hi')\n```");
         assert!(
@@ -684,6 +688,12 @@ mod tests {
         assert!(
             result.html.contains(r#"data-overrides="""#),
             "无 overrides 时 data-overrides 应为空, got: {}",
+            result.html
+        );
+        // data-source 携带 HTML 转义后的原始源码（单引号转义为 &#x27;）。
+        assert!(
+            result.html.contains(r#"data-source="print(&#x27;hi&#x27;)"#),
+            "data-source 应含转义后的源码, got: {}",
             result.html
         );
         // 内部仍带高亮 code 与 language-python。
