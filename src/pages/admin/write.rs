@@ -401,7 +401,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
     // 元信息表单复用样式见模块级 META_LABEL_CLASS / META_INPUT_CLASS。
 
     rsx! {
-        div { class: "relative flex flex-col",
+        div { class: "relative flex flex-col w-full max-w-7xl mx-auto h-full",
             if loading() {
                 div { class: "absolute inset-0 z-10 bg-paper-theme", WriteSkeleton {} }
             }
