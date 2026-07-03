@@ -44,6 +44,30 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  /* Minimalist custom scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-paper-border) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--color-paper-border);
+    border-radius: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-paper-tertiary);
+  }
+
   .dark {
     /* Catppuccin Mocha（暗色）。accent-soft 带绿调、accent-2-soft 带 teal 调，
        在 surface0 暗底上透出微弱主/次强调色。 */
