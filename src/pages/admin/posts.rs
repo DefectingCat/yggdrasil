@@ -75,9 +75,12 @@ pub fn PostsPage(page: i32) -> Element {
     let get_posts = move || -> Vec<PostListItem> { posts() };
 
     rsx! {
-        div { class: "space-y-6",
-            div { class: "flex items-center justify-between",
-                h1 { class: "text-2xl font-bold text-paper-primary", "文章管理" }
+        div { class: "w-full max-w-7xl mx-auto space-y-6",
+            div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-paper-border mb-6",
+                div {
+                    h1 { class: "text-2xl font-semibold tracking-tight text-paper-primary uppercase", "POST_MANAGEMENT" }
+                    p { class: "text-sm text-paper-secondary mt-1 font-mono uppercase tracking-widest", "All Publications & Drafts" }
+                }
                 div { class: "flex items-center gap-3",
                     // 重建缓存工具条（抽取为子组件 RebuildCacheBar，见文件末尾）。
                     RebuildCacheBar {
@@ -85,9 +88,9 @@ pub fn PostsPage(page: i32) -> Element {
                         rebuild_result: rebuild_result,
                     }
                     Link {
-                        class: "px-4 py-2 bg-paper-accent text-paper-theme rounded-full text-sm font-medium hover:brightness-110 active:scale-[0.98] transition-all duration-200 cursor-pointer",
+                        class: "px-6 py-3 rounded-sm text-xs font-mono uppercase tracking-widest text-paper-theme bg-paper-primary hover:bg-paper-primary/90 transition-all cursor-pointer",
                         to: Route::Write {},
-                        "+ 写文章"
+                        "+ NEW_POST"
                     }
                 }
             }

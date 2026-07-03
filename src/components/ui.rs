@@ -15,15 +15,11 @@ use crate::router::Route;
 // 样式常量
 // ===========================================================================
 
-/// Admin 卡片容器：白底圆角描边，亮/暗双模式。用于 stat 卡片、面板等。
-pub const ADMIN_CARD_CLASS: &str = "bg-paper-entry rounded-xl border border-paper-border";
+/// Admin 卡片容器：锐利直角/微小圆角，工业控制台风格。
+pub const ADMIN_CARD_CLASS: &str = "bg-paper-entry border border-paper-border rounded-sm";
 
-/// Admin 表格容器：白底圆角描边，亮/暗双模式。
-///
-/// 不加 `overflow-hidden`：它会裁掉表格行内按钮的 tooltip 等溢出内容。
-/// 圆角裁剪由 `<table>` 的 `rounded-xl` + 行 hover 背景与容器同色
-/// (`bg-paper-entry`) 自然收敛，去掉后视觉无差异。
-pub const ADMIN_TABLE_CLASS: &str = "bg-paper-entry rounded-xl border border-paper-border";
+/// Admin 表格容器：锐利直角/微小圆角，与控制台一致。
+pub const ADMIN_TABLE_CLASS: &str = "bg-paper-entry border border-paper-border rounded-sm";
 
 /// Admin 表格行 hover 态：底部分割线 + 悬停背景。
 pub const ADMIN_ROW_HOVER: &str =
@@ -46,13 +42,13 @@ pub const BADGE_BASE: &str =
 
 /// 绿色实心小按钮（批量通过、批量恢复）。
 pub const BTN_SOLID_GREEN: &str =
-    "px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded hover:bg-green-700 transition-colors";
+    "px-3 py-1.5 text-[11px] uppercase tracking-wider font-mono bg-green-600 text-white rounded-sm hover:bg-green-700 transition-colors";
 /// 琥珀色实心小按钮（批量标为垃圾）。
 pub const BTN_SOLID_AMBER: &str =
-    "px-3 py-1.5 text-xs font-medium bg-amber-600 text-white rounded hover:bg-amber-700 transition-colors";
+    "px-3 py-1.5 text-[11px] uppercase tracking-wider font-mono bg-amber-600 text-white rounded-sm hover:bg-amber-700 transition-colors";
 /// 红色实心小按钮（批量删除、批量彻底删除）。
 pub const BTN_SOLID_RED: &str =
-    "px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded hover:bg-red-700 transition-colors";
+    "px-3 py-1.5 text-[11px] uppercase tracking-wider font-mono bg-red-600 text-white rounded-sm hover:bg-red-700 transition-colors";
 
 // --- 文字小按钮（表格行内操作：通过 / 垃圾 / 删除 / 恢复） ---
 
@@ -69,11 +65,9 @@ pub const BTN_TEXT_ACCENT: &str =
 
 // --- 次要按钮（Teal 第二色，ghost 描边风格，从属于主色 Green） ---
 
-/// 次要按钮：Teal 描边 ghost 风格。
-/// 用于与主操作按钮（paper-accent 实心）成对的次操作，如「管理文章」「重建内容」。
-/// 亮色文字 #179299 vs mantle 底、暗色 #94e2d5 vs mantle 底，均过 WCAG AA。
+/// 次要按钮：细线勾勒的极简风格，控制台质感。
 pub const BTN_SECONDARY: &str =
-    "px-6 py-3 rounded-full text-sm font-medium text-center text-paper-accent-2 border border-paper-accent-2/40 hover:border-paper-accent-2 hover:bg-paper-accent-2-soft transition-all cursor-pointer";
+    "px-6 py-3 rounded-sm text-xs font-mono uppercase tracking-widest text-center text-paper-secondary border border-paper-border hover:border-paper-primary hover:text-paper-primary transition-all cursor-pointer";
 
 // ===========================================================================
 // 组件
@@ -112,7 +106,7 @@ pub fn Pagination(
     let is_admin = variant == "admin";
     let (link_class, link_extra_next) = if is_admin {
         (
-            "inline-flex items-center px-4 py-2 text-sm text-paper-theme bg-paper-accent rounded-full hover:brightness-110 active:scale-[0.98] transition-all duration-200 cursor-pointer",
+            "inline-flex items-center px-4 py-2 text-xs font-mono tracking-wider text-paper-theme bg-paper-primary rounded-sm hover:brightness-110 active:scale-[0.98] transition-all duration-200 cursor-pointer",
             "",
         )
     } else {
@@ -122,7 +116,7 @@ pub fn Pagination(
         )
     };
     let disabled_class =
-        "inline-flex items-center px-4 py-2 text-sm text-paper-secondary bg-paper-tertiary rounded-full cursor-not-allowed";
+        "inline-flex items-center px-4 py-2 text-xs font-mono tracking-wider text-paper-secondary bg-paper-entry border border-paper-border rounded-sm cursor-not-allowed";
 
     // admin 首尾页渲染禁用态；frontend 首尾页直接不渲染。
     rsx! {
@@ -296,12 +290,12 @@ pub fn FilterTabs(
     });
 
     rsx! {
-        div { class: "relative flex gap-1 border-b border-paper-border",
+        div { class: "relative flex gap-4 border-b border-paper-border mb-6",
             for (value, label) in items {
                 button {
                     id: "tab-{id_prefix}-{value}",
                     key: "{value}",
-                    class: if active_value == *value { "cursor-pointer px-4 py-2 text-sm font-medium text-paper-primary transition-colors" } else { "cursor-pointer px-4 py-2 text-sm font-medium text-paper-secondary hover:text-paper-primary transition-colors" },
+                    class: if active_value == *value { "cursor-pointer px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-primary transition-colors" } else { "cursor-pointer px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-secondary hover:text-paper-primary transition-colors" },
                     onclick: {
                         let v = value.to_string();
                         move |_| {
@@ -314,7 +308,7 @@ pub fn FilterTabs(
             }
             // 绝对定位的滑动颜色条
             div {
-                class: "absolute bottom-[-1px] h-[2px] bg-paper-accent transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] pointer-events-none",
+                class: "absolute bottom-[-1px] h-[2px] bg-paper-primary transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] pointer-events-none",
                 style: "{indicator_style}",
             }
         }

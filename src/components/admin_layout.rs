@@ -1,27 +1,20 @@
 //! 后台管理布局组件
 //!
-//! 包裹所有后台路由，提供管理员专属导航、登录校验、主题切换与登出入口。
-//! 在未完成身份校验前显示与真实布局结构一致的骨架屏，避免切换闪烁。
+//! 提供全新设计的工业/极简风格的管理员专属后台布局。
+//! 采用 Linear-style / Vercel-style 全宽顶部导航，去除冗余圆角与阴影，
+//! 突出数据密度与严谨性（工业/控制台美学）。
 
 use dioxus::prelude::*;
+use dioxus::router::components::Link;
 
 use crate::api::auth::{get_current_user, logout};
 use crate::components::admin_skeleton::AdminDashboardSkeleton;
-use crate::components::footer::Footer;
-use crate::components::header::{Header, NavItemConfig};
 use crate::components::write_skeleton::WriteSkeleton;
 use crate::context::UserContext;
 use crate::hooks::delayed_loading::use_delayed_loading;
 use crate::router::Route;
 use crate::theme::ThemeToggle;
 
-/// 后台管理整体布局组件。
-///
-/// 负责：
-/// - 通过 `get_current_user` 校验登录状态，未登录时跳转登录页
-/// - 渲染顶部导航（仪表盘、写文章、管理文章）与主题切换/登出按钮
-/// - 根据当前路由切换主区域样式（Write 路由固定高度，其他路由可滚动）
-/// - 校验完成前使用骨架屏保持布局稳定
 #[component]
 pub fn AdminLayout() -> Element {
     let mut ctx: UserContext = use_context();
@@ -29,7 +22,6 @@ pub fn AdminLayout() -> Element {
     let route = use_route::<Route>();
     let show_skeleton = use_delayed_loading(move || !(ctx.checked)());
 
-    // 仅在首次挂载时执行一次登录校验
     use_effect(move || {
         if !(ctx.checked)() {
             (ctx.checked).set(true);
@@ -50,109 +42,105 @@ pub fn AdminLayout() -> Element {
         }
     });
 
-    // 后台导航项，当前路由高亮
     let admin_nav_items = vec![
-        NavItemConfig {
-            route: Route::Admin {},
-            label: "仪表盘",
-            is_active: matches!(route, Route::Admin {}),
-        },
-        NavItemConfig {
-            route: Route::Write {},
-            label: "写文章",
-            is_active: matches!(route, Route::Write {}) || matches!(route, Route::WriteEdit { .. }),
-        },
-        NavItemConfig {
-            route: Route::Posts {},
-            label: "管理文章",
-            is_active: matches!(route, Route::Posts {}),
-        },
-        NavItemConfig {
-            route: Route::Trash {},
-            label: "回收站",
-            is_active: matches!(route, Route::Trash {}) || matches!(route, Route::TrashPage { .. }),
-        },
-        NavItemConfig {
-            route: Route::System {},
-            label: "系统",
-            is_active: matches!(route, Route::System {}),
-        },
+        (Route::Admin {}, "仪表盘"),
+        (Route::Write {}, "写文章"),
+        (Route::Posts {}, "管理文章"),
+        (Route::Trash {}, "回收站"),
+        (Route::System {}, "系统"),
     ];
 
-    // 右侧操作区：主题切换 + 登出按钮
-    let right_content = rsx! {
-        div { class: "flex items-center gap-3",
-            ThemeToggle {}
-            button {
-                class: "text-sm text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer",
-                onclick: move |_| {
-                    spawn(async move {
-                        let _ = logout().await;
-                        ctx.user.set(None);
-                        ctx.checked.set(false);
-                        let _ = navigator.push(Route::Login {});
-                    });
-                },
-                "登出"
+    let is_write_route =
+        matches!(route, Route::Write {}) || matches!(route, Route::WriteEdit { .. });
+
+    let main_class = if is_write_route {
+        "flex-1 w-full flex flex-col relative"
+    } else {
+        "flex-1 w-full max-w-7xl mx-auto px-6 py-10"
+    };
+
+    let root_class = "min-h-dvh flex flex-col bg-paper-theme text-paper-primary font-sans";
+
+    let nav_content = rsx! {
+        header { class: "w-full border-b border-paper-border bg-paper-theme sticky top-0 z-40",
+            div { class: "w-full max-w-7xl mx-auto px-6 h-14 flex items-center justify-between",
+                div { class: "flex items-center gap-8",
+                    // 品牌标识 / 回前台
+                    Link {
+                        class: "font-bold text-sm tracking-widest uppercase hover:text-paper-accent transition-colors",
+                        to: Route::Home {},
+                        "Yggdrasil // Admin"
+                    }
+                    // 导航链接
+                    nav { class: "hidden md:flex items-center gap-6",
+                        for (dest, label) in admin_nav_items {
+                            {
+                                let is_active = route == dest || (label == "写文章" && is_write_route) || (label == "回收站" && matches!(route, Route::TrashPage { .. }));
+                                let text_class = if is_active { "text-paper-primary" } else { "text-paper-secondary hover:text-paper-primary" };
+                                rsx! {
+                                    Link {
+                                        key: "{label}",
+                                        class: "text-sm font-medium transition-colors {text_class}",
+                                        to: dest,
+                                        "{label}"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                // 右侧操作
+                div { class: "flex items-center gap-4",
+                    ThemeToggle {}
+                    button {
+                        class: "text-xs font-mono px-3 py-1.5 border border-paper-border rounded hover:bg-paper-entry transition-colors cursor-pointer text-paper-secondary hover:text-paper-primary",
+                        onclick: move |_| {
+                            spawn(async move {
+                                let _ = logout().await;
+                                ctx.user.set(None);
+                                ctx.checked.set(false);
+                                let _ = navigator.push(Route::Login {});
+                            });
+                        },
+                        "LOGOUT"
+                    }
+                }
             }
         }
     };
 
-    let is_write_route =
-        matches!(route, Route::Write {}) || matches!(route, Route::WriteEdit { .. });
-    let main_class = if is_write_route {
-        "flex-1 w-full max-w-5xl mx-auto px-6 flex flex-col"
-    } else {
-        "flex-1 w-full max-w-5xl mx-auto px-6 py-8"
-    };
-
-    // 所有路由统一自然文档流：浏览器右侧滚动条，整页滚动。
-    let root_class = if is_write_route {
-        "min-h-dvh flex flex-col bg-paper-theme"
-    } else {
-        "min-h-screen flex flex-col bg-paper-theme"
-    };
-
-    // 根据校验状态与用户状态渲染真实布局、跳转提示或骨架屏
     match ((ctx.checked)(), (ctx.user)()) {
         (true, Some(_)) => {
             rsx! {
                 div { class: "{root_class}",
-                    Header { nav_items: admin_nav_items, right_content, max_width: "max-w-5xl" }
+                    {nav_content}
                     main { class: "{main_class}", Outlet::<Route> {} }
-                    Footer {}
                 }
             }
         }
         (true, None) => {
             rsx! {
                 div { class: "{root_class}",
-                    div { class: "flex-1 flex items-center justify-center",
-                        p { class: "text-paper-secondary", "未登录，正在跳转..." }
+                    div { class: "flex-1 flex items-center justify-center font-mono text-xs text-paper-secondary tracking-widest",
+                        "AUTHENTICATING..."
                     }
                 }
             }
         }
         (false, _) => {
-            // 使用与真实布局完全相同的结构包裹内容骨架，避免 checked 变化时的布局闪烁
             rsx! {
                 div { class: "{root_class}",
-                    Header { nav_items: admin_nav_items, right_content, max_width: "max-w-5xl" }
+                    {nav_content}
                     main { class: "{main_class}",
                         div { class: if show_skeleton() { "" } else { "opacity-0" },
                             {
                                 match route {
-                                    Route::Write {} => rsx! {
-                                        WriteSkeleton {}
-                                    },
-                                    _ => rsx! {
-                                        AdminDashboardSkeleton {}
-                                    },
+                                    Route::Write {} => rsx! { WriteSkeleton {} },
+                                    _ => rsx! { AdminDashboardSkeleton {} },
                                 }
                             }
                         }
                     }
-                    Footer {}
                 }
             }
         }

@@ -57,8 +57,13 @@ pub fn System() -> Element {
     let mut active_tab = use_signal(|| SystemTab::DbStatus);
 
     rsx! {
-        div { class: "space-y-6",
-            h1 { class: "text-2xl font-bold text-paper-primary", "系统管理" }
+        div { class: "w-full max-w-7xl mx-auto space-y-6",
+            div { class: "flex items-end justify-between pb-6 border-b border-paper-border mb-6",
+                div {
+                    h1 { class: "text-2xl font-semibold tracking-tight text-paper-primary uppercase", "SYSTEM_CONTROL_PANEL" }
+                    p { class: "text-sm text-paper-secondary mt-1 font-mono uppercase tracking-widest", "Database & Server Diagnostics" }
+                }
+            }
 
             // 顶部 tab 切换栏:复用公共 FilterTabs 组件(String API,经 as_str/from_str 桥接枚举)。
             // 视觉与评论页一致:平滑滑动指示条 + 选中文字 text-paper-primary。

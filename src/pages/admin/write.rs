@@ -398,14 +398,6 @@ fn write_editor(post_id: Option<i32>) -> Element {
         }
     };
 
-    let save_button_text = if saving() {
-        "保存中..."
-    } else if is_edit {
-        "更新"
-    } else {
-        "保存"
-    };
-
     // 元信息表单复用样式见模块级 META_LABEL_CLASS / META_INPUT_CLASS。
 
     rsx! {
@@ -519,29 +511,29 @@ fn write_editor(post_id: Option<i32>) -> Element {
             } // 内容区闭合
 
             // 底部操作栏 - 跟随页面滚动
-            div { class: "flex items-center gap-2 pt-2 pb-4 border-t border-[var(--color-paper-border)]",
+            div { class: "flex items-center gap-4 pt-4 pb-4 border-t border-[var(--color-paper-border)]",
                 button {
-                    class: "px-4 py-1.5 text-sm text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors cursor-pointer",
+                    class: "px-4 py-2 text-xs font-mono uppercase tracking-widest text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors cursor-pointer",
                     onclick: move |_| {
                         let _ = dioxus::router::navigator().push(Route::Posts {});
                     },
-                    "取消"
+                    "CANCEL"
                 }
                 div { class: "w-px h-5 bg-[var(--color-paper-border)]" }
-                div { class: "relative inline-flex items-center px-3 py-1.5 text-sm text-[var(--color-paper-secondary)] cursor-pointer",
+                div { class: "relative inline-flex items-center px-4 py-2 text-xs font-mono uppercase tracking-widest text-[var(--color-paper-secondary)] cursor-pointer",
                     select {
                         class: "absolute inset-0 w-full h-full opacity-0 cursor-pointer",
                         style: "appearance: none; -webkit-appearance: none;",
                         value: "{status}",
                         onchange: move |evt| status.set(evt.value()),
-                        option { value: "draft", "草稿" }
-                        option { value: "published", "发布" }
+                        option { value: "draft", "DRAFT" }
+                        option { value: "published", "PUBLISHED" }
                     }
-                    span { class: "pr-1.5 text-[var(--color-paper-primary)] font-medium",
+                    span { class: "pr-2 text-[var(--color-paper-primary)]",
                         if status() == "draft" {
-                            "草稿"
+                            "DRAFT"
                         } else {
-                            "发布"
+                            "PUBLISHED"
                         }
                     }
                     svg {
@@ -558,10 +550,10 @@ fn write_editor(post_id: Option<i32>) -> Element {
                 }
                 div { class: "w-px h-5 bg-[var(--color-paper-border)]" }
                 button {
-                    class: if saving() { "px-5 py-1.5 text-sm bg-[var(--color-paper-tertiary)] text-[var(--color-paper-secondary)] rounded-xl font-medium cursor-not-allowed" } else { "px-5 py-1.5 text-sm bg-[var(--color-paper-accent)] text-[var(--color-paper-theme)] rounded-xl font-medium hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer" },
+                    class: if saving() { "px-6 py-2 text-xs font-mono uppercase tracking-widest bg-[var(--color-paper-tertiary)] text-[var(--color-paper-secondary)] rounded-sm cursor-not-allowed" } else { "px-6 py-2 text-xs font-mono uppercase tracking-widest bg-[var(--color-paper-primary)] text-[var(--color-paper-theme)] rounded-sm hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer" },
                     disabled: saving(),
                     onclick: on_submit,
-                    "{save_button_text}"
+                    if saving() { "SAVING..." } else if is_edit { "UPDATE" } else { "PUBLISH" }
                 }
             }
         }

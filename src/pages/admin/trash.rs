@@ -78,11 +78,13 @@ pub fn TrashPage(page: i32) -> Element {
     };
 
     rsx! {
-        div { class: "space-y-6",
+        div { class: "w-full max-w-7xl mx-auto space-y-6",
             // 页面标题
-            div { class: "flex items-center gap-3",
-                h1 { class: "text-2xl font-bold text-paper-primary", "回收站" }
-                span { class: "text-sm text-paper-secondary", "共 {total()} 篇" }
+            div { class: "flex items-end justify-between pb-6 border-b border-paper-border mb-6",
+                div {
+                    h1 { class: "text-2xl font-semibold tracking-tight text-paper-primary uppercase", "TRASH_BIN" }
+                    p { class: "text-sm text-paper-secondary mt-1 font-mono uppercase tracking-widest", "Deleted Items ({total()})" }
+                }
             }
 
             // 自动清理配置卡片（抽取为子组件 AutoPurgeSettings，见文件末尾）。
