@@ -115,7 +115,7 @@ test:
 # JS + Rust 一次性检查（不改动文件）。
 lint:
 	@echo "==> Biome check (libs)"
-	@cd libs && pnpm exec biome check .
+	@cd libs && pnpm exec biome check . && pnpm typecheck
 	@echo "==> Cargo clippy (Rust)"
 	@cargo clippy --all-targets --all-features -- -D warnings
 
