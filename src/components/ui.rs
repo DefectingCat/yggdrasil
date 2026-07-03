@@ -29,6 +29,12 @@ pub const ADMIN_ROW_HOVER: &str =
 /// 列表复选框统一样式（全选表头 + 行内）。
 pub const CHECKBOX_CLASS: &str = "rounded border-paper-border";
 
+/// 行内加载 spinner：环形渐变 + 自旋动画，用 currentColor 继承文字色。
+///
+/// 内联 SVG（含 `@keyframes`），通过 `dangerous_inner_html` 注入；尺寸由外层
+/// Tailwind 类（如 `w-3.5 h-3.5`）控制。源文件 `public/icons/90-ring-with-gradient.svg`。
+pub const SPINNER_SVG: &str = r#"<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="yggSpinnerGrad"><stop offset="0%" stop-color="currentColor" stop-opacity="1"/><stop offset="100%" stop-color="currentColor" stop-opacity="0.25"/></linearGradient></defs><style>@keyframes yggSpin { to { transform: rotate(360deg); } } .ygg-spinner-circle { transform-origin: 50% 50%; stroke: url(#yggSpinnerGrad); fill: none; animation: yggSpin .5s infinite linear; }</style><circle cx="10" cy="10" r="8" class="ygg-spinner-circle" stroke-width="2"/></svg>"#;
+
 /// 状态徽章外层：小号圆角胶囊。
 pub const BADGE_BASE: &str =
     "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap";

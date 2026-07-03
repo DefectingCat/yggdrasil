@@ -17,6 +17,7 @@ use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::posts_skeleton::PostsSkeleton;
 use crate::components::ui::{
     Pagination, StatusBadge, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_TEXT_ACCENT, BTN_TEXT_RED,
+    SPINNER_SVG,
 };
 use crate::hooks::query::use_paginated;
 use crate::models::post::PostListItem;
@@ -118,7 +119,7 @@ pub fn PostsPage(page: i32) -> Element {
                                     "状态"
                                 }
                                 th { class: "px-4 py-3 font-medium w-32", "日期" }
-                                th { class: "px-4 py-3 font-medium w-24 text-right",
+                                th { class: "px-4 py-3 font-medium w-44 text-right",
                                     "操作"
                                 }
                             }
@@ -302,11 +303,18 @@ fn PostRow(
                         "编辑"
                     }
                     button {
-                        class: if rebuilding { "text-xs text-paper-secondary cursor-not-allowed" } else { BTN_TEXT_ACCENT },
+                        class: if rebuilding {
+                            "inline-flex items-center gap-1 text-xs text-paper-secondary cursor-not-allowed"
+                        } else {
+                            BTN_TEXT_ACCENT
+                        },
                         disabled: rebuilding,
                         onclick: move |_| on_rebuild.call(post.id),
                         if rebuilding {
-                            "重建中..."
+                            {rsx! {
+                                span { dangerous_inner_html: SPINNER_SVG }
+                                "重建中"
+                            }}
                         } else {
                             "重建"
                         }
