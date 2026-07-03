@@ -236,13 +236,18 @@ fn RebuildCacheBar(
         div { class: "flex items-center gap-3",
             div { class: "group relative",
                 button {
-                    class: if rebuilding() { "px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all" },
+                    class: if rebuilding() { "relative px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all" },
                     disabled: rebuilding(),
                     onclick: move |_| do_rebuild(false),
-                    if rebuilding() {
-                        "重建中..."
-                    } else {
+                    span {
+                        class: if rebuilding() { "opacity-40" } else { "" },
                         "重建内容"
+                    }
+                    if rebuilding() {
+                        span {
+                            class: "absolute inset-0 flex items-center justify-center",
+                            dangerous_inner_html: SPINNER_SVG,
+                        }
                     }
                 }
                 div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-paper-primary text-paper-theme shadow-lg z-50",
@@ -251,13 +256,18 @@ fn RebuildCacheBar(
             }
             div { class: "group relative",
                 button {
-                    class: if rebuilding() { "px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all" },
+                    class: if rebuilding() { "relative px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all" },
                     disabled: rebuilding(),
                     onclick: move |_| do_rebuild(true),
-                    if rebuilding() {
-                        "重建中..."
-                    } else {
+                    span {
+                        class: if rebuilding() { "opacity-40" } else { "" },
                         "重建全部"
+                    }
+                    if rebuilding() {
+                        span {
+                            class: "absolute inset-0 flex items-center justify-center",
+                            dangerous_inner_html: SPINNER_SVG,
+                        }
                     }
                 }
                 div { class: "pointer-events-none absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-paper-primary text-paper-theme shadow-lg z-50",
