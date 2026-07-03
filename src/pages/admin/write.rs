@@ -38,7 +38,7 @@ use dioxus::web::{WebEventExt, WebFileExt};
 const META_LABEL_CLASS: &str =
     "block text-sm font-medium text-[var(--color-paper-secondary)] mb-2";
 const META_INPUT_CLASS: &str =
-    "w-full text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-xl px-4 py-2.5 shadow-sm transition-all";
+    "w-full text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-2xl px-4 py-3 shadow-sm transition-all";
 
 /// 新建文章页面组件。
 ///
@@ -424,16 +424,16 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     div { class: "flex flex-col gap-6",
                         // 标题输入
                         input {
-                            class: "w-full text-3xl md:text-4xl font-bold bg-transparent text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none tracking-tight leading-tight",
-                            placeholder: "ENTER_TITLE_HERE...",
+                            class: "w-full text-4xl md:text-5xl font-extrabold bg-transparent text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none tracking-tight leading-tight",
+                            placeholder: "输入文章标题...",
                             value: "{title}",
                             oninput: move |evt| title.set(evt.value()),
                         }
                         
                         // 摘要
                         textarea {
-                            class: "w-full text-sm font-mono bg-transparent text-[var(--color-paper-secondary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none resize-none leading-relaxed mb-2 border-b border-[var(--color-paper-border)] pb-4 focus:border-[var(--color-paper-primary)] transition-colors",
-                            placeholder: "SUMMARY (OPTIONAL)...",
+                            class: "w-full text-base font-normal bg-transparent text-[var(--color-paper-secondary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none resize-none leading-relaxed mb-4 border-b-2 border-transparent focus:border-[var(--color-paper-border)] pb-2 transition-all",
+                            placeholder: "摘要（选填）...",
                             rows: "2",
                             value: "{summary}",
                             oninput: move |evt| summary.set(evt.value()),
@@ -441,30 +441,30 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     }
 
                     // 元信息放在控制面板网格
-                    div { class: "grid grid-cols-1 md:grid-cols-2 gap-6",
-                        div { class: "flex flex-col gap-6 p-6 border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)]",
+                    div { class: "grid grid-cols-1 md:grid-cols-2 gap-6 mt-4",
+                        div { class: "flex flex-col gap-6 p-8 rounded-3xl border border-transparent bg-[var(--color-paper-entry)] hover:border-[var(--color-paper-border)] transition-colors shadow-sm",
                             div {
-                                label { class: "{META_LABEL_CLASS}", "SLUG_IDENTIFIER" }
+                                label { class: "{META_LABEL_CLASS}", "自定义链接 (Slug)" }
                                 input {
                                     class: "{META_INPUT_CLASS}",
-                                    placeholder: "AUTO_GENERATED",
+                                    placeholder: "自动生成",
                                     value: "{slug}",
                                     oninput: move |evt| slug.set(evt.value()),
                                 }
                             }
                             div {
-                                label { class: "{META_LABEL_CLASS}", "TAG_SYSTEM" }
+                                label { class: "{META_LABEL_CLASS}", "标签系统" }
                                 input {
                                     class: "{META_INPUT_CLASS}",
-                                    placeholder: "COMMA_SEPARATED...",
+                                    placeholder: "输入标签，以逗号分隔...",
                                     value: "{tags}",
                                     oninput: move |evt| tags.set(evt.value()),
                                 }
                             }
                         }
                         // 封面图放右边
-                        div { class: "flex flex-col p-6 border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)]",
-                            label { class: "{META_LABEL_CLASS}", "COVER_ASSET" }
+                        div { class: "flex flex-col p-8 rounded-3xl border border-transparent bg-[var(--color-paper-entry)] hover:border-[var(--color-paper-border)] transition-colors shadow-sm",
+                            label { class: "{META_LABEL_CLASS}", "封面图" }
                             CoverUploader { cover_image, cover_uploading }
                         }
                     }
@@ -474,7 +474,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
                 // h-[60vh]：随窗口高度自适应；min-h-[400px]：窗口过矮时仍可用。
                 div { class: "h-[60vh] min-h-[400px] flex flex-col my-4",
                     div {
-                        class: "relative group flex-1 min-h-0 w-full border border-[var(--color-paper-border)] rounded-xl overflow-hidden bg-[var(--color-paper-entry)] shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none",
+                        class: "relative group flex-1 min-h-0 w-full border border-[var(--color-paper-border)] rounded-3xl overflow-hidden bg-[var(--color-paper-entry)] shadow-sm",
                         id: "tiptap-editor",
                         img {
                             src: "/images/xiantiaoxiaogou_input_bg.webp",
@@ -541,14 +541,14 @@ fn write_editor(post_id: Option<i32>) -> Element {
                         style: "appearance: none; -webkit-appearance: none;",
                         value: "{status}",
                         onchange: move |evt| status.set(evt.value()),
-                        option { value: "draft", "DRAFT" }
-                        option { value: "published", "PUBLISHED" }
+                        option { value: "draft", "存为草稿" }
+                        option { value: "published", "直接发布" }
                     }
                     span { class: "pr-2 text-[var(--color-paper-primary)]",
                         if status() == "draft" {
-                            "DRAFT"
+                            "存为草稿"
                         } else {
-                            "PUBLISHED"
+                            "直接发布"
                         }
                     }
                     svg {
@@ -621,7 +621,7 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
         // 21:9 与首页卡片封面统一比例，比 16:9 更扁，适合宽屏横幅式封面。
         // 容器统一绑定拖拽与粘贴事件；内部按 cover_image / cover_uploading 切换空态、上传中、预览。
         div {
-            class: "relative w-full border border-dashed overflow-hidden transition-all duration-200 group/cover",
+            class: "relative w-full border border-dashed rounded-2xl overflow-hidden transition-all duration-200 group/cover",
             // 空态矮横条；有图/上传中展开成 21:9。
             class: if cover_image().is_empty() && !cover_uploading() { "h-14" } else { "aspect-[21/9]" },
             class: if cover_drag_active() { "border-[var(--color-paper-primary)] bg-[var(--color-paper-entry)]" } else if cover_image().is_empty() { "border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] hover:border-[var(--color-paper-primary)]" } else { "border-[var(--color-paper-border)] bg-[var(--color-paper-entry)]" },
