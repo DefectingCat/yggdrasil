@@ -206,9 +206,12 @@ pub fn use_theme_provider() -> Signal<Theme> {
     //
     // 仅在 System 模式（theme == System）且 resolved 实际翻转时触发：Light/Dark 显式
     // 模式下 resolved 由 theme 决定，DOM 已由 ThemeToggle::onclick 全权处理，effect
-    // 不介入，避免与手动点击的 VT 动画重复触发。以主题按钮位置为圆心复用同一条 JS
-    // 路径（__startThemeTransition 从 DOM 现状推导目标明暗），让自动切换与手动点击
-    // 的动画起点一致；屏幕中心圆心会让圆形展开近似「整体覆盖」，被误看成淡入淡出。
+    // 不介入，避免与手动点击的 VT 动画重复触发。
+    //
+    // 采用无动画的瞬切（__applyResolvedTheme，设置语义）而非 VT 圆形展开：系统偏好
+    // 变化是后台事件，实测 View Transitions 在此上下文下动画不显示（VT 流程虽正常
+    // 完成、CSS 也正确挂上 tt-expand，但视觉上仅瞬切），故跟随系统走瞬切更可靠；
+    // 手动点击仍走 __startThemeTransition 保留圆形展开动画。
     //
     // 首次挂载自然跳过：effect 通过 prev 信号记录上一次 resolved，初次运行 prev 为
     // None，此时 DOM 已由 ThemePreload 脚本设为正确状态，直接对齐 prev 后返回。
@@ -221,7 +224,7 @@ pub fn use_theme_provider() -> Signal<Theme> {
                 return;
             }
             let current = resolved();
-            // 首次运行：DOM 已由 ThemePreload 设好，仅记录基线，不触发动画。
+            // 首次运行：DOM 已由 ThemePreload 设好，仅记录基线，不触发同步。
             let Some(prev) = prev_resolved() else {
                 prev_resolved.set(Some(current));
                 return;
@@ -231,40 +234,17 @@ pub fn use_theme_provider() -> Signal<Theme> {
                 return;
             }
             prev_resolved.set(Some(current));
-            // resolved 翻转 → 触发 VT 圆形展开动画。
+            // resolved 翻转 → 瞬切同步 dark class（设置语义，非翻转）。
             let Some(window) = web_sys::window() else {
                 return;
             };
-            // 圆心优先取主题切换按钮（.theme-toggle）的中心，与手动点击的动画起点一致；
-            // 按钮不在 DOM（如未渲染导航栏的页面）时回退到视口中心。
-            use wasm_bindgen::JsCast;
-            let (x, y) = window
-                .document()
-                .and_then(|doc| doc.query_selector(".theme-toggle").ok().flatten())
-                .map(|el| {
-                    let r = el.unchecked_into::<web_sys::Element>().get_bounding_client_rect();
-                    (r.x() + r.width() / 2.0, r.y() + r.height() / 2.0)
-                })
-                .unwrap_or_else(|| {
-                    let w = window
-                        .inner_width()
-                        .ok()
-                        .and_then(|v| v.as_f64())
-                        .map(|v| v / 2.0)
-                        .unwrap_or(0.0);
-                    let h = window
-                        .inner_height()
-                        .ok()
-                        .and_then(|v| v.as_f64())
-                        .map(|v| v / 2.0)
-                        .unwrap_or(0.0);
-                    (w, h)
-                });
-            let key = "__startThemeTransition".into();
+            let key = "__applyResolvedTheme".into();
             if let Ok(fn_val) = js_sys::Reflect::get(&window, &key) {
                 if !fn_val.is_undefined() && !fn_val.is_null() {
+                    use wasm_bindgen::JsCast;
                     let fn_obj = fn_val.unchecked_into::<js_sys::Function>();
-                    let _ = fn_obj.call2(&window, &x.into(), &y.into());
+                    let is_dark = current == ResolvedTheme::Dark;
+                    let _ = fn_obj.call1(&window, &is_dark.into());
                 }
             }
         });

@@ -40,6 +40,18 @@ function applyDarkClass(isDark: boolean): void {
   }
 }
 
+/**
+ * 直接设置 <html> 的 dark class（设置语义，非翻转）。
+ *
+ * 用于跟随系统偏好变化时的后台同步：系统偏好变化是后台事件，View Transitions
+ * 在此上下文下动画不可靠（实测圆形展开不显示，仅瞬切），故跟随系统场景不走
+ * startThemeTransition 的 VT 路径，改用此函数直接同步 class，做无动画的瞬切。
+ * 手动点击主题按钮仍走 startThemeTransition，保留圆形展开动画。
+ */
+export function applyResolvedTheme(isDark: boolean): void {
+  applyDarkClass(isDark);
+}
+
 export function startThemeTransition(x: number, y: number): void {
   const html = document.documentElement;
   const isDark = !html.classList.contains('dark');
