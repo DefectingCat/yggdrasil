@@ -32,3 +32,5 @@ pub mod settings;
 pub mod slug;
 /// 图片上传的 Axum 处理器。
 pub mod upload;
+/// 代码运行接口与数据结构。
+pub mod code_runner;
