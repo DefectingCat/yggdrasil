@@ -8,7 +8,8 @@
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 16px;
   line-height: 1.75;
-  color: #2c2c2c;
+  /* Catppuccin Latte text */
+  color: #4c4f69;
   outline: none;
 }
 
@@ -29,7 +30,8 @@
   p:first-child:last-child:has(br.ProseMirror-trailingBreak:only-child)::before {
   content: '在此输入内容...';
   float: left;
-  color: #999;
+  /* Latte overlay0 */
+  color: #9ca0b0;
   pointer-events: none;
   height: 0;
 }
@@ -40,7 +42,8 @@
   font-weight: 700;
   margin: 1.2em 0 0.6em;
   line-height: 1.3;
-  color: #1a1a1a;
+  /* Latte text */
+  color: #4c4f69;
 }
 
 .tiptap-editor h2 {
@@ -48,14 +51,14 @@
   font-weight: 600;
   margin: 1em 0 0.5em;
   line-height: 1.35;
-  color: #1a1a1a;
+  color: #4c4f69;
 }
 
 .tiptap-editor h3 {
   font-size: 1.25em;
   font-weight: 600;
   margin: 0.8em 0 0.4em;
-  color: #1a1a1a;
+  color: #4c4f69;
 }
 
 .tiptap-editor p {
@@ -68,7 +71,7 @@
 
 .tiptap-editor strong {
   font-weight: 700;
-  color: #1a1a1a;
+  color: #4c4f69;
 }
 
 .tiptap-editor em {
@@ -83,14 +86,16 @@
 .tiptap-editor code {
   font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
   font-size: 0.875em;
-  background: #f3f3f3;
+  /* Latte surface0 / red */
+  background: #ccd0da;
   padding: 0.15em 0.4em;
   border-radius: 3px;
-  color: #d73a49;
+  color: #d20f39;
 }
 
 .tiptap-editor pre {
-  background: #f6f8fa;
+  /* Latte crust */
+  background: #dce0e8;
   border-radius: 6px;
   padding: 16px;
   overflow-x: auto;
@@ -100,16 +105,17 @@
 .tiptap-editor pre code {
   background: none;
   padding: 0;
-  color: #24292e;
+  color: #4c4f69;
   font-size: 0.85em;
   line-height: 1.6;
 }
 
 .tiptap-editor blockquote {
-  border-left: 4px solid #dfe2e5;
+  /* Latte surface1 / subtext0 */
+  border-left: 4px solid #bcc0cc;
   padding-left: 16px;
   margin: 1em 0;
-  color: #6a737d;
+  color: #6c6f85;
   font-style: italic;
 }
 
@@ -134,14 +140,16 @@
 }
 
 .tiptap-editor hr {
+  /* Latte surface1 */
   border: none;
-  border-top: 1px solid #e1e4e8;
+  border-top: 1px solid #bcc0cc;
   margin: 1.5em 0;
 }
 
 /* Selection */
 .tiptap-editor .ProseMirror ::selection {
-  background: #b4d7ff;
+  /* Latte surface0 */
+  background: #ccd0da;
 }
 
 /* Cursor */
@@ -149,56 +157,62 @@
   display: none;
 }
 
-/* ========== Dark Theme ========== */
+/* ========== Dark Theme (Catppuccin Mocha) ========== */
 
 .dark .tiptap-editor {
-  color: #dadadb;
+  /* Mocha text */
+  color: #cdd6f4;
 }
 
 .dark .tiptap-editor h1,
 .dark .tiptap-editor h2,
 .dark .tiptap-editor h3,
 .dark .tiptap-editor strong {
-  color: #f0f0f0;
+  color: #cdd6f4;
 }
 
 .dark .tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
-  color: #666;
+  /* Mocha overlay0 */
+  color: #6c7086;
 }
 
 .dark .tiptap-editor code {
-  background: #2e2e33;
-  color: #ff7b72;
+  /* Mocha surface0 / red */
+  background: #313244;
+  color: #f38ba8;
 }
 
 .dark .tiptap-editor pre {
-  background: #2e2e33;
+  background: #313244;
 }
 
 .dark .tiptap-editor pre code {
-  color: #dadadb;
+  color: #cdd6f4;
 }
 
 .dark .tiptap-editor blockquote {
-  border-left-color: #444;
-  color: #9b9c9d;
+  /* Mocha surface1 / subtext0 */
+  border-left-color: #45475a;
+  color: #a6adc8;
 }
 
 .dark .tiptap-editor hr {
-  border-top-color: #333;
+  border-top-color: #45475a;
 }
 
 .dark .tiptap-editor a {
-  color: #58a6ff;
+  /* Mocha blue */
+  color: #89b4fa;
 }
 
 .dark .tiptap-editor .ProseMirror ::selection {
-  background: #1c4e80;
+  background: rgba(30, 102, 245, 0.3);
 }
 
 /* ========== Link ========== */
 .tiptap-editor a {
-  color: #0366d6;
+  /* Latte blue */
+  color: #1e66f5;
   text-decoration: none;
 }
 
@@ -213,14 +227,15 @@
   width: 100%;
   margin: 1em 0;
   overflow: hidden;
-  border: 1px solid #e1e4e8;
+  /* Latte surface1 */
+  border: 1px solid #bcc0cc;
   border-radius: 6px;
 }
 
 .tiptap-editor table td,
 .tiptap-editor table th {
   min-width: 80px;
-  border: 1px solid #e1e4e8;
+  border: 1px solid #bcc0cc;
   padding: 8px 12px;
   position: relative;
   vertical-align: top;
@@ -228,13 +243,15 @@
 }
 
 .tiptap-editor table th {
-  background: #f6f8fa;
+  /* Latte crust */
+  background: #dce0e8;
   font-weight: 600;
   text-align: left;
 }
 
 .tiptap-editor table .selectedCell {
-  background: #b4d7ff;
+  /* Latte surface0 */
+  background: #ccd0da;
 }
 
 .tiptap-editor table .column-resize-handle {
@@ -243,7 +260,8 @@
   top: 0;
   bottom: -2px;
   width: 4px;
-  background-color: #adf;
+  /* Latte blue */
+  background-color: #1e66f5;
   pointer-events: none;
 }
 
@@ -261,8 +279,9 @@
 .slash-command {
   position: fixed;
   z-index: 9999;
-  background: #fff;
-  border: 1px solid #e1e4e8;
+  /* Latte mantle */
+  background: #e6e9ef;
+  border: 1px solid #bcc0cc;
   border-radius: 8px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
   padding: 4px;
@@ -290,7 +309,8 @@
 
 .slash-command-item:hover,
 .slash-command-item.is-selected {
-  background: #f0f4ff;
+  /* Latte surface0 */
+  background: #ccd0da;
 }
 
 .slash-command-item-icon {
@@ -300,11 +320,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f3f3f3;
+  background: #ccd0da;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
-  color: #555;
+  /* Latte subtext1 */
+  color: #5c5f77;
 }
 
 .slash-command-item-text {
@@ -315,13 +336,14 @@
 .slash-command-item-title {
   font-size: 14px;
   font-weight: 500;
-  color: #1a1a1a;
+  color: #4c4f69;
   line-height: 1.3;
 }
 
 .slash-command-item-desc {
   font-size: 12px;
-  color: #999;
+  /* Latte overlay0 */
+  color: #9ca0b0;
   line-height: 1.3;
 }
 
@@ -353,7 +375,8 @@
 .tiptap-editor ul[data-type='taskList'] li > label input[type='checkbox'] {
   width: 16px;
   height: 16px;
-  accent-color: #0366d6;
+  /* 主强调色 Latte green */
+  accent-color: #40a02b;
   cursor: pointer;
 }
 
@@ -382,7 +405,8 @@
 }
 
 .tiptap-editor img.ProseMirror-selectednode {
-  outline: 2px solid #0366d6;
+  /* 主强调色 Latte green */
+  outline: 2px solid #40a02b;
   border-radius: 6px;
 }
 
@@ -482,53 +506,58 @@
   background: rgba(239, 68, 68, 0.3);
 }
 
-/* ========== Dark Theme: Table ========== */
+/* ========== Dark Theme: Table (Mocha) ========== */
 .dark .tiptap-editor table {
-  border-color: #333;
+  /* Mocha surface1 */
+  border-color: #45475a;
 }
 
 .dark .tiptap-editor table td,
 .dark .tiptap-editor table th {
-  border-color: #333;
-  color: #dadadb;
+  border-color: #45475a;
+  color: #cdd6f4;
 }
 
 .dark .tiptap-editor table th {
-  background: #2e2e33;
+  /* Mocha surface0 */
+  background: #313244;
 }
 
 .dark .tiptap-editor table .selectedCell {
-  background: #1c4e80;
+  background: rgba(30, 102, 245, 0.25);
 }
 
-/* ========== Dark Theme: Slash Command ========== */
+/* ========== Dark Theme: Slash Command (Mocha) ========== */
 .dark .slash-command {
-  background: #2e2e33;
-  border-color: #444;
+  /* Mocha mantle */
+  background: #181825;
+  border-color: #45475a;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
 }
 
 .dark .slash-command-item:hover,
 .dark .slash-command-item.is-selected {
-  background: #3a3a44;
+  background: #313244;
 }
 
 .dark .slash-command-item-icon {
-  background: #3a3a44;
-  color: #dadadb;
+  background: #313244;
+  color: #cdd6f4;
 }
 
 .dark .slash-command-item-title {
-  color: #f0f0f0;
+  color: #cdd6f4;
 }
 
 .dark .slash-command-item-desc {
-  color: #888;
+  /* Mocha overlay0 */
+  color: #6c7086;
 }
 
-/* ========== Dark Theme: Image ========== */
+/* ========== Dark Theme: Image (Mocha) ========== */
 .dark .tiptap-editor img.ProseMirror-selectednode {
-  outline-color: #58a6ff;
+  /* 主强调色 Mocha green */
+  outline-color: #a6e3a1;
 }
 .dark .upload-image-container.is-error img {
   opacity: 0.45;
@@ -540,9 +569,10 @@
   border-color: rgba(239, 68, 68, 0.5);
 }
 
-/* ========== Dark Theme: Task List ========== */
+/* ========== Dark Theme: Task List (Mocha) ========== */
 .dark .tiptap-editor ul[data-type='taskList'] li > label input[type='checkbox'] {
-  accent-color: #58a6ff;
+  /* 主强调色 Mocha green */
+  accent-color: #a6e3a1;
 }
 
 /* ========== Source Toggle Button ========== */
@@ -558,8 +588,9 @@
   justify-content: center;
   border: none;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.04);
-  color: #6a737d;
+  /* Latte text 半透明底 */
+  background: rgba(76, 79, 105, 0.05);
+  color: #6c6f85;
   font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
   font-size: 13px;
   font-weight: 600;
@@ -573,16 +604,17 @@
 
 .tiptap-toggle-btn:hover {
   opacity: 1;
-  background: rgba(0, 0, 0, 0.08);
+  background: rgba(76, 79, 105, 0.1);
 }
 
 .dark .tiptap-toggle-btn {
-  background: rgba(255, 255, 255, 0.06);
-  color: #9b9c9d;
+  /* Mocha text 半透明底 */
+  background: rgba(205, 214, 244, 0.06);
+  color: #6c7086;
 }
 
 .dark .tiptap-toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(205, 214, 244, 0.12);
 }
 
 /* ========== Source Textarea ========== */
@@ -595,7 +627,8 @@
   box-sizing: border-box;
   border: none;
   background: transparent;
-  color: #2c2c2c;
+  /* Latte text */
+  color: #4c4f69;
   font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
   font-size: 14px;
   line-height: 1.7;
@@ -606,13 +639,16 @@
 }
 
 .tiptap-source-textarea::placeholder {
-  color: #999;
+  /* Latte overlay0 */
+  color: #9ca0b0;
 }
 
 .dark .tiptap-source-textarea {
-  color: #dadadb;
+  /* Mocha text */
+  color: #cdd6f4;
 }
 
 .dark .tiptap-source-textarea::placeholder {
-  color: #666;
+  /* Mocha overlay0 */
+  color: #6c7086;
 }
