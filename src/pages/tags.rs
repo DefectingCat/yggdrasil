@@ -27,10 +27,12 @@ use crate::router::Route;
 #[component]
 pub fn Tags() -> Element {
     rsx! {
-        header { class: "page-header mb-6",
-            h1 { class: "text-4xl font-bold text-paper-primary tracking-tight", "标签" }
+        div { class: "animate-page-enter",
+            header { class: "page-header mb-6",
+                h1 { class: "text-4xl font-bold text-paper-primary tracking-tight", "标签" }
+            }
+            TagsContent {}
         }
-        TagsContent {}
     }
 }
 
@@ -105,10 +107,12 @@ fn TagsContent() -> Element {
 #[component]
 pub fn TagDetail(tag: String) -> Element {
     rsx! {
-        header { class: "page-header mb-6",
-            h1 { class: "text-4xl font-bold text-paper-primary tracking-tight", "{tag}" }
+        div { class: "animate-page-enter",
+            header { class: "page-header mb-6",
+                h1 { class: "text-4xl font-bold text-paper-primary tracking-tight", "{tag}" }
+            }
+            TagDetailContent { tag: tag.clone() }
         }
-        TagDetailContent { tag: tag.clone() }
     }
 }
 

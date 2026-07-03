@@ -60,11 +60,7 @@ pub fn FrontendLayout() -> Element {
                 },
             }
             main { class: "flex-1 w-full max-w-4xl mx-auto px-6 py-6 md:py-12 overflow-hidden",
-                div {
-                    key: "{route}",
-                    class: "animate-page-enter",
-                    SuspenseBoundary { fallback: move |_| route_skeleton(&route), Outlet::<Route> {} }
-                }
+                SuspenseBoundary { fallback: move |_| route_skeleton(&route), Outlet::<Route> {} }
             }
             Footer {}
         }

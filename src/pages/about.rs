@@ -13,11 +13,13 @@ use dioxus::prelude::*;
 #[component]
 pub fn About() -> Element {
     rsx! {
-        header { class: "page-header mb-6",
-            h1 { class: "text-4xl font-bold text-paper-primary tracking-tight", "关于" }
-        }
-        article { class: "prose dark:prose-invert max-w-none text-paper-content leading-relaxed",
-            p { "世界……遗忘我……" }
+        div { class: "animate-page-enter",
+            header { class: "page-header mb-6",
+                h1 { class: "text-4xl font-bold text-paper-primary tracking-tight", "关于" }
+            }
+            article { class: "prose dark:prose-invert max-w-none text-paper-content leading-relaxed",
+                p { "世界……遗忘我……" }
+            }
         }
     }
 }

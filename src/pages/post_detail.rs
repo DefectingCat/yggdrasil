@@ -41,7 +41,7 @@ pub fn PostDetail(slug: String) -> Element {
     match post_data {
         Some(Ok(post)) => {
             rsx! {
-                article { class: "post-single", key: "{post.slug}",
+                article { class: "post-single animate-page-enter", key: "{post.slug}",
                     PostHeader { post: post.clone() }
 
                     // 如果文章设置了封面图，则渲染封面组件。

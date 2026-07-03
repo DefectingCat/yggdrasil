@@ -101,10 +101,12 @@ fn group_posts(posts: &[PostListItem]) -> Vec<YearGroup> {
 #[component]
 pub fn Archives() -> Element {
     rsx! {
-        header { class: "page-header mb-6",
-            h1 { class: "text-4xl font-bold text-paper-primary tracking-tight", "归档" }
+        div { class: "animate-page-enter",
+            header { class: "page-header mb-6",
+                h1 { class: "text-4xl font-bold text-paper-primary tracking-tight", "归档" }
+            }
+            ArchivesContent {}
         }
-        ArchivesContent {}
     }
 }
 

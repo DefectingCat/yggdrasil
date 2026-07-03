@@ -40,8 +40,10 @@ pub fn HomePage(page: i32) -> Element {
     let current_page = page.max(1);
 
     rsx! {
-        HomeInfo {}
-        HomePosts { current_page }
+        div { class: "animate-page-enter",
+            HomeInfo {}
+            HomePosts { current_page }
+        }
     }
 }
 
