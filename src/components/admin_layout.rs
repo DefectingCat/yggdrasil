@@ -46,6 +46,7 @@ pub fn AdminLayout() -> Element {
         (Route::Write {}, "写文章"),
         (Route::Posts {}, "管理文章"),
         (Route::Trash {}, "回收站"),
+        (Route::Runner {}, "试运行"),
         (Route::System {}, "系统"),
     ];
 

@@ -8,6 +8,8 @@ pub mod comments;
 pub mod dashboard;
 /// 文章管理列表页面模块。
 pub mod posts;
+/// 代码试运行沙箱页面模块。
+pub mod runner;
 /// 系统管理页面模块（数据库 + 服务器状态 + SQL 控制台 + 导出 + 备份）。
 pub mod system;
 /// 回收站管理页面模块。
@@ -21,6 +23,8 @@ pub use comments::{AdminComments, AdminCommentsPage};
 pub use dashboard::Admin;
 /// 文章管理列表组件（带默认分页）。
 pub use posts::{Posts, PostsPage};
+/// 代码试运行沙箱组件。
+pub use runner::Runner;
 /// 系统管理入口组件。
 pub use system::System;
 /// 回收站管理组件（带默认分页）。

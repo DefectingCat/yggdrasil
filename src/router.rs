@@ -12,8 +12,8 @@ use crate::components::frontend_layout::FrontendLayout;
 use crate::context::UserContext;
 use crate::pages::about::About;
 use crate::pages::admin::{
-    Admin, AdminComments, AdminCommentsPage, Posts, PostsPage, System, Trash, TrashPage, Write,
-    WriteEdit,
+    Admin, AdminComments, AdminCommentsPage, Posts, PostsPage, Runner, System, Trash, TrashPage,
+    Write, WriteEdit,
 };
 use crate::pages::archives::Archives;
 use crate::pages::home::{Home, HomePage};
@@ -94,6 +94,9 @@ pub enum Route {
         /// 系统管理（数据库 + 服务器状态 + SQL 控制台 + 导出 + 备份）
         #[route("/system")]
         System {},
+        /// 代码试运行沙箱（作者预览可运行代码块输出）
+        #[route("/runner")]
+        Runner {},
     #[end_layout]
     #[end_nest]
 
