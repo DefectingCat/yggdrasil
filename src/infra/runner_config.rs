@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "server")]
 use std::env;
+#[cfg(feature = "server")]
 use std::sync::LazyLock;
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
@@ -11,6 +13,7 @@ pub struct ResourceLimits {
     pub allow_network: bool,
 }
 
+#[cfg(feature = "server")]
 pub struct RunnerConfig {
     pub max_cpu_cores: f64,
     pub max_memory_mb: u64,
@@ -25,6 +28,13 @@ pub struct RunnerConfig {
     pub languages: Vec<String>,
 }
 
+#[cfg(feature = "server")]
+fn parse_allow_network(v: &str) -> bool {
+    let l = v.to_lowercase();
+    l == "true" || l == "1" || l == "yes"
+}
+
+#[cfg(feature = "server")]
 pub static RUNNER_CONFIG: LazyLock<RunnerConfig> = LazyLock::new(|| {
     let languages_str = env::var("CODE_RUNNER_LANGUAGES").unwrap_or_else(|_| "python,node".to_string());
     let languages = languages_str.split(',').map(|s| s.trim().to_lowercase()).collect();
@@ -35,7 +45,7 @@ pub static RUNNER_CONFIG: LazyLock<RunnerConfig> = LazyLock::new(|| {
         max_timeout_secs: env::var("CODE_RUNNER_MAX_TIMEOUT_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(30),
         max_output_bytes: env::var("CODE_RUNNER_MAX_OUTPUT_BYTES").ok().and_then(|v| v.parse().ok()).unwrap_or(1048576),
         max_source_bytes: env::var("CODE_RUNNER_MAX_SOURCE_BYTES").ok().and_then(|v| v.parse().ok()).unwrap_or(65536),
-        allow_network: env::var("CODE_RUNNER_ALLOW_NETWORK").ok().map(|v| v == "true" || v == "1" || v == "yes").unwrap_or(false),
+        allow_network: env::var("CODE_RUNNER_ALLOW_NETWORK").ok().map(|v| parse_allow_network(&v)).unwrap_or(false),
         max_concurrent: env::var("CODE_RUNNER_MAX_CONCURRENT").ok().and_then(|v| v.parse().ok()).unwrap_or(4),
         queue_timeout_secs: env::var("CODE_RUNNER_QUEUE_TIMEOUT_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(30),
         task_ttl_secs: env::var("CODE_RUNNER_TASK_TTL_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(300),
@@ -44,18 +54,37 @@ pub static RUNNER_CONFIG: LazyLock<RunnerConfig> = LazyLock::new(|| {
     }
 });
 
+#[cfg(feature = "server")]
 pub fn clamp_limits(merged: ResourceLimits, lang_allows_network: bool) -> ResourceLimits {
-    let config = &*RUNNER_CONFIG;
+    clamp_limits_impl(merged, lang_allows_network, &*RUNNER_CONFIG)
+}
+
+#[cfg(feature = "server")]
+fn clamp_limits_impl(merged: ResourceLimits, lang_allows_network: bool, config: &RunnerConfig) -> ResourceLimits {
+    let max_cpu = if config.max_cpu_cores.is_nan() { 2.0 } else { config.max_cpu_cores };
+    let min_cpu = 0.1f64.min(max_cpu);
+    let cpu_cores = if merged.cpu_cores.is_nan() {
+        min_cpu
+    } else {
+        merged.cpu_cores.clamp(min_cpu, max_cpu)
+    };
+
+    let min_mem = 16.min(config.max_memory_mb);
+    let memory_mb = merged.memory_mb.clamp(min_mem, config.max_memory_mb);
+
+    let min_timeout = 1.min(config.max_timeout_secs);
+    let timeout_secs = merged.timeout_secs.clamp(min_timeout, config.max_timeout_secs);
+
     ResourceLimits {
-        cpu_cores: merged.cpu_cores.clamp(0.1, config.max_cpu_cores),
-        memory_mb: merged.memory_mb.clamp(16, config.max_memory_mb),
-        timeout_secs: merged.timeout_secs.clamp(1, config.max_timeout_secs),
+        cpu_cores,
+        memory_mb,
+        timeout_secs,
         output_bytes: merged.output_bytes.min(config.max_output_bytes),
         allow_network: merged.allow_network && config.allow_network && lang_allows_network,
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "server"))]
 mod tests {
     use super::*;
 
@@ -69,11 +98,54 @@ mod tests {
             allow_network: true,
         };
         let clamped = clamp_limits(raw, true);
-        // 假设运行的是默认的 RUNNER_CONFIG（allow_network 默认为 false，除非 env 改了）
         assert!(clamped.cpu_cores <= 2.0);
         assert!(clamped.memory_mb <= 1024);
         assert!(clamped.timeout_secs <= 30);
         assert!(clamped.output_bytes <= 1048576);
-        assert_eq!(clamped.allow_network, false); // 此时全局 allow_network=false
+        assert_eq!(clamped.allow_network, false);
+    }
+
+    #[test]
+    fn test_clamp_limits_safeguarded() {
+        let config = RunnerConfig {
+            max_cpu_cores: 0.05,
+            max_memory_mb: 8,
+            max_timeout_secs: 0,
+            max_output_bytes: 100,
+            max_source_bytes: 100,
+            allow_network: true,
+            max_concurrent: 1,
+            queue_timeout_secs: 1,
+            task_ttl_secs: 1,
+            docker_socket_path: "".to_string(),
+            languages: vec![],
+        };
+        let raw = ResourceLimits {
+            cpu_cores: 1.0,
+            memory_mb: 64,
+            timeout_secs: 10,
+            output_bytes: 50,
+            allow_network: true,
+        };
+        let clamped = clamp_limits_impl(raw, true, &config);
+        assert_eq!(clamped.cpu_cores, 0.05);
+        assert_eq!(clamped.memory_mb, 8);
+        assert_eq!(clamped.timeout_secs, 0);
+        assert_eq!(clamped.output_bytes, 50);
+        assert_eq!(clamped.allow_network, true);
+    }
+
+    #[test]
+    fn test_parse_allow_network() {
+        assert!(parse_allow_network("true"));
+        assert!(parse_allow_network("TRUE"));
+        assert!(parse_allow_network("True"));
+        assert!(parse_allow_network("1"));
+        assert!(parse_allow_network("yes"));
+        assert!(parse_allow_network("YES"));
+        assert!(parse_allow_network("Yes"));
+        assert!(!parse_allow_network("false"));
+        assert!(!parse_allow_network("0"));
+        assert!(!parse_allow_network("no"));
     }
 }
