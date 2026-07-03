@@ -72,7 +72,8 @@ pub struct ExecTask {
 }
 
 // 子模块在后续任务中实现：
-// #[cfg(feature = "server")] pub mod execute;
+#[cfg(feature = "server")]
+pub mod execute;
 #[cfg(feature = "server")]
 pub mod languages;
 #[cfg(feature = "server")]

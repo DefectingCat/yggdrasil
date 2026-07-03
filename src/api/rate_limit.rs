@@ -19,6 +19,8 @@ use governor::{DefaultKeyedRateLimiter, Quota, RateLimiter};
 use std::num::NonZeroU32;
 #[cfg(feature = "server")]
 use std::sync::LazyLock;
+#[cfg(feature = "server")]
+use std::time::Duration;
 
 #[cfg(feature = "server")]
 fn env_or(key: &str, default: u32) -> NonZeroU32 {
@@ -58,6 +60,30 @@ static COMMENT_LIMITER: LazyLock<DefaultKeyedRateLimiter<String>> = LazyLock::ne
     RateLimiter::keyed(
         Quota::per_second(env_or("RATE_LIMIT_COMMENT_PER_SEC", 1))
             .allow_burst(env_or("RATE_LIMIT_COMMENT_BURST", 5)),
+    )
+});
+
+#[cfg(feature = "server")]
+/// 代码执行单 IP 每秒限流（默认 0.2 req/s，突发 3）。
+/// 防止单个客户端高频提交容器任务，与下方日限额共同构成双层速率限制。
+static CODE_EXEC_LIMITER: LazyLock<DefaultKeyedRateLimiter<String>> = LazyLock::new(|| {
+    RateLimiter::keyed(
+        Quota::per_second(env_or("RATE_LIMIT_CODE_EXEC_PER_SEC", 1))
+            .allow_burst(env_or("RATE_LIMIT_CODE_EXEC_BURST", 3)),
+    )
+});
+
+#[cfg(feature = "server")]
+/// 代码执行单 IP 每日限额（默认 50 次/天）。
+/// 容器执行成本高（CPU/内存/启动延迟），需要硬性日上限防止资源耗尽。
+///
+/// governor 0.8 无 `Quota::per_day`，用 `with_period(24h)` + `allow_burst(daily)`
+/// 模拟：每 24h 补充 1 token、突发上限即日额度，等效于「每日最多 daily 次」。
+static CODE_EXEC_DAILY_LIMITER: LazyLock<DefaultKeyedRateLimiter<String>> = LazyLock::new(|| {
+    RateLimiter::keyed(
+        Quota::with_period(Duration::from_secs(86_400))
+            .unwrap()
+            .allow_burst(env_or("RATE_LIMIT_CODE_EXEC_DAILY", 50)),
     )
 });
 
@@ -224,6 +250,20 @@ pub fn check_upload_limit(ip: &str) -> Result<(), String> {
         .check_key(&ip.to_string())
         .map(|_| ())
         .map_err(|_| "上传过于频繁，请稍后再试".to_string())
+}
+
+#[cfg(feature = "server")]
+/// 检查代码执行请求的双层速率限制（每秒突发 + 每日总额）。
+///
+/// 两层任一被限即拒绝。返回中文错误消息，供 server function 直接透传给前端。
+pub fn check_code_exec_limit(ip: &str) -> Result<(), String> {
+    CODE_EXEC_LIMITER
+        .check_key(&ip.to_string())
+        .map_err(|_| "请求过于频繁，请稍后再试".to_string())?;
+    CODE_EXEC_DAILY_LIMITER
+        .check_key(&ip.to_string())
+        .map_err(|_| "今日运行次数已达上限，请明天再试".to_string())?;
+    Ok(())
 }
 
 #[cfg(all(test, feature = "server"))]
