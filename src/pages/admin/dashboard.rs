@@ -12,6 +12,7 @@ use crate::api::comments::get_pending_count;
 use crate::api::posts::{get_post_stats, list_posts};
 #[cfg(target_arch = "wasm32")]
 use crate::api::posts::{PostListResponse, PostStatsResponse};
+use crate::components::empty_state::{EmptyState, EmptyStateAction};
 use crate::components::skeletons::atoms::SkeletonBox;
 use crate::components::ui::{ADMIN_CARD_CLASS, ADMIN_TABLE_CLASS, BTN_SECONDARY};
 use crate::models::post::{PostListItem, PostStats};
@@ -127,10 +128,24 @@ pub fn Admin() -> Element {
                 div { class: "flex items-center justify-between mb-6",
                     h2 { class: "text-xl font-bold text-[var(--color-paper-primary)] tracking-tight", "近期文章" }
                 }
-                div { class: "{ADMIN_TABLE_CLASS}",
-                    match recent_posts() {
-                        Some(posts) => {
-                            rsx! {
+                match recent_posts() {
+                    // 空库 / 无文章：展示空状态占位（与 posts.rs 列表页一致）。
+                    // 放在 ADMIN_TABLE_CLASS 容器之外，避免 overflow-hidden 裁掉插画的 py-20 内边距。
+                    Some(posts) if posts.is_empty() => {
+                        rsx! {
+                            EmptyState {
+                                title: "暂无文章",
+                                description: "还没有创建任何文章，开始写下你的第一篇文字吧。",
+                                action: Some(EmptyStateAction {
+                                    label: "写文章".to_string(),
+                                    to: Route::Write {},
+                                }),
+                            }
+                        }
+                    }
+                    Some(posts) => {
+                        rsx! {
+                            div { class: "{ADMIN_TABLE_CLASS}",
                                 div { class: "divide-y divide-paper-border",
                                     for post in posts.iter().take(5) {
                                         RecentPostItem { key: "{post.id}", post: post.clone() }
@@ -138,8 +153,11 @@ pub fn Admin() -> Element {
                                 }
                             }
                         }
-                        None => {
-                            rsx! {
+                    }
+                    // 加载中：骨架屏。
+                    None => {
+                        rsx! {
+                            div { class: "{ADMIN_TABLE_CLASS}",
                                 div { class: "divide-y divide-paper-border animate-pulse",
                                     for _ in 0..5 {
                                         div { class: "flex justify-between items-center px-6 py-4",
