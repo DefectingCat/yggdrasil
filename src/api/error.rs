@@ -30,21 +30,34 @@ pub enum AppError {
 impl AppError {
     /// 记录并包装数据库连接错误。
     ///
-    /// 日志仅记录 Display 摘要，避免 Debug 输出中的 SQL/参数泄露。
-    pub fn db_conn(e: impl std::fmt::Display + std::fmt::Debug) -> Self {
-        tracing::error!("DB connection failed: {e}");
+    /// 对外只暴露通用提示（脱敏），但服务端日志会展开 source 链，记录完整的
+    /// 失败原因（如 `db error: connection refused`、IO 错误等）。传入的错误类型
+    /// 必须实现 `std::error::Error` —— DB 相关错误（`tokio_postgres::Error`、
+    /// `deadpool_postgres::PoolError`）均满足，这一点是上次"日志只显示 `db error`"
+    /// 问题的根治前提。
+    pub fn db_conn(e: impl std::error::Error) -> Self {
+        tracing::error!(
+            "DB connection failed: {}",
+            crate::db::format_with_sources(&e)
+        );
         AppError::DbConn("connection error".to_string())
     }
 
     /// 记录并包装 SQL 查询错误。
-    pub fn query(e: impl std::fmt::Display + std::fmt::Debug) -> Self {
-        tracing::error!("Query failed: {e}");
+    pub fn query(e: impl std::error::Error) -> Self {
+        tracing::error!(
+            "Query failed: {}",
+            crate::db::format_with_sources(&e)
+        );
         AppError::Query("query error".to_string())
     }
 
     /// 记录并包装数据库事务错误。
-    pub fn tx(e: impl std::fmt::Display + std::fmt::Debug) -> Self {
-        tracing::error!("Transaction failed: {e}");
+    pub fn tx(e: impl std::error::Error) -> Self {
+        tracing::error!(
+            "Transaction failed: {}",
+            crate::db::format_with_sources(&e)
+        );
         AppError::Transaction("transaction error".to_string())
     }
 }
@@ -80,7 +93,10 @@ mod tests {
 
     #[test]
     fn db_conn_hides_internal_details() {
-        let err: ServerFnError = AppError::db_conn("connection refused on port 5432").into();
+        // 入参是实现 Error 的类型；构造函数内部会把 source 链写进日志，
+        // 但对外（ServerFnError）必须只暴露通用提示。
+        let src = std::io::Error::other("connection refused on port 5432");
+        let err: ServerFnError = AppError::db_conn(src).into();
         let msg = err.to_string();
         assert!(
             !msg.contains("5432"),
@@ -94,7 +110,8 @@ mod tests {
 
     #[test]
     fn query_hides_sql_details() {
-        let err: ServerFnError = AppError::query("syntax error at SELECT * FROM").into();
+        let src = std::io::Error::other("syntax error at SELECT * FROM");
+        let err: ServerFnError = AppError::query(src).into();
         let msg = err.to_string();
         assert!(!msg.contains("SELECT"), "should not leak SQL: {msg}");
     }
@@ -124,7 +141,8 @@ mod tests {
     #[test]
     fn transaction_hides_sql_details() {
         // 事务错误同样返回通用提示，不泄露 SQL 细节。
-        let err: ServerFnError = AppError::tx("deadlock detected on UPDATE posts").into();
+        let src = std::io::Error::other("deadlock detected on UPDATE posts");
+        let err: ServerFnError = AppError::tx(src).into();
         let msg = err.to_string();
         assert!(!msg.contains("UPDATE"), "should not leak SQL: {msg}");
         assert!(

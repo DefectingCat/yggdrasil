@@ -256,12 +256,14 @@ pub async fn ensure_database() -> Result<(), String> {
                 let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
                 if remaining.is_zero() {
                     return Err(format!(
-                        "could not connect to 'postgres' maintenance database within {timeout_secs}s: {e}"
+                        "could not connect to 'postgres' maintenance database within {timeout_secs}s: {}",
+                        crate::db::format_with_sources(&e)
                     ));
                 }
                 tracing::warn!(
-                    "ensure_database: connect to 'postgres' failed, ~{}s remaining: {e}",
-                    remaining.as_secs()
+                    "ensure_database: connect to 'postgres' failed, ~{}s remaining: {}",
+                    remaining.as_secs(),
+                    crate::db::format_with_sources(&e)
                 );
                 tokio::time::sleep(std::cmp::min(retry_interval, remaining)).await;
             }
@@ -270,7 +272,10 @@ pub async fn ensure_database() -> Result<(), String> {
     // 连接的后台驱动任务：出错时仅记录，连接随即作废。
     tokio::spawn(async move {
         if let Err(e) = connection.await {
-            tracing::warn!("postgres maintenance connection ended: {e}");
+            tracing::warn!(
+                "postgres maintenance connection ended: {}",
+                crate::db::format_with_sources(&e)
+            );
         }
     });
 
@@ -281,7 +286,12 @@ pub async fn ensure_database() -> Result<(), String> {
             &[&db_name],
         )
         .await
-        .map_err(|e| format!("failed to query pg_database: {e}"))?
+        .map_err(|e| {
+            format!(
+                "failed to query pg_database: {}",
+                crate::db::format_with_sources(&e)
+            )
+        })?
         .get(0);
 
     if exists {
@@ -295,7 +305,12 @@ pub async fn ensure_database() -> Result<(), String> {
     client
         .batch_execute(&stmt)
         .await
-        .map_err(|e| format!("failed to create database {db_name:?}: {e}"))?;
+        .map_err(|e| {
+            format!(
+                "failed to create database {db_name:?}: {}",
+                crate::db::format_with_sources(&e)
+            )
+        })?;
     tracing::info!("created database {:?}", db_name);
     Ok(())
 }
