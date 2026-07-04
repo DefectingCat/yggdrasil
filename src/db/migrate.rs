@@ -92,16 +92,51 @@ impl From<tokio_postgres::Error> for MigrateError {
 impl std::fmt::Display for MigrateError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MigrateError::Pool(e) => write!(f, "database pool error: {}", e),
-            MigrateError::Query(e) => write!(f, "database query error: {}", e),
+            MigrateError::Pool(e) => {
+                write!(f, "database pool error: {}", e)?;
+                fmt_source_chain(f, e)
+            }
+            MigrateError::Query(e) => {
+                write!(f, "database query error: {}", e)?;
+                fmt_source_chain(f, e)
+            }
             MigrateError::Apply { version, source } => {
-                write!(f, "migration {} failed: {}", version, source)
+                write!(f, "migration {} failed: {}", version, source)?;
+                fmt_source_chain(f, source)
             }
         }
     }
 }
 
-impl std::error::Error for MigrateError {}
+impl std::error::Error for MigrateError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            MigrateError::Pool(e) => Some(e),
+            MigrateError::Query(e) => Some(e),
+            MigrateError::Apply { source, .. } => Some(source),
+        }
+    }
+}
+
+/// 把错误的 `source()` 链逐层拼到 Display 输出里，用 `: ` 分隔。
+///
+/// 存在的原因：`tokio_postgres::Error` 的 `Display` 对 DB 侧错误只会打印
+/// 无信息量的 `db error`，真正的消息文本（如
+/// `column "x" of relation "y" already exists`、SQLSTATE、约束名）藏在
+/// `source()` 链里的 `postgres::error::DbError`。不主动遍历链就会丢失全部上下文，
+/// 日志只显示 `migration 001 failed: db error`，难以定位。
+fn fmt_source_chain(
+    f: &mut std::fmt::Formatter<'_>,
+    mut source: &(dyn std::error::Error + 'static),
+) -> std::fmt::Result {
+    while let Some(next) = source.source() {
+        // `DbError` 的 Display 已经包含 message（必要时还有 detail/hint），
+        // 直接拼上即可；避免逐层重复打印 `db error` 这类占位串。
+        write!(f, ": {next}")?;
+        source = next;
+    }
+    Ok(())
+}
 
 /// 在**已获取**的连接上执行迁移主体逻辑（咨询锁 + 建表 + 应用迁移 + 解锁）。
 ///
