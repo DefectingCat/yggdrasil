@@ -209,6 +209,63 @@ async fn add_cache_control(
     response
 }
 
+/// Axum 中间件：`/admin*` 的 SSR 层认证守卫。
+///
+/// 未登录访问后台时，服务端**直接 302 跳转 `/login`**，根本不进入 Dioxus
+/// SSR 渲染器。此前后台鉴权完全在客户端 WASM 完成（SSR 渲染骨架屏 → WASM
+/// 下载/编译 → hydrate → 异步 `get_current_user()` → 客户端 `navigator.push`），
+/// 整条链串行，未登录用户首屏要"空白好久"才跳登录。
+///
+/// - 只匹配 `/admin*`，其它路径（`/login`、公开页、`/api/*`）直接放行。
+/// - 复用 `get_user_by_token`：命中内存缓存 + 校验 `session_generation`
+///   （封禁/降级后旧 session 立即失效），与客户端鉴权同一套语义。
+/// - DB 错误时 **fail-open**（放行进入 SSR）：避免数据库抖动把已登录的
+///   管理员也踢到登录页；客户端 `AdminLayout` 仍有兜底校验。
+/// - `/admin` 与 `/login` 本就不进 `cache_control_for_path` 缓存，302 不会被缓存。
+#[cfg(feature = "server")]
+async fn admin_guard(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::body::Body;
+    use axum::http::{header, StatusCode};
+    use axum::response::Response;
+    use crate::models::user::UserRole;
+
+    let path = req.uri().path().to_string();
+    if !path.starts_with("/admin") {
+        return next.run(req).await;
+    }
+
+    // 从 Cookie 头读 session token（与 export.rs / upload.rs 同款手法）。
+    let cookie = req
+        .headers()
+        .get("cookie")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("");
+    let token = crate::auth::session::parse_session_token(cookie);
+
+    let is_admin = match token {
+        Some(t) => match crate::api::auth::get_user_by_token(t).await {
+            Ok(Some(user)) => user.role == UserRole::Admin,
+            // Err（DB 抖动）/ Ok(None)（token 无效）：fail-open，交给客户端兜底。
+            _ => true,
+        },
+        // 无 token：明确未登录，拦截。
+        None => false,
+    };
+
+    if is_admin {
+        next.run(req).await
+    } else {
+        Response::builder()
+            .status(StatusCode::FOUND)
+            .header(header::LOCATION, "/login")
+            .body(Body::empty())
+            .unwrap()
+    }
+}
+
 /// 程序入口
 fn main() {
     // server feature：启动服务端
@@ -425,6 +482,10 @@ fn main() {
                 StatusCode::REQUEST_TIMEOUT,
                 Duration::from_secs(30),
             ));
+            // admin_guard 置于最外层（最后添加 = 最先执行）：未登录的 /admin* 请求
+            // 在 CSRF / cache / SSR 渲染之前就被 302 短路，零渲染开销。
+            let app_routes =
+                app_routes.layer(axum::middleware::from_fn(admin_guard));
 
             // 静态资源路由：图片文件服务。
             // 注意：`dioxus::server::serve()` 接管了 listener 与 `into_make_service`
