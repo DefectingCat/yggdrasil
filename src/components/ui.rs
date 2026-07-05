@@ -69,6 +69,36 @@ pub const BTN_TEXT_ACCENT: &str =
 pub const BTN_SECONDARY: &str =
     "px-6 py-2.5 rounded-full text-sm font-medium text-center text-[var(--color-paper-secondary)] bg-[var(--color-paper-entry)] hover:bg-[var(--color-paper-border)] hover:text-[var(--color-paper-primary)] transition-all cursor-pointer";
 
+// --- 主操作按钮（主题绿实心胶囊，全站统一 CTA） ---
+
+/// 主操作按钮：主题绿实心胶囊（用于 `<Link>`、无 loading 态的静态按钮）。
+pub const BTN_PRIMARY: &str =
+    "inline-flex items-center justify-center px-5 py-2 text-sm font-medium text-[var(--color-paper-theme)] bg-[var(--color-paper-accent)] rounded-full shadow-sm hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer";
+
+/// 小号主操作按钮：工具栏场景（刷新 / 导出 / 创建备份）。
+pub const BTN_PRIMARY_SM: &str =
+    "inline-flex items-center justify-center px-4 py-1.5 text-sm font-medium text-[var(--color-paper-theme)] bg-[var(--color-paper-accent)] rounded-full hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer";
+
+// --- 描边按钮 ---
+
+/// 描边次要按钮（posts 重建、system 刷新列表）：`relative` 以承载 spinner 叠加层。
+pub const BTN_OUTLINE: &str =
+    "relative px-4 py-2 rounded-full text-sm font-medium text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all cursor-pointer";
+
+/// 红色描边危险按钮（trash 清空回收站）。
+pub const BTN_DANGER_OUTLINE: &str =
+    "px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 border border-red-300 dark:border-red-900/50 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors cursor-pointer";
+
+// --- 图标按钮 ---
+
+/// 关闭图标按钮（× 关闭提示条）。
+pub const BTN_CLOSE_ICON: &str =
+    "shrink-0 text-red-400 hover:text-red-600 cursor-pointer text-lg leading-none";
+
+/// 方形图标按钮（trash 步进 −/+）。
+pub const BTN_ICON: &str =
+    "w-9 h-9 flex items-center justify-center text-sm text-paper-secondary hover:text-paper-primary hover:bg-paper-theme cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40";
+
 // ===========================================================================
 // 组件
 // ===========================================================================
@@ -310,6 +340,66 @@ pub fn FilterTabs(
             div {
                 class: "absolute bottom-[-1px] h-[2px] bg-paper-primary transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] pointer-events-none",
                 style: "{indicator_style}",
+            }
+        }
+    }
+}
+
+/// 主操作按钮，内置 loading spinner 叠加（统一三态）。
+///
+/// 用于全站所有主题绿 CTA（执行 / 刷新 / 创建备份 / 发布 / 保存设置）。
+/// 三态：
+/// - `loading=true`：主题绿底 + 文字隐藏（`opacity-0`）+ spinner 绝对居中
+///   （按钮宽度不变，避免加载时布局抖动）
+/// - `disabled=true`（且未 loading）：灰色底（`bg-paper-tertiary`）+
+///   `cursor-not-allowed`
+/// - 正常：主题绿底 + `hover:brightness-110` + `active:scale-[0.98]`
+///
+/// Props：
+/// - `label`：正常态显示的文案（loading 时隐藏，由 spinner 占位）
+/// - `loading`：是否处于加载态
+/// - `disabled`：是否禁用（loading 优先级更高）
+/// - `variant`：`"primary"`（默认，`px-5 py-2`）或 `"sm"`（`px-4 py-1.5`）
+/// - `onclick`：点击回调
+#[component]
+pub fn LoadingButton(
+    label: String,
+    loading: bool,
+    #[props(default = false)] disabled: bool,
+    #[props(default = "primary")] variant: &'static str,
+    onclick: EventHandler<()>,
+) -> Element {
+    // 尺寸变体：sm 用于工具栏（刷新/导出），primary 用于主 CTA（执行/发布/保存）。
+    let size = if variant == "sm" {
+        "px-4 py-1.5"
+    } else {
+        "px-5 py-2 shadow-sm"
+    };
+
+    // 三态背景：loading 与正常都是主题绿（保持视觉连续），disabled 灰化。
+    let (bg, cursor) = if disabled && !loading {
+        (
+            "bg-[var(--color-paper-tertiary)] text-[var(--color-paper-secondary)]",
+            "cursor-not-allowed",
+        )
+    } else {
+        (
+            "text-[var(--color-paper-theme)] bg-[var(--color-paper-accent)] hover:brightness-110 active:scale-[0.98]",
+            "cursor-pointer",
+        )
+    };
+
+    rsx! {
+        button {
+            class: "relative inline-flex items-center justify-center {size} {bg} {cursor} rounded-full text-sm font-medium transition-all",
+            disabled: loading || disabled,
+            onclick: move |_| onclick.call(()),
+            span { class: if loading { "opacity-0" } else { "" }, "{label}" }
+            if loading {
+                span {
+                    class: "absolute inset-0 flex items-center justify-center",
+                    dangerous_inner_html: SPINNER_SVG,
+                }
             }
         }
     }
