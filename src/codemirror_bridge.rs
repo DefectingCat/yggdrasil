@@ -147,6 +147,10 @@ pub mod wasm {
         /// 编辑器就绪回调（构造末尾同步触发一次）。
         #[wasm_bindgen(method, setter, js_name = onReady)]
         pub fn set_on_ready(this: &EditorOptions, cb: &Closure<dyn FnMut()>);
+
+        /// Ctrl/Cmd + Enter 快捷键回调（SQL 控制台触发执行）。
+        #[wasm_bindgen(method, setter, js_name = onRunShortcut)]
+        pub fn set_on_run_shortcut(this: &EditorOptions, cb: &Closure<dyn FnMut()>);
     }
 
     /// 编辑器实例句柄：持有 instance + 所有 Closure，Drop 时销毁实例并释放闭包。
@@ -157,20 +161,24 @@ pub mod wasm {
         instance: EditorInstance,
         _on_change: Closure<dyn FnMut(String)>,
         _on_ready: Closure<dyn FnMut()>,
+        _on_run_shortcut: Closure<dyn FnMut()>,
     }
 
     impl EditorHandle {
         /// 调用方须先把各 closure set 进 EditorOptions，再 create，
         /// 然后把返回的 instance + 同名 closure 一起传入 new。
+        /// `on_run_shortcut` 对应 Ctrl/Cmd+Enter 回调；不用该功能时传 no-op 闭包。
         pub fn new(
             instance: EditorInstance,
             on_change: Closure<dyn FnMut(String)>,
             on_ready: Closure<dyn FnMut()>,
+            on_run_shortcut: Closure<dyn FnMut()>,
         ) -> Self {
             Self {
                 instance,
                 _on_change: on_change,
                 _on_ready: on_ready,
+                _on_run_shortcut: on_run_shortcut,
             }
         }
 

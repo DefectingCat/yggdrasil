@@ -73,6 +73,9 @@ pub fn CodeRunner(
                 move |v: String| sig.set(v)
             });
             let on_ready = Closure::new(|| {});
+            // CodeRunner 不使用 Ctrl+Enter 运行快捷键（它有自己的运行按钮），
+            // 但 EditorHandle 签名要求该闭包，传 no-op 满足生命周期。
+            let on_run_shortcut = Closure::new(|| {});
 
             let resolved = use_resolved_theme();
             let theme_name = if resolved() == ResolvedTheme::Dark {
@@ -87,12 +90,17 @@ pub fn CodeRunner(
             opts.set_value(&source_signal.read());
             opts.set_on_change(&on_change);
             opts.set_on_ready(&on_ready);
+            opts.set_on_run_shortcut(&on_run_shortcut);
 
             if let Ok(Some(inst)) =
                 codemirror_bridge::get_module().create(&mount_container_id, &opts)
             {
-                let handle =
-                    codemirror_bridge::EditorHandle::new(inst, on_change, on_ready);
+                let handle = codemirror_bridge::EditorHandle::new(
+                    inst,
+                    on_change,
+                    on_ready,
+                    on_run_shortcut,
+                );
                 editor_handle.set(Some(handle));
             }
         });

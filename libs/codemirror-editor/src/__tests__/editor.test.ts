@@ -64,4 +64,12 @@ describe('CodeMirrorInstance', () => {
     expect(captured).toBe('hello');
     inst.destroy();
   });
+
+  it('onRunShortcut 注入则构造不抛错', () => {
+    const opts = new EditorOptions();
+    opts.onRunShortcut = () => {};
+    const inst = new CodeMirrorInstance(container, opts);
+    inst.destroy();
+    // happy-dom 无法触发真实按键，仅验证 keymap 扩展加载不抛错
+  });
 });

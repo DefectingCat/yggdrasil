@@ -1,8 +1,8 @@
 import { javascript } from '@codemirror/lang-javascript';
 import { python } from '@codemirror/lang-python';
 import { PostgreSQL, sql } from '@codemirror/lang-sql';
-import { Compartment, EditorState, type Extension } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
+import { Compartment, EditorState, type Extension, Prec } from '@codemirror/state';
+import { EditorView, keymap } from '@codemirror/view';
 import { vim } from '@replit/codemirror-vim';
 import { basicSetup } from 'codemirror';
 import { type ThemeName, themeExtension } from './themes';
@@ -25,6 +25,8 @@ export class EditorOptions {
   value?: string;
   onChange?: (value: string) => void;
   onReady?: () => void;
+  /** Ctrl/Cmd + Enter 快捷键回调（SQL 控制台触发执行）。 */
+  onRunShortcut?: () => void;
 }
 
 /**
@@ -75,6 +77,24 @@ export class CodeMirrorInstance {
         doc: options.value ?? '',
         extensions: [
           basicSetup,
+          // Ctrl/Cmd + Enter 运行快捷键：用 Prec.highest 包裹，保证在 vim 的
+          // ViewPlugin 按键拦截之前命中（vim 自己也用 Prec.highest，跟随此惯例）。
+          ...(options.onRunShortcut
+            ? [
+                Prec.highest(
+                  keymap.of([
+                    {
+                      key: 'Mod-Enter',
+                      preventDefault: true,
+                      run: () => {
+                        options.onRunShortcut?.();
+                        return true;
+                      },
+                    },
+                  ]),
+                ),
+              ]
+            : []),
           // vim 必须在 keymap 最前（@replit/codemirror-vim 仓库要求）
           this.vimCompartment.of(options.vim ? [vim()] : []),
           this.themeCompartment.of(themeExtension(theme)),
