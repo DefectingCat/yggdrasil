@@ -1,4 +1,9 @@
 //! CodeRunner 组件实现：源码 + 运行按钮 + 轮询 + 输出区。
+//!
+//! 编辑器挂载：组件在 WASM 端按自身 `container_id` 调用
+//! [`crate::codemirror_bridge::get_module().create`] 挂载 CodeMirror，`onChange`
+//! 回写到内部 `source_signal`，`use_drop` 时销毁实例。范式镜像 SQL 控制台
+//!（`src/pages/admin/system.rs`）与 Tiptap 编辑器（`src/pages/admin/write.rs`）。
 
 use dioxus::prelude::*;
 
@@ -15,7 +20,7 @@ const MAX_POLLS: u32 = 240; // 500ms * 240 = 120s 上限
 /// 代码运行器组件。
 ///
 /// Props：
-/// - `source`：初始源码（用于展示与提交）。
+/// - `source`：初始源码（首次挂载用于初始化编辑器；之后编辑器内容是唯一真源）。
 /// - `language`：语言标识（python / node 等）。
 /// - `overrides`：可选资源限制覆盖。
 ///
@@ -34,21 +39,98 @@ pub fn CodeRunner(
     let mut exit_info = use_signal(String::new);
     let mut error_msg = use_signal(String::new);
 
-    // 为每个实例生成稳定的容器 id（CodeMirror 容器，由调用方在 WASM 端挂载）。
-    // use_id 在 Dioxus 0.7 提供 scope 内稳定的 id；退回 use_hook 保证只算一次。
-    let container_id = use_hook(|| {
-        format!(
-            "code-runner-{}",
-            // 简单用一次性随机后缀；非安全场景，避免额外依赖。
-            now_pseudo_unique()
-        )
-    });
+    // 编辑器内容的唯一真源；初始化为 prop 值。
+    let mut source_signal = use_signal(|| source.clone());
 
-    // 提前克隆一份给 run 闭包使用，避免 move 闭包抢走 rsx! 仍要读的 source/language。
-    let run_source = source.clone();
+    // 为每个实例生成稳定的容器 id（CodeMirror 容器，由本组件在 WASM 端挂载）。
+    // use_hook 保证只算一次；后缀用时间戳+原子计数避免同页多实例 id 冲突。
+    let container_id = use_hook(|| format!("code-runner-{}", now_pseudo_unique()));
+
+    // —— CodeMirror 挂载（仅 WASM）——
+    // 范式镜像 src/pages/admin/system.rs 的 SQL 控制台与 src/pages/admin/write.rs 的 Tiptap。
+    #[cfg(target_arch = "wasm32")]
+    {
+        use crate::codemirror_bridge;
+        use crate::theme::{use_resolved_theme, ResolvedTheme};
+        use wasm_bindgen::closure::Closure;
+
+        let mut editor_handle: Signal<Option<codemirror_bridge::EditorHandle>> =
+            use_signal(|| None);
+
+        // 首次挂载：构造 closure + options，create 后存进 editor_handle。
+        // 用 resolved() 读取主题作为初始值（同时订阅，但主题切换由下方独立 effect 处理）。
+        let mount_language = language.clone();
+        let mount_container_id = container_id.clone();
+        use_effect(move || {
+            if editor_handle.read().is_some() {
+                return; // 防重复 init
+            }
+
+            // onChange 回写到 source_signal（编辑器内容 = 唯一真源）。
+            let on_change = Closure::new({
+                let mut sig = source_signal;
+                move |v: String| sig.set(v)
+            });
+            let on_ready = Closure::new(|| {});
+
+            let resolved = use_resolved_theme();
+            let theme_name = if resolved() == ResolvedTheme::Dark {
+                "dark"
+            } else {
+                "light"
+            };
+
+            let opts = codemirror_bridge::EditorOptions::new();
+            opts.set_language(&mount_language);
+            opts.set_theme(theme_name);
+            opts.set_value(&source_signal.read());
+            opts.set_on_change(&on_change);
+            opts.set_on_ready(&on_ready);
+
+            if let Ok(Some(inst)) =
+                codemirror_bridge::get_module().create(&mount_container_id, &opts)
+            {
+                let handle =
+                    codemirror_bridge::EditorHandle::new(inst, on_change, on_ready);
+                editor_handle.set(Some(handle));
+            }
+        });
+
+        // 主题切换（含 System 模式下系统偏好变化）时同步编辑器主题。
+        use_effect(move || {
+            let r = use_resolved_theme();
+            if let Some(h) = editor_handle.read().as_ref() {
+                h.instance()
+                    .set_theme(if r() == ResolvedTheme::Dark {
+                        "dark"
+                    } else {
+                        "light"
+                    });
+            }
+        });
+
+        // source prop 外部变更（如 admin 页面切换语言重置示例代码）同步到
+        // signal + 编辑器。读取 source() 订阅其变化；编辑器用户输入经 on_change
+        // 写回 signal，但不会改变 prop（单向），故不会形成回环。
+        let sync_source = source.clone();
+        use_effect(move || {
+            if sync_source != *source_signal.read() {
+                source_signal.set(sync_source.clone());
+                if let Some(h) = editor_handle.read().as_ref() {
+                    h.instance().set_value(&sync_source);
+                }
+            }
+        });
+
+        // 组件卸载时销毁 CodeMirror 实例（EditorHandle::drop → instance.destroy）。
+        use_drop(move || {
+            editor_handle.set(None);
+        });
+    }
+
+    // —— run_code：同步段取 signal 当前值，move 进 spawn ——
     let run_language = language.clone();
     let run_overrides = overrides.clone();
-
     let run_code = move |_| {
         if running() {
             return;
@@ -59,9 +141,11 @@ pub fn CodeRunner(
         exit_info.set(String::new());
         error_msg.set(String::new());
 
+        // 不能跨 await 持有 signal borrow，先 clone 出 owned 值。
+        let run_source = source_signal.read().clone();
         let req = ExecRequest {
             language: run_language.clone(),
-            source: run_source.clone(),
+            source: run_source,
             overrides: run_overrides.clone(),
         };
 
@@ -141,13 +225,11 @@ pub fn CodeRunner(
                     }
                 }
             }
-            // CodeMirror 容器：调用方（阅读器扫描 / 后台试运行）在 WASM 端按此 id 挂载编辑器。
-            // 服务端渲染时仅展示源码文本，避免在 SSR 阶段拉起 JS 编辑器。
+            // CodeMirror 容器：组件自身在 WASM 端按此 id 挂载编辑器。
+            // 服务端渲染时仅展示空容器，避免在 SSR 阶段拉起 JS 编辑器。
             div {
                 id: "{container_id}",
                 class: "code-runner-editor min-h-[100px] font-mono text-sm",
-                // 源码以 data 属性承载，供挂载脚本读取初始化（避免 SSR 时把源码当 HTML 解析）。
-                "data-source": "{source}",
             }
             if !output().is_empty() {
                 div { class: "output-area bg-neutral text-neutral-content p-3 rounded-lg m-2 font-mono text-xs whitespace-pre-wrap break-all",
