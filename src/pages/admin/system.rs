@@ -710,7 +710,7 @@ fn SqlConsoleTab() -> Element {
     // 用两个独立闭包（execute_for_editor / run_sql）避免 move 单一所有权冲突——
     // 它们捕获相同的 Copy signal，行为完全等价。
     #[cfg(target_arch = "wasm32")]
-    let execute_for_editor = move || {
+    let mut execute_for_editor = move || {
         running.set(true);
         error.set(None);
         let sql = sql_text.read().clone();
@@ -746,6 +746,14 @@ fn SqlConsoleTab() -> Element {
         });
     };
 
+    // 捕获当前 scope id：Ctrl+Enter 从 CodeMirror 的 JS 事件处理中触发时，
+    // dioxus scope stack 为空，spawn() 内部 current_scope_id().unwrap() 会 panic。
+    // 在 effect 里用 Runtime::in_scope 重建 scope 上下文，保证 spawn 找得到 origin。
+    #[cfg(target_arch = "wasm32")]
+    let scope_id = dioxus::core::Runtime::current()
+        .try_current_scope_id()
+        .unwrap_or(dioxus::core::ScopeId::ROOT);
+
     // 初始化 CodeMirror + 拉取 schema 注入补全。仅 WASM。
     #[cfg(target_arch = "wasm32")]
     {
@@ -760,7 +768,12 @@ fn SqlConsoleTab() -> Element {
             });
             let on_ready = Closure::new(|| {});
             // Ctrl/Cmd+Enter 触发执行（与按钮共用同一套资源/护栏逻辑）。
-            let on_run_shortcut = Closure::new(execute_for_editor);
+            // 从 CodeMirror JS 事件触发时无 dioxus scope，必须用 in_scope 重建。
+            // execute_for_editor 是 Fn（只捕获 Copy signal），借用调用即可。
+            let on_run_shortcut = Closure::new(move || {
+                dioxus::core::Runtime::current()
+                    .in_scope(scope_id, || execute_for_editor());
+            });
 
             let theme_name = if resolved() == ResolvedTheme::Dark { "dark" } else { "light" };
             let opts = codemirror_bridge::EditorOptions::new();
