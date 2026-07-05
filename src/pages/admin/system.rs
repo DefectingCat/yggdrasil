@@ -680,7 +680,7 @@ fn SqlConsoleTab() -> Element {
     use crate::api::database::sql_console::{execute_sql, ExecuteSqlOpts};
     #[cfg(target_arch = "wasm32")]
     use crate::api::database::schema::get_db_schema;
-    use crate::components::ui::ADMIN_TABLE_CLASS;
+    use crate::components::ui::{ADMIN_TABLE_CLASS, SPINNER_SVG};
     #[cfg(target_arch = "wasm32")]
     use crate::codemirror_bridge;
     // use_resolved_theme 两种构建都用：resolved() 在 wasm 块内消费，非 wasm 仅引用避免警告。
@@ -705,6 +705,47 @@ fn SqlConsoleTab() -> Element {
     #[cfg(target_arch = "wasm32")]
     let mut editor_handle: Signal<Option<codemirror_bridge::EditorHandle>> = use_signal(|| None);
 
+    // 执行 SQL 的核心逻辑：抽成独立闭包，按钮 onclick 与 Ctrl+Enter 快捷键共用。
+    // 所有捕获都是 Copy 的 Signal，故每次调用读取最新值，闭包本身是 Fn 可重复调用。
+    // 用两个独立闭包（execute_for_editor / run_sql）避免 move 单一所有权冲突——
+    // 它们捕获相同的 Copy signal，行为完全等价。
+    #[cfg(target_arch = "wasm32")]
+    let execute_for_editor = move || {
+        running.set(true);
+        error.set(None);
+        let sql = sql_text.read().clone();
+        let opts = ExecuteSqlOpts {
+            allow_multi: allow_multi(),
+            confirm_dangerous: confirm_dangerous(),
+            with_explain: with_explain(),
+        };
+        // 护栏 4：写操作前端二次确认（简单判断：含 UPDATE/DELETE/INSERT/ALTER/DROP/TRUNCATE/CREATE 关键词）
+        let lower = sql.to_lowercase();
+        let looks_write = ["update ", "delete ", "insert ", "alter ", "drop ", "truncate ", "create "]
+            .iter()
+            .any(|k| lower.contains(k));
+        if looks_write && !confirm_dangerous() {
+            // 简单提示；真正的高危放行靠 confirm_dangerous 开关
+            let confirmed = web_sys::window().and_then(|w| {
+                w.confirm_with_message(
+                    "这是写操作（修改数据/结构），确认执行？\n\n高危操作（DROP/TRUNCATE/ALTER）还需勾选「我了解后果」。",
+                )
+                .ok()
+            });
+            if confirmed != Some(true) {
+                running.set(false);
+                return;
+            }
+        }
+        spawn(async move {
+            match execute_sql(sql, opts).await {
+                Ok(r) => result.set(Some(r)),
+                Err(e) => error.set(Some(e.to_string())),
+            }
+            running.set(false);
+        });
+    };
+
     // 初始化 CodeMirror + 拉取 schema 注入补全。仅 WASM。
     #[cfg(target_arch = "wasm32")]
     {
@@ -718,6 +759,8 @@ fn SqlConsoleTab() -> Element {
                 text.set(v);
             });
             let on_ready = Closure::new(|| {});
+            // Ctrl/Cmd+Enter 触发执行（与按钮共用同一套资源/护栏逻辑）。
+            let on_run_shortcut = Closure::new(execute_for_editor);
 
             let theme_name = if resolved() == ResolvedTheme::Dark { "dark" } else { "light" };
             let opts = codemirror_bridge::EditorOptions::new();
@@ -726,9 +769,15 @@ fn SqlConsoleTab() -> Element {
             opts.set_vim(true);
             opts.set_on_change(&on_change);
             opts.set_on_ready(&on_ready);
+            opts.set_on_run_shortcut(&on_run_shortcut);
 
             if let Ok(Some(inst)) = codemirror_bridge::get_module().create("sql-editor", &opts) {
-                let handle = codemirror_bridge::EditorHandle::new(inst, on_change, on_ready);
+                let handle = codemirror_bridge::EditorHandle::new(
+                    inst,
+                    on_change,
+                    on_ready,
+                    on_run_shortcut,
+                );
                 editor_handle.set(Some(handle));
             }
 
@@ -756,7 +805,8 @@ fn SqlConsoleTab() -> Element {
         });
     }
 
-    // 执行 SQL
+    // 执行 SQL：按钮 onclick 用的闭包。wasm 下复制 execute_for_editor 的逻辑，
+    // server 下仅复位 running（无网络层）。两处闭包捕获相同的 Copy signal。
     let mut run_sql = move || {
         running.set(true);
         error.set(None);
@@ -834,68 +884,98 @@ fn SqlConsoleTab() -> Element {
     let explain = current_result.as_ref().and_then(|r| r.explain.clone());
 
     rsx! {
-        div { class: "space-y-4",
-            // 编辑器容器
-            div {
-                class: "border border-paper-border rounded-lg overflow-hidden bg-paper-entry",
-                id: "sql-editor",
-                style: "min-height: 200px"
+        div { class: "space-y-5",
+            // 编辑器卡片：标题栏 + CodeMirror 一体化
+            div { class: "rounded-2xl overflow-hidden border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)]",
+                // 标题栏
+                div { class: "flex justify-between items-center px-4 py-2.5 border-b border-[var(--color-paper-border)] bg-[var(--color-paper-theme)]",
+                    div { class: "flex items-center gap-2",
+                        span { class: "w-2 h-2 rounded-full bg-[var(--color-paper-accent)]" }
+                        span { class: "font-mono text-sm font-semibold text-[var(--color-paper-primary)]", "SQL" }
+                    }
+                    span { class: "text-xs text-[var(--color-paper-tertiary)] font-mono", "⌘↵ 执行" }
+                }
+                // CodeMirror 容器
+                div {
+                    id: "sql-editor",
+                    style: "min-height: 280px",
+                }
             }
 
-            // 选项 + 执行按钮
-            div { class: "flex flex-wrap items-center gap-3",
+            // 工具条：执行按钮 + 普通/危险选项分层
+            div { class: "flex flex-wrap items-center gap-x-4 gap-y-3",
                 button {
-                    class: "px-4 py-1.5 text-sm bg-paper-accent text-paper-theme rounded hover:brightness-110 transition disabled:opacity-50",
+                    class: "inline-flex items-center gap-1.5 px-5 py-2 text-sm font-medium rounded-full text-[var(--color-paper-theme)] bg-[var(--color-paper-accent)] hover:brightness-110 active:scale-[0.98] transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer",
                     disabled: running(),
                     onclick: move |_| run_sql(),
-                    if running() { "执行中..." } else { "执行 (Ctrl+Enter)" }
+                    if running() {
+                        span { class: "inline-block w-3.5 h-3.5 text-[var(--color-paper-theme)]",
+                            dangerous_inner_html: SPINNER_SVG,
+                        }
+                        "执行中"
+                    } else {
+                        "执行"
+                    }
                 }
-                label { class: "flex items-center gap-1 text-sm text-paper-secondary",
+                // 普通选项
+                label { class: "flex items-center gap-1.5 text-sm text-[var(--color-paper-secondary)] cursor-pointer",
                     input {
                         r#type: "checkbox",
-                        class: "mr-1",
+                        class: "rounded border-[var(--color-paper-border)]",
                         checked: with_explain(),
                         onchange: move |e| with_explain.set(e.checked()),
                     }
                     "EXPLAIN"
                 }
-                label { class: "flex items-center gap-1 text-sm text-paper-secondary",
+                label { class: "flex items-center gap-1.5 text-sm text-[var(--color-paper-secondary)] cursor-pointer",
                     input {
                         r#type: "checkbox",
-                        class: "mr-1",
+                        class: "rounded border-[var(--color-paper-border)]",
                         checked: allow_multi(),
                         onchange: move |e| allow_multi.set(e.checked()),
                     }
                     "允许多语句"
                 }
-                label { class: "flex items-center gap-1 text-sm text-red-600 dark:text-red-400",
+                // 危险选项：视觉分隔 + 红色语义
+                span { class: "w-px h-4 bg-[var(--color-paper-border)] mx-1" }
+                label { class: "flex items-center gap-1.5 text-sm text-red-600 dark:text-red-400 cursor-pointer",
                     input {
                         r#type: "checkbox",
-                        class: "mr-1",
+                        class: "rounded border-red-300 dark:border-red-700",
                         checked: confirm_dangerous(),
                         onchange: move |e| confirm_dangerous.set(e.checked()),
                     }
-                    "我了解后果（放开 DROP/TRUNCATE/ALTER）"
+                    "我了解后果（DROP/TRUNCATE/ALTER）"
                 }
             }
 
             // 错误
             if let Some(err) = current_error {
-                div { class: "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-sm text-red-700 dark:text-red-300",
+                div { class: "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-3 text-sm text-red-700 dark:text-red-300",
                     "{err}"
                 }
             }
 
-            // 结果摘要
+            // 结果摘要（徽章式）
             if current_result.is_some() {
-                div { class: "flex flex-wrap gap-4 text-sm text-paper-secondary",
-                    span { "类型：{stmt_type}" }
-                    if affected > 0 {
-                        span { "影响行数：{affected}" }
+                div { class: "flex flex-wrap items-center gap-2",
+                    if !stmt_type.is_empty() {
+                        span { class: "inline-flex items-center px-2.5 py-1 rounded-full bg-[var(--color-paper-accent-soft)] text-[var(--color-paper-secondary)] text-xs font-medium",
+                            "{stmt_type}"
+                        }
                     }
-                    span { "耗时：{elapsed}ms" }
+                    if affected > 0 {
+                        span { class: "inline-flex items-center px-2.5 py-1 rounded-full bg-[var(--color-paper-accent-soft)] text-[var(--color-paper-secondary)] text-xs font-medium",
+                            "影响 {affected} 行"
+                        }
+                    }
+                    span { class: "inline-flex items-center px-2.5 py-1 rounded-full bg-[var(--color-paper-accent-soft)] text-[var(--color-paper-secondary)] text-xs font-medium",
+                        "{elapsed}ms"
+                    }
                     if truncated {
-                        span { class: "text-amber-600 dark:text-amber-400", "结果超过 500 行，已截断" }
+                        span { class: "inline-flex items-center px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-xs font-medium",
+                            "结果超过 500 行，已截断"
+                        }
                     }
                 }
             }
@@ -924,6 +1004,11 @@ fn SqlConsoleTab() -> Element {
                         }
                     }
                 }
+            } else if current_result.is_some() && stmt_type.to_uppercase().contains("SELECT") {
+                // 有结果但无行：SELECT 返回空集的友好提示
+                div { class: "{ADMIN_TABLE_CLASS} px-4 py-8 text-center text-sm text-[var(--color-paper-tertiary)]",
+                    "查询成功，无返回行"
+                }
             }
 
             // EXPLAIN 输出
@@ -932,7 +1017,7 @@ fn SqlConsoleTab() -> Element {
                     div { class: "px-4 py-2 border-b border-paper-border text-sm font-medium text-paper-primary",
                         "执行计划"
                     }
-                    pre { class: "p-4 text-xs font-mono text-paper-secondary overflow-x-auto whitespace-pre", "{explain}" }
+                    pre { class: "p-4 text-xs font-mono text-paper-secondary overflow-x-auto whitespace-pre m-0", "{explain}" }
                 }
             }
         }
