@@ -16,8 +16,8 @@ use crate::components::empty_state::{EmptyState, EmptyStateAction};
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::posts_skeleton::PostsSkeleton;
 use crate::components::ui::{
-    Pagination, StatusBadge, Tooltip, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_TEXT_ACCENT,
-    BTN_TEXT_RED, SPINNER_SVG,
+    Pagination, StatusBadge, Tooltip, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_OUTLINE,
+    BTN_PRIMARY, BTN_TEXT_ACCENT, BTN_TEXT_RED, SPINNER_SVG,
 };
 use crate::hooks::query::use_paginated;
 use crate::models::post::PostListItem;
@@ -88,7 +88,7 @@ pub fn PostsPage(page: i32) -> Element {
                         rebuild_result: rebuild_result,
                     }
                     Link {
-                        class: "px-6 py-2 rounded-full text-sm font-medium text-[var(--color-paper-theme)] bg-[var(--color-paper-primary)] hover:opacity-90 shadow-sm transition-all cursor-pointer",
+                        class: "{BTN_PRIMARY}",
                         to: Route::Write {},
                         "发布文章"
                     }
@@ -244,7 +244,7 @@ fn RebuildCacheBar(
                 tip: "重建 content_html 为空的文章渲染缓存".to_string(),
                 placement: "bottom",
                 button {
-                    class: if rebuilding() { "relative px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all" },
+                    class: if rebuilding() { "relative px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { BTN_OUTLINE },
                     disabled: rebuilding(),
                     onclick: move |_| do_rebuild(false),
                     span {
@@ -263,7 +263,7 @@ fn RebuildCacheBar(
                 tip: "重建所有文章的渲染缓存（含已有内容）".to_string(),
                 placement: "bottom",
                 button {
-                    class: if rebuilding() { "relative px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { "px-4 py-2 rounded-full text-sm font-medium cursor-pointer text-paper-primary border border-paper-border hover:border-paper-accent hover:text-paper-accent transition-all" },
+                    class: if rebuilding() { "relative px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { BTN_OUTLINE },
                     disabled: rebuilding(),
                     onclick: move |_| do_rebuild(true),
                     span {

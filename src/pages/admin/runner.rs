@@ -9,7 +9,7 @@
 use dioxus::prelude::*;
 
 use crate::components::code_runner::CodeRunner;
-use crate::components::ui::ADMIN_CARD_CLASS;
+use crate::components::ui::{ADMIN_CARD_CLASS, BTN_PRIMARY_SM};
 use crate::infra::runner_config::ResourceLimits;
 
 /// 受支持的语言集合（与 LANGUAGES 注册表 / CODE_RUNNER_LANGUAGES 对齐）。
@@ -72,7 +72,7 @@ pub fn Runner() -> Element {
                             button {
                                 key: "{l}",
                                 class: (if lang() == *l {
-                                    "px-4 py-1.5 text-sm font-medium rounded-full text-[var(--color-paper-theme)] bg-[var(--color-paper-accent)] hover:brightness-110 transition shadow-sm cursor-pointer"
+                                    BTN_PRIMARY_SM
                                 } else {
                                     "px-4 py-1.5 text-sm font-medium rounded-full text-[var(--color-paper-secondary)] bg-[var(--color-paper-theme)] hover:bg-[var(--color-paper-border)] hover:text-[var(--color-paper-primary)] transition cursor-pointer"
                                 }).to_string(),

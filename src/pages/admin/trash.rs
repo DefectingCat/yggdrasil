@@ -21,8 +21,9 @@ use crate::components::empty_state::EmptyState;
 use crate::components::skeletons::atoms::SkeletonBox;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::ui::{
-    Pagination, StatusBadge, ADMIN_CARD_CLASS, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_SOLID_GREEN,
-    BTN_SOLID_RED, BTN_TEXT_ACCENT, BTN_TEXT_RED, CHECKBOX_CLASS,
+    Pagination, StatusBadge, ADMIN_CARD_CLASS, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS,
+    BTN_DANGER_OUTLINE, BTN_ICON, BTN_SOLID_GREEN, BTN_SOLID_RED, BTN_TEXT_ACCENT, BTN_TEXT_RED,
+    CHECKBOX_CLASS, LoadingButton,
 };
 use crate::hooks::query::use_paginated;
 use crate::models::post::PostListItem;
@@ -263,7 +264,7 @@ pub fn TrashPage(page: i32) -> Element {
                         // 底部：清空回收站 + 分页
                         div { class: "flex items-center justify-between mt-4",
                             button {
-                                class: "px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 border border-red-300 dark:border-red-900/50 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors cursor-pointer",
+                                class: "{BTN_DANGER_OUTLINE}",
                                 onclick: move |_| {
                                     #[cfg(target_arch = "wasm32")]
                                     {
@@ -450,7 +451,7 @@ fn AutoPurgeSettings(settings: Signal<TrashSettings>) -> Element {
                                 div { class: "flex items-center rounded-lg border border-paper-border bg-paper-entry overflow-hidden",
                                     // 减号
                                     button {
-                                        class: "w-9 h-9 flex items-center justify-center text-sm text-paper-secondary hover:text-paper-primary hover:bg-paper-theme cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40",
+                                        class: "{BTN_ICON}",
                                         r#type: "button",
                                         aria_label: "减少保留天数",
                                         onclick: move |_| {
@@ -475,7 +476,7 @@ fn AutoPurgeSettings(settings: Signal<TrashSettings>) -> Element {
                                     }
                                     // 加号
                                     button {
-                                        class: "w-9 h-9 flex items-center justify-center text-sm text-paper-secondary hover:text-paper-primary hover:bg-paper-theme cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40",
+                                        class: "{BTN_ICON}",
                                         r#type: "button",
                                         aria_label: "增加保留天数",
                                         onclick: move |_| {
@@ -517,10 +518,12 @@ fn AutoPurgeSettings(settings: Signal<TrashSettings>) -> Element {
                                     "·"
                                 }
                             }
-                            // 保存按钮：启用主题色，禁用/保存中态灰化
-                            button {
-                                class: if saving_settings() { "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium cursor-not-allowed text-paper-secondary bg-paper-tertiary rounded-full" } else if just_saved() { "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium cursor-not-allowed text-paper-secondary bg-paper-tertiary rounded-full" } else { "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium text-paper-theme bg-paper-accent rounded-full hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40" },
-                                disabled: saving_settings() || just_saved() || !dirty(),
+                            // 保存按钮：主题绿主操作，saving 态显示 spinner，just_saved/无改动禁用
+                            LoadingButton {
+                                label: "保存设置".to_string(),
+                                loading: saving_settings(),
+                                disabled: just_saved() || !dirty(),
+                                variant: "sm",
                                 onclick: move |_| {
                                     let days: i32 = settings_draft_days().parse().unwrap_or(30);
                                     let enabled = settings_draft_enabled();
@@ -533,11 +536,6 @@ fn AutoPurgeSettings(settings: Signal<TrashSettings>) -> Element {
                                         saving_settings.set(false);
                                     });
                                 },
-                                if saving_settings() {
-                                    "保存中…"
-                                } else {
-                                    "保存设置"
-                                }
                             }
                         }
                     }

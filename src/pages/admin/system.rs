@@ -5,7 +5,9 @@
 
 use dioxus::prelude::*;
 
-use crate::components::ui::FilterTabs;
+use crate::components::ui::{
+    BTN_OUTLINE, BTN_PRIMARY_SM, BTN_TEXT_AMBER, BTN_TEXT_RED, FilterTabs, LoadingButton,
+};
 
 /// 系统管理的 5 个功能 tab。
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -226,9 +228,10 @@ fn DbStatusTab() -> Element {
         div { class: "space-y-6",
             // 工具栏：刷新按钮 + 自动刷新开关
             div { class: "flex items-center justify-between",
-                button {
-                    class: "px-3 py-1.5 text-sm bg-paper-accent text-paper-theme rounded hover:brightness-110 transition disabled:opacity-50",
-                    disabled: loading(),
+                LoadingButton {
+                    label: "刷新".to_string(),
+                    loading: loading(),
+                    variant: "sm",
                     onclick: move |_| {
                         loading.set(true);
                         #[cfg(target_arch = "wasm32")]
@@ -249,7 +252,6 @@ fn DbStatusTab() -> Element {
                             loading.set(false);
                         }
                     },
-                    if loading() { "加载中..." } else { "刷新" }
                 }
                 div { class: "flex items-center gap-2",
                     span { class: "text-sm text-paper-secondary", "自动刷新" }
@@ -535,9 +537,10 @@ fn ServerStatusTab() -> Element {
     rsx! {
         div { class: "space-y-6",
         div { class: "flex items-center justify-between",
-                button {
-                    class: "px-3 py-1.5 text-sm bg-paper-accent text-paper-theme rounded hover:brightness-110 transition disabled:opacity-50",
-                    disabled: loading(),
+                LoadingButton {
+                    label: "刷新".to_string(),
+                    loading: loading(),
+                    variant: "sm",
                     onclick: move |_| {
                         loading.set(true);
                         #[cfg(target_arch = "wasm32")]
@@ -558,7 +561,6 @@ fn ServerStatusTab() -> Element {
                             loading.set(false);
                         }
                     },
-                    if loading() { "加载中..." } else { "刷新" }
                 }
                 div { class: "flex items-center gap-2",
                     span { class: "text-sm text-paper-secondary", "自动刷新" }
@@ -680,7 +682,7 @@ fn SqlConsoleTab() -> Element {
     use crate::api::database::sql_console::{execute_sql, ExecuteSqlOpts};
     #[cfg(target_arch = "wasm32")]
     use crate::api::database::schema::get_db_schema;
-    use crate::components::ui::{ADMIN_TABLE_CLASS, SPINNER_SVG};
+    use crate::components::ui::ADMIN_TABLE_CLASS;
     #[cfg(target_arch = "wasm32")]
     use crate::codemirror_bridge;
     // use_resolved_theme 两种构建都用：resolved() 在 wasm 块内消费，非 wasm 仅引用避免警告。
@@ -917,18 +919,10 @@ fn SqlConsoleTab() -> Element {
 
             // 工具条：执行按钮 + 普通/危险选项分层
             div { class: "flex flex-wrap items-center gap-x-4 gap-y-3",
-                button {
-                    class: "inline-flex items-center gap-1.5 px-5 py-2 text-sm font-medium rounded-full text-[var(--color-paper-theme)] bg-[var(--color-paper-accent)] hover:brightness-110 active:scale-[0.98] transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer",
-                    disabled: running(),
+                LoadingButton {
+                    label: "执行".to_string(),
+                    loading: running(),
                     onclick: move |_| run_sql(),
-                    if running() {
-                        span { class: "inline-block w-3.5 h-3.5 text-[var(--color-paper-theme)]",
-                            dangerous_inner_html: SPINNER_SVG,
-                        }
-                        "执行中"
-                    } else {
-                        "执行"
-                    }
                 }
                 // 普通选项
                 label { class: "flex items-center gap-1.5 text-sm text-[var(--color-paper-secondary)] cursor-pointer",
@@ -1145,7 +1139,7 @@ fn ExportTab() -> Element {
                 }
 
                 button {
-                    class: "px-4 py-1.5 text-sm bg-paper-accent text-paper-theme rounded hover:brightness-110 transition",
+                    class: "{BTN_PRIMARY_SM}",
                     onclick: move |_| do_export(),
                     "导出并下载"
                 }
@@ -1343,9 +1337,10 @@ fn BackupTab() -> Element {
         div { class: "space-y-4",
             // 操作栏
             div { class: "flex items-center gap-3",
-                button {
-                    class: "px-4 py-1.5 text-sm bg-paper-accent text-paper-theme rounded hover:brightness-110 transition disabled:opacity-50",
-                    disabled: is_busy,
+                LoadingButton {
+                    label: "创建备份".to_string(),
+                    loading: is_busy,
+                    variant: "sm",
                     onclick: move |_| {
                         #[cfg(target_arch = "wasm32")]
                         {
@@ -1360,10 +1355,9 @@ fn BackupTab() -> Element {
                             });
                         }
                     },
-                    if is_busy { "处理中..." } else { "创建备份" }
                 }
                 button {
-                    class: "px-3 py-1.5 text-sm border border-paper-border text-paper-primary rounded hover:bg-paper-entry transition disabled:opacity-50",
+                    class: "{BTN_OUTLINE}",
                     disabled: loading() || is_busy,
                     onclick: move |_| refresh_list(),
                     "刷新列表"
@@ -1502,13 +1496,13 @@ fn BackupRow(props: BackupRowProps) -> Element {
                     "下载"
                 }
                 button {
-                    class: "text-xs text-amber-600 hover:text-amber-800 dark:text-amber-400 mr-3 disabled:opacity-50",
+                    class: "{BTN_TEXT_AMBER} mr-3 disabled:opacity-50",
                     disabled: props.busy,
                     onclick: move |_| on_restore.call(fname_for_restore.clone()),
                     "恢复"
                 }
                 button {
-                    class: "text-xs text-red-600 hover:text-red-800 dark:text-red-400 disabled:opacity-50",
+                    class: "{BTN_TEXT_RED} disabled:opacity-50",
                     disabled: props.busy,
                     onclick: move |_| on_delete.call(fname_for_delete.clone()),
                     "删除"

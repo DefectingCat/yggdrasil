@@ -14,7 +14,7 @@ use crate::api::posts::{get_post_stats, list_posts};
 use crate::api::posts::{PostListResponse, PostStatsResponse};
 use crate::components::empty_state::{EmptyState, EmptyStateAction};
 use crate::components::skeletons::atoms::SkeletonBox;
-use crate::components::ui::{ADMIN_CARD_CLASS, ADMIN_TABLE_CLASS, BTN_SECONDARY};
+use crate::components::ui::{ADMIN_CARD_CLASS, ADMIN_TABLE_CLASS, BTN_PRIMARY, BTN_SECONDARY};
 use crate::models::post::{PostListItem, PostStats};
 use crate::router::Route;
 
@@ -65,7 +65,7 @@ pub fn Admin() -> Element {
                         "管理文章"
                     }
                     Link {
-                        class: "px-6 py-2 rounded-full text-sm font-medium text-[var(--color-paper-theme)] bg-[var(--color-paper-primary)] hover:opacity-90 shadow-sm transition-all cursor-pointer",
+                        class: "{BTN_PRIMARY}",
                         to: Route::Write {},
                         "发布文章"
                     }

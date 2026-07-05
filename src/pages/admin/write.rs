@@ -17,6 +17,7 @@ use crate::api::posts::{
 #[cfg(target_arch = "wasm32")]
 use crate::tiptap_bridge::{consume_upload_event, upload_image_file, EditorHandle};
 // 共享上传状态类型：两端都编译（rsx 在 server SSR 时也要渲染这些结构）。
+use crate::components::ui::{BTN_CLOSE_ICON, BTN_PRIMARY_SM, LoadingButton};
 use crate::components::write_skeleton::WriteSkeleton;
 use crate::models::post::Post;
 use crate::router::Route;
@@ -241,7 +242,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
     });
 
     // 提交表单：校验标题与内容，读取 Tiptap 编辑器 Markdown，调用 create_post 或 update_post。
-    let on_submit = move |_| {
+    let mut on_submit = move |_| {
         // 上传未完成/失败拦截：有占位符时阻止保存
         let in_flight = uploads_in_flight.read();
         if in_flight.uploading > 0 || in_flight.error > 0 {
@@ -504,7 +505,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
                         class: "flex-shrink-0 flex items-center justify-between gap-3 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30 mb-2",
                         span { "图片上传失败: {err.file_name} — {err.message}" }
                         button {
-                            class: "shrink-0 text-red-400 hover:text-red-600 cursor-pointer text-lg leading-none",
+                            class: "{BTN_CLOSE_ICON}",
                             aria_label: "关闭提示",
                             onclick: {
                                 // 捕获 owned id，避免借用临时值
@@ -564,11 +565,10 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     }
                 }
                 div { class: "w-px h-5 bg-[var(--color-paper-border)]" }
-                button {
-                    class: if saving() { "px-6 py-2 rounded-full text-sm font-medium bg-[var(--color-paper-tertiary)] text-[var(--color-paper-secondary)] cursor-not-allowed shadow-sm" } else { "px-6 py-2 rounded-full text-sm font-medium bg-[var(--color-paper-primary)] text-[var(--color-paper-theme)] hover:opacity-90 shadow-sm transition-all cursor-pointer" },
-                    disabled: saving(),
-                    onclick: on_submit,
-                    if saving() { "保存中..." } else if is_edit { "更新文章" } else { "发布文章" }
+                LoadingButton {
+                    label: if is_edit { "更新文章".to_string() } else { "发布文章".to_string() },
+                    loading: saving(),
+                    onclick: move |_| on_submit(()),
                 }
             }
         }
@@ -814,7 +814,7 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
                     },
                 }
                 button {
-                    class: "shrink-0 px-4 py-1.5 rounded-full text-sm font-medium text-[var(--color-paper-theme)] bg-[var(--color-paper-primary)] hover:opacity-90 shadow-sm transition-all cursor-pointer",
+                    class: "shrink-0 {BTN_PRIMARY_SM}",
                     onclick: move |_| {
                         let v = cover_url_input().trim().to_string();
                         if !v.is_empty() {
@@ -841,7 +841,7 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
             div { class: "flex items-center justify-between gap-3 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30 mt-2",
                 span { "封面图: {err}" }
                 button {
-                    class: "shrink-0 text-red-400 hover:text-red-600 cursor-pointer text-lg leading-none",
+                    class: "{BTN_CLOSE_ICON}",
                     aria_label: "关闭提示",
                     onclick: move |_| cover_error.set(None),
                     "×"
