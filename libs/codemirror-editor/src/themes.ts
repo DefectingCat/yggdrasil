@@ -7,17 +7,20 @@ import type { Extension } from '@codemirror/state';
 export type ThemeName = 'light' | 'dark';
 
 /**
- * 覆盖 CodeMirror core 内置 base theme 给 `.cm-gutters` 设的默认背景。
+ * 覆盖 CodeMirror core 内置 base theme 的两处问题：
  *
- * CodeMirror core 的 base theme 用 `&light .cm-gutters` / `&dark .cm-gutters`
- * （特异性 `.cm-editor.cm-light .cm-gutters`）注入了一个浅灰/深灰背景
- * （light `#f5f5f5`、dark `#333338`），优先级高于 catppuccin 的 `.cm-gutters`
- * 覆盖，导致行号列与编辑器 content（catppuccin base 色）背景不一致，产生割裂。
+ * 1. `.cm-gutters` 默认背景：core 的 `&light .cm-gutters`（`#f5f5f5`）/ `&dark`
+ *    （`#333338`）特异性高于 catppuccin 的 `.cm-gutters`，catppuccin 的 base 背景被
+ *    压制，行号列与代码区背景不一致。用 `!important` 强制透明，继承 editor base 色。
  *
- * 这里用 `!important` 强制 gutter 背景透明，使其继承 `.cm-editor` 的 base 色，
- * 行号区与代码区融为一体。
+ * 2. `.cm-editor` 默认不撑满父容器：core 的 `&` 没设 height，编辑器只占内容高度，
+ *    容器剩余空间透出父元素背景，造成「有行号的上半部分」与「空白下半部分」色差。
+ *    用 `& { height: 100% }` 让编辑器填满容器。
  */
 const gutterBackgroundOverride: Extension = EditorView.theme({
+  '&': {
+    height: '100%',
+  },
   '.cm-gutters': {
     backgroundColor: 'transparent !important',
   },
