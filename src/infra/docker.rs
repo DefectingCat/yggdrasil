@@ -31,9 +31,12 @@ pub fn build_host_config(limits: &ResourceLimits) -> HostConfig {
         readonly_rootfs: Some(true),
         tmpfs: Some(tmpfs),
         pids_limit: Some(64),
+        // 只保留 nofile（fd 数上限，语义正常）。
+        // 不设 nproc：RLIMIT_NPROC 在 setrlimit 时按 UID 计数，配合 non-root 用户会让
+        // 容器初始 exec /bin/sh 直接 EAGAIN（"exec: resource temporarily unavailable"），
+        // 与容器内实际进程数无关。pids_limit 已在 cgroup 层兜底，nproc 是冗余且有害的双重约束。
         ulimits: Some(vec![
             ResourcesUlimits { name: Some("nofile".to_string()), soft: Some(64), hard: Some(64) },
-            ResourcesUlimits { name: Some("nproc".to_string()), soft: Some(64), hard: Some(64) },
         ]),
         cap_drop: Some(vec!["ALL".to_string()]),
         security_opt: Some(vec!["no-new-privileges".to_string()]),
