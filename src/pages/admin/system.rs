@@ -899,12 +899,9 @@ fn SqlConsoleTab() -> Element {
     rsx! {
         div { class: "space-y-5",
             // 编辑器卡片：标题栏 + CodeMirror 一体化。
-            // 容器用 code-block(crust) 比标题栏 entry(mantle) 深一档，CodeMirror 自带
-            // base 背景则更浅——三层形成 crust > mantle > base 的层级，让编辑器作为
-            // 「浅色岛」浮在深色容器上（IDE 经典范式），消除 gutter/content 割裂。
-            div { class: "rounded-2xl overflow-hidden border border-[var(--color-paper-border)] bg-[var(--color-paper-code-block)]",
+            div { class: "rounded-2xl overflow-hidden border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)]",
                 // 标题栏
-                div { class: "flex justify-between items-center px-4 py-2.5 border-b border-[var(--color-paper-border)] bg-[var(--color-paper-entry)]",
+                div { class: "flex justify-between items-center px-4 py-2.5 border-b border-[var(--color-paper-border)] bg-[var(--color-paper-theme)]",
                     div { class: "flex items-center gap-2",
                         span { class: "w-2 h-2 rounded-full bg-[var(--color-paper-accent)]" }
                         span { class: "font-mono text-sm font-semibold text-[var(--color-paper-primary)]", "SQL" }
