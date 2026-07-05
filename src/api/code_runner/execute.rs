@@ -21,6 +21,8 @@ use crate::api::code_runner::{ExecRequest, ExecResult, ExecStatus, ExecTask};
 
 // server-only 辅助模块与依赖：仅在 server function body（被宏剥离到 WASM 之外）内使用。
 #[cfg(feature = "server")]
+use crate::api::auth::get_current_admin_user;
+#[cfg(feature = "server")]
 use crate::api::code_runner::languages::{is_supported_lang, LANGUAGES};
 #[cfg(feature = "server")]
 use crate::api::code_runner::progress::{
@@ -60,12 +62,20 @@ fn client_ip() -> String {
 ///
 /// 同步校验通过后立即返回 task_id，容器在后台执行；结果通过
 /// [`get_exec_result`] 轮询查询。语言不支持 / 源码过大 / 触发限流时同步返回错误。
+///
+/// admin 角色跳过速率限制（便于作者在沙箱调试），但仍受并发槽、
+/// 资源钳制与源码大小校验约束。
 #[server(StartExec, "/api")]
 pub async fn start_exec(req: ExecRequest) -> Result<String, ServerFnError> {
     // 1. 速率限制（双层：每秒突发 + 每日总额）
-    let ip = client_ip();
-    if let Err(msg) = check_code_exec_limit(&ip) {
-        return Err(ServerFnError::new(msg));
+    //    admin 放行：作者在 /admin/runner 沙箱试运行时不应被限流打断；
+    //    仍受并发槽、资源钳制、源码大小校验约束。
+    let is_admin = get_current_admin_user().await.is_ok();
+    if !is_admin {
+        let ip = client_ip();
+        if let Err(msg) = check_code_exec_limit(&ip) {
+            return Err(ServerFnError::new(msg));
+        }
     }
 
     // 2. 语言白名单
