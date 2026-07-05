@@ -910,10 +910,11 @@ fn SqlConsoleTab() -> Element {
                     }
                     span { class: "text-xs text-[var(--color-paper-tertiary)] font-mono", "⌘↵ 执行" }
                 }
-                // CodeMirror 容器
+                // CodeMirror 容器：用 flex 让 .cm-editor(flex:1) 填满整个高度，
+                // 避免编辑器塌缩到内容高度、底部透出容器背景造成上下色差。
                 div {
                     id: "sql-editor",
-                    style: "min-height: 280px",
+                    style: "min-height: 280px; display: flex; flex-direction: column",
                 }
             }
 

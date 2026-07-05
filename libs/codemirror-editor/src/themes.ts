@@ -13,13 +13,15 @@ export type ThemeName = 'light' | 'dark';
  *    （`#333338`）特异性高于 catppuccin 的 `.cm-gutters`，catppuccin 的 base 背景被
  *    压制，行号列与代码区背景不一致。用 `!important` 强制透明，继承 editor base 色。
  *
- * 2. `.cm-editor` 默认不撑满父容器：core 的 `&` 没设 height，编辑器只占内容高度，
- *    容器剩余空间透出父元素背景，造成「有行号的上半部分」与「空白下半部分」色差。
- *    用 `& { height: 100% }` 让编辑器填满容器。
+ * 2. `.cm-editor` 默认不撑满父容器：core 的 `&` 没设 height/flex，编辑器只占内容
+ *    高度。`height: 100%` 在父容器只有 min-height 时会塌缩（CSS：百分比高度需要
+ *    父元素有明确 height）。改用 `flex: 1`，配合父容器 `display: flex`，编辑器才能
+ *    真正填满，避免「有内容的上半部分」与「空白下半部分」背景割裂。
  */
 const gutterBackgroundOverride: Extension = EditorView.theme({
   '&': {
-    height: '100%',
+    flex: '1 1 0',
+    minHeight: '0',
   },
   '.cm-gutters': {
     backgroundColor: 'transparent !important',

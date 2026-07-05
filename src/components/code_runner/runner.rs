@@ -245,7 +245,7 @@ pub fn CodeRunner(
             div {
                 id: "{container_id}",
                 class: "code-runner-editor font-mono text-sm",
-                style: "min-height: 160px",
+                style: "min-height: 160px; display: flex; flex-direction: column",
             }
             // 输出区
             if !output().is_empty() {
