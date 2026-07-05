@@ -9,6 +9,7 @@ use dioxus::prelude::*;
 
 use crate::api::code_runner::execute::{get_exec_result, start_exec};
 use crate::api::code_runner::{ExecRequest, ExecStatus};
+use crate::components::ui::SPINNER_SVG;
 use crate::infra::runner_config::ResourceLimits;
 use crate::utils::time::sleep_ms;
 
@@ -210,18 +211,24 @@ pub fn CodeRunner(
     };
 
     rsx! {
-        div { class: "code-runner-container border border-base-300 rounded-xl overflow-hidden my-4 bg-base-100",
-            div { class: "flex justify-between items-center bg-base-200 px-3 py-1 text-sm border-b border-base-300",
-                span { class: "font-mono font-bold text-base-content/80", "{language}" }
+        div { class: "rounded-2xl overflow-hidden border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)]",
+            // 顶栏：语言标签 + 运行按钮
+            div { class: "flex justify-between items-center px-4 py-2.5 border-b border-[var(--color-paper-border)] bg-[var(--color-paper-theme)]",
+                div { class: "flex items-center gap-2",
+                    span { class: "w-2 h-2 rounded-full bg-[var(--color-paper-accent)]" }
+                    span { class: "font-mono text-sm font-semibold text-[var(--color-paper-primary)]", "{language}" }
+                }
                 button {
-                    class: "btn btn-xs btn-primary rounded-lg",
+                    class: "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-full text-[var(--color-paper-theme)] bg-[var(--color-paper-accent)] hover:brightness-110 active:scale-[0.98] transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer",
                     disabled: running(),
                     onclick: run_code,
                     if running() {
-                        span { class: "loading loading-spinner loading-xs mr-1" }
+                        span { class: "inline-block w-3.5 h-3.5 text-[var(--color-paper-theme)]",
+                            dangerous_inner_html: SPINNER_SVG,
+                        }
                         "{stage()}"
                     } else {
-                        "Run"
+                        "运行"
                     }
                 }
             }
@@ -229,19 +236,24 @@ pub fn CodeRunner(
             // 服务端渲染时仅展示空容器，避免在 SSR 阶段拉起 JS 编辑器。
             div {
                 id: "{container_id}",
-                class: "code-runner-editor min-h-[100px] font-mono text-sm",
+                class: "code-runner-editor font-mono text-sm",
+                style: "min-height: 160px",
             }
+            // 输出区
             if !output().is_empty() {
-                div { class: "output-area bg-neutral text-neutral-content p-3 rounded-lg m-2 font-mono text-xs whitespace-pre-wrap break-all",
-                    div { class: "text-gray-400 border-b border-gray-600 pb-1 mb-1 flex justify-between items-center",
-                        span { "Console Output" }
-                        span { class: "text-gray-500", "{exit_info()}" }
+                div { class: "border-t border-[var(--color-paper-border)]",
+                    div { class: "flex justify-between items-center px-4 py-2 text-xs text-[var(--color-paper-tertiary)] border-b border-[var(--color-paper-border)] bg-[var(--color-paper-code-block)]",
+                        span { class: "font-medium uppercase tracking-wide", "输出" }
+                        span { "{exit_info()}" }
                     }
-                    {output()}
+                    pre { class: "px-4 py-3 m-0 text-xs font-mono text-[var(--color-paper-secondary)] bg-[var(--color-paper-code-block)] overflow-x-auto whitespace-pre-wrap break-words",
+                        {output()}
+                    }
                 }
             }
+            // 错误提示
             if !error_msg().is_empty() {
-                div { class: "px-3 pb-2 text-xs text-error",
+                div { class: "px-4 py-2.5 border-t border-[var(--color-paper-border)] text-xs text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/10",
                     {error_msg()}
                 }
             }

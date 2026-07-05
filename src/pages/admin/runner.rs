@@ -51,22 +51,31 @@ pub fn Runner() -> Element {
     let (overrides, override_error) = (parsed.read().0.clone(), parsed.read().1.clone());
 
     rsx! {
-        div { class: "flex flex-col gap-6 max-w-4xl mx-auto w-full",
-            div { class: "flex flex-col gap-2",
-                h1 { class: "text-3xl font-extrabold tracking-tight", "代码试运行沙箱" }
-                p { class: "text-base text-base-content/60",
-                    "在此快速试运行代码，验证文章中可运行代码块的预期输出。资源钳制与读者侧一致，速率限制对 admin 放行。"
+        div { class: "w-full max-w-5xl mx-auto space-y-8",
+            // 页头：与 dashboard / posts / system 对齐（h1 text-4xl + 底部分割线）
+            div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8 border-b border-[var(--color-paper-border)]/50",
+                div {
+                    h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]", "代码试运行沙箱" }
+                    p { class: "text-base text-[var(--color-paper-secondary)] mt-2",
+                        "在此快速试运行代码，验证文章中可运行代码块的预期输出。资源钳制与读者侧一致，速率限制对 admin 放行。"
+                    }
                 }
             }
 
-            div { class: "{ADMIN_CARD_CLASS} flex flex-col gap-3",
-                div { class: "flex flex-wrap items-center gap-3",
-                    label { class: "text-sm font-semibold text-base-content/70", "语言" }
-                    div { class: "join",
+            // 配置卡片：语言切换 + 资源覆盖
+            div { class: "{ADMIN_CARD_CLASS} p-8 flex flex-col gap-6",
+                // 语言切换
+                div { class: "flex flex-col gap-2",
+                    label { class: "text-sm font-medium text-[var(--color-paper-secondary)]", "语言" }
+                    div { class: "flex gap-2",
                         for l in SUPPORTED_LANGS {
                             button {
                                 key: "{l}",
-                                class: (if lang() == *l { "btn btn-sm join-item btn-primary" } else { "btn btn-sm join-item btn-ghost" }).to_string(),
+                                class: (if lang() == *l {
+                                    "px-4 py-1.5 text-sm font-medium rounded-full text-[var(--color-paper-theme)] bg-[var(--color-paper-accent)] hover:brightness-110 transition shadow-sm cursor-pointer"
+                                } else {
+                                    "px-4 py-1.5 text-sm font-medium rounded-full text-[var(--color-paper-secondary)] bg-[var(--color-paper-theme)] hover:bg-[var(--color-paper-border)] hover:text-[var(--color-paper-primary)] transition cursor-pointer"
+                                }).to_string(),
                                 onclick: {
                                     let ll = (*l).to_string();
                                     move |_| {
@@ -81,23 +90,30 @@ pub fn Runner() -> Element {
                         }
                     }
                 }
-                div { class: "flex flex-col gap-1",
-                    label { class: "text-sm font-semibold text-base-content/70",
+
+                // 资源覆盖（JSON）
+                div { class: "flex flex-col gap-2",
+                    label { class: "text-sm font-medium text-[var(--color-paper-secondary)]",
                         "资源覆盖 (JSON, 可选)"
                     }
                     input {
-                        class: "input input-bordered input-sm font-mono w-full",
+                        class: "w-full px-3 py-2 text-sm border border-paper-border rounded-lg bg-[var(--color-paper-theme)] text-[var(--color-paper-primary)] font-mono focus:outline-none focus:border-[var(--color-paper-accent)] transition-colors",
                         r#type: "text",
                         placeholder: "如 {{\"timeout_secs\":10,\"memory_mb\":512}}",
                         value: "{overrides_json()}",
                         oninput: move |e| overrides_json.set(e.value()),
                     }
                     if !override_error.is_empty() {
-                        span { class: "text-xs text-error", "{override_error}" }
+                        p { class: "text-xs text-red-500 dark:text-red-400", "{override_error}" }
+                    } else {
+                        p { class: "text-xs text-[var(--color-paper-tertiary)]",
+                            "覆盖 cpu_cores / memory_mb / timeout_secs / output_bytes / allow_network；最终仍受 CODE_RUNNER_MAX_* 钳制"
+                        }
                     }
                 }
             }
 
+            // 运行器
             CodeRunner {
                 source: source(),
                 language: lang(),
