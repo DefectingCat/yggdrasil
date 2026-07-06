@@ -62,8 +62,8 @@ fn render_cell(value: &serde_json::Value) -> Element {
 
 /// 渲染展开详情区中的「列名: 完整值」单行。
 ///
-/// 与 `render_cell` 不同：值不做截断，长文本由外层 `<pre>` 的
-/// `whitespace-pre-wrap break-all` + `max-h-80 overflow-y-auto` 承载。
+/// 与 `render_cell` 不同：值不做截断，长文本换行由外层展开区容器
+/// （`whitespace-pre-wrap break-all` + `max-h-80 overflow-y-auto`）承载。
 fn render_expanded_value(col: &str, value: &serde_json::Value) -> Element {
     use serde_json::Value;
     let display = match value {
@@ -101,12 +101,64 @@ pub struct SqlResultTableProps {
 #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut))]
 pub fn SqlResultTable(props: SqlResultTableProps) -> Element {
     let mut expanded_row: Signal<Option<usize>> = use_signal(|| None);
+    let cols_len = props.result.columns.len();
+    // colspan = 列数 + 行头箭头列
+    let expand_colspan = cols_len + 1;
 
     rsx! {
         div { class: "{ADMIN_TABLE_CLASS}",
             div { class: "overflow-auto max-h-[70vh]",
                 table { class: "w-full text-sm border-collapse",
-                    // 占位：后续 task 填充 thead / tbody
+                    thead {
+                        tr { class: "border-b border-[var(--color-paper-border)] sticky top-0 bg-[var(--color-paper-entry)] z-10",
+                            th { class: "w-8 px-2 py-2", "" }
+                            for col in props.result.columns.iter() {
+                                th {
+                                    class: "px-4 py-2 text-left font-medium whitespace-nowrap text-[var(--color-paper-secondary)]",
+                                    "{col}"
+                                }
+                            }
+                        }
+                    }
+                    tbody {
+                        for (row_idx, row) in props.result.rows.iter().enumerate() {
+                            // 数据行：点击切换展开
+                            tr {
+                                class: "border-b border-[var(--color-paper-border)] last:border-0 hover:bg-[var(--color-paper-accent-soft)] transition-colors cursor-pointer",
+                                onclick: move |_| {
+                                    let cur = expanded_row();
+                                    if cur == Some(row_idx) {
+                                        expanded_row.set(None);
+                                    } else {
+                                        expanded_row.set(Some(row_idx));
+                                    }
+                                },
+                                td { class: "px-2 py-2 text-center text-[var(--color-paper-tertiary)] text-xs select-none",
+                                    if expanded_row() == Some(row_idx) { "▾" } else { "▸" }
+                                }
+                                for cell in row.iter() {
+                                    td {
+                                        class: "px-4 py-2 align-top",
+                                        {render_cell(cell)}
+                                    }
+                                }
+                            }
+                            // 展开详情行（跨列）
+                            if expanded_row() == Some(row_idx) {
+                                tr {
+                                    td { colspan: "{expand_colspan}",
+                                        class: "px-4 py-3 bg-[var(--color-paper-theme)]",
+                                        div {
+                                            class: "{EXPAND_MAX_HEIGHT_CLASS} overflow-y-auto space-y-0.5 whitespace-pre-wrap break-all",
+                                            for (ci, col) in props.result.columns.iter().enumerate() {
+                                                {render_expanded_value(col, row.get(ci).unwrap_or(&serde_json::Value::Null))}
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
