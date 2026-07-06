@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Editor } from '@tiptap/core';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { openRunnableModal } from '../slash-command';
 
 /**
@@ -54,10 +54,14 @@ describe('openRunnableModal', () => {
     timeoutInput.value = '10';
     timeoutInput.dispatchEvent(new Event('input', { bubbles: true }));
     // 点插入
-    const insertBtn = document.querySelector<HTMLButtonElement>('.tiptap-runnable-actions .insert')!;
+    const insertBtn = document.querySelector<HTMLButtonElement>(
+      '.tiptap-runnable-actions .insert',
+    )!;
     insertBtn.click();
     expect(calls).toHaveLength(1);
-    expect(calls[0].language).toBe('python runnable {"timeout_secs":10,"memory_mb":256,"allow_network":false}');
+    expect(calls[0].language).toBe(
+      'python runnable {"timeout_secs":10,"memory_mb":256,"allow_network":false}',
+    );
     expect(document.querySelector('.tiptap-runnable-modal')).toBeNull();
   });
 
@@ -74,7 +78,9 @@ describe('openRunnableModal', () => {
     const timeoutInput = document.querySelector<HTMLInputElement>('#runnable-timeout')!;
     timeoutInput.value = '0';
     timeoutInput.dispatchEvent(new Event('input', { bubbles: true }));
-    const insertBtn = document.querySelector<HTMLButtonElement>('.tiptap-runnable-actions .insert')!;
+    const insertBtn = document.querySelector<HTMLButtonElement>(
+      '.tiptap-runnable-actions .insert',
+    )!;
     expect(insertBtn.disabled).toBe(true);
     // 且点插入(即使强制)不应触发——实际 disabled 按钮不接收 click,这里只验状态
     insertBtn.click();
@@ -85,7 +91,9 @@ describe('openRunnableModal', () => {
     const { editor } = mockEditor();
     openRunnableModal(editor);
     const timeoutInput = document.querySelector<HTMLInputElement>('#runnable-timeout')!;
-    const insertBtn = document.querySelector<HTMLButtonElement>('.tiptap-runnable-actions .insert')!;
+    const insertBtn = document.querySelector<HTMLButtonElement>(
+      '.tiptap-runnable-actions .insert',
+    )!;
     timeoutInput.value = '0';
     timeoutInput.dispatchEvent(new Event('input', { bubbles: true }));
     expect(insertBtn.disabled).toBe(true);

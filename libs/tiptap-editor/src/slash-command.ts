@@ -552,11 +552,19 @@ export function openRunnableModal(editor: Editor): void {
   function updateInsertEnabled(): void {
     const t = Number(timeoutInput.value);
     const m = Number(memInput.value);
-    insertBtn.disabled = !(t >= TIMEOUT_RANGE.min && t <= TIMEOUT_RANGE.max && m >= MEMORY_RANGE.min && m <= MEMORY_RANGE.max);
+    insertBtn.disabled = !(
+      t >= TIMEOUT_RANGE.min &&
+      t <= TIMEOUT_RANGE.max &&
+      m >= MEMORY_RANGE.min &&
+      m <= MEMORY_RANGE.max
+    );
   }
 
   function insert(): void {
-    editor.chain().setCodeBlock({ language: buildRunnableInfo(state) }).run();
+    editor
+      .chain()
+      .setCodeBlock({ language: buildRunnableInfo(state) })
+      .run();
     close();
   }
 
