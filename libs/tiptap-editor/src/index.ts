@@ -1,9 +1,9 @@
 import { Editor } from '@tiptap/core';
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { FileHandler } from '@tiptap/extension-file-handler';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { TableKit } from '@tiptap/extension-table';
 import { Markdown } from '@tiptap/markdown';
-import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import StarterKit from '@tiptap/starter-kit';
 import { lowlight } from './highlight';
 import { SlashCommand } from './slash-command';

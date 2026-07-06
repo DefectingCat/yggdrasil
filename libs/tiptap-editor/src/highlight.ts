@@ -1,4 +1,4 @@
-import { createLowlight, common } from 'lowlight';
+import { common, createLowlight } from 'lowlight';
 
 const base = createLowlight(common);
 
