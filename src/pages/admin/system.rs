@@ -682,6 +682,7 @@ fn SqlConsoleTab() -> Element {
     use crate::api::database::sql_console::{execute_sql, ExecuteSqlOpts};
     #[cfg(target_arch = "wasm32")]
     use crate::api::database::schema::get_db_schema;
+    use crate::components::sql_result_table::SqlResultTable;
     use crate::components::ui::ADMIN_TABLE_CLASS;
     #[cfg(target_arch = "wasm32")]
     use crate::codemirror_bridge;
@@ -874,28 +875,6 @@ fn SqlConsoleTab() -> Element {
         .map(|r| r.statement_type.clone())
         .unwrap_or_default();
     let truncated = current_result.as_ref().map(|r| r.truncated).unwrap_or(false);
-    // 结果行预格式化（避免在 rsx for 循环体内格式化）
-    let result_rows: Vec<Vec<String>> = current_result
-        .as_ref()
-        .map(|r| {
-            r.rows
-                .iter()
-                .map(|row| {
-                    row.iter()
-                        .map(|cell| match cell {
-                            serde_json::Value::Null => "NULL".to_string(),
-                            serde_json::Value::String(s) => s.clone(),
-                            other => other.to_string(),
-                        })
-                        .collect()
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    let result_columns: Vec<String> = current_result
-        .as_ref()
-        .map(|r| r.columns.clone())
-        .unwrap_or_default();
     let explain = current_result.as_ref().and_then(|r| r.explain.clone());
 
     rsx! {
@@ -989,33 +968,14 @@ fn SqlConsoleTab() -> Element {
             }
 
             // 结果表格
-            if !result_rows.is_empty() {
-                div { class: "{ADMIN_TABLE_CLASS}",
-                    div { class: "overflow-x-auto",
-                        table { class: "w-full text-sm",
-                            thead {
-                                tr { class: "border-b border-paper-border text-left text-paper-secondary",
-                                    for col in result_columns.iter() {
-                                        th { class: "px-4 py-2 font-medium whitespace-nowrap", "{col}" }
-                                    }
-                                }
-                            }
-                            tbody {
-                                for row in result_rows.iter() {
-                                    tr { class: "border-b border-paper-border last:border-0 hover:bg-paper-entry transition-colors",
-                                        for cell in row.iter() {
-                                            td { class: "px-4 py-2 font-mono text-xs text-paper-secondary", "{cell}" }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+            if let Some(res) = &current_result {
+                if !res.rows.is_empty() {
+                    SqlResultTable { result: res.clone() }
+                } else if res.statement_type.to_uppercase().contains("SELECT") {
+                    // 有结果但无行：SELECT 返回空集的友好提示
+                    div { class: "{ADMIN_TABLE_CLASS} px-4 py-8 text-center text-sm text-[var(--color-paper-tertiary)]",
+                        "查询成功，无返回行"
                     }
-                }
-            } else if current_result.is_some() && stmt_type.to_uppercase().contains("SELECT") {
-                // 有结果但无行：SELECT 返回空集的友好提示
-                div { class: "{ADMIN_TABLE_CLASS} px-4 py-8 text-center text-sm text-[var(--color-paper-tertiary)]",
-                    "查询成功，无返回行"
                 }
             }
 

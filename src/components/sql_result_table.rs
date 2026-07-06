@@ -10,7 +10,7 @@ use dioxus::prelude::*;
 use crate::api::database::sql_console::SqlResult;
 use crate::components::ui::ADMIN_TABLE_CLASS;
 
-/// 一行展开详情区中 `<pre>` 的最大高度（超出纵向滚动，避免大 jsonb 撑爆页面）。
+/// 一行展开详情区容器的最大高度（超出纵向滚动，避免大 jsonb 撑爆页面）。
 const EXPAND_MAX_HEIGHT_CLASS: &str = "max-h-80";
 /// 文本单元格的列宽上限（Tailwind 任意值，约束长文本不无限拉伸）。
 const TEXT_CELL_MAX_WIDTH_CLASS: &str = "max-w-[24rem]";
