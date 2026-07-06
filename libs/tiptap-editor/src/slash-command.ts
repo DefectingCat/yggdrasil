@@ -582,6 +582,9 @@ export function openRunnableModal(editor: Editor): void {
       // Enter 在表单元素内提交（浏览器原生 number input 的 Enter 不会触发 click）。
       // 注意：网络 checkbox 的 tagName 也是 'input'，Enter 会触发提交而非切换
       // （checkbox 原生用 Space 切换），符合模态框 Enter=确认的惯例。
+      // 例外：语言 <select> 下拉展开时 Enter 用于确认选项，不应触发插入。
+      // （HTMLSelectElement.open 在浏览器存在，但 TS lib.dom 未声明，需断言。）
+      if ((langSelect as HTMLSelectElement & { open: boolean }).open) return;
       const tag = (document.activeElement?.tagName ?? '').toLowerCase();
       if (tag === 'input' || tag === 'select') {
         e.preventDefault();
