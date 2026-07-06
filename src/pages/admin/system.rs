@@ -772,7 +772,10 @@ fn SqlConsoleTab() -> Element {
             let on_ready = Closure::new(|| {});
             // Ctrl/Cmd+Enter 触发执行（与按钮共用同一套资源/护栏逻辑）。
             // 从 CodeMirror JS 事件触发时无 dioxus scope，必须用 in_scope 重建。
-            // execute_for_editor 是 Fn（只捕获 Copy signal），借用调用即可。
+            // 刻意用闭包 `|| execute_for_editor()` 而非直接传 `execute_for_editor`：
+            // 后者会 move 闭包值进 in_scope，导致第二次快捷键触发时 use-after-move
+            // （Closure::new 要求 Fn 可重复调用）。闭包包装走借用调用，每次都读最新值。
+            #[allow(clippy::redundant_closure)]
             let on_run_shortcut = Closure::new(move || {
                 dioxus::core::Runtime::current()
                     .in_scope(scope_id, || execute_for_editor());

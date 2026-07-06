@@ -17,7 +17,10 @@
 use dioxus::prelude::*;
 
 // 共享数据类型在函数签名中出现，双目标可见，不 gate。
-use crate::api::code_runner::{ExecRequest, ExecResult, ExecStatus, ExecTask};
+use crate::api::code_runner::{ExecRequest, ExecTask};
+// ExecResult/ExecStatus 仅在 server function body（被宏剥离到 WASM 之外）内使用。
+#[cfg(feature = "server")]
+use crate::api::code_runner::{ExecResult, ExecStatus};
 
 // server-only 辅助模块与依赖：仅在 server function body（被宏剥离到 WASM 之外）内使用。
 #[cfg(feature = "server")]
