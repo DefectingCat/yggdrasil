@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@tiptap/core": "^3.27.1",
+    "@tiptap/extension-code-block-lowlight": "^3.27.1",
     "@tiptap/extension-file-handler": "^3.27.1",
     "@tiptap/extension-image": "^3.27.1",
     "@tiptap/extension-link": "^3.27.1",
@@ -20,6 +21,7 @@
     "@tiptap/markdown": "^3.27.1",
     "@tiptap/pm": "^3.27.1",
     "@tiptap/starter-kit": "^3.27.1",
-    "@tiptap/suggestion": "^3.27.1"
+    "@tiptap/suggestion": "^3.27.1",
+    "lowlight": "^3.3.0"
   }
 }

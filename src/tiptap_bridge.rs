@@ -126,6 +126,14 @@ pub mod wasm {
         /// 上传事件回调（coordinator.emit 时触发，携带 counts）。
         #[wasm_bindgen(method, setter, js_name = onUploadEvent)]
         pub fn set_on_upload_event(this: &EditorOptions, cb: &Closure<dyn FnMut(UploadEventJs)>);
+
+        /// JS 侧 onRunCode: (opts: RunCodeOptsJs) => Promise<string>。
+        /// Rust closure 返回 js_sys::Promise，内部调 start_exec + 轮询 get_exec_result。
+        #[wasm_bindgen(method, setter, js_name = onRunCode)]
+        pub fn set_on_run_code(
+            this: &EditorOptions,
+            cb: &Closure<dyn Fn(RunCodeOptsJs) -> js_sys::Promise>,
+        );
     }
 
     // —— 上传事件（JS UploadEvent 的 Rust 映射）——
@@ -172,6 +180,27 @@ pub mod wasm {
         pub fn error(this: &UploadCountsJs) -> u32;
     }
 
+    // —— RunCodeOptsJs：onRunCode 回调参数（JS 侧传给 Rust 的纯数据对象）——
+    /// JS 侧传给 onRunCode 的参数对象，Rust 侧读取 getter。
+    /// language 是纯语言名（如 "python"，前端已 extractLang 提取）；overridesJson 是 overrides 的 JSON 字符串（可能为空）。
+    #[wasm_bindgen]
+    extern "C" {
+        pub type RunCodeOptsJs;
+
+        /// 纯语言名（前端 extractLang 从完整 info string 提取，如 "python"）。
+        #[wasm_bindgen(method, getter)]
+        pub fn language(this: &RunCodeOptsJs) -> String;
+
+        /// 代码块文本内容。
+        #[wasm_bindgen(method, getter)]
+        pub fn source(this: &RunCodeOptsJs) -> String;
+
+        /// overrides 的 JSON 字符串（如 `{"timeout_secs":10}`），空串表示无 overrides。
+        /// 前端从 info string 提取（大括号部分），Rust 用 serde_json 反序列化。
+        #[wasm_bindgen(method, getter, js_name = overridesJson)]
+        pub fn overrides_json(this: &RunCodeOptsJs) -> String;
+    }
+
     // —— EditorHandle：实例 + closure 统一生命周期 ——
 
     /// 持有编辑器实例 + 其全部 closure，统一生命周期。
@@ -185,13 +214,14 @@ pub mod wasm {
         _on_image_upload: Closure<dyn Fn(web_sys::File) -> js_sys::Promise>,
         _on_ready: Closure<dyn FnMut()>,
         _on_upload_event: Closure<dyn FnMut(UploadEventJs)>,
+        _on_run_code: Closure<dyn Fn(RunCodeOptsJs) -> js_sys::Promise>,
     }
 
     impl EditorHandle {
-        /// 聚合编辑器实例与四个回调 closure，使其共用同一生命周期。
+        /// 聚合编辑器实例与回调 closure，使其共用同一生命周期。
         ///
         /// 调用方负责先用各 setter 把 closure 装进 [`EditorOptions`]、`create` 出实例后，
-        /// 再把实例与这四个 closure 一并交由本函数持有。返回的 [`EditorHandle`] 一旦
+        /// 再把实例与这些 closure 一并交由本函数持有。返回的 [`EditorHandle`] 一旦
         /// drop，会先 `destroy` 实例、再按字段逆序 drop closure。
         pub fn new(
             instance: EditorInstance,
@@ -199,6 +229,7 @@ pub mod wasm {
             on_image_upload: Closure<dyn Fn(web_sys::File) -> js_sys::Promise>,
             on_ready: Closure<dyn FnMut()>,
             on_upload_event: Closure<dyn FnMut(UploadEventJs)>,
+            on_run_code: Closure<dyn Fn(RunCodeOptsJs) -> js_sys::Promise>,
         ) -> Self {
             Self {
                 instance,
@@ -206,6 +237,7 @@ pub mod wasm {
                 _on_image_upload: on_image_upload,
                 _on_ready: on_ready,
                 _on_upload_event: on_upload_event,
+                _on_run_code: on_run_code,
             }
         }
 
@@ -348,12 +380,104 @@ pub mod wasm {
             })
         })
     }
+
+    // —— make_run_code_closure：编辑器内运行代码 ——
+
+    /// 把 ExecTask 格式化为结果字符串（供编辑器结果区展示）。
+    fn format_run_result(task: &crate::api::code_runner::ExecTask) -> String {
+        use crate::api::code_runner::ExecStatus;
+        let status_label = match task.status {
+            ExecStatus::Success => "Success",
+            ExecStatus::Error => "Error",
+            ExecStatus::Timeout => "Timeout",
+            ExecStatus::OomKilled => "OOM",
+            ExecStatus::Failed => "Failed",
+            _ => "Unknown",
+        };
+        match &task.result {
+            Some(res) => {
+                let mut out = format!("状态: {} · 耗时: {}ms", status_label, res.duration_ms);
+                if !res.stdout.is_empty() {
+                    out.push_str("\nStdout:\n");
+                    out.push_str(&res.stdout);
+                }
+                if !res.stderr.is_empty() {
+                    out.push_str("\nStderr:\n");
+                    out.push_str(&res.stderr);
+                }
+                out
+            }
+            None => format!("状态: {} · {}", status_label, task.stage),
+        }
+    }
+
+    /// 创建「编辑器内运行代码」closure：内部调 start_exec + 轮询 get_exec_result，
+    /// 把格式化结果字符串回传 JS。
+    ///
+    /// 返回的 closure 签名 `(RunCodeOptsJs) -> Promise` 对应 JS `onRunCode`。
+    /// JS 侧 NodeView await Promise，拿到字符串直接填进结果区 DOM。
+    ///
+    /// 注意：info string 的解析（提取语言名 + overrides JSON）在前端 extractLang 完成，
+    /// Rust 收到的 language 已是纯语言名（如 "python"），不依赖 server-only 的 languages 模块。
+    pub fn make_run_code_closure() -> Closure<dyn Fn(RunCodeOptsJs) -> js_sys::Promise> {
+        Closure::new(move |opts: RunCodeOptsJs| -> js_sys::Promise {
+            wasm_bindgen_futures::future_to_promise(async move {
+                use crate::api::code_runner::{execute, ExecRequest, ExecStatus};
+                use crate::infra::runner_config::ResourceLimits;
+
+                let language = opts.language();
+                let source = opts.source();
+                let overrides_json = opts.overrides_json();
+
+                // 反序列化 overrides JSON（前端已提取大括号部分；空串视为 None）
+                let overrides = if overrides_json.trim().is_empty() {
+                    None
+                } else {
+                    match serde_json::from_str::<ResourceLimits>(&overrides_json) {
+                        Ok(o) => Some(o),
+                        Err(_) => None, // 畸形 JSON 静默降级为无 overrides
+                    }
+                };
+
+                let req = ExecRequest {
+                    language,
+                    source,
+                    overrides,
+                };
+
+                match execute::start_exec(req).await {
+                    Ok(task_id) => {
+                        let poll_interval = 500;
+                        // 500ms * 60 = 30s 上限（编辑器内运行是写作辅助，比 reader 的 120s 短）
+                        for _ in 0..60 {
+                            crate::utils::time::sleep_ms(poll_interval).await;
+                            match execute::get_exec_result(task_id.clone()).await {
+                                Ok(task) => {
+                                    let terminal = task.status != ExecStatus::Queued
+                                        && task.status != ExecStatus::Running;
+                                    if terminal {
+                                        let s = format_run_result(&task);
+                                        return Ok(js_sys::JsString::from(s).into());
+                                    }
+                                }
+                                Err(_) => {
+                                    return Err(js_sys::Error::new("结果获取异常").into());
+                                }
+                            }
+                        }
+                        Err(js_sys::Error::new("轮询超时，请重试").into())
+                    }
+                    Err(e) => Err(js_sys::Error::new(&e.to_string()).into()),
+                }
+            })
+        })
+    }
 }
 
 /// 将 WASM 子模块中的桥接类型与函数重导出到 crate 根，供 `write.rs` 直接引用。
 /// server 构建剥离该子模块，故此重导出仅对 WASM 前端生效。
 #[cfg(target_arch = "wasm32")]
 pub use wasm::{
-    consume_upload_event, get_module, make_upload_closure, upload_image_file, EditorHandle,
-    EditorOptions, UploadEventJs,
+    consume_upload_event, get_module, make_run_code_closure, make_upload_closure,
+    upload_image_file, EditorHandle, EditorOptions, RunCodeOptsJs, UploadEventJs,
 };

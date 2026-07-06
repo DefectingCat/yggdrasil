@@ -1,9 +1,12 @@
 import { Editor } from '@tiptap/core';
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { FileHandler } from '@tiptap/extension-file-handler';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { TableKit } from '@tiptap/extension-table';
 import { Markdown } from '@tiptap/markdown';
 import StarterKit from '@tiptap/starter-kit';
+import { CodeBlockNodeView, ON_RUN_CODE_STORAGE_KEY } from './code-block-view';
+import { lowlight } from './highlight';
 import { SlashCommand } from './slash-command';
 import { TaskInputRule } from './task-input-rule';
 import {
@@ -36,6 +39,13 @@ class EditorOptions {
   onReady?: () => void;
   // 上传状态事件（error/success/removed + counts），替代 window.__tiptap_uploads 轮询
   onUploadEvent?: (event: UploadEvent) => void;
+  // 编辑器内运行代码回调：Rust 注入，NodeView 点击「运行」时经 editor.storage 转发。
+  // opts: { language(纯语言名), source, overridesJson }；返回格式化结果字符串（Rust 拼好 stdout/stderr/状态）。
+  onRunCode?: (opts: {
+    language: string;
+    source: string;
+    overridesJson: string;
+  }) => Promise<string>;
 }
 // wasm-bindgen 生成的 glue 用裸标识符 `new EditorOptions()` 从全局解析，
 // IIFE 的 name 只能挂一个全局（TiptapEditor），这里手动把 EditorOptions 也挂到 window 上。
@@ -98,8 +108,14 @@ class TiptapEditorInstance {
             linkOnPaste: true,
             HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' },
           },
+          codeBlock: false,
         }),
         Markdown,
+        CodeBlockLowlight.configure({ lowlight }).extend({
+          addNodeView() {
+            return ({ node, editor }) => new CodeBlockNodeView({ node, editor });
+          },
+        }),
         TableKit,
         UploadImage,
         TaskList,
@@ -163,6 +179,12 @@ class TiptapEditorInstance {
       // editor.storage 是开放式索引签名；自定义 key 需绕过严格检查（Tiptap 官方扩展 storage 模式）。
       (this.editor.storage as unknown as Record<string, unknown>)[UPLOAD_COORDINATOR_STORAGE_KEY] =
         this.coordinator;
+    }
+
+    // 把 onRunCode 回调挂到 editor.storage，供 CodeBlockNodeView 读取（仿 upload-coordinator 范式）。
+    if (this.options.onRunCode) {
+      (this.editor.storage as unknown as Record<string, unknown>)[ON_RUN_CODE_STORAGE_KEY] =
+        this.options.onRunCode;
     }
 
     // 通知宿主编辑器已就绪（替代 window.__tiptap_ready 轮询）
