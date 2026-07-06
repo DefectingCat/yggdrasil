@@ -363,3 +363,34 @@ function createPopup(props: SuggestionProps<CommandItem>): SlashPopup {
     },
   };
 }
+
+/** buildRunnableInfo 的输入配置。 */
+export interface RunnableInfoOpts {
+  /** 语言名（python / node）。 */
+  lang: string;
+  /** 超时秒数。 */
+  timeoutSecs: number;
+  /** 内存上限（MB）。 */
+  memoryMb: number;
+  /** 是否允许网络。 */
+  allowNetwork: boolean;
+  /** 作者是否改动过任一 overrides 字段；false 则省略 JSON。 */
+  dirty: boolean;
+}
+
+/**
+ * 把弹框收集的配置转成 markdown fence 的 info string。
+ *
+ * - dirty=false → `${lang} runnable`（省略 JSON，最小形态）
+ * - dirty=true  → `${lang} runnable {"timeout_secs":N,"memory_mb":M,"allow_network":B}`
+ *
+ * JSON 字段顺序固定（timeout → memory → network），由显式构造保证（不依赖对象插入顺序）。
+ * 到达此函数时值必然合法（弹框「插入」按钮在非法值时 disabled）。
+ */
+export function buildRunnableInfo(opts: RunnableInfoOpts): string {
+  const prefix = `${opts.lang} runnable`;
+  if (!opts.dirty) return prefix;
+  // 显式拼字符串，保证字段顺序固定（timeout → memory → network），不依赖对象键序。
+  const json = `{"timeout_secs":${opts.timeoutSecs},"memory_mb":${opts.memoryMb},"allow_network":${opts.allowNetwork}}`;
+  return `${prefix} ${json}`;
+}
