@@ -108,6 +108,15 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         },
       },
       {
+        title: '可运行代码块',
+        description: '插入可被读者执行的代码块',
+        icon: '▶',
+        command: ({ editor, range }) => {
+          editor.chain().focus().deleteRange(range).run();
+          openRunnableModal(editor);
+        },
+      },
+      {
         title: '分割线',
         description: '插入水平分割线',
         icon: '—',
