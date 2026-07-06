@@ -97,13 +97,17 @@ describe('CodeBlockNodeView', () => {
   it('点击运行按钮调用 onRunCode(storage 回调)', () => {
     const onRunCode = vi.fn(() => Promise.resolve('结果'));
     const view = new CodeBlockNodeView({
-      node: mockNode('python runnable', 'print(1)'),
+      node: mockNode('python runnable {"timeout_secs":10}', 'print(1)'),
       editor: mockEditor(onRunCode),
     } as any);
     view.dom.querySelector<HTMLButtonElement>('.tiptap-codeblock-run')!.click();
     expect(onRunCode).toHaveBeenCalledTimes(1);
     expect(onRunCode).toHaveBeenCalledWith(
-      expect.objectContaining({ language: 'python runnable', source: 'print(1)' }),
+      expect.objectContaining({
+        language: 'python',
+        source: 'print(1)',
+        overridesJson: '{"timeout_secs":10}',
+      }),
     );
   });
 

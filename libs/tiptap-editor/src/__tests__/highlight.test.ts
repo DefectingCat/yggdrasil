@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractLang, lowlight } from '../highlight';
+import { extractLang, extractOverridesJson, lowlight } from '../highlight';
 
 /**
  * extractLang 测试：从完整 fence info string 提取语言名（首个 token）。
@@ -18,6 +18,23 @@ describe('extractLang', () => {
     ['Python Runnable', 'python', '混合大小写'],
   ])('%s → %s (%s)', (input, expected) => {
     expect(extractLang(input)).toBe(expected);
+  });
+});
+
+describe('extractOverridesJson', () => {
+  it.each([
+    ['python runnable {"timeout_secs":10}', '{"timeout_secs":10}', 'runnable + overrides'],
+    [
+      'python runnable {"timeout_secs":10,"memory_mb":256}',
+      '{"timeout_secs":10,"memory_mb":256}',
+      '多字段 overrides',
+    ],
+    ['python runnable', '', '无 overrides'],
+    ['python', '', '纯语言名'],
+    ['', '', '空字符串'],
+    ['python runnable {"allow_network":true}', '{"allow_network":true}', 'allow_network'],
+  ])('%s → %s (%s)', (input, expected) => {
+    expect(extractOverridesJson(input)).toBe(expected);
   });
 });
 

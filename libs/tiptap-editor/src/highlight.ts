@@ -15,6 +15,21 @@ export function extractLang(info: string): string {
 }
 
 /**
+ * 从完整 fence info string 提取 overrides JSON 字符串。
+ *
+ * 与后端 parse_fence_info（src/api/code_runner/languages.rs:93-97）对齐：
+ * info string 形如 `python runnable {"timeout_secs":10}`，提取以 `{` 开头的 token。
+ * 无 overrides 时返回空串（Rust 侧空串视为 None）。
+ */
+export function extractOverridesJson(info: string): string {
+  const token = info
+    .trim()
+    .split(/\s+/)
+    .find((t) => t.startsWith('{'));
+  return token ?? '';
+}
+
+/**
  * lowlight 实例，包装 highlight 方法以处理完整 info string。
  *
  * CodeBlockLowlight 取 `block.node.attrs.language`（如 `python runnable {...}`）

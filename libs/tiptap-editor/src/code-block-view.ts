@@ -1,16 +1,18 @@
 import type { Editor } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
-import { extractLang } from './highlight';
+import { extractLang, extractOverridesJson } from './highlight';
 
 /** editor.storage 的 key，宿主（index.ts）在此注入 onRunCode 回调。 */
 export const ON_RUN_CODE_STORAGE_KEY = '__onRunCode';
 
 /** 运行请求参数（传给 onRunCode 回调）。 */
 export interface RunCodeOpts {
-  /** 完整 info string（如 `python runnable {"timeout_secs":10}`）。 */
+  /** 纯语言名（extractLang 提取，如 "python"）。 */
   language: string;
   /** 代码块文本内容。 */
   source: string;
+  /** overrides 的 JSON 字符串（extractOverridesJson 提取，空串表示无 overrides）。 */
+  overridesJson: string;
 }
 
 /**
@@ -153,9 +155,11 @@ export class CodeBlockNodeView {
     this.ensureResultArea('运行中…');
 
     try {
+      const info = (this.node.attrs.language as string) ?? '';
       const result = await onRunCode({
-        language: (this.node.attrs.language as string) ?? '',
+        language: extractLang(info),
         source: this.node.textContent,
+        overridesJson: extractOverridesJson(info),
       });
       this.renderResult(result);
     } catch (e) {

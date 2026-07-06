@@ -40,8 +40,12 @@ class EditorOptions {
   // 上传状态事件（error/success/removed + counts），替代 window.__tiptap_uploads 轮询
   onUploadEvent?: (event: UploadEvent) => void;
   // 编辑器内运行代码回调：Rust 注入，NodeView 点击「运行」时经 editor.storage 转发。
-  // opts: { language, source }；返回格式化结果字符串（Rust 拼好 stdout/stderr/状态）。
-  onRunCode?: (opts: { language: string; source: string }) => Promise<string>;
+  // opts: { language(纯语言名), source, overridesJson }；返回格式化结果字符串（Rust 拼好 stdout/stderr/状态）。
+  onRunCode?: (opts: {
+    language: string;
+    source: string;
+    overridesJson: string;
+  }) => Promise<string>;
 }
 // wasm-bindgen 生成的 glue 用裸标识符 `new EditorOptions()` 从全局解析，
 // IIFE 的 name 只能挂一个全局（TiptapEditor），这里手动把 EditorOptions 也挂到 window 上。
