@@ -186,6 +186,8 @@ fn write_editor(post_id: Option<i32>) -> Element {
                 consume_upload_event(&ev, uploads_in_flight, upload_errors);
             }
         });
+        // 运行代码 closure：start_exec + 轮询，结果字符串回填 JS 结果区 DOM。
+        let on_run_code = crate::tiptap_bridge::make_run_code_closure();
 
         // —— 构造 options ——
         let opts = crate::tiptap_bridge::EditorOptions::new();
@@ -194,6 +196,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
         opts.set_on_ready(&on_ready);
         opts.set_on_image_upload(&on_image_upload);
         opts.set_on_upload_event(&on_upload_event);
+        opts.set_on_run_code(&on_run_code);
 
         // —— create（同步返回；找不到容器返回 None，构造失败抛异常）——
         match crate::tiptap_bridge::get_module().create("tiptap-editor", &opts) {
@@ -211,8 +214,14 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     }
                     editor_content_set.set(true);
                 }
-                let handle =
-                    EditorHandle::new(inst, on_update, on_image_upload, on_ready, on_upload_event);
+                let handle = EditorHandle::new(
+                    inst,
+                    on_update,
+                    on_image_upload,
+                    on_ready,
+                    on_upload_event,
+                    on_run_code,
+                );
                 editor.set(Some(handle));
             }
             Ok(None) => {
