@@ -35,3 +35,6 @@ pub mod skeletons;
 pub mod ui;
 /// 编辑器页面骨架屏组件。
 pub mod write_skeleton;
+
+/// SQL 查询结果表格组件。
+pub mod sql_result_table;

@@ -32,7 +32,7 @@ pub struct ExecuteSqlOpts {
     pub with_explain: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, Clone)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct SqlResult {
     pub columns: Vec<String>,
     /// 每格用 JSON 表示（text/int/timestamp/bool/null）。
