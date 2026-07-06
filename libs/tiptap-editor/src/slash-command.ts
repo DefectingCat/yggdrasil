@@ -394,3 +394,188 @@ export function buildRunnableInfo(opts: RunnableInfoOpts): string {
   const json = `{"timeout_secs":${opts.timeoutSecs},"memory_mb":${opts.memoryMb},"allow_network":${opts.allowNetwork}}`;
   return `${prefix} ${json}`;
 }
+
+/**
+ * 受支持的语言（与 src/pages/admin/runner.rs SUPPORTED_LANGS 对齐）。
+ * 编辑器是纯 JS lib，不调 server function，故写死。
+ */
+const RUNNABLE_LANGS = ['python', 'node'] as const;
+
+/** 模态框默认值（与后端 ResourceLimits 默认对齐：见 languages.rs）。 */
+const RUNNABLE_DEFAULTS = { timeoutSecs: 5, memoryMb: 256, allowNetwork: false };
+
+/** timeout_secs 取值范围（与 CODE_RUNNER_MAX_TIMEOUT_SECS 对齐）。 */
+const TIMEOUT_RANGE = { min: 1, max: 30 } as const;
+/** memory_mb 取值范围（与 CODE_RUNNER_MAX_MEMORY_MB 对齐）。 */
+const MEMORY_RANGE = { min: 16, max: 1024 } as const;
+
+/**
+ * 打开「插入可运行代码块」模态框。
+ *
+ * 作者选语言 + 可选 overrides（超时/内存/网络），确认后调用
+ * `editor.chain().focus().setCodeBlock({ language }).run()` 插入标准 CodeBlock，
+ * 其 language 属性承载完整 'python runnable {...}' info string（marked 往返保真）。
+ *
+ * 任一 overrides 字段被改动即 dirty；dirty=false 插入 'python runnable'（无 JSON）。
+ * Esc / 遮罩点击 / 取消按钮 → 关闭不插入。
+ */
+export function openRunnableModal(editor: Editor): void {
+  const state = { ...RUNNABLE_DEFAULTS, lang: 'python' as string, dirty: false };
+
+  const mask = document.createElement('div');
+  mask.className = 'tiptap-runnable-modal-mask';
+
+  const modal = document.createElement('div');
+  modal.className = 'tiptap-runnable-modal';
+
+  const title = document.createElement('div');
+  title.className = 'tiptap-runnable-modal-title';
+  title.textContent = '插入可运行代码块';
+  modal.appendChild(title);
+
+  // 语言选择
+  const langRow = document.createElement('label');
+  langRow.className = 'tiptap-runnable-field';
+  langRow.textContent = '语言';
+  const langSelect = document.createElement('select');
+  langSelect.id = 'runnable-lang';
+  for (const l of RUNNABLE_LANGS) {
+    const opt = document.createElement('option');
+    opt.value = l;
+    opt.textContent = l;
+    langSelect.appendChild(opt);
+  }
+  langSelect.value = state.lang;
+  langSelect.addEventListener('change', () => {
+    state.lang = langSelect.value;
+    updatePreview();
+  });
+  langRow.appendChild(langSelect);
+  modal.appendChild(langRow);
+
+  // 超时
+  const timeoutRow = document.createElement('label');
+  timeoutRow.className = 'tiptap-runnable-field';
+  timeoutRow.textContent = '超时（秒）';
+  const timeoutInput = document.createElement('input');
+  timeoutInput.id = 'runnable-timeout';
+  timeoutInput.type = 'number';
+  timeoutInput.min = String(TIMEOUT_RANGE.min);
+  timeoutInput.max = String(TIMEOUT_RANGE.max);
+  timeoutInput.value = String(state.timeoutSecs);
+  timeoutInput.addEventListener('input', () => {
+    state.timeoutSecs = Number(timeoutInput.value) || RUNNABLE_DEFAULTS.timeoutSecs;
+    state.dirty = true;
+    updatePreview();
+    updateInsertEnabled();
+  });
+  timeoutRow.appendChild(timeoutInput);
+  modal.appendChild(timeoutRow);
+
+  // 内存
+  const memRow = document.createElement('label');
+  memRow.className = 'tiptap-runnable-field';
+  memRow.textContent = '内存（MB）';
+  const memInput = document.createElement('input');
+  memInput.id = 'runnable-memory';
+  memInput.type = 'number';
+  memInput.min = String(MEMORY_RANGE.min);
+  memInput.max = String(MEMORY_RANGE.max);
+  memInput.value = String(state.memoryMb);
+  memInput.addEventListener('input', () => {
+    state.memoryMb = Number(memInput.value) || RUNNABLE_DEFAULTS.memoryMb;
+    state.dirty = true;
+    updatePreview();
+    updateInsertEnabled();
+  });
+  memRow.appendChild(memInput);
+  modal.appendChild(memRow);
+
+  // 网络
+  const netRow = document.createElement('label');
+  netRow.className = 'tiptap-runnable-field';
+  const netInput = document.createElement('input');
+  netInput.id = 'runnable-network';
+  netInput.type = 'checkbox';
+  netInput.checked = state.allowNetwork;
+  netInput.addEventListener('change', () => {
+    state.allowNetwork = netInput.checked;
+    state.dirty = true;
+    updatePreview();
+  });
+  netRow.appendChild(netInput);
+  netRow.appendChild(document.createTextNode('允许网络'));
+  modal.appendChild(netRow);
+
+  // 预览
+  const preview = document.createElement('div');
+  preview.className = 'tiptap-runnable-preview';
+  modal.appendChild(preview);
+
+  // 按钮
+  const actions = document.createElement('div');
+  actions.className = 'tiptap-runnable-actions';
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'cancel';
+  cancelBtn.type = 'button';
+  cancelBtn.textContent = '取消';
+  cancelBtn.addEventListener('click', close);
+  const insertBtn = document.createElement('button');
+  insertBtn.className = 'insert';
+  insertBtn.type = 'button';
+  insertBtn.textContent = '插入';
+  insertBtn.addEventListener('click', insert);
+  actions.appendChild(cancelBtn);
+  actions.appendChild(insertBtn);
+  modal.appendChild(actions);
+
+  mask.appendChild(modal);
+  mask.addEventListener('click', (e) => {
+    // 仅点击遮罩本身（非卡片）时关闭
+    if (e.target === mask) close();
+  });
+
+  function updatePreview(): void {
+    preview.textContent = `\`\`\`${buildRunnableInfo(state)}`;
+  }
+
+  /** 校验数字字段：全合法才启用「插入」。 */
+  function updateInsertEnabled(): void {
+    const t = Number(timeoutInput.value);
+    const m = Number(memInput.value);
+    insertBtn.disabled = !(t >= TIMEOUT_RANGE.min && t <= TIMEOUT_RANGE.max && m >= MEMORY_RANGE.min && m <= MEMORY_RANGE.max);
+  }
+
+  function insert(): void {
+    editor.chain().setCodeBlock({ language: buildRunnableInfo(state) }).run();
+    close();
+  }
+
+  function close(): void {
+    document.removeEventListener('keydown', onKeydown);
+    mask.remove();
+    editor.chain().focus().run();
+  }
+
+  function onKeydown(e: KeyboardEvent): void {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+    } else if (e.key === 'Enter' && !insertBtn.disabled) {
+      // Enter 在表单元素内提交（浏览器原生 number input 的 Enter 不会触发 click）。
+      // 注意：网络 checkbox 的 tagName 也是 'input'，Enter 会触发提交而非切换
+      // （checkbox 原生用 Space 切换），符合模态框 Enter=确认的惯例。
+      const tag = (document.activeElement?.tagName ?? '').toLowerCase();
+      if (tag === 'input' || tag === 'select') {
+        e.preventDefault();
+        insert();
+      }
+    }
+  }
+
+  document.addEventListener('keydown', onKeydown);
+  document.body.appendChild(mask);
+  updatePreview();
+  updateInsertEnabled();
+  langSelect.focus();
+}
