@@ -820,3 +820,119 @@
 .dark .tiptap-editor pre:has(code[class*='runnable']) {
   border-left-color: #a6e3a1;
 }
+
+/* ========== Code Block Syntax Highlighting (Catppuccin Latte) ========== */
+/* 色值取自 @catppuccin/highlightjs@1.0.1,与读者侧 public/highlight.css(syntect Catppuccin)同一 palette。
+   scope 到 .tiptap-editor pre code,避免污染全站 code 元素。
+   基础文字色/背景由现有 .tiptap-editor pre code 规则覆盖,未命中 token 回退到基础色。 */
+
+.tiptap-editor pre code .hljs-keyword {
+  color: #8839ef;
+}
+.tiptap-editor pre code .hljs-string,
+.tiptap-editor pre code .hljs-char.escape_ {
+  color: #40a02b;
+}
+.tiptap-editor pre code .hljs-comment {
+  color: #7c7f93;
+  font-style: italic;
+}
+.tiptap-editor pre code .hljs-number,
+.tiptap-editor pre code .hljs-literal {
+  color: #fe640b;
+}
+.tiptap-editor pre code .hljs-title,
+.tiptap-editor pre code .hljs-title.function_ {
+  color: #1e66f5;
+}
+.tiptap-editor pre code .hljs-type,
+.tiptap-editor pre code .hljs-title.class_ {
+  color: #df8e1d;
+}
+.tiptap-editor pre code .hljs-built_in,
+.tiptap-editor pre code .hljs-doctag {
+  color: #d20f39;
+}
+.tiptap-editor pre code .hljs-operator {
+  color: #04a5e5;
+}
+.tiptap-editor pre code .hljs-property,
+.tiptap-editor pre code .hljs-tag {
+  color: #179299;
+}
+.tiptap-editor pre code .hljs-regexp,
+.tiptap-editor pre code .hljs-meta {
+  color: #ea76cb;
+}
+.tiptap-editor pre code .hljs-variable,
+.tiptap-editor pre code .hljs-symbol {
+  color: #dd7878;
+}
+.tiptap-editor pre code .hljs-attr,
+.tiptap-editor pre code .hljs-attribute {
+  color: #1e66f5;
+}
+.tiptap-editor pre code .hljs-addition {
+  color: #40a02b;
+  background: rgba(64, 160, 43, 0.15);
+}
+.tiptap-editor pre code .hljs-deletion {
+  color: #d20f39;
+  background: rgba(210, 15, 57, 0.15);
+}
+
+/* ========== Dark Theme: Code Block Syntax Highlighting (Catppuccin Mocha) ========== */
+.dark .tiptap-editor pre code .hljs-keyword {
+  color: #cba6f7;
+}
+.dark .tiptap-editor pre code .hljs-string,
+.dark .tiptap-editor pre code .hljs-char.escape_ {
+  color: #a6e3a1;
+}
+.dark .tiptap-editor pre code .hljs-comment {
+  color: #9399b2;
+  font-style: italic;
+}
+.dark .tiptap-editor pre code .hljs-number,
+.dark .tiptap-editor pre code .hljs-literal {
+  color: #fab387;
+}
+.dark .tiptap-editor pre code .hljs-title,
+.dark .tiptap-editor pre code .hljs-title.function_ {
+  color: #89b4fa;
+}
+.dark .tiptap-editor pre code .hljs-type,
+.dark .tiptap-editor pre code .hljs-title.class_ {
+  color: #8839ef;
+}
+.dark .tiptap-editor pre code .hljs-built_in,
+.dark .tiptap-editor pre code .hljs-doctag {
+  color: #f38ba8;
+}
+.dark .tiptap-editor pre code .hljs-operator {
+  color: #89dceb;
+}
+.dark .tiptap-editor pre code .hljs-property,
+.dark .tiptap-editor pre code .hljs-tag {
+  color: #94e2d5;
+}
+.dark .tiptap-editor pre code .hljs-regexp,
+.dark .tiptap-editor pre code .hljs-meta {
+  color: #f5c2e7;
+}
+.dark .tiptap-editor pre code .hljs-variable,
+.dark .tiptap-editor pre code .hljs-symbol {
+  color: #f2cdcd;
+}
+.dark .tiptap-editor pre code .hljs-attr,
+.dark .tiptap-editor pre code .hljs-attribute {
+  color: #89b4fa;
+}
+.dark .tiptap-editor pre code .hljs-addition {
+  color: #a6e3a1;
+  background: rgba(166, 227, 161, 0.15);
+}
+.dark .tiptap-editor pre code .hljs-deletion {
+  color: #f38ba8;
+  background: rgba(243, 139, 168, 0.15);
+}
