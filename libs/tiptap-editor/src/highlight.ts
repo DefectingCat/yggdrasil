@@ -3,13 +3,15 @@ import { common, createLowlight } from 'lowlight';
 const base = createLowlight(common);
 
 /**
- * 从完整 fence info string 提取语言名（首个 token）。
+ * 从完整 fence info string 提取语言名（首个 token，小写化）。
  *
- * 与后端 parse_fence_info（src/api/code_runner/languages.rs:80）对齐：
- * info string 形如 `python runnable {"timeout_secs":10}`，语言是首个空白分隔的 token。
+ * 与后端 parse_fence_info（src/api/code_runner/languages.rs:85）对齐：
+ * info string 形如 `python runnable {"timeout_secs":10}`，语言是首个空白分隔的 token，
+ * 再 to_lowercase（lowlight 注册名均为小写，大写会导致 Unknown language 抛错）。
  */
 export function extractLang(info: string): string {
-  return info.trim().split(/\s+/)[0] || '';
+  const first = info.trim().split(/\s+/)[0];
+  return first ? first.toLowerCase() : '';
 }
 
 /**

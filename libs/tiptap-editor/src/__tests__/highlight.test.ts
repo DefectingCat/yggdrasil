@@ -14,6 +14,8 @@ describe('extractLang', () => {
     ['  python  ', 'python', '前后空格(trim)'],
     ['', '', '空字符串'],
     ['   ', '', '纯空格'],
+    ['PYTHON', 'python', '大写小写化（与后端对齐）'],
+    ['Python Runnable', 'python', '混合大小写'],
   ])('%s → %s (%s)', (input, expected) => {
     expect(extractLang(input)).toBe(expected);
   });
