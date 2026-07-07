@@ -114,7 +114,7 @@ class TiptapEditorInstance {
         Markdown,
         CodeBlockLowlight.configure({ lowlight }).extend({
           addNodeView() {
-            return ({ node, editor }) => new CodeBlockNodeView({ node, editor });
+            return ({ node, editor, getPos }) => new CodeBlockNodeView({ node, editor, getPos });
           },
         }),
         CodeBlockBackspaceFix,

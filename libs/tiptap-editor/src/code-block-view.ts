@@ -2,6 +2,7 @@ import type { Editor } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import type { ViewMutationRecord } from '@tiptap/pm/view';
 import { extractLang, extractOverridesJson } from './highlight';
+import { openRunnableModal } from './slash-command';
 
 /** editor.storage 的 key，宿主（index.ts）在此注入 onRunCode 回调。 */
 export const ON_RUN_CODE_STORAGE_KEY = '__onRunCode';
@@ -46,9 +47,12 @@ export class CodeBlockNodeView {
   private code: HTMLElement;
   private resultArea: HTMLDivElement | null = null;
 
-  constructor(opts: { node: PMNode; editor: Editor }) {
+  private getPos: (() => number | undefined) | undefined;
+
+  constructor(opts: { node: PMNode; editor: Editor; getPos?: () => number | undefined }) {
     this.node = opts.node;
     this.editor = opts.editor;
+    this.getPos = opts.getPos;
 
     this.container = document.createElement('div');
     this.container.classList.add('tiptap-codeblock');
@@ -61,6 +65,12 @@ export class CodeBlockNodeView {
     this.langBadge = document.createElement('span');
     this.langBadge.classList.add('tiptap-codeblock-lang');
     this.langBadge.textContent = extractLang((this.node.attrs.language as string) ?? '');
+    // runnable 块的语言标签可点击，触发编辑模态框（改语言/overrides）
+    if (isRunnable(this.node)) {
+      this.langBadge.classList.add('tiptap-codeblock-lang-editable');
+      this.langBadge.title = '点击修改语言与运行配置';
+      this.langBadge.addEventListener('click', () => this.openEditModal());
+    }
     this.toolbar.appendChild(this.langBadge);
 
     // 运行按钮（仅 runnable 块）
@@ -104,6 +114,10 @@ export class CodeBlockNodeView {
     this.node = node;
     if (oldLang !== newLang) {
       this.langBadge.textContent = extractLang(newLang);
+      // 更新 <code> 的 language class（低亮按新语言重算）
+      this.code.className = '';
+      const langClass = extractLang(newLang);
+      if (langClass) this.code.classList.add(`language-${langClass}`);
       // runnable 状态变化时重建按钮（简化：不细粒度增删，整体重建工具栏按钮区）
       this.refreshRunButton();
     }
@@ -162,6 +176,14 @@ export class CodeBlockNodeView {
   }
 
   /** 点击运行：调 editor.storage.__onRunCode，结果填入结果区。 */
+  /** 点击语言标签：打开编辑模态框，修改当前 runnable 块的语言/overrides。 */
+  private openEditModal(): void {
+    const pos = this.getPos?.();
+    const currentInfo = (this.node.attrs.language as string) ?? '';
+    if (pos === undefined) return;
+    openRunnableModal(this.editor, pos, currentInfo);
+  }
+
   private async runCode(): Promise<void> {
     if (!this.runBtn) return;
     const storage = this.editor.storage as unknown as Record<string, unknown>;

@@ -1,6 +1,7 @@
 import { type Editor, Extension, type Range } from '@tiptap/core';
 import { PluginKey } from '@tiptap/pm/state';
 import { Suggestion, type SuggestionKeyDownProps, type SuggestionProps } from '@tiptap/suggestion';
+import { extractLang, extractOverridesJson } from './highlight';
 
 interface CommandItem {
   title: string;
@@ -475,17 +476,40 @@ const TIMEOUT_RANGE = { min: 1, max: 30 } as const;
 const MEMORY_RANGE = { min: 16, max: 1024 } as const;
 
 /**
- * 打开「插入可运行代码块」模态框。
+ * 打开「可运行代码块」配置模态框。
  *
- * 作者选语言 + 可选 overrides（超时/内存/网络），确认后调用
- * `editor.chain().focus().setCodeBlock({ language }).run()` 插入标准 CodeBlock，
- * 其 language 属性承载完整 'python runnable {...}' info string（marked 往返保真）。
+ * 两种模式：
+ * - 插入模式（默认）：确认后 `setCodeBlock({ language })` 插入新块。
+ * - 编辑模式（传 `editPos` + `currentInfo`）：回填当前块的 lang/overrides，确认后
+ *   `setNodeMarkup(editPos, ..., { language })` 原地更新该块的 language 属性。
+ *   供 CodeBlockNodeView 的语言标签点击触发（创建后修改语言/overrides）。
  *
- * 任一 overrides 字段被改动即 dirty；dirty=false 插入 'python runnable'（无 JSON）。
- * Esc / 遮罩点击 / 取消按钮 → 关闭不插入。
+ * 作者选语言 + 可选 overrides（超时/内存/网络）。
+ * 任一 overrides 字段被改动即 dirty；dirty=false 用 'python runnable'（无 JSON）。
+ * Esc / 遮罩点击 / 取消按钮 → 关闭不改动。
  */
-export function openRunnableModal(editor: Editor): void {
-  const state = { ...RUNNABLE_DEFAULTS, lang: 'python' as string, dirty: false };
+export function openRunnableModal(editor: Editor, editPos?: number, currentInfo?: string): void {
+  const isEdit = editPos !== undefined;
+  // 编辑模式：从 currentInfo 回填 lang + overrides；插入模式用默认值
+  const initialLang = isEdit ? extractLang(currentInfo ?? '') : 'python';
+  const initialOverrides = isEdit ? extractOverridesJson(currentInfo ?? '') : '';
+  const parsedOverrides = initialOverrides
+    ? (() => {
+        try {
+          return JSON.parse(initialOverrides);
+        } catch {
+          return null;
+        }
+      })()
+    : null;
+  const state = {
+    lang: (RUNNABLE_LANGS as readonly string[]).includes(initialLang) ? initialLang : 'python',
+    timeoutSecs: parsedOverrides?.timeout_secs ?? RUNNABLE_DEFAULTS.timeoutSecs,
+    memoryMb: parsedOverrides?.memory_mb ?? RUNNABLE_DEFAULTS.memoryMb,
+    allowNetwork: parsedOverrides?.allow_network ?? RUNNABLE_DEFAULTS.allowNetwork,
+    // 编辑模式下若有 overrides 即 dirty（保留现有 overrides 除非作者改动）
+    dirty: isEdit && parsedOverrides !== null,
+  };
 
   const mask = document.createElement('div');
   mask.className = 'tiptap-runnable-modal-mask';
@@ -495,7 +519,7 @@ export function openRunnableModal(editor: Editor): void {
 
   const title = document.createElement('div');
   title.className = 'tiptap-runnable-modal-title';
-  title.textContent = '插入可运行代码块';
+  title.textContent = isEdit ? '编辑可运行代码块' : '插入可运行代码块';
   modal.appendChild(title);
 
   // 语言选择
@@ -588,7 +612,7 @@ export function openRunnableModal(editor: Editor): void {
   const insertBtn = document.createElement('button');
   insertBtn.className = 'insert';
   insertBtn.type = 'button';
-  insertBtn.textContent = '插入';
+  insertBtn.textContent = isEdit ? '保存' : '插入';
   insertBtn.addEventListener('click', insert);
   actions.appendChild(cancelBtn);
   actions.appendChild(insertBtn);
@@ -617,10 +641,17 @@ export function openRunnableModal(editor: Editor): void {
   }
 
   function insert(): void {
-    editor
-      .chain()
-      .setCodeBlock({ language: buildRunnableInfo(state) })
-      .run();
+    const language = buildRunnableInfo(state);
+    if (isEdit && editPos !== undefined) {
+      // 编辑模式：原地更新块的 language 属性（保留块内代码内容）。
+      // Tiptap chain 无 setNodeMarkup，用原生 tr。
+      const tr = editor.state.tr;
+      tr.setNodeMarkup(editPos, undefined, { language });
+      editor.view.dispatch(tr);
+    } else {
+      // 插入模式：新建 codeBlock
+      editor.chain().setCodeBlock({ language }).run();
+    }
     close();
   }
 

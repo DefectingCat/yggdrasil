@@ -28,6 +28,38 @@ function mockEditor() {
   return { editor: { chain: vi.fn(() => chain) } as unknown as Editor, calls };
 }
 
+/**
+ * 构造支持编辑模式的 mock editor：额外记录 view.dispatch 调用（编辑模式用 setNodeMarkup）。
+ */
+function mockEditorWithView() {
+  const calls: { language: string }[] = [];
+  const markupCalls: { pos: number | undefined; language: string }[] = [];
+  const chain = {
+    focus: vi.fn(() => chain),
+    setCodeBlock: vi.fn((attrs: { language: string }) => {
+      calls.push(attrs);
+      return chain;
+    }),
+    run: vi.fn(),
+  };
+  // tr.setNodeMarkup 记录调用，view.dispatch 触发记录
+  const tr = {
+    setNodeMarkup: vi.fn((pos: number, _type: unknown, attrs: { language: string }) => {
+      markupCalls.push({ pos, language: attrs.language });
+      return tr;
+    }),
+  };
+  const view = {
+    dispatch: vi.fn(() => {}),
+  };
+  const editor = {
+    chain: vi.fn(() => chain),
+    view,
+    state: { tr },
+  };
+  return { editor: editor as unknown as Editor, calls, markupCalls };
+}
+
 describe('openRunnableModal', () => {
   it('创建后 body 含模态框', () => {
     const { editor } = mockEditor();
@@ -126,5 +158,50 @@ describe('openRunnableModal', () => {
     mask.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(calls).toHaveLength(0);
     expect(document.querySelector('.tiptap-runnable-modal')).toBeNull();
+  });
+});
+
+/**
+ * 编辑模式测试：openRunnableModal(editor, editPos, currentInfo) 回填 + 原地更新。
+ */
+describe('openRunnableModal 编辑模式', () => {
+  it('回填当前语言（python runnable + overrides）', () => {
+    const { editor } = mockEditorWithView();
+    openRunnableModal(editor, 0, 'python runnable {"timeout_secs":10,"memory_mb":512}');
+    const langSelect = document.querySelector<HTMLSelectElement>('#runnable-lang')!;
+    const timeoutInput = document.querySelector<HTMLInputElement>('#runnable-timeout')!;
+    const memInput = document.querySelector<HTMLInputElement>('#runnable-memory')!;
+    expect(langSelect.value).toBe('python');
+    expect(timeoutInput.value).toBe('10');
+    expect(memInput.value).toBe('512');
+  });
+
+  it('标题为「编辑」、按钮为「保存」', () => {
+    const { editor } = mockEditorWithView();
+    openRunnableModal(editor, 0, 'node runnable');
+    expect(document.querySelector('.tiptap-runnable-modal-title')?.textContent).toBe(
+      '编辑可运行代码块',
+    );
+    expect(document.querySelector('.tiptap-runnable-actions .insert')?.textContent).toBe('保存');
+  });
+
+  it('保存时用 setNodeMarkup 原地更新（非 setCodeBlock 新建）', () => {
+    const { editor, calls, markupCalls } = mockEditorWithView();
+    openRunnableModal(editor, 5, 'python runnable');
+    document.querySelector<HTMLButtonElement>('.tiptap-runnable-actions .insert')!.click();
+    expect(calls).toHaveLength(0); // 编辑模式不走 setCodeBlock
+    expect(markupCalls).toHaveLength(1);
+    expect(markupCalls[0].pos).toBe(5);
+    expect(markupCalls[0].language).toBe('python runnable');
+  });
+
+  it('改语言后保存，新语言写入', () => {
+    const { editor, markupCalls } = mockEditorWithView();
+    openRunnableModal(editor, 5, 'python runnable');
+    const langSelect = document.querySelector<HTMLSelectElement>('#runnable-lang')!;
+    langSelect.value = 'node';
+    langSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector<HTMLButtonElement>('.tiptap-runnable-actions .insert')!.click();
+    expect(markupCalls[0].language).toBe('node runnable');
   });
 });

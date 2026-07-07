@@ -982,6 +982,24 @@
   text-transform: lowercase;
 }
 
+/* runnable 块的语言标签可点击（触发编辑模态框） */
+.tiptap-codeblock-lang-editable {
+  cursor: pointer;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+.tiptap-codeblock-lang-editable:hover {
+  /* Latte surface0 */
+  background: #ccd0da;
+  /* Catppuccin green，暗示可改 */
+  color: #40a02b;
+}
+.dark .tiptap-codeblock-lang-editable:hover {
+  /* Mocha surface0 / green */
+  background: #313244;
+  color: #a6e3a1;
+}
+
 .tiptap-codeblock-run {
   border: none;
   border-radius: 4px;
