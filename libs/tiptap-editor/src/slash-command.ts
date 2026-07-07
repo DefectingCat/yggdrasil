@@ -277,7 +277,17 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
           };
         },
         command: ({ editor, range, props: item }) => {
-          item.command({ editor, range });
+          // 防御性重算 range：Suggestion 的 range 在某些输入路径下会过时
+          //（停在首次输入 '/' 的位置，不随后续字符更新），导致 deleteRange 只删 '/'，
+          // 命令文本（如 'code'）残留进新节点。基于当前 selection 重算：
+          // 从光标往前在同一段落内找触发字符 '/'，删到光标。
+          const { from } = editor.state.selection;
+          const $from = editor.state.doc.resolve(from);
+          const text = $from.parent.textBetween(0, $from.parentOffset, '', '');
+          const slashIdx = text.lastIndexOf('/');
+          const effectiveRange =
+            slashIdx >= 0 ? { from: $from.start() + slashIdx, to: from } : range;
+          item.command({ editor, range: effectiveRange });
         },
       }),
     ];
