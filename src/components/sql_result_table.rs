@@ -1,6 +1,7 @@
 //! SQL 查询结果表格组件。
 //!
-//! 消费后端 [`SqlResult`]，按单元格的 `serde_json::Value` variant 渲染：
+//! 消费后端 `SqlResult`（`crate::api::database::sql_console::SqlResult`），
+//! 按单元格的 `serde_json::Value` variant 渲染：
 //! NULL 显示为斜体灰色字面量，布尔显示为彩色小徽章，数字右对齐 + 等宽数字，
 //! 文本截断显示。长文本可通过点击行在行下方展开跨列详情区查看完整内容。
 //! 表头 sticky，列宽有界（`max-width`），避免长文本撑爆横向布局。

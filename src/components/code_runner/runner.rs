@@ -1,7 +1,7 @@
 //! CodeRunner 组件实现：源码 + 运行按钮 + 轮询 + 输出区。
 //!
 //! 编辑器挂载：组件在 WASM 端按自身 `container_id` 调用
-//! [`crate::codemirror_bridge::get_module().create`] 挂载 CodeMirror，`onChange`
+//! `codemirror_bridge::get_module().create(...)` 挂载 CodeMirror，`onChange`
 //! 回写到内部 `source_signal`，`use_drop` 时销毁实例。范式镜像 SQL 控制台
 //!（`src/pages/admin/system.rs`）与 Tiptap 编辑器（`src/pages/admin/write.rs`）。
 
