@@ -86,6 +86,17 @@ describe('CodeBlockNodeView', () => {
     expect(view.contentDOM?.tagName).toBe('CODE');
   });
 
+  it('runnable 块的 code class 只含纯语言名(不抛 InvalidCharacterError)', () => {
+    // 回归：完整 info string `python runnable {...}` 含空格，
+    // classList.add 会拒绝含空格的 token。必须用 extractLang 提取首 token。
+    const view = new CodeBlockNodeView({
+      node: mockNode('python runnable {"timeout_secs":10}'),
+      editor: mockEditor(),
+    } as any);
+    expect(view.contentDOM?.classList.contains('language-python')).toBe(true);
+    expect(view.contentDOM?.classList.contains('runnable')).toBe(false);
+  });
+
   it('ignoreMutation 返回 true(工具栏不触发编辑事务)', () => {
     const view = new CodeBlockNodeView({
       node: mockNode('python'),

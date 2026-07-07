@@ -73,9 +73,12 @@ export class CodeBlockNodeView {
     // pre > code（contentDOM，decoration 在此生效）
     this.pre = document.createElement('pre');
     this.code = document.createElement('code');
-    const lang = (this.node.attrs.language as string) ?? '';
-    if (lang) {
-      this.code.classList.add(`language-${lang}`);
+    // 只挂纯语言名的 class（extractLang 提取首个 token）。
+    // 不能用完整 info string——`python runnable {...}` 含空格，classList.add 会抛
+    // InvalidCharacterError。高亮靠 CodeBlockLowlight 的 decoration，不依赖此 class。
+    const langClass = extractLang((this.node.attrs.language as string) ?? '');
+    if (langClass) {
+      this.code.classList.add(`language-${langClass}`);
     }
     this.pre.appendChild(this.code);
     this.container.appendChild(this.pre);
