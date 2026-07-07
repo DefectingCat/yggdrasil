@@ -1,3 +1,4 @@
+import type { ViewMutationRecord } from '@tiptap/pm/view';
 import { describe, expect, it, vi } from 'vitest';
 import { CodeBlockNodeView } from '../code-block-view';
 
@@ -97,12 +98,47 @@ describe('CodeBlockNodeView', () => {
     expect(view.contentDOM?.classList.contains('runnable')).toBe(false);
   });
 
-  it('ignoreMutation 返回 true(工具栏不触发编辑事务)', () => {
+  it('ignoreMutation: contentDOM 内的编辑 mutation 返回 false(让 ProseMirror 处理)', () => {
+    // 回归：ignoreMutation 无条件返回 true 会导致 contentDOM 内的输入/退格被忽略，
+    // 文档状态与 DOM 失同步，表现为 Backspace 删整块而非删字符。
     const view = new CodeBlockNodeView({
       node: mockNode('python'),
       editor: mockEditor(),
     } as any);
-    expect(view.ignoreMutation()).toBe(true);
+    const code = view.contentDOM!;
+    // 模拟 code 内文本节点的 characterData mutation(输入/退格)
+    const textNode = document.createTextNode('fn main');
+    code.appendChild(textNode);
+    const editMutation = {
+      type: 'characterData',
+      target: textNode,
+    } as unknown as ViewMutationRecord;
+    expect(view.ignoreMutation(editMutation)).toBe(false);
+    // selection mutation 也应交给 ProseMirror
+    const selMutation = { type: 'selection', target: code } as unknown as ViewMutationRecord;
+    expect(view.ignoreMutation(selMutation)).toBe(false);
+  });
+
+  it('ignoreMutation: 工具栏/结果区装饰元素的 mutation 返回 true(忽略)', () => {
+    const view = new CodeBlockNodeView({
+      node: mockNode('python'),
+      editor: mockEditor(),
+    } as any);
+    // 工具栏(装饰元素)的 childList mutation 应忽略
+    const toolbarMutation = {
+      type: 'childList',
+      target: view.dom.querySelector('.tiptap-codeblock-toolbar')!,
+      addedNodes: [] as Node[],
+      removedNodes: [] as Node[],
+    } as unknown as ViewMutationRecord;
+    expect(view.ignoreMutation(toolbarMutation)).toBe(true);
+    // contentDOM 自身的 attributes 变化(如高亮改 class)忽略
+    const attrMutation = {
+      type: 'attributes',
+      target: view.contentDOM!,
+      attributeName: 'class',
+    } as unknown as ViewMutationRecord;
+    expect(view.ignoreMutation(attrMutation)).toBe(true);
   });
 
   it('点击运行按钮调用 onRunCode(storage 回调)', () => {

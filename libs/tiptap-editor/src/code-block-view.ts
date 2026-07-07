@@ -1,5 +1,6 @@
 import type { Editor } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
+import type { ViewMutationRecord } from '@tiptap/pm/view';
 import { extractLang, extractOverridesJson } from './highlight';
 
 /** editor.storage 的 key，宿主（index.ts）在此注入 onRunCode 回调。 */
@@ -122,8 +123,25 @@ export class CodeBlockNodeView {
     }
   }
 
-  /** 工具栏/结果区交互不触发 ProseMirror 编辑事务。 */
-  ignoreMutation(): boolean {
+  /**
+   * 判断 DOM mutation 是否应被 ProseMirror 忽略。
+   *
+   * contentDOM（<code>）内的编辑（characterData/childList）必须返回 false，
+   * 让 ProseMirror 正常处理事务——否则输入/退格会让文档状态与 DOM 失同步
+   * （表现为 Backspace 删整块而非删字符）。
+   *
+   * 仅对工具栏/结果区等装饰元素返回 true（避免它们的变化触发无谓的事务）。
+   * 对齐 Tiptap NodeViewWrapper 默认 ignoreMutation 逻辑。
+   */
+  ignoreMutation(mutation: ViewMutationRecord): boolean {
+    // selection：让 ProseMirror 管光标
+    if (mutation.type === 'selection') return false;
+    // contentDOM 自身的 attributes 变化（如高亮 decoration 改 class）：忽略
+    if (mutation.target === this.contentDOM && mutation.type === 'attributes') return true;
+    // contentDOM 内的 mutation（characterData/childList）：交给 ProseMirror（编辑核心）
+    // 注意 contains 对 target===contentDOM 自身也返回 true，故上面的 attributes 判断须在前。
+    if (this.contentDOM && this.contentDOM.contains(mutation.target)) return false;
+    // 工具栏/结果区等装饰元素的 mutation：忽略
     return true;
   }
 
