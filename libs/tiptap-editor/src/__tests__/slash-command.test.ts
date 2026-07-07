@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { isValidUrl, matchCommand } from '../slash-command';
+import type { SuggestionProps } from '@tiptap/suggestion';
+import { afterEach, describe, expect, it } from 'vitest';
+import { createPopup, isValidUrl, matchCommand } from '../slash-command';
 
 /**
  * isValidUrl 纯函数测试。
@@ -131,5 +132,84 @@ describe('matchCommand', () => {
     it('keywords 缺省，搜英文不命中（回归：不会因缺字段报错）', () => {
       expect(matchCommand(mk('引用', '插入引用块'), 'quote')).toBe(false);
     });
+  });
+});
+
+/**
+ * createPopup 空状态测试（happy-dom）。
+ *
+ * 搜索无结果时浮层应显示「无匹配命令」提示，而非空白卡片。
+ */
+describe('createPopup 空状态', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  /** 构造最小 SuggestionProps mock。 */
+  function mockProps(
+    items: Parameters<typeof matchCommand>[0][],
+  ): SuggestionProps<Parameters<typeof matchCommand>[0]> {
+    return {
+      items,
+      editor: {} as any,
+      range: {} as any,
+      query: '',
+      text: '',
+      command: () => {},
+      clientRect: () => null,
+    } as unknown as SuggestionProps<Parameters<typeof matchCommand>[0]>;
+  }
+
+  it('items 为空时显示「无匹配命令」提示', () => {
+    const popup = createPopup(mockProps([]));
+    document.body.appendChild(popup.component);
+    const empty = document.querySelector('.slash-command-empty');
+    expect(empty).not.toBeNull();
+    expect(empty?.textContent).toBe('无匹配命令');
+    // 且不渲染任何列表项
+    expect(document.querySelectorAll('.slash-command-item')).toHaveLength(0);
+  });
+
+  it('items 非空时不显示空状态提示', () => {
+    const item = { title: '代码块', description: '插入代码块', icon: '<>', command: () => {} };
+    const popup = createPopup(mockProps([item]));
+    document.body.appendChild(popup.component);
+    expect(document.querySelector('.slash-command-empty')).toBeNull();
+    expect(document.querySelectorAll('.slash-command-item')).toHaveLength(1);
+  });
+
+  it('空列表时 Enter 不被拦截（return false，让回车正常输入）', () => {
+    const popup = createPopup(mockProps([]));
+    const handled = popup.onKeyDown({
+      event: new KeyboardEvent('keydown', { key: 'Enter' }),
+    } as any);
+    expect(handled).toBe(false);
+  });
+
+  it('空列表时 ArrowUp/Down 不被拦截（避免 % 0 产生 NaN）', () => {
+    const popup = createPopup(mockProps([]));
+    expect(
+      popup.onKeyDown({ event: new KeyboardEvent('keydown', { key: 'ArrowUp' }) } as any),
+    ).toBe(false);
+    expect(
+      popup.onKeyDown({ event: new KeyboardEvent('keydown', { key: 'ArrowDown' }) } as any),
+    ).toBe(false);
+  });
+
+  it('空列表时 Escape 仍关闭浮层（return true）', () => {
+    const popup = createPopup(mockProps([]));
+    const handled = popup.onKeyDown({
+      event: new KeyboardEvent('keydown', { key: 'Escape' }),
+    } as any);
+    expect(handled).toBe(true);
+  });
+
+  it('updateItems 传空数组时切换到空状态', () => {
+    const item = { title: '代码块', description: '插入代码块', icon: '<>', command: () => {} };
+    const popup = createPopup(mockProps([item]));
+    document.body.appendChild(popup.component);
+    expect(document.querySelector('.slash-command-empty')).toBeNull();
+    popup.updateItems([]);
+    expect(document.querySelector('.slash-command-empty')).not.toBeNull();
   });
 });

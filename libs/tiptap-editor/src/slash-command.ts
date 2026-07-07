@@ -298,7 +298,7 @@ export function isValidUrl(url: string): boolean {
   return /^https?:\/\//i.test(url) || /^data:image\//i.test(url);
 }
 
-function createPopup(props: SuggestionProps<CommandItem>): SlashPopup {
+export function createPopup(props: SuggestionProps<CommandItem>): SlashPopup {
   const component = document.createElement('div');
   component.classList.add('slash-command');
 
@@ -313,6 +313,15 @@ function createPopup(props: SuggestionProps<CommandItem>): SlashPopup {
     currentItems = items;
     list.innerHTML = '';
     selectedIndex = 0;
+
+    // 空状态：显示提示，不渲染列表项。
+    if (items.length === 0) {
+      const empty = document.createElement('div');
+      empty.classList.add('slash-command-empty');
+      empty.textContent = '无匹配命令';
+      list.appendChild(empty);
+      return;
+    }
 
     items.forEach((item, index) => {
       const el = document.createElement('div');
@@ -376,6 +385,15 @@ function createPopup(props: SuggestionProps<CommandItem>): SlashPopup {
     },
     updatePosition,
     onKeyDown({ event }: SuggestionKeyDownProps): boolean {
+      // 空列表时不拦截键盘：避免 % 0 产生 NaN，也避免吞掉 Enter（让用户正常输入）。
+      // Escape 仍拦截（关闭浮层）。
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        return true;
+      }
+      if (currentItems.length === 0) {
+        return false;
+      }
       if (event.key === 'ArrowUp') {
         event.preventDefault();
         selectedIndex = (selectedIndex - 1 + currentItems.length) % currentItems.length;
@@ -391,10 +409,6 @@ function createPopup(props: SuggestionProps<CommandItem>): SlashPopup {
       if (event.key === 'Enter') {
         event.preventDefault();
         selectItem();
-        return true;
-      }
-      if (event.key === 'Escape') {
-        event.preventDefault();
         return true;
       }
       return false;
