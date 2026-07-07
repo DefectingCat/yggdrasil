@@ -5,6 +5,7 @@ import { TaskItem, TaskList } from '@tiptap/extension-list';
 import { TableKit } from '@tiptap/extension-table';
 import { Markdown } from '@tiptap/markdown';
 import StarterKit from '@tiptap/starter-kit';
+import { CodeBlockBackspaceFix } from './code-block-backspace-fix';
 import { CodeBlockNodeView, ON_RUN_CODE_STORAGE_KEY } from './code-block-view';
 import { lowlight } from './highlight';
 import { SlashCommand } from './slash-command';
@@ -116,6 +117,7 @@ class TiptapEditorInstance {
             return ({ node, editor }) => new CodeBlockNodeView({ node, editor });
           },
         }),
+        CodeBlockBackspaceFix,
         TableKit,
         UploadImage,
         TaskList,
