@@ -680,8 +680,12 @@ export function openRunnableModal(editor: Editor, editPos?: number, currentInfo?
     }
   }
 
-  document.addEventListener('keydown', onKeydown);
   document.body.appendChild(mask);
+  // 延迟注册 keydown 监听：openRunnableModal 可能在 slash 命令的 Enter keydown 事件处理中
+  // 同步调用。若立即注册，该 Enter 事件继续冒泡到 document 时会被模态框的 onKeydown 捕获，
+  // 触发 insert() → close()——模态框在同一 tick 内被创建又被销毁，用户看不到。
+  // setTimeout(0) 推迟到下一个宏任务，确保触发事件已完成传播。
+  setTimeout(() => document.addEventListener('keydown', onKeydown), 0);
   updatePreview();
   updateInsertEnabled();
   langSelect.focus();

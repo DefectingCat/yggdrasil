@@ -142,9 +142,11 @@ describe('openRunnableModal', () => {
     expect(document.querySelector('.tiptap-runnable-modal')).toBeNull();
   });
 
-  it('Esc 关闭弹框(不插入)', () => {
+  it('Esc 关闭弹框(不插入)', async () => {
     const { editor, calls } = mockEditor();
     openRunnableModal(editor);
+    // keydown 监听延迟注册（setTimeout(0)），需先 flush timer
+    await new Promise((r) => setTimeout(r, 0));
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(calls).toHaveLength(0);
     expect(document.querySelector('.tiptap-runnable-modal')).toBeNull();
