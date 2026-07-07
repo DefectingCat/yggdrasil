@@ -7,6 +7,28 @@ interface CommandItem {
   description: string;
   icon: string;
   command: (props: { editor: Editor; range: Range }) => void;
+  /**
+   * 搜索别名（空格分隔），让中英文都能命中。
+   * 例：「代码块」keywords='code codeblock' → /code 与 /代码 都匹配。
+   * title/description 已含的字词不必重复写（过滤逻辑会一并匹配）。
+   */
+  keywords?: string;
+}
+
+/**
+ * 判断命令是否匹配搜索词（不区分大小写）。
+ *
+ * 命中 title / description / keywords 任一即算匹配。keywords 是空格分隔的别名
+ * （含英文/常见词），让中英文互通：`/code` 能命中「代码块」，`/代码` 也能。
+ * 抽成纯函数便于单元测试。
+ */
+export function matchCommand(item: CommandItem, query: string): boolean {
+  const q = query.toLowerCase();
+  return (
+    item.title.toLowerCase().includes(q) ||
+    item.description.toLowerCase().includes(q) ||
+    (item.keywords?.toLowerCase().includes(q) ?? false)
+  );
 }
 
 /**
@@ -47,6 +69,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         title: '标题 1',
         description: '大标题',
         icon: 'H1',
+        keywords: 'h1 heading 标题',
         command: ({ editor, range }) => {
           editor.chain().focus().deleteRange(range).setHeading({ level: 1 }).run();
         },
@@ -55,6 +78,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         title: '标题 2',
         description: '中标题',
         icon: 'H2',
+        keywords: 'h2 heading 标题',
         command: ({ editor, range }) => {
           editor.chain().focus().deleteRange(range).setHeading({ level: 2 }).run();
         },
@@ -63,6 +87,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         title: '标题 3',
         description: '小标题',
         icon: 'H3',
+        keywords: 'h3 heading 标题',
         command: ({ editor, range }) => {
           editor.chain().focus().deleteRange(range).setHeading({ level: 3 }).run();
         },
@@ -71,6 +96,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         title: '无序列表',
         description: '创建无序列表',
         icon: '•',
+        keywords: 'bullet list ul 列表',
         command: ({ editor, range }) => {
           editor.chain().focus().deleteRange(range).toggleBulletList().run();
         },
@@ -79,6 +105,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         title: '有序列表',
         description: '创建有序列表',
         icon: '1.',
+        keywords: 'ordered ol number list 列表',
         command: ({ editor, range }) => {
           editor.chain().focus().deleteRange(range).toggleOrderedList().run();
         },
@@ -87,6 +114,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         title: '任务列表',
         description: '创建任务列表',
         icon: '☑',
+        keywords: 'task todo checklist 列表',
         command: ({ editor, range }) => {
           editor.chain().focus().deleteRange(range).toggleTaskList().run();
         },
@@ -95,6 +123,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         title: '引用',
         description: '插入引用块',
         icon: '❝',
+        keywords: 'quote blockquote 引用',
         command: ({ editor, range }) => {
           editor.chain().focus().deleteRange(range).toggleBlockquote().run();
         },
@@ -103,6 +132,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         title: '代码块',
         description: '插入代码块',
         icon: '<>',
+        keywords: 'code codeblock pre 代码',
         command: ({ editor, range }) => {
           editor.chain().focus().deleteRange(range).toggleCodeBlock().run();
         },
@@ -111,6 +141,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         title: '可运行代码块',
         description: '插入可被读者执行的代码块',
         icon: '▶',
+        keywords: 'code run runnable execute 代码 运行',
         command: ({ editor, range }) => {
           editor.chain().focus().deleteRange(range).run();
           openRunnableModal(editor);
@@ -120,6 +151,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         title: '分割线',
         description: '插入水平分割线',
         icon: '—',
+        keywords: 'hr rule divider 分割',
         command: ({ editor, range }) => {
           editor.chain().focus().deleteRange(range).setHorizontalRule().run();
         },
@@ -128,6 +160,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         title: '表格',
         description: '插入 3×3 表格',
         icon: '▦',
+        keywords: 'table 表格',
         command: ({ editor, range }) => {
           editor
             .chain()
@@ -145,6 +178,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         title: '上传图片',
         description: '从本地选择并上传图片',
         icon: '📤',
+        keywords: 'image upload 图片',
         command: ({ editor, range }) => {
           // 必须先删掉 /命令 文本，文件选择对话框会阻塞，关闭后 range 可能失效。
           editor.chain().focus().deleteRange(range).run();
@@ -179,6 +213,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         title: '图片链接',
         description: '通过 URL 插入图片',
         icon: '🖼',
+        keywords: 'image url 图片',
         command: ({ editor, range }) => {
           const url = window.prompt('输入图片 URL');
           if (url && isValidUrl(url)) {
@@ -190,6 +225,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         title: '链接',
         description: '插入链接',
         icon: '🔗',
+        keywords: 'link url a href 链接',
         command: ({ editor, range }) => {
           const url = window.prompt('输入链接 URL');
           if (!url || !isValidUrl(url)) return;
@@ -214,11 +250,7 @@ export const SlashCommand = Extension.create<SlashCommandOptions>({
         editor: this.editor,
         char: '/',
         items: ({ query }) => {
-          return COMMANDS.filter(
-            (item) =>
-              item.title.toLowerCase().includes(query.toLowerCase()) ||
-              item.description.toLowerCase().includes(query.toLowerCase()),
-          );
+          return COMMANDS.filter((item) => matchCommand(item, query));
         },
         render() {
           let popup: SlashPopup | null = null;

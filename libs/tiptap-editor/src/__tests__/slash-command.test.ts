@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isValidUrl } from '../slash-command';
+import { isValidUrl, matchCommand } from '../slash-command';
 
 /**
  * isValidUrl 纯函数测试。
@@ -51,6 +51,85 @@ describe('isValidUrl', () => {
     it('https:// 后含末尾空格仍被接受（只校验前缀）', () => {
       // 有意为之：isValidUrl 只校验 scheme 前缀，URL 其余部分由浏览器/服务端校验
       expect(isValidUrl('https://example.com ')).toBe(true);
+    });
+  });
+});
+
+/**
+ * matchCommand 纯函数测试。
+ *
+ * 验证中英文互通：title/description（中文）与 keywords（英文别名）任一命中即匹配。
+ */
+
+describe('matchCommand', () => {
+  /** 构造最小命令项（只含匹配需要的字段）。 */
+  const mk = (title: string, description: string, keywords?: string) =>
+    ({ title, description, keywords, icon: '', command: () => {} }) as Parameters<
+      typeof matchCommand
+    >[0];
+
+  describe('中文标题命中', () => {
+    it.each([
+      ['代码块', '插入代码块', 'code codeblock pre 代码', '代码', 'title 含中文'],
+      ['标题 1', '大标题', 'h1 heading 标题', '标题', '标题'],
+      ['链接', '插入链接', 'link url a href 链接', '链接', '链接'],
+    ])('%s 搜 %s', (title, desc, keywords, query) => {
+      expect(matchCommand(mk(title, desc, keywords), query)).toBe(true);
+    });
+  });
+
+  describe('英文 keywords 别名命中（核心：中英文互通）', () => {
+    it.each([
+      ['代码块', '插入代码块', 'code codeblock pre 代码', 'code', '/code 命中「代码块」'],
+      ['代码块', '插入代码块', 'code codeblock pre 代码', 'pre', '/pre 命中'],
+      [
+        '可运行代码块',
+        '插入可被读者执行的代码块',
+        'code run runnable execute 代码 运行',
+        'run',
+        '/run 命中',
+      ],
+      ['标题 1', '大标题', 'h1 heading 标题', 'h1', '/h1 命中'],
+      ['标题 1', '大标题', 'h1 heading 标题', 'heading', '/heading 命中'],
+      ['无序列表', '创建无序列表', 'bullet list ul 列表', 'bullet', '/bullet 命中'],
+      ['无序列表', '创建无序列表', 'bullet list ul 列表', 'ul', '/ul 命中'],
+      ['任务列表', '创建任务列表', 'task todo checklist 列表', 'todo', '/todo 命中'],
+      ['引用', '插入引用块', 'quote blockquote 引用', 'quote', '/quote 命中'],
+      ['分割线', '插入水平分割线', 'hr rule divider 分割', 'hr', '/hr 命中'],
+      ['表格', '插入 3×3 表格', 'table 表格', 'table', '/table 命中'],
+      ['链接', '插入链接', 'link url a href 链接', 'link', '/link 命中'],
+      ['链接', '插入链接', 'link url a href 链接', 'href', '/href 命中'],
+    ])('「%s」搜 %s (%s)', (title, desc, keywords, query) => {
+      expect(matchCommand(mk(title, desc, keywords ?? undefined), query)).toBe(true);
+    });
+  });
+
+  describe('不命中', () => {
+    it.each<[string, string, string | undefined, string, string]>([
+      ['代码块', '插入代码块', 'code codeblock 代码', 'image', '无关词'],
+      ['链接', '插入链接', 'link url', 'code', '跨命令误命中'],
+      ['', '', undefined, 'anything', '空命令'],
+    ])('「%s」搜 %s (%s)', (title, desc, keywords, query) => {
+      expect(matchCommand(mk(title, desc, keywords), query)).toBe(false);
+    });
+  });
+
+  describe('大小写不敏感', () => {
+    it.each([
+      ['CODE', '大写 query'],
+      ['Code', '混合大小写'],
+      ['code', '小写'],
+    ])('搜 %s 都命中「代码块」(%s)', (query) => {
+      expect(matchCommand(mk('代码块', '插入代码块', 'code codeblock'), query)).toBe(true);
+    });
+  });
+
+  describe('无 keywords 字段时仍按 title/description 匹配', () => {
+    it('keywords 缺省，搜 title 中文仍命中', () => {
+      expect(matchCommand(mk('引用', '插入引用块'), '引用')).toBe(true);
+    });
+    it('keywords 缺省，搜英文不命中（回归：不会因缺字段报错）', () => {
+      expect(matchCommand(mk('引用', '插入引用块'), 'quote')).toBe(false);
     });
   });
 });
