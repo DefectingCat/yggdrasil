@@ -479,5 +479,5 @@ pub mod wasm {
 #[cfg(target_arch = "wasm32")]
 pub use wasm::{
     consume_upload_event, get_module, make_run_code_closure, make_upload_closure,
-    upload_image_file, EditorHandle, EditorOptions, RunCodeOptsJs, UploadEventJs,
+    upload_image_file, EditorHandle, EditorOptions, UploadEventJs,
 };
