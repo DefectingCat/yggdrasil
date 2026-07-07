@@ -302,3 +302,24 @@ The single most repeated mistake: running only `cargo build --all-features` (ser
 ### Placing util functions: check the feature gate of the target module
 
 `src/utils/text.rs` is `#[cfg(feature = "server")]`-gated and pulls in `regex` (an optional, server-only dep). A frontend-reachable function (e.g. `escape_html`, called from a `#[component]`) **cannot** move there — the WASM build would fail on the missing `regex` crate. Use an ungated module (`src/utils/html.rs`, `src/utils/time.rs`) for code that must compile on both targets. Verify the destination module's cfg before moving anything into it.
+
+### Tiptap/ProseMirror 交互 bug：happy-dom 测不出，用 Playwright
+
+编辑器（`libs/tiptap-editor/`）的真实交互 bug——键盘事件分发、selection 同步、NodeView 生命周期、Suggestion 的 range 计算——**在 happy-dom 单测里几乎都复现不了**。happy-dom 对 ProseMirror 的 MutationObserver、contenteditable 焦点、事务调度模拟不完整，一连串 NodeView bug（`classList.add` 拒绝含空格 token、`ignoreMutation` 误吞 contentDOM 编辑、Suggestion range 过时导致 `/code` 文本残留进 codeBlock）都是单测全绿、真实浏览器才暴露。
+
+**这类 bug 必须用真实浏览器反馈环。** Playwright 是本项目的标准做法：
+
+```bash
+npm install -D playwright && npx playwright install chromium   # 一次性装好
+make dev                                                          # 起 dev server(:8080)
+```
+
+写一个 `repro.mjs`，驱动真实浏览器复现症状。关键模式：
+- 登录用 `#login-username`/`#login-password`（首个用户是 admin），进 `/admin/write` 后 `waitForSelector('.ProseMirror')`。
+- 模拟输入用 `page.keyboard.type`，**逐字符带 delay**（`{delay: 80}`）更接近真实手动敲击；一次性 `type('code')` 可能触发 composition 路径。
+- 诊断时若 `console.log` 被 dx serve 过滤，**把调试信息写进 DOM 元素**（`document.body.appendChild` 一个带 id 的 div），再用 `page.evaluate(() => document.querySelector('#dbg').textContent)` 读出来——比靠 console 转发可靠。
+- **二分定位**：怀疑 NodeView 时，临时把 `.extend({ addNodeView })` 注释掉、保留 `CodeBlockLowlight.configure({ lowlight })`，重新 build + 跑复现脚本，对比 bug 是否消失。能快速判定根因是否在 NodeView（多次 bug 中 NodeView 有时有罪、有时无辜）。
+
+真实案例（`/code` 文本残留进 codeBlock）：Playwright dump 出 `nodeBefore.text = "/code"` 但 Suggestion 给的 `range = {from:1,to:2}`（只覆盖 `/`），定位到是 Suggestion range 过时而非 NodeView 问题，避免在错误方向修代码。修复后 Playwright 验证两个衍生 bug（文本残留 + 空块退格无效）同时消失。
+
+注意：Playwright 脚本（`repro.mjs`）、`package.json`、`node_modules/` 不要进 git——用完即删，保持工作树干净。
