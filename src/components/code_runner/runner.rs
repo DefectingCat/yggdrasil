@@ -49,6 +49,13 @@ pub fn CodeRunner(
     // 编辑器内容的唯一真源；初始化为 prop 值。
     let mut source_signal = use_signal(|| source.clone());
 
+    // 监听 prop source 的变更。
+    // 由于 props 不是 signal，用辅助 signal 记录并同步它的最新值，以响应外部（如切换语言）的主动更新。
+    let mut source_prop_signal = use_signal(|| source.clone());
+    if source != *source_prop_signal.read() {
+        source_prop_signal.set(source.clone());
+    }
+
     // CodeMirror 容器 id：直接由确定性 prop 派生（不进 use_hook）。
     // instance_id 由父组件从纯函数片段解析的索引传入，SSR 与 hydration 同一 content_html
     // → 同一片段序列 → 同一索引 → 同一 id，故 hydration 时 create() 能找到 SSR 渲染的容器。
@@ -132,15 +139,13 @@ pub fn CodeRunner(
         });
 
         // source prop 外部变更（如 admin 页面切换语言重置示例代码）同步到
-        // signal + 编辑器。读取 source() 订阅其变化；编辑器用户输入经 on_change
-        // 写回 signal，但不会改变 prop（单向），故不会形成回环。
-        let sync_source = source.clone();
+        // signal + 编辑器。通过 source_prop_signal 订阅其变化。
+        // 此 effect 仅读取 source_prop_signal，不读取 source_signal，避免用户编辑时误触重置回环。
         use_effect(move || {
-            if sync_source != *source_signal.read() {
-                source_signal.set(sync_source.clone());
-                if let Some(h) = editor_handle.read().as_ref() {
-                    h.instance().set_value(&sync_source);
-                }
+            let new_val = source_prop_signal.read().clone();
+            source_signal.set(new_val.clone());
+            if let Some(h) = editor_handle.read().as_ref() {
+                h.instance().set_value(&new_val);
             }
         });
 
