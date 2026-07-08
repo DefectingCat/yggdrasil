@@ -101,7 +101,6 @@ CODE_RUNNER_LANGUAGES=python,node      # ops whitelist (must also exist in LANGU
 DOCKER_SOCKET_PATH=/var/run/docker.sock
 ```
 
-
 Session / security tuning:
 
 ```
@@ -192,11 +191,11 @@ Readers can execute fenced code blocks in isolated Docker containers; authors ge
 
 Four Vite-built IIFE libraries under `libs/`, managed as a **pnpm workspace** (single `libs/pnpm-lock.yaml`, shared `libs/tsconfig.base.json` + `libs/biome.json`, hoisted devDeps). Built artifacts go to `public/<name>/` — **do not edit `public/<name>/` files; they are build artifacts**. Each `build` script is `tsc --noEmit && vite build` (type-check before bundle). Output is IIFE because Dioxus `[web.resource] script` injects bare `<script src>` without `type="module"` support. Registered globally in `Dioxus.toml` `script`/`style` arrays.
 
-| Lib                       | Output dir                                                   | Exposes                                                                                                       | Wiring                                                                                                                                                                                                                                                                                                                                            |
-| ------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `libs/tiptap-editor/`     | `public/tiptap/` (`editor.js`/`.css`/`.map`)                 | `window.TiptapEditor`                                                                                         | wasm-bindgen via `src/tiptap_bridge.rs` — injects `Closure` callbacks (`onUpdate`/`onReady`/`onUploadEvent`/`onImageUpload`) into `TiptapEditor.create`, holds instance + closures in `EditorHandle` (Drop → `destroy()`). No `js_sys::eval`, no `window` globals, no polling.                                                                    |
-| `libs/codemirror-editor/` | `public/codemirror/` (`editor.js`/`.map`, **no CSS**)        | `window.CodeMirrorEditor` (object literal `{ create }`) + `window.EditorOptions` (class, survives TS erasure) | `src/codemirror_bridge.rs` mirrors tiptap — `get_module()` uses `Reflect::get` + `unchecked_into` (object literal, NOT a constructor extern). Themes are JS `Extension`s from `@catppuccin/codemirror` (Latte/Mocha), hot-swapped via `Compartment.reconfigure`.                                                                                  |
-| `libs/lightbox/`          | `public/lightbox/` (`lightbox.js`/`.css`/`.map`)             | self-initializing IIFE                                                                                        | **Not** wasm-bindgen. `src/components/post/post_content.rs` sets `window.__lightboxSelectors` before load; IIFE tail reads it and self-initializes. Direct fallback call if already loaded.                                                                                                                                                       |
+| Lib                       | Output dir                                                   | Exposes                                                                                                       | Wiring                                                                                                                                                                                                                                                                                                                                                                        |
+| ------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `libs/tiptap-editor/`     | `public/tiptap/` (`editor.js`/`.css`/`.map`)                 | `window.TiptapEditor`                                                                                         | wasm-bindgen via `src/tiptap_bridge.rs` — injects `Closure` callbacks (`onUpdate`/`onReady`/`onUploadEvent`/`onImageUpload`) into `TiptapEditor.create`, holds instance + closures in `EditorHandle` (Drop → `destroy()`). No `js_sys::eval`, no `window` globals, no polling.                                                                                                |
+| `libs/codemirror-editor/` | `public/codemirror/` (`editor.js`/`.map`, **no CSS**)        | `window.CodeMirrorEditor` (object literal `{ create }`) + `window.EditorOptions` (class, survives TS erasure) | `src/codemirror_bridge.rs` mirrors tiptap — `get_module()` uses `Reflect::get` + `unchecked_into` (object literal, NOT a constructor extern). Themes are JS `Extension`s from `@catppuccin/codemirror` (Latte/Mocha), hot-swapped via `Compartment.reconfigure`.                                                                                                              |
+| `libs/lightbox/`          | `public/lightbox/` (`lightbox.js`/`.css`/`.map`)             | self-initializing IIFE                                                                                        | **Not** wasm-bindgen. `src/components/post/post_content.rs` sets `window.__lightboxSelectors` before load; IIFE tail reads it and self-initializes. Direct fallback call if already loaded.                                                                                                                                                                                   |
 | `libs/yggdrasil-core/`    | `public/yggdrasil-core/` (`yggdrasil-core.js`/`.css`/`.map`) | `window.__initPostContent`, `window.__startThemeTransition`                                                   | Designated home for all new core JS — add here, not to `public/js/`. Rust calls entry points via `js_sys::Reflect::get` + `Function::apply` (no `js_sys::eval`), silently no-oping if undefined. Theme reveal uses View Transitions API (`startViewTransition` + `@keyframes tt-expand` `clip-path` expand); falls back to instant switch when VT / `prefers-reduced-motion`. |
 
 Run a single lib's tests: `cd libs && pnpm --filter @yggdrasil/<name> test` (Vitest + happy-dom). Watch mode: append `-- test:watch`.
@@ -248,6 +247,7 @@ cargo build --target wasm32-unknown-unknown --no-default-features --features web
 `dx check` does Dioxus-level type-checking but does NOT run a full `cargo build` for the WASM target, so it can miss borrow-checker / move / lifetime errors that only surface in the frontend bundle. `dx serve` / `make dev` do the real WASM compile — run them (or the explicit `cargo build --target wasm32-...` above) before declaring a task complete.
 
 Common target-mismatch traps:
+
 - `#[cfg(target_arch = "wasm32")]` code invisible to server build → `web_sys` / `js_sys` references only resolve on WASM.
 - `let mut x = use_signal(...)` flagged as `unused_mut` on server (where the `.set()` calls live inside stripped wasm blocks) but **required** on WASM. Use `#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut))]` on the function/item rather than deleting `mut`.
 - `use` imports placed inside a `#[cfg(target_arch = "wasm32")] {}` block are invisible to the server build; imports at module top level are visible to both. When an import is only needed on one target, gate the `use` line itself.
@@ -302,24 +302,3 @@ The single most repeated mistake: running only `cargo build --all-features` (ser
 ### Placing util functions: check the feature gate of the target module
 
 `src/utils/text.rs` is `#[cfg(feature = "server")]`-gated and pulls in `regex` (an optional, server-only dep). A frontend-reachable function (e.g. `escape_html`, called from a `#[component]`) **cannot** move there — the WASM build would fail on the missing `regex` crate. Use an ungated module (`src/utils/html.rs`, `src/utils/time.rs`) for code that must compile on both targets. Verify the destination module's cfg before moving anything into it.
-
-### Tiptap/ProseMirror 交互 bug：happy-dom 测不出，用 Playwright
-
-编辑器（`libs/tiptap-editor/`）的真实交互 bug——键盘事件分发、selection 同步、NodeView 生命周期、Suggestion 的 range 计算——**在 happy-dom 单测里几乎都复现不了**。happy-dom 对 ProseMirror 的 MutationObserver、contenteditable 焦点、事务调度模拟不完整，一连串 NodeView bug（`classList.add` 拒绝含空格 token、`ignoreMutation` 误吞 contentDOM 编辑、Suggestion range 过时导致 `/code` 文本残留进 codeBlock）都是单测全绿、真实浏览器才暴露。
-
-**这类 bug 必须用真实浏览器反馈环。** Playwright 是本项目的标准做法：
-
-```bash
-npm install -D playwright && npx playwright install chromium   # 一次性装好
-make dev                                                          # 起 dev server(:8080)
-```
-
-写一个 `repro.mjs`，驱动真实浏览器复现症状。关键模式：
-- 登录用 `#login-username`/`#login-password`（首个用户是 admin），进 `/admin/write` 后 `waitForSelector('.ProseMirror')`。
-- 模拟输入用 `page.keyboard.type`，**逐字符带 delay**（`{delay: 80}`）更接近真实手动敲击；一次性 `type('code')` 可能触发 composition 路径。
-- 诊断时若 `console.log` 被 dx serve 过滤，**把调试信息写进 DOM 元素**（`document.body.appendChild` 一个带 id 的 div），再用 `page.evaluate(() => document.querySelector('#dbg').textContent)` 读出来——比靠 console 转发可靠。
-- **二分定位**：怀疑 NodeView 时，临时把 `.extend({ addNodeView })` 注释掉、保留 `CodeBlockLowlight.configure({ lowlight })`，重新 build + 跑复现脚本，对比 bug 是否消失。能快速判定根因是否在 NodeView（多次 bug 中 NodeView 有时有罪、有时无辜）。
-
-真实案例（`/code` 文本残留进 codeBlock）：Playwright dump 出 `nodeBefore.text = "/code"` 但 Suggestion 给的 `range = {from:1,to:2}`（只覆盖 `/`），定位到是 Suggestion range 过时而非 NodeView 问题，避免在错误方向修代码。修复后 Playwright 验证两个衍生 bug（文本残留 + 空块退格无效）同时消失。
-
-注意：Playwright 脚本（`repro.mjs`）、`package.json`、`node_modules/` 不要进 git——用完即删，保持工作树干净。
