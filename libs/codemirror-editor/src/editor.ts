@@ -204,6 +204,13 @@ export class CodeMirrorInstance {
     });
   }
 
+  /** 热切换 Vim 模式，不重建实例（Compartment.reconfigure）。 */
+  setVim(v: boolean): void {
+    this.view.dispatch({
+      effects: this.vimCompartment.reconfigure(v ? [vim()] : []),
+    });
+  }
+
   /** 热切换语言（python/node/javascript/sql），不重建实例（Compartment.reconfigure）。 */
   setLanguage(lang: string): void {
     this.language = lang;

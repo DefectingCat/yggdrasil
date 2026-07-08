@@ -66,6 +66,34 @@ pub fn CodeRunner(
     // → 骨架屏从 DOM 移除，露出真实编辑器。
     let mut editor_ready = use_signal(|| false);
 
+    // Vim 模式状态（通过 localStorage 持久化偏好）
+    let mut vim_enabled = use_signal(|| {
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(window) = web_sys::window() {
+                if let Ok(Some(storage)) = window.local_storage() {
+                    if let Ok(Some(val)) = storage.get_item("yggdrasil-code-runner-vim") {
+                        return val == "true";
+                    }
+                }
+            }
+        }
+        false
+    });
+
+    let toggle_vim = move |_| {
+        let next = !vim_enabled();
+        vim_enabled.set(next);
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(window) = web_sys::window() {
+                if let Ok(Some(storage)) = window.local_storage() {
+                    let _ = storage.set_item("yggdrasil-code-runner-vim", &next.to_string());
+                }
+            }
+        }
+    };
+
     // —— CodeMirror 挂载（仅 WASM）——
     // 范式镜像 src/pages/admin/system.rs 的 SQL 控制台与 src/pages/admin/write.rs 的 Tiptap。
     #[cfg(target_arch = "wasm32")]
@@ -106,6 +134,7 @@ pub fn CodeRunner(
             let opts = codemirror_bridge::EditorOptions::new();
             opts.set_language(&mount_language);
             opts.set_theme(theme_name);
+            opts.set_vim(*vim_enabled.read());
             opts.set_value(&source_signal.read());
             opts.set_on_change(&on_change);
             opts.set_on_ready(&on_ready);
@@ -135,6 +164,14 @@ pub fn CodeRunner(
                     } else {
                         "light"
                     });
+            }
+        });
+
+        // 监听 vim 模式切换并同步。
+        use_effect(move || {
+            let enabled = vim_enabled();
+            if let Some(h) = editor_handle.read().as_ref() {
+                h.instance().set_vim(enabled);
             }
         });
 
@@ -241,9 +278,21 @@ pub fn CodeRunner(
         div { class: "rounded-2xl overflow-hidden border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)]",
             // 顶栏：语言标签 + 运行按钮
             div { class: "flex justify-between items-center px-4 py-2.5 border-b border-[var(--color-paper-border)] bg-[var(--color-paper-theme)]",
-                div { class: "flex items-center gap-2",
+                div { class: "flex items-center gap-3",
                     span { class: "w-2 h-2 rounded-full bg-[var(--color-paper-accent)]" }
                     span { class: "font-mono text-sm font-semibold text-[var(--color-paper-primary)]", "{language}" }
+                    button {
+                        class: format!(
+                            "text-[10px] px-1.5 py-0.5 rounded border transition cursor-pointer {}",
+                            if vim_enabled() {
+                                "bg-[var(--color-paper-accent)]/15 text-[var(--color-paper-accent)] border-[var(--color-paper-accent)]/30 font-semibold"
+                            } else {
+                                "bg-transparent text-[var(--color-paper-tertiary)] border-[var(--color-paper-border)] hover:text-[var(--color-paper-primary)]"
+                            }
+                        ),
+                        onclick: toggle_vim,
+                        "Vim"
+                    }
                 }
                 button {
                     class: "inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-full text-[var(--color-paper-theme)] bg-[var(--color-paper-accent)] hover:brightness-110 active:scale-[0.98] transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer",

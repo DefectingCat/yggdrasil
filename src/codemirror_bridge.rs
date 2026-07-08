@@ -89,6 +89,10 @@ pub mod wasm {
         #[wasm_bindgen(method, js_name = setTheme)]
         pub fn set_theme(this: &EditorInstance, theme: &str);
 
+        /// 热切换 Vim 模式（Compartment.reconfigure，不重建实例）。
+        #[wasm_bindgen(method, js_name = setVim)]
+        pub fn set_vim(this: &EditorInstance, v: bool);
+
         /// 热切换语言（python/node/javascript/sql，Compartment.reconfigure）。
         /// 由 CodeRunner 组件在挂载时按 data-lang 调用。
         #[wasm_bindgen(method, js_name = setLanguage)]
