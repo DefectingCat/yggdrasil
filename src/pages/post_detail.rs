@@ -63,7 +63,9 @@ pub fn PostDetail(slug: String) -> Element {
                         div { class: "mt-12 border-t border-gray-200 dark:border-gray-700 pt-8",
                             SuspenseBoundary {
                                 fallback: move |_| rsx! {
-                                    crate::components::skeletons::comment_skeleton::CommentListSkeleton {}
+                                    DelayedSkeleton {
+                                        crate::components::skeletons::comment_skeleton::CommentListSkeleton {}
+                                    }
                                 },
                                 crate::components::comments::section::CommentSection { post_id: post.id }
                             }

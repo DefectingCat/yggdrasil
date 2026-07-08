@@ -8,9 +8,9 @@ use dioxus::router::components::Link;
 
 use crate::api::auth::{get_current_user, logout};
 use crate::components::admin_skeleton::AdminDashboardSkeleton;
+use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::write_skeleton::WriteSkeleton;
 use crate::context::UserContext;
-use crate::hooks::delayed_loading::use_delayed_loading;
 use crate::router::Route;
 use crate::theme::ThemeToggle;
 
@@ -19,7 +19,7 @@ pub fn AdminLayout() -> Element {
     let mut ctx: UserContext = use_context();
     let navigator = dioxus::router::navigator();
     let route = use_route::<Route>();
-    let show_skeleton = use_delayed_loading(move || !(ctx.checked)());
+
 
     use_effect(move || {
         if !(ctx.checked)() {
@@ -145,11 +145,13 @@ pub fn AdminLayout() -> Element {
                     div { class: "flex-1 flex flex-col min-w-0 h-screen p-2 md:p-4",
                         div { class: "flex-1 bg-[var(--color-paper-theme)] rounded-[2rem] shadow-sm border border-[var(--color-paper-border)] overflow-hidden relative flex flex-col",
                             main { class: "{main_class}",
-                                div { class: if show_skeleton() { "p-10" } else { "opacity-0" },
-                                    {
-                                        match route {
-                                            Route::Write {} => rsx! { WriteSkeleton {} },
-                                            _ => rsx! { AdminDashboardSkeleton {} },
+                                DelayedSkeleton {
+                                    div { class: "p-10",
+                                        {
+                                            match route {
+                                                Route::Write {} => rsx! { WriteSkeleton {} },
+                                                _ => rsx! { AdminDashboardSkeleton {} },
+                                            }
                                         }
                                     }
                                 }
