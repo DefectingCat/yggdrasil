@@ -139,16 +139,7 @@ pub fn AdminLayout() -> Element {
                 }
             }
         }
-        (true, None) => {
-            rsx! {
-                div { class: "{root_class}",
-                    div { class: "flex-1 flex items-center justify-center font-medium text-sm text-[var(--color-paper-secondary)]",
-                        "正在验证身份..."
-                    }
-                }
-            }
-        }
-        (false, _) => {
+        _ => {
             rsx! {
                 div { class: "{root_class}",
                     {nav_content}
