@@ -420,8 +420,9 @@ fn write_editor(post_id: Option<i32>) -> Element {
 
             // 整页自然滚动：元信息 + 编辑器 + 错误提示 + 底部操作栏一起随浏览器滚动。
             div { class: "flex flex-col",
-                // 顶部元信息区域
-                div { class: "flex-shrink-0 flex flex-col gap-6 pt-8",
+                // 顶部元信息区域(pt-8 已移除:main 的 py-12 已提供顶部间距,
+                // 与 posts/system 等其他 admin 页面保持一致)。
+                div { class: "flex-shrink-0 flex flex-col gap-6",
                     // 页面标题与状态
                     div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[var(--color-paper-border)]",
                         div {
