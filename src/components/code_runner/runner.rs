@@ -66,7 +66,7 @@ pub fn CodeRunner(
     // → 骨架屏从 DOM 移除，露出真实编辑器。
     let mut editor_ready = use_signal(|| false);
 
-    // Vim 模式状态（通过 localStorage 持久化偏好）
+    // Vim 模式状态（通过 localStorage 持久化偏好，默认开启）
     let mut vim_enabled = use_signal(|| {
         #[cfg(target_arch = "wasm32")]
         {
@@ -78,7 +78,7 @@ pub fn CodeRunner(
                 }
             }
         }
-        false
+        true
     });
 
     let toggle_vim = move |_| {
