@@ -411,7 +411,9 @@ fn write_editor(post_id: Option<i32>) -> Element {
     // 元信息表单复用样式见模块级 META_LABEL_CLASS / META_INPUT_CLASS。
 
     rsx! {
-        div { class: "relative flex flex-col w-full max-w-7xl mx-auto min-h-full",
+        // 根容器:与 admin shell 对齐(main 已提供 max-w-7xl mx-auto + px-10 py-12),
+        // 这里只承担内部纵向布局 + min-h-full(让底部 sticky 操作栏能贴住卡片底沿)。
+        div { class: "relative flex flex-col w-full min-h-full",
             if loading() {
                 div { class: "absolute inset-0 z-10 bg-paper-theme", WriteSkeleton {} }
             }
@@ -535,8 +537,11 @@ fn write_editor(post_id: Option<i32>) -> Element {
                 }
             } // 内容区闭合
 
-            // 底部操作栏 - 跟随页面滚动
-            div { class: "flex items-center gap-4 pt-4 pb-4 border-t border-[var(--color-paper-border)]",
+            // 底部操作栏 - sticky 贴底:内容滚动时停在视口底部(圆角卡片滚动容器的底部)。
+            // sticky 相对最近的 overflow-y-auto 祖先(layout 的圆角卡片)定位。
+            // -mt-12 + -mx-10 + px-10 py-4:抵消 main 的 py-12 px-10,让操作栏贴满卡片底沿宽度。
+            // bg + backdrop-blur:滚动内容从下方滑过时不穿透。
+            div { class: "sticky bottom-0 -mt-12 -mx-10 px-10 py-4 flex items-center gap-4 border-t border-[var(--color-paper-border)] bg-[var(--color-paper-theme)]/95 backdrop-blur-sm",
                 button {
                     class: "px-6 py-2 rounded-full text-sm font-medium text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors cursor-pointer",
                     onclick: move |_| {
