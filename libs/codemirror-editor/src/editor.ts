@@ -1,11 +1,86 @@
+import {
+  autocompletion,
+  closeBrackets,
+  closeBracketsKeymap,
+  completionKeymap,
+} from '@codemirror/autocomplete';
+import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { javascript } from '@codemirror/lang-javascript';
 import { python } from '@codemirror/lang-python';
 import { PostgreSQL, sql } from '@codemirror/lang-sql';
+import {
+  bracketMatching,
+  codeFolding,
+  defaultHighlightStyle,
+  foldGutter,
+  foldKeymap,
+  indentOnInput,
+  syntaxHighlighting,
+} from '@codemirror/language';
+import { lintKeymap } from '@codemirror/lint';
+import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
 import { Compartment, EditorState, type Extension, Prec } from '@codemirror/state';
-import { EditorView, keymap } from '@codemirror/view';
+import {
+  crosshairCursor,
+  drawSelection,
+  dropCursor,
+  EditorView,
+  highlightActiveLine,
+  highlightActiveLineGutter,
+  highlightSpecialChars,
+  keymap,
+  lineNumbers,
+  rectangularSelection,
+} from '@codemirror/view';
 import { vim } from '@replit/codemirror-vim';
-import { basicSetup } from 'codemirror';
 import { type ThemeName, themeExtension } from './themes';
+
+/**
+ * 本地版 basicSetup：与 `codemirror` 包同名的便利数组成员完全一致，唯一差别是
+ * 折叠图标换成几何三角形字符。
+ *
+ * 原因：`codemirror` 的 basicSetup 调 `foldGutter()` 用默认 `openText: "⌄"`
+ * (U+2304 DOWNWARDS HARPOON WITH BARB… 实为「下花括号」)，这是个基线/字形表现
+ * 不稳定的符号字符——在多数 mono 字体里墨迹落在字符框底部，导致折叠三角在行框里
+ * 明显偏低。改成 `▾` (U+25BE BLACK DOWN-POINTING SMALL TRIANGLE) / `▸`
+ * (U+25B8 BLACK RIGHT-POINTING SMALL TRIANGLE) 两个「几何形状」块字符，字形稳定
+ * 居中，配合 themes.ts 的 flex 居中后，三角精准落在每行行框中央。
+ *
+ * 按 CodeMirror 官方建议：basicSetup 「does not allow customization」，需要定制时
+ * 「copy this package's source ... and adjust as desired」，此处即采用此法。
+ */
+const basicSetup: Extension[] = [
+  lineNumbers(),
+  highlightActiveLineGutter(),
+  highlightSpecialChars(),
+  history(),
+  foldGutter({
+    openText: '▾',
+    closedText: '▸',
+  }),
+  drawSelection(),
+  dropCursor(),
+  EditorState.allowMultipleSelections.of(true),
+  indentOnInput(),
+  syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+  bracketMatching(),
+  closeBrackets(),
+  autocompletion(),
+  rectangularSelection(),
+  crosshairCursor(),
+  highlightActiveLine(),
+  highlightSelectionMatches(),
+  keymap.of([
+    ...closeBracketsKeymap,
+    ...defaultKeymap,
+    ...searchKeymap,
+    ...historyKeymap,
+    ...foldKeymap,
+    ...completionKeymap,
+    ...lintKeymap,
+  ]),
+  codeFolding(),
+];
 
 /** SQL 补全用 schema 数据（由 Rust 侧从实时库拉取注入）。 */
 export interface SqlSchema {

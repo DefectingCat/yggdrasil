@@ -28,8 +28,29 @@ const gutterBackgroundOverride: Extension = EditorView.theme({
   },
 });
 
+/**
+ * 修复 CodeMirror 折叠图标（fold gutter 的 ▾ / ▸）垂直不居中。
+ *
+ * core 的 baseTheme（@codemirror/language）只给 `.cm-foldGutter span` 设了
+ * `padding`/`cursor`，没设 `display`/`vertical-align`。折叠图标是个 <span>，
+ * 装在 `.cm-gutterElement` 里（高度被 core 固定为行高的格子），默认按基线对齐，
+ * 图标贴在格子底部而非中央。
+ *
+ * editor.ts 已把图标字符从基线不稳的 `⌄`(U+2304)/`›`(U+203A) 换成几何三角形
+ * `▾`(U+25BE)/`▸`(U+25B8)——字形本身在字符框内居中；再配合这里的 flex 居中，
+ * 三角稳稳落在行框中央。只作用到 `.cm-foldGutter`，不影响行号列（行号文本仍按
+ * 基线，正常可读）。
+ */
+const foldGutterCenterOverride: Extension = EditorView.theme({
+  '.cm-foldGutter .cm-gutterElement': {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
+
 /** 根据主题名返回对应的 CodeMirror 主题 Extension。 */
 export function themeExtension(name: ThemeName): Extension {
   const catppuccin = name === 'light' ? catppuccinLatte : catppuccinMocha;
-  return [catppuccin, gutterBackgroundOverride];
+  return [catppuccin, gutterBackgroundOverride, foldGutterCenterOverride];
 }
