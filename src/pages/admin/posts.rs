@@ -9,8 +9,12 @@ use dioxus::router::components::Link;
 // 分页数据接口：list_posts 是 server function，两端都生成（wasm 端为 client stub，
 // server 端为真实实现），故无需 cfg。实际请求只在 use_paginated 的 wasm 分支发出。
 use crate::api::posts::{list_posts, PostListResponse};
+// get_post_stats / PostStatsResponse 仅在 PostsTabs 的 wasm 加载路径使用，
+// SSR 下对应 use_effect 分支被裁剪，故允许 unused imports。
+#[allow(unused_imports)]
 use crate::api::posts::{
-    delete_post, rebuild_content_html, rebuild_post_content_html, CreatePostResponse, RebuildResult,
+    delete_post, get_post_stats, rebuild_content_html, rebuild_post_content_html,
+    CreatePostResponse, PostStatsResponse, RebuildResult,
 };
 use crate::components::empty_state::{EmptyState, EmptyStateAction};
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
@@ -94,6 +98,9 @@ pub fn PostsPage(page: i32) -> Element {
                     }
                 }
             }
+
+            // tab 栏：文章 / 回收站。URL 驱动（Link 切换路由），回收站带数量角标。
+            PostsTabs {}
 
             // 重建结果消息：独立成行，进入文档流，吃 space-y-6 的正常间距。
             // 既不撑高 header（不在 header 内）触发 items-center 重排，也不脱离流
@@ -358,6 +365,67 @@ fn PostRow(
                                 dangerous_inner_html: SPINNER_SVG,
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// 文章管理 tab 栏：「全部文章」与「回收站」。
+///
+/// tab 状态由 URL（当前路由）驱动而非本地 signal：点击即跳转路由，刷新/深链均可直达
+/// 对应 tab。回收站 tab 带 `get_post_stats().stats.trash` 数量角标，便于发现待清理文章。
+/// 本组件在 `PostsPage`（全部文章）与 `PostsTrashPage`（回收站）共用，故设为 pub。
+#[component]
+#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
+pub fn PostsTabs() -> Element {
+    let route = use_route::<Route>();
+    // 当前 tab：true=回收站（PostsTrash/PostsTrashPage），false=全部文章（Posts/PostsPage）。
+    let is_trash = matches!(
+        route,
+        Route::PostsTrash {} | Route::PostsTrashPage { .. }
+    );
+    // 回收站数量：仅 WASM 异步拉取，供角标展示。
+    let mut trash_count = use_signal(|| Option::<i64>::None);
+
+    use_effect(move || {
+        #[cfg(target_arch = "wasm32")]
+        spawn(async move {
+            if let Ok(PostStatsResponse { stats }) = get_post_stats().await {
+                trash_count.set(Some(stats.trash));
+            }
+        });
+    });
+
+    rsx! {
+        div { class: "flex gap-4 border-b border-paper-border",
+            Link {
+                to: Route::Posts {},
+                class: if !is_trash {
+                    "px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-primary transition-colors cursor-pointer border-b-2 border-paper-primary -mb-px"
+                } else {
+                    "px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer border-b-2 border-transparent -mb-px"
+                },
+                "全部文章"
+            }
+            Link {
+                to: Route::PostsTrash {},
+                class: if is_trash {
+                    "inline-flex items-center gap-1.5 px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-primary transition-colors cursor-pointer border-b-2 border-paper-primary -mb-px"
+                } else {
+                    "inline-flex items-center gap-1.5 px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer border-b-2 border-transparent -mb-px"
+                },
+                "回收站"
+                // 数量角标：有数据才显示。0 显示中性灰，>0 用主题强调色提醒。
+                if let Some(count) = trash_count() {
+                    span {
+                        class: if count > 0 {
+                            "inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[0.625rem] font-semibold normal-case tracking-normal bg-paper-accent-soft text-paper-accent"
+                        } else {
+                            "inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[0.625rem] font-semibold normal-case tracking-normal bg-paper-tertiary text-paper-secondary"
+                        },
+                        "{count}"
                     }
                 }
             }

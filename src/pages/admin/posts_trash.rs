@@ -1,8 +1,11 @@
-//! 回收站管理页面。
+//! 回收站（文章管理下的 tab）。
 //!
 //! 展示已软删除文章，支持恢复、彻底删除、批量操作、一键清空，
 //! 以及自动清理配置（启用开关 + 保留天数）。
 //! 数据加载与操作仅在 WASM 前端通过 Dioxus server functions 交互。
+//!
+//! 回收站原为独立路由 `/admin/trash`，现合并为 `/admin/posts/trash` tab，
+//! 与文章列表共享「管理文章」导航项与 tab 栏（见 `posts.rs::PostsTabs`）。
 
 use std::collections::HashSet;
 
@@ -29,15 +32,17 @@ use crate::hooks::query::use_paginated;
 use crate::models::post::PostListItem;
 use crate::models::settings::TrashSettings;
 use crate::router::Route;
+// 文章管理共享的 tab 栏（同目录 posts 模块）。
+use super::posts::PostsTabs;
 
 /// 每页展示的回收站文章数量。
 const TRASH_PER_PAGE: i32 = 20;
 
 /// 回收站入口组件，默认展示第 1 页。
 #[component]
-pub fn Trash() -> Element {
+pub fn PostsTrash() -> Element {
     rsx! {
-        TrashPage { page: 1 }
+        PostsTrashPage { page: 1 }
     }
 }
 
@@ -46,7 +51,7 @@ pub fn Trash() -> Element {
 /// 支持单条/批量恢复与彻底删除、一键清空，以及内联自动清理配置。
 #[allow(unused_mut, unused_variables)]
 #[component]
-pub fn TrashPage(page: i32) -> Element {
+pub fn PostsTrashPage(page: i32) -> Element {
     let current_page = page.max(1);
     let mut selected_ids: Signal<HashSet<i32>> = use_signal(HashSet::new);
 
@@ -87,6 +92,9 @@ pub fn TrashPage(page: i32) -> Element {
                     p { class: "text-base text-[var(--color-paper-secondary)] mt-2", "已删除文章 ({total()})" }
                 }
             }
+
+            // tab 栏：文章 / 回收站。URL 驱动，与全部文章页共用（见 posts::PostsTabs）。
+            PostsTabs {}
 
             // 自动清理配置卡片（抽取为子组件 AutoPurgeSettings，见文件末尾）。
             AutoPurgeSettings { settings }
@@ -294,10 +302,10 @@ pub fn TrashPage(page: i32) -> Element {
                             current_page,
                             total: total(),
                             per_page: TRASH_PER_PAGE,
-                            prev_route: if current_page - 1 <= 1 { Route::Trash {} } else { Route::TrashPage {
+                            prev_route: if current_page - 1 <= 1 { Route::PostsTrash {} } else { Route::PostsTrashPage {
                                 page: current_page - 1,
                             } },
-                            next_route: Route::TrashPage {
+                            next_route: Route::PostsTrashPage {
                                 page: current_page + 1,
                             },
                             unit: "篇",
@@ -316,7 +324,7 @@ pub fn TrashPage(page: i32) -> Element {
 /// 内部完成。`settings`（已保存的服务端配置）由父组件传入双向绑定 signal：
 /// 本组件加载/保存时写入，父组件读取 `retention_days` 供 TrashRow 的「剩余天数」。
 ///
-/// 从 `TrashPage` 抽取以降低 god component 复杂度（见 dioxus-render-purity skill）。
+/// 从 `PostsTrashPage` 抽取以降低 god component 复杂度（见 dioxus-render-purity skill）。
 #[component]
 #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
 fn AutoPurgeSettings(settings: Signal<TrashSettings>) -> Element {
@@ -644,7 +652,7 @@ fn TrashRow(
 mod tests {
     #[test]
     fn test_auto_purge_settings_has_transition_class() {
-        let full_code = include_str!("trash.rs");
+        let full_code = include_str!("posts_trash.rs");
         let code = full_code.split("#[cfg(test)]").next().unwrap_or(full_code);
         assert!(code.contains("grid transition-all duration-300 ease-in-out"));
         assert!(code.contains("grid-template-rows: 1fr; opacity: 1;"));

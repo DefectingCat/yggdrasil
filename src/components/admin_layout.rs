@@ -45,13 +45,20 @@ pub fn AdminLayout() -> Element {
         (Route::Admin {}, "仪表盘"),
         (Route::Write {}, "写文章"),
         (Route::Posts {}, "管理文章"),
-        (Route::Trash {}, "回收站"),
         (Route::Runner {}, "试运行"),
         (Route::System {}, "系统"),
     ];
 
     let is_write_route =
         matches!(route, Route::Write {}) || matches!(route, Route::WriteEdit { .. });
+    // 「管理文章」高亮覆盖其下所有子路由：列表、分页、回收站 tab。
+    let is_posts_route = matches!(
+        route,
+        Route::Posts {}
+            | Route::PostsPage { .. }
+            | Route::PostsTrash {}
+            | Route::PostsTrashPage { .. }
+    );
 
     let main_class = if is_write_route {
         "flex-1 flex flex-col relative w-full h-full overflow-y-auto px-10 py-12 rounded-[2rem] bg-[var(--color-paper-theme)] shadow-sm border border-[var(--color-paper-border)]"
@@ -75,7 +82,9 @@ pub fn AdminLayout() -> Element {
             nav { class: "flex-1 flex flex-col gap-2",
                 for (dest, label) in admin_nav_items {
                     {
-                        let is_active = route == dest || (label == "写文章" && is_write_route) || (label == "回收站" && matches!(route, Route::TrashPage { .. }));
+                        let is_active = route == dest
+                            || (label == "写文章" && is_write_route)
+                            || (label == "管理文章" && is_posts_route);
                         let base_class = "flex items-center px-4 py-3 rounded-2xl text-sm font-medium transition-all";
                         let text_class = if is_active {
                             "bg-[var(--color-paper-theme)] text-[var(--color-paper-primary)] shadow-sm border border-[var(--color-paper-border)]"
