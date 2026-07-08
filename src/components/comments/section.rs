@@ -57,9 +57,9 @@ pub fn CommentSection(post_id: i32) -> Element {
 
     // 轮询待审核评论状态，已处理（非 pending）的评论从本地移除
     use_future(move || {
-        let mut pending = ctx.pending_comments;
+        let pending_val = ctx.pending_comments.read().clone();
         async move {
-            let ids: Vec<i64> = pending().iter().map(|c| c.id).collect();
+            let ids: Vec<i64> = pending_val.iter().map(|c| c.id).collect();
             if ids.is_empty() {
                 return;
             }
@@ -72,7 +72,7 @@ pub fn CommentSection(post_id: i32) -> Element {
                         .collect();
                     if !to_remove.is_empty() {
                         comment_storage::remove_pending_ids(post_id, &to_remove);
-                        pending.write().retain(|c| !to_remove.contains(&c.id));
+                        ctx.pending_comments.write().retain(|c| !to_remove.contains(&c.id));
                     }
                 }
                 Err(_e) => {
@@ -83,9 +83,11 @@ pub fn CommentSection(post_id: i32) -> Element {
     });
 
     // 评论数据资源，refresh_trigger 变化时自动重新加载
-    let comments_resource = use_resource(move || async move {
+    let comments_resource = use_resource(move || {
         let _ = (ctx.refresh_trigger)();
-        get_comments(post_id).await
+        async move {
+            get_comments(post_id).await
+        }
     });
 
     let data = comments_resource.read();
