@@ -259,13 +259,9 @@ pub fn CodeRunner(
                     }
                 }
             }
-            // CodeMirror 容器：组件自身在 WASM 端按此 id 挂载编辑器。
-            // 服务端渲染时仅展示空容器，避免在 SSR 阶段拉起 JS 编辑器。
-            // relative 定位，使骨架屏覆盖层（未就绪时）能贴合容器尺寸。
             div {
                 id: "{container_id}",
                 class: "code-runner-editor font-mono text-sm relative",
-                style: "min-height: 160px; display: flex; flex-direction: column",
 
                 // 骨架屏：CodeMirror 尚未挂载就绪时（SSR + hydration 完成前）显示。
                 // editor_ready 由挂载 effect 置 true 后，此处 if 分支消失，骨架屏从 DOM 移除。
