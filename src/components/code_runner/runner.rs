@@ -54,6 +54,11 @@ pub fn CodeRunner(
     // → 同一片段序列 → 同一索引 → 同一 id，故 hydration 时 create() 能找到 SSR 渲染的容器。
     let container_id = format!("code-runner-{instance_id}");
 
+    // 编辑器是否已挂载就绪。声明在 cfg 块外，使 SSR 端也能读取：
+    // SSR 与 hydration 完成前为 false → 容器内渲染骨架屏；CodeMirror 挂载后置 true
+    // → 骨架屏从 DOM 移除，露出真实编辑器。
+    let mut editor_ready = use_signal(|| false);
+
     // —— CodeMirror 挂载（仅 WASM）——
     // 范式镜像 src/pages/admin/system.rs 的 SQL 控制台与 src/pages/admin/write.rs 的 Tiptap。
     #[cfg(target_arch = "wasm32")]
@@ -109,6 +114,7 @@ pub fn CodeRunner(
                     on_run_shortcut,
                 );
                 editor_handle.set(Some(handle));
+                editor_ready.set(true);
             }
         });
 
@@ -141,6 +147,7 @@ pub fn CodeRunner(
         // 组件卸载时销毁 CodeMirror 实例（EditorHandle::drop → instance.destroy）。
         use_drop(move || {
             editor_handle.set(None);
+            editor_ready.set(false);
         });
     }
 
@@ -249,10 +256,26 @@ pub fn CodeRunner(
             }
             // CodeMirror 容器：组件自身在 WASM 端按此 id 挂载编辑器。
             // 服务端渲染时仅展示空容器，避免在 SSR 阶段拉起 JS 编辑器。
+            // relative 定位，使骨架屏覆盖层（未就绪时）能贴合容器尺寸。
             div {
                 id: "{container_id}",
-                class: "code-runner-editor font-mono text-sm",
+                class: "code-runner-editor font-mono text-sm relative",
                 style: "min-height: 160px; display: flex; flex-direction: column",
+
+                // 骨架屏：CodeMirror 尚未挂载就绪时（SSR + hydration 完成前）显示。
+                // editor_ready 由挂载 effect 置 true 后，此处 if 分支消失，骨架屏从 DOM 移除。
+                // 用绝对定位覆盖在（始终存在的）容器上方，不影响 CodeMirror 的 getElementById 挂载。
+                if !editor_ready() {
+                    div {
+                        class: "absolute inset-0 flex flex-col justify-center gap-2.5 px-4 py-4 bg-[var(--color-paper-code-block)]",
+                        // 代码行占位条：递减宽度模拟代码缩进，贴合等宽字体语境。
+                        div { class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse", style: "width: 90%" }
+                        div { class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse", style: "width: 70%" }
+                        div { class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse", style: "width: 55%" }
+                        div { class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse", style: "width: 85%" }
+                        div { class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse", style: "width: 40%" }
+                    }
+                }
             }
             // 输出区
             if !output().is_empty() {
