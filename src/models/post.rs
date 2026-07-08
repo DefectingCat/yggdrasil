@@ -187,6 +187,8 @@ pub struct PostStats {
     pub drafts: i64,
     /// 已发布数量。
     pub published: i64,
+    /// 回收站（软删除）数量。
+    pub trash: i64,
 }
 
 #[cfg(test)]

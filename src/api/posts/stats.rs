@@ -1,7 +1,7 @@
 //! 文章统计接口。
 //!
-//! 返回文章总数、草稿数与已发布数，供管理后台仪表盘使用，结果缓存。
-//! Dioxus server function，注册在 `/api` 路径下。
+//! 返回文章总数、草稿数、已发布数与回收站（软删除）数量，供管理后台仪表盘与
+//! 文章列表页使用，结果缓存。Dioxus server function，注册在 `/api` 路径下。
 //! 仅在 `feature = "server"` 启用的服务端构建中查询数据库。
 
 use dioxus::prelude::*;
@@ -19,7 +19,7 @@ use crate::models::post::PostStats;
 /// 获取文章统计信息。
 ///
 /// 需要 admin 权限；优先命中缓存，未命中时通过单次条件聚合查询同时统计
-/// 未删除文章总数、草稿数与已发布数。
+/// 未删除文章总数、草稿数、已发布数与回收站（软删除）数量。
 #[server(GetPostStats, "/api")]
 pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
     let _user = get_current_admin_user().await?;
@@ -32,13 +32,14 @@ pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
 
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
-        // 通过单次条件聚合查询同时统计总数、草稿数与已发布数。
+        // 通过单次条件聚合查询同时统计总数、草稿数、已发布数与回收站数量。
         let row = client
             .query_one(
                 "SELECT
                     COUNT(*) FILTER (WHERE deleted_at IS NULL) AS total,
                     COUNT(*) FILTER (WHERE deleted_at IS NULL AND status = 'draft') AS drafts,
-                    COUNT(*) FILTER (WHERE deleted_at IS NULL AND status = 'published') AS published
+                    COUNT(*) FILTER (WHERE deleted_at IS NULL AND status = 'published') AS published,
+                    COUNT(*) FILTER (WHERE deleted_at IS NOT NULL) AS trash
                  FROM posts",
                 &[],
             )
@@ -49,6 +50,7 @@ pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
             total: row.get("total"),
             drafts: row.get("drafts"),
             published: row.get("published"),
+            trash: row.get("trash"),
         };
         crate::cache::set_post_stats(stats.clone()).await;
         Ok(PostStatsResponse { stats })
@@ -61,6 +63,7 @@ pub async fn get_post_stats() -> Result<PostStatsResponse, ServerFnError> {
                 total: 0,
                 drafts: 0,
                 published: 0,
+                trash: 0,
             },
         })
     }
