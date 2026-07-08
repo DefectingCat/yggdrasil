@@ -113,11 +113,12 @@ pub fn Runner() -> Element {
                 }
             }
 
-            // 运行器
+            // 运行器（admin 试运行页单实例、纯客户端渲染，instance_id 固定 0 即可）
             CodeRunner {
                 source: source(),
                 language: lang(),
                 overrides: overrides,
+                instance_id: 0,
             }
         }
     }

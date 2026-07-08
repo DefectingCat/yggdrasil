@@ -24,6 +24,11 @@ const MAX_POLLS: u32 = 240; // 500ms * 240 = 120s 上限
 /// - `source`：初始源码（首次挂载用于初始化编辑器；之后编辑器内容是唯一真源）。
 /// - `language`：语言标识（python / node 等）。
 /// - `overrides`：可选资源限制覆盖。
+/// - `instance_id`：实例在父级片段序列中的索引，用作 CodeMirror 容器 id 后缀。
+///   必须是 **SSR/hydration 确定性**的值（如父组件 `for (i, ..)` 的索引 `i`）——
+///   Dioxus hydration 不传递 use_hook 状态，任何在 use_hook 内基于运行时状态
+///   （时间戳 / 随机 / ScopeId）生成的 id，在 SSR 与 hydration 两端会不一致，
+///   导致 CodeMirror `create()` 在 hydration 时找不到 SSR 渲染的容器元素。
 ///
 /// `mut` 信号仅在 WASM 的 spawn 闭包内被 `.set()`，server 构建会触发 unused_mut，
 /// 故按项目惯例加 `cfg_attr` 放行（参见 AGENTS.md「mut bindings needed only on WASM」）。
@@ -33,6 +38,7 @@ pub fn CodeRunner(
     source: String,
     language: String,
     overrides: Option<ResourceLimits>,
+    instance_id: usize,
 ) -> Element {
     let mut running = use_signal(|| false);
     let mut stage = use_signal(String::new);
@@ -43,9 +49,10 @@ pub fn CodeRunner(
     // 编辑器内容的唯一真源；初始化为 prop 值。
     let mut source_signal = use_signal(|| source.clone());
 
-    // 为每个实例生成稳定的容器 id（CodeMirror 容器，由本组件在 WASM 端挂载）。
-    // use_hook 保证只算一次；后缀用时间戳+原子计数避免同页多实例 id 冲突。
-    let container_id = use_hook(|| format!("code-runner-{}", now_pseudo_unique()));
+    // CodeMirror 容器 id：直接由确定性 prop 派生（不进 use_hook）。
+    // instance_id 由父组件从纯函数片段解析的索引传入，SSR 与 hydration 同一 content_html
+    // → 同一片段序列 → 同一索引 → 同一 id，故 hydration 时 create() 能找到 SSR 渲染的容器。
+    let container_id = format!("code-runner-{instance_id}");
 
     // —— CodeMirror 挂载（仅 WASM）——
     // 范式镜像 src/pages/admin/system.rs 的 SQL 控制台与 src/pages/admin/write.rs 的 Tiptap。
@@ -281,13 +288,4 @@ fn status_label(status: &ExecStatus) -> String {
         ExecStatus::Failed => "系统失败".to_string(),
         ExecStatus::RateLimited => "请求过频".to_string(),
     }
-}
-
-/// 生成一个伪唯一后缀（基于时间戳 + 计数器），用于容器 id。
-/// 非安全用途，仅避免同页多实例 id 冲突。
-fn now_pseudo_unique() -> String {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-    format!("{}-{}", crate::utils::time::now_millis(), n)
 }

@@ -162,6 +162,10 @@ pub fn PostContent(content_html: String) -> Element {
                             source: source.clone(),
                             language: lang.clone(),
                             overrides: overrides.clone(),
+                            // i 是片段序列中的确定性索引（来自纯函数 split_content_fragments
+                            // 对同一 content_html 的解析），SSR 与 hydration 一致，用作容器
+                            // id 后缀保证 hydration 时 CodeMirror 能找到 SSR 渲染的容器。
+                            instance_id: i,
                         }
                     },
                 }}
