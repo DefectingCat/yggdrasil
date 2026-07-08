@@ -86,40 +86,56 @@ pub fn CommentSection(post_id: i32) -> Element {
 
     let data = comments_resource.read();
 
-    // 根据加载结果渲染评论区、错误提示或骨架屏
-    match &*data {
-        Some(Ok(CommentTreeResponse { comments, count })) => {
-            let approved_count = *count;
-            let pending_count = ctx.pending_comments.read().len() as i64;
-            let total_count = approved_count + pending_count;
-            let has_any = approved_count > 0 || pending_count > 0;
-            rsx! {
-                div { class: "space-y-8",
-                    h2 { class: "text-xl font-bold text-paper-primary", "评论区 ({total_count})" }
+    // 动态计算总评论数（已审核 + 本地待审核）
+    let total_count = if let Some(Ok(CommentTreeResponse { count, .. })) = &*data {
+        let approved_count = *count;
+        let pending_count = ctx.pending_comments.read().len() as i64;
+        Some(approved_count + pending_count)
+    } else {
+        None
+    };
 
-                    CommentForm { post_id, parent_id: None, parent_indent: None }
+    rsx! {
+        div { class: "space-y-8",
+            // 标题：加载中显示通用“评论区”，加载成功后附加数量
+            if let Some(count) = total_count {
+                h2 { class: "text-xl font-bold text-paper-primary", "评论区 ({count})" }
+            } else {
+                h2 { class: "text-xl font-bold text-paper-primary", "评论区" }
+            }
 
+            // 真实的评论输入表单始终立即可见且可交互，避免 CLS
+            CommentForm { post_id, parent_id: None, parent_indent: None }
+
+            // 根据数据状态渲染列表区、错误提示或骨架屏
+            match &*data {
+                Some(Ok(CommentTreeResponse { comments, .. })) => {
+                    let approved_count = comments.len();
+                    let pending_count = ctx.pending_comments.read().len();
+                    let has_any = approved_count > 0 || pending_count > 0;
                     if !has_any {
-                        p { class: "text-paper-tertiary text-center py-8",
-                            "暂无评论，成为第一个评论的人吧！"
+                        rsx! {
+                            p { class: "text-paper-tertiary text-center py-8",
+                                "暂无评论，成为第一个评论的人吧！"
+                            }
                         }
                     } else {
-                        CommentList {
-                            comments: comments.clone(),
-                            pending: ctx.pending_comments.read().clone(),
-                            post_id,
+                        rsx! {
+                            CommentList {
+                                comments: comments.clone(),
+                                pending: ctx.pending_comments.read().clone(),
+                                post_id,
+                            }
                         }
                     }
                 }
+                Some(Err(_)) => rsx! {
+                    div { class: "text-center text-red-500 dark:text-red-400 py-8", "评论加载失败" }
+                },
+                None => rsx! {
+                    DelayedSkeleton { CommentListSkeleton {} }
+                },
             }
         }
-        Some(Err(_)) => {
-            rsx! {
-                div { class: "text-center text-red-500 dark:text-red-400 py-8", "评论加载失败" }
-            }
-        }
-        None => rsx! {
-            DelayedSkeleton { CommentListSkeleton {} }
-        },
     }
 }
