@@ -444,7 +444,11 @@
     background: var(--color-paper-entry);
   }
 
-  .md-content img {
+  /* 排除 CodeMirror 编辑器内的 <img>：CM 用 <img class="cm-widgetBuffer">（width:0、
+     height:1em 的占位符）对齐折叠 widget 的基线。若被这里的 margin/height 命中，
+     会把折叠那行 .cm-line 撑高约 32px（上下各 1rem margin）。用 :where() 把
+     .cm-editor 后代的 img 优先级压到 0，确保 CM 内部任何 img 都不受正文图片样式影响。 */
+  .md-content img:where(:not(.cm-widgetBuffer)) {
     border-radius: var(--radius-paper);
     margin: 1rem 0;
     max-width: 100%;

@@ -29,23 +29,30 @@ const gutterBackgroundOverride: Extension = EditorView.theme({
 });
 
 /**
- * 修复 CodeMirror 折叠图标（fold gutter 的 ▾ / ▸）垂直不居中。
+ * 修复 CodeMirror 折叠图标（fold gutter 的 ⌄ / ›）垂直不居中。
  *
- * core 的 baseTheme（@codemirror/language）只给 `.cm-foldGutter span` 设了
- * `padding`/`cursor`，没设 `display`/`vertical-align`。折叠图标是个 <span>，
- * 装在 `.cm-gutterElement` 里（高度被 core 固定为行高的格子），默认按基线对齐，
- * 图标贴在格子底部而非中央。
+ * core 的 baseTheme 对 `.cm-gutterElement` 只设了 `box-sizing`，对折叠列
+ * `.cm-foldGutter .cm-gutterElement` 完全没设样式。`.cm-gutter` 是
+ * `display:flex; flex-direction:column`，格子高度由内容决定——折叠列格子高度
+ * ≈ font-size（14px），比正文行（line-height ≈19.6px）矮一截，图标被挤在矮格子
+ * 顶部/底部，视觉上偏离每行中央。
  *
- * editor.ts 已把图标字符从基线不稳的 `⌄`(U+2304)/`›`(U+203A) 换成几何三角形
- * `▾`(U+25BE)/`▸`(U+25B8)——字形本身在字符框内居中；再配合这里的 flex 居中，
- * 三角稳稳落在行框中央。只作用到 `.cm-foldGutter`，不影响行号列（行号文本仍按
- * 基线，正常可读）。
+ * 把折叠列每个格子变成 flex 容器并居中，图标稳稳落在格子中央；同时格子必须和正文
+ * 行等高，图标才会落在正文行的视觉中央。正文 .cm-line 的 line-height 由 CodeMirror
+ * 按「字号 × 1.4」算出（实测 14px → 19.6px），这里用同样倍数复刻，避免硬编码像素
+ * 值随字号漂移。
+ *
+ * 注意：折叠后正文行被撑高的根因（文章页 47.5px vs 试运行页 19.6px）不在
+ * placeholder——而在 `<img class="cm-widgetBuffer">` 被 `.md-content img` 的
+ * `margin: 1rem 0` 命中（上下各 16px = 32px）。修复见 input.css 的
+ * `.md-content img:where(:not(.cm-widgetBuffer))`。
  */
 const foldGutterCenterOverride: Extension = EditorView.theme({
   '.cm-foldGutter .cm-gutterElement': {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    lineHeight: '1.4',
   },
 });
 
