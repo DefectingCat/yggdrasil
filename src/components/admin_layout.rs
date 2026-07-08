@@ -61,8 +61,15 @@ pub fn AdminLayout() -> Element {
     );
 
     // 所有 admin 页面共用同一 shell:外层圆角卡片(滚动容器) + 内部 main 负责居中限宽。
-    // 取消 write 路由的特例化分支,视觉与其它 admin 页面统一。
-    let main_class = "flex-1 w-full max-w-7xl mx-auto px-10 py-12";
+    // write 路由例外:卡片不滚动(overflow-hidden),main 作为 flex 容器不带头尾 padding,
+    // 由 write 页面自身组织 [内容区 flex-1 overflow-y-auto] + [底栏 flex-shrink-0] 的分区布局,
+    // 这样底栏永远贴卡片底部不随内容滚动,也不会出现 sticky + 负 margin 的跳动。
+    let card_overflow = if is_write_route { "overflow-hidden" } else { "overflow-y-auto" };
+    let main_class = if is_write_route {
+        "flex-1 w-full max-w-7xl mx-auto flex flex-col min-h-0"
+    } else {
+        "flex-1 w-full max-w-7xl mx-auto px-10 py-12"
+    };
 
     let root_class = "min-h-dvh flex bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] font-sans";
 
@@ -125,7 +132,7 @@ pub fn AdminLayout() -> Element {
                 div { class: "{root_class}",
                     {nav_content}
                     div { class: "flex-1 flex flex-col min-w-0 h-screen p-2 md:p-4",
-                        div { class: "flex-1 bg-[var(--color-paper-theme)] rounded-[2rem] shadow-sm border border-[var(--color-paper-border)] overflow-y-auto relative flex flex-col",
+                        div { class: "flex-1 bg-[var(--color-paper-theme)] rounded-[2rem] shadow-sm border border-[var(--color-paper-border)] {card_overflow} relative flex flex-col",
                             main { class: "{main_class}", Outlet::<Route> {} }
                         }
                     }

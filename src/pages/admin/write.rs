@@ -411,17 +411,19 @@ fn write_editor(post_id: Option<i32>) -> Element {
     // 元信息表单复用样式见模块级 META_LABEL_CLASS / META_INPUT_CLASS。
 
     rsx! {
-        // 根容器:与 admin shell 对齐(main 已提供 max-w-7xl mx-auto + px-10 py-12),
-        // 这里只承担内部纵向布局 + min-h-full(让底部 sticky 操作栏能贴住卡片底沿)。
-        div { class: "relative flex flex-col w-full min-h-full",
+        // 根容器:flex 分区布局。layout 给 write 的 main 是 flex 容器(无 padding/不滚动),
+        // 这里拆成 [内容区 flex-1 overflow-y-auto] + [底栏 flex-shrink-0] 两块。
+        // 底栏作为 main 直接子元素永远贴卡片底沿,不随内容滚动,也无需 sticky。
+        div { class: "relative flex flex-col w-full min-h-0 flex-1",
             if loading() {
                 div { class: "absolute inset-0 z-10 bg-paper-theme", WriteSkeleton {} }
             }
 
-            // 整页自然滚动：元信息 + 编辑器 + 错误提示 + 底部操作栏一起随浏览器滚动。
-            div { class: "flex flex-col",
-                // 顶部元信息区域(pt-8 已移除:main 的 py-12 已提供顶部间距,
-                // 与 posts/system 等其他 admin 页面保持一致)。
+            // 内容区:单独滚动。layout 的 main 不再带 padding/滚动职责,
+            // px-10 py-12 下放到这里,与其它 admin 页面的 main 视觉等价。
+            // min-h-0 是 flex 子元素允许收缩到内容以下、让 overflow 生效的关键。
+            div { class: "flex-1 min-h-0 overflow-y-auto px-10 py-12 flex flex-col",
+                // 顶部元信息区域
                 div { class: "flex-shrink-0 flex flex-col gap-6",
                     // 页面标题与状态
                     div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[var(--color-paper-border)]",
@@ -538,11 +540,10 @@ fn write_editor(post_id: Option<i32>) -> Element {
                 }
             } // 内容区闭合
 
-            // 底部操作栏 - sticky 贴底:内容滚动时停在视口底部(圆角卡片滚动容器的底部)。
-            // sticky 相对最近的 overflow-y-auto 祖先(layout 的圆角卡片)定位。
-            // -mt-12 + -mx-10 + px-10 py-4:抵消 main 的 py-12 px-10,让操作栏贴满卡片底沿宽度。
-            // bg + backdrop-blur:滚动内容从下方滑过时不穿透。
-            div { class: "sticky bottom-0 -mt-12 -mx-10 px-10 py-4 flex items-center gap-4 border-t border-[var(--color-paper-border)] bg-[var(--color-paper-theme)]/95 backdrop-blur-sm",
+            // 底部操作栏 - flex 分区布局的贴底块:作为 main 直接子元素(flex-shrink-0),
+            // 永远贴卡片底沿,不随内容区滚动。无需 sticky,不会跳动。
+            // px-10 py-4 与内容区水平对齐;border-t 与页头分割线视觉一致。
+            div { class: "flex-shrink-0 px-10 py-4 flex items-center gap-4 border-t border-[var(--color-paper-border)] bg-[var(--color-paper-theme)]",
                 button {
                     class: "px-6 py-2 rounded-full text-sm font-medium text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors cursor-pointer",
                     onclick: move |_| {
