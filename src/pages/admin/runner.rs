@@ -51,7 +51,7 @@ pub fn Runner() -> Element {
     let (overrides, override_error) = (parsed.read().0.clone(), parsed.read().1.clone());
 
     rsx! {
-        div { class: "w-full max-w-5xl mx-auto space-y-8",
+        div { class: "w-full max-w-7xl mx-auto space-y-8",
             // 页头：与 dashboard / posts / system 对齐（h1 text-4xl + 底部分割线）
             div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8 border-b border-[var(--color-paper-border)]/50",
                 div {
