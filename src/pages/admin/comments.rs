@@ -67,7 +67,7 @@ pub fn AdminCommentsPage(page: i32) -> Element {
     let mut comments: Signal<Vec<AdminComment>> = use_signal(Vec::new);
     let mut total: Signal<i64> = use_signal(|| 0);
     #[allow(unused_mut)]
-    let mut loading: Signal<bool> = use_signal(|| false);
+    let mut loading: Signal<bool> = use_signal(|| true);
     #[allow(unused_mut)]
     let mut error: Signal<Option<String>> = use_signal(|| None);
 

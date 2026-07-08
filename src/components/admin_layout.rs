@@ -8,7 +8,7 @@ use dioxus::router::components::Link;
 
 use crate::api::auth::{get_current_user, logout};
 use crate::components::admin_skeleton::AdminDashboardSkeleton;
-use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
+
 use crate::components::write_skeleton::WriteSkeleton;
 use crate::context::UserContext;
 use crate::router::Route;
@@ -155,13 +155,11 @@ pub fn AdminLayout() -> Element {
                     div { class: "flex-1 flex flex-col min-w-0 h-screen p-2 md:p-4",
                         div { class: "flex-1 bg-[var(--color-paper-theme)] rounded-[2rem] shadow-sm border border-[var(--color-paper-border)] overflow-hidden relative flex flex-col",
                             main { class: "{main_class}",
-                                DelayedSkeleton {
-                                    div { class: "p-10",
-                                        {
-                                            match route {
-                                                Route::Write {} => rsx! { WriteSkeleton {} },
-                                                _ => rsx! { AdminDashboardSkeleton {} },
-                                            }
+                                div { class: "p-10 animate-pulse",
+                                    {
+                                        match route {
+                                            Route::Write {} => rsx! { WriteSkeleton {} },
+                                            _ => rsx! { AdminDashboardSkeleton {} },
                                         }
                                     }
                                 }
