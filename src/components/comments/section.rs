@@ -40,15 +40,19 @@ pub struct CommentContext {
 /// - 空评论时展示提示文案
 #[component]
 pub fn CommentSection(post_id: i32) -> Element {
-    let ctx = use_context_provider(|| {
-        let pending: Vec<PendingComment> = comment_storage::load_pending_comments(post_id);
-        comment_storage::prune_all_expired();
-
+    let mut ctx = use_context_provider(|| {
         CommentContext {
             active_reply: Signal::new(None),
             refresh_trigger: Signal::new(false),
-            pending_comments: Signal::new(pending),
+            pending_comments: Signal::new(Vec::new()),
         }
+    });
+
+    // 挂载后从本地存储异步加载待审核评论以防 SSR Hydration Mismatch
+    use_effect(move || {
+        let pending = comment_storage::load_pending_comments(post_id);
+        comment_storage::prune_all_expired();
+        ctx.pending_comments.set(pending);
     });
 
     // 轮询待审核评论状态，已处理（非 pending）的评论从本地移除
