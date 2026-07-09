@@ -97,7 +97,7 @@ CODE_RUNNER_MAX_OUTPUT_BYTES=1048576   # hard cap on stdout+stderr captured
 CODE_RUNNER_MAX_SOURCE_BYTES=65536     # max source size accepted by StartExec
 CODE_RUNNER_QUEUE_TIMEOUT_SECS=30      # how long a task waits for a container slot before failing
 CODE_RUNNER_TASK_TTL_SECS=300          # DashMap task entry lifetime (gc_old_tasks)
-CODE_RUNNER_LANGUAGES=python,node      # ops whitelist (must also exist in LANGUAGES registry)
+CODE_RUNNER_LANGUAGES=                 # unset = all registered langs; set a comma-list to narrow (e.g. python,node)
 DOCKER_SOCKET_PATH=/var/run/docker.sock
 ```
 

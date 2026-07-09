@@ -25,7 +25,9 @@ pub struct RunnerConfig {
     pub queue_timeout_secs: u64,
     pub task_ttl_secs: u64,
     pub docker_socket_path: String,
-    pub languages: Vec<String>,
+    /// 语言白名单。`None` 表示不限制——注册表里的所有语言均视为支持；
+    /// `Some(list)` 表示收窄到列表内（仍须同时在 LANGUAGES 注册表存在）。
+    pub languages: Option<Vec<String>>,
 }
 
 #[cfg(feature = "server")]
@@ -36,8 +38,11 @@ fn parse_allow_network(v: &str) -> bool {
 
 #[cfg(feature = "server")]
 pub static RUNNER_CONFIG: LazyLock<RunnerConfig> = LazyLock::new(|| {
-    let languages_str = env::var("CODE_RUNNER_LANGUAGES").unwrap_or_else(|_| "python,node".to_string());
-    let languages = languages_str.split(',').map(|s| s.trim().to_lowercase()).collect();
+    // CODE_RUNNER_LANGUAGES 未设置时默认全开（None）：注册表里的语言均可用，
+    // 新增语言无需同步白名单。设置为逗号分隔列表则收窄到这些语言。
+    let languages = env::var("CODE_RUNNER_LANGUAGES").ok().map(|s| {
+        s.split(',').map(|t| t.trim().to_lowercase()).filter(|t| !t.is_empty()).collect()
+    });
 
     RunnerConfig {
         max_cpu_cores: env::var("CODE_RUNNER_MAX_CPU_CORES").ok().and_then(|v| v.parse().ok()).unwrap_or(2.0),
@@ -118,7 +123,7 @@ mod tests {
             queue_timeout_secs: 1,
             task_ttl_secs: 1,
             docker_socket_path: "".to_string(),
-            languages: vec![],
+            languages: None,
         };
         let raw = ResourceLimits {
             cpu_cores: 1.0,

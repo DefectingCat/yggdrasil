@@ -4,8 +4,8 @@
 //! [`parse_fence_info`] 解析 markdown 围栏代码块的信息串，识别 `runnable` 标记与
 //! 可选的 JSON 资源覆盖（如 `python runnable {"timeout_secs":10}`）。
 //!
-//! 实际可用语言还受 `RUNNER_CONFIG.languages`（环境变量 `CODE_RUNNER_LANGUAGES`）双重约束：
-//! 既要在注册表中存在，也要在运维白名单中启用，才视为支持（[`is_supported_lang`]）。
+//! 实际可用语言默认即注册表里的全部；若设置了 `CODE_RUNNER_LANGUAGES`
+//! 环境变量，则进一步收窄到该白名单内（[`is_supported_lang`]）。
 
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -24,8 +24,8 @@ pub struct LanguageDef {
     pub allow_network: bool,
 }
 
-/// 内置语言注册表。新增语言时在此 `insert`，并在 `.env.example` / `CODE_RUNNER_LANGUAGES`
-/// 中默认启用。
+/// 内置语言注册表。新增语言时在此 `insert` 即可默认启用；
+/// 若运维需要收窄，设置 `CODE_RUNNER_LANGUAGES` 为逗号分隔列表。
 pub static LANGUAGES: LazyLock<HashMap<String, LanguageDef>> = LazyLock::new(|| {
     let mut m = HashMap::new();
 
@@ -106,10 +106,16 @@ pub static LANGUAGES: LazyLock<HashMap<String, LanguageDef>> = LazyLock::new(|| 
     m
 });
 
-/// 同时存在于注册表与运维白名单 (`RUNNER_CONFIG.languages`) 才视为支持。
+/// 是否支持该语言：必须在 LANGUAGES 注册表中存在。
+/// 若设置了 `CODE_RUNNER_LANGUAGES`，还需同时在该白名单内（用于收窄可用语言）；
+/// 未设置则注册表里的语言全部放行。
 pub fn is_supported_lang(lang: &str) -> bool {
     let clean = lang.trim().to_lowercase();
-    RUNNER_CONFIG.languages.iter().any(|l| l == &clean) && LANGUAGES.contains_key(&clean)
+    LANGUAGES.contains_key(&clean)
+        && RUNNER_CONFIG
+            .languages
+            .as_ref()
+            .is_none_or(|list| list.iter().any(|l| l == &clean))
 }
 
 /// 解析围栏代码块的 info string。
@@ -202,11 +208,14 @@ mod tests {
     }
 
     #[test]
-    fn is_supported_lang_default_whitelist() {
-        // 默认 CODE_RUNNER_LANGUAGES=python,node
+    fn is_supported_lang_default_all_open() {
+        // 默认未设 CODE_RUNNER_LANGUAGES：注册表里的语言全部放行。
         assert!(is_supported_lang("python"));
         assert!(is_supported_lang("node"));
-        assert!(!is_supported_lang("rust"));
+        assert!(is_supported_lang("go"));
+        assert!(is_supported_lang("rust"));
+        // 未注册的语言仍不支持。
+        assert!(!is_supported_lang("ruby"));
         assert!(!is_supported_lang(""));
     }
 
