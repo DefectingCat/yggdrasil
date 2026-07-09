@@ -146,7 +146,9 @@ pub fn AdminLayout() -> Element {
                     div { class: "flex-1 flex flex-col min-w-0 h-screen p-2 md:p-4",
                         div { class: "flex-1 bg-[var(--color-paper-theme)] rounded-[2rem] shadow-sm border border-[var(--color-paper-border)] overflow-hidden relative flex flex-col",
                             main { class: "{main_class}",
-                                div { class: "p-10 animate-pulse",
+                                // flex-1 撑满 main(使 write 骨架屏能引用到确定高度),
+                                // 非 write 页面的 py-12 padding 由 main_class 自带,这里不重复加。
+                                div { class: "flex-1 min-h-0 flex flex-col animate-pulse",
                                     {
                                         match route {
                                             Route::Write {} => rsx! { WriteSkeleton {} },

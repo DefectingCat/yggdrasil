@@ -414,7 +414,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
         // 底栏作为 main 直接子元素永远贴卡片底沿,不随内容滚动,也无需 sticky。
         div { class: "relative flex flex-col w-full min-h-0 flex-1",
             if loading() {
-                div { class: "absolute inset-0 z-10 bg-paper-theme", WriteSkeleton {} }
+                div { class: "absolute inset-0 z-10 bg-paper-theme flex flex-col", WriteSkeleton {} }
             }
 
             // 两栏容器:flex-1 分配空间,自身不滚动(min-h-0),滚动职责下放给左右两栏。
