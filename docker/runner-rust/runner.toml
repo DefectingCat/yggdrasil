@@ -1,0 +1,19 @@
+# Rust runner 镜像的运行时默认值（参考用）。
+# 实际生效配置由 Rust 侧 LANGUAGES 注册表 + CODE_RUNNER_* 环境变量决定（见
+# src/api/code_runner/languages.rs、src/infra/runner_config.rs），本文件仅作为
+# 镜像构建产物的自描述，便于运维核对镜像与代码的契约一致。
+#
+# run_command 指向镜像内置的 wrapper 脚本（run-rust.sh），而非裸 rustc 命令：
+# rustc 编译 + 运行是两步，docker.rs 注入脚本用 exec 执行 run_cmd，
+# exec 替换 shell 进程后 "A && B" 后半段不执行，故封装进脚本。
+language = "rust"
+extension = "rs"
+run_command = "/usr/local/bin/run-rust.sh"
+allow_network = false
+
+[default_limits]
+cpu_cores = 1.0
+memory_mb = 512
+timeout_secs = 15
+output_bytes = 1048576
+allow_network = false

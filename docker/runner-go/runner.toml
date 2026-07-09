@@ -1,0 +1,15 @@
+# Go runner 镜像的运行时默认值（参考用）。
+# 实际生效配置由 Rust 侧 LANGUAGES 注册表 + CODE_RUNNER_* 环境变量决定（见
+# src/api/code_runner/languages.rs、src/infra/runner_config.rs），本文件仅作为
+# 镜像构建产物的自描述，便于运维核对镜像与代码的契约一致。
+language = "go"
+extension = "go"
+run_command = "go run /code/main.go"
+allow_network = false
+
+[default_limits]
+cpu_cores = 1.0
+memory_mb = 256
+timeout_secs = 10
+output_bytes = 1048576
+allow_network = false

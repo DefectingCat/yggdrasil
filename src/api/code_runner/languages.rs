@@ -63,6 +63,46 @@ pub static LANGUAGES: LazyLock<HashMap<String, LanguageDef>> = LazyLock::new(|| 
         },
     );
 
+    // 编译型语言：go run 是单条命令（内部编译 + 运行），可直接作为 run_cmd。
+    // 只读根文件系统下 $HOME/.cache 不可写，镜像已把 GOCACHE/GOTMPDIR/GOPATH
+    // 重定向到可写的 /tmp tmpfs。编译冷启动比解释型慢，timeout 提到 10s。
+    m.insert(
+        "go".to_string(),
+        LanguageDef {
+            image: "yggdrasil-runner-go:latest".to_string(),
+            run_cmd: "go run /code/main.go".to_string(),
+            extension: "go".to_string(),
+            default_limits: ResourceLimits {
+                cpu_cores: 1.0,
+                memory_mb: 256,
+                timeout_secs: 10,
+                output_bytes: 1_048_576,
+                allow_network: false,
+            },
+            allow_network: false,
+        },
+    );
+
+    // rustc 编译 + 运行是两步，但 docker.rs 注入脚本用 exec 执行 run_cmd，
+    // exec 替换 shell 进程后 "A && B" 后半段不执行，故镜像内置 run-rust.sh wrapper。
+    // rustc 内存开销大、编译慢，memory 提到 512MB、timeout 提到 15s。
+    m.insert(
+        "rust".to_string(),
+        LanguageDef {
+            image: "yggdrasil-runner-rust:latest".to_string(),
+            run_cmd: "/usr/local/bin/run-rust.sh".to_string(),
+            extension: "rs".to_string(),
+            default_limits: ResourceLimits {
+                cpu_cores: 1.0,
+                memory_mb: 512,
+                timeout_secs: 15,
+                output_bytes: 1_048_576,
+                allow_network: false,
+            },
+            allow_network: false,
+        },
+    );
+
     m
 });
 

@@ -185,7 +185,7 @@ Readers can execute fenced code blocks in isolated Docker containers; authors ge
 
 **Governor 0.8 caveat**: `Quota::per_day` does not exist; `CODE_EXEC_DAILY_LIMITER` uses `Quota::with_period(24h).allow_burst(daily)`. `RATE_LIMIT_CODE_EXEC_PER_SEC` must be an integer (governor's `per_second` takes `NonZeroU32`; decimals in `.env` fall back to the default 1).
 
-**Runner images** (`docker/`): `build-runners.sh` builds `yggdrasil-runner-base` → `yggdrasil-runner-python` → `yggdrasil-runner-node`; tags must match `LANGUAGES` image fields. Python image symlinks `python`→`python3` to match `run_cmd`. `runner.toml` files are image self-descriptions only — runtime config is the Rust `LANGUAGES` registry + `CODE_RUNNER_*` env, not parsed from toml.
+**Runner images** (`docker/`): `build-runners.sh` builds `yggdrasil-runner-base` → `yggdrasil-runner-python` → `yggdrasil-runner-node` → `yggdrasil-runner-go` → `yggdrasil-runner-rust`; tags must match `LANGUAGES` image fields. Python image symlinks `python`→`python3` to match `run_cmd`. Go image redirects `GOCACHE`/`GOTMPDIR`/`GOPATH` to `/tmp` (read-only rootfs makes `$HOME/.cache` unwritable). Rust image ships a `/usr/local/bin/run-rust.sh` wrapper because `rustc` compile + run is two steps and `docker.rs` injects `run_cmd` via `exec` — `exec A && B` would replace the shell and never reach `B`, so the two steps are encapsulated in the wrapper. `runner.toml` files are image self-descriptions only — runtime config is the Rust `LANGUAGES` registry + `CODE_RUNNER_*` env, not parsed from toml.
 
 ## Frontend Lib Subprojects
 
