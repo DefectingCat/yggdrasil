@@ -5,6 +5,12 @@
 # -----------------------------------------------------------------------------
 FROM rust:1.96-bookworm AS builder
 
+# Use HTTPS Debian mirrors. A transparent HTTP proxy on the build network can
+# truncate plain-HTTP apt downloads to an HTML error page (apt error
+# "Clearsigned file isn't valid, got 'NOSPLIT'"), while HTTPS passes through.
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g; s|http://security.debian.org|https://security.debian.org|g' \
+        /etc/apt/sources.list.d/debian.sources
+
 # Install system build tooling. Native dependencies are needed for:
 #   - musl-tools: linker for x86_64-unknown-linux-musl
 #   - cmake/clang/nasm/libssl-dev: libwebp (zenwebp), ring, syntect
