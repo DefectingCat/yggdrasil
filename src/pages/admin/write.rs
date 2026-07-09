@@ -419,15 +419,6 @@ fn write_editor(post_id: Option<i32>) -> Element {
                 div { class: "absolute inset-0 z-10 bg-paper-theme", WriteSkeleton {} }
             }
 
-            // 页头条:整宽,提到两栏之上,与内容区水平对齐(px-10 pt-10)。
-            // flex-shrink-0 保证它不参与垂直伸缩。
-            div { class: "flex-shrink-0 px-10 pt-10 pb-6 border-b border-[var(--color-paper-border)]",
-                h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]",
-                    if is_edit { "编辑文章" } else { "撰写新文章" }
-                }
-                p { class: "text-base text-[var(--color-paper-secondary)] mt-2", "内容编辑器" }
-            }
-
             // 两栏容器:flex-1 分配空间,自身不滚动(min-h-0),滚动职责下放给左右两栏。
             div { class: "flex-1 min-h-0 flex",
                 // 左栏(主写作区):flex-1 撑满宽度,min-w-0 防止长标题/代码块撑破 flex,
