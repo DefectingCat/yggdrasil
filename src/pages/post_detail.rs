@@ -78,7 +78,27 @@ pub fn PostDetail(slug: String) -> Element {
                         PostToc { toc_html: toc.clone() }
                     }
 
-                    PostContent { content_html: post.content_html.clone().unwrap_or_default() }
+                    // 用单元素 keyed 列表包裹 PostContent，key 绑定 slug。
+                    //
+                    // 为什么不能直接给 PostContent 加 key：Dioxus 的 key diff（diff_keyed_children）
+                    // 只在「兄弟节点列表」里生效，对单个非列表元素的 key 变化会走 diff_non_keyed
+                    // 路径、按位置复用，不触发 remount。把组件放进单元素 for 循环并带 key，
+                    // 才会进入 keyed diff——slug 变化时旧 PostContent 被移除、新的被创建。
+                    //
+                    // 为什么需要 remount：上下篇切换时 PostContent 若被复用（仅重渲染），
+                    // (1) 内部 CodeRunner 用片段索引作 key，两篇文章索引可能相同（如 1/3/5），
+                    //     keyed diff 按相同 key 复用 CodeRunner 实例——其挂载 use_effect 的
+                    //     「防重复 init」守卫阻止 CodeMirror 挂载到新的（已替换的）DOM 容器，
+                    //     表现为翻页后代码块消失；
+                    // (2) PostContent 自身的 use_effect（__initPostContent 复制按钮 / 灯箱初始化）
+                    //     也不会重跑，新文章的交互脚本不初始化。
+                    // 强制 remount 让编辑器与脚本随文章切换全部重新初始化。
+                    for post_slug in std::iter::once(post.slug.clone()) {
+                        PostContent {
+                            key: "{post_slug}",
+                            content_html: post.content_html.clone().unwrap_or_default(),
+                        }
+                    }
 
                     PostFooter { post: post.clone() }
 
