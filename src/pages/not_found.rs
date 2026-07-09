@@ -17,6 +17,15 @@ use crate::router::Route;
 pub fn NotFound(segments: Vec<String>) -> Element {
     let _ = segments;
 
+    // Commit 404 status code during server-side rendering
+    #[cfg(feature = "server")]
+    {
+        dioxus::fullstack::FullstackContext::commit_http_status(
+            http::StatusCode::NOT_FOUND,
+            Some("Page Not Found".to_string()),
+        );
+    }
+
     rsx! {
         div { class: "flex flex-col items-center justify-center text-center min-h-[50vh] md:min-h-[55vh] px-6",
             // 巨大的装饰性 404，作为视觉锚点
