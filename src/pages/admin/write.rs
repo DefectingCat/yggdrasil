@@ -496,13 +496,13 @@ fn write_editor(post_id: Option<i32>) -> Element {
                 } // 左栏闭合
 
                 // 右栏(侧边栏):分节式布局,每节带小标题,节间用细分隔线分隔。
-                // 抛弃「卡片套卡片」的重结构,改用轻量、清爽的分组式排版。
-                div { class: "w-80 flex-shrink-0 min-h-0 overflow-y-auto border-l border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] flex flex-col",
+                // 透明背景(与左栏共用 paper-theme 底),靠 border-l 和分隔线划分区域。
+                div { class: "w-80 flex-shrink-0 min-h-0 overflow-y-auto border-l border-[var(--color-paper-border)] flex flex-col",
                     // Slug 节
                     div { class: "p-6 border-b border-[var(--color-paper-border)]",
                         label { class: "block text-xs font-semibold uppercase tracking-wide text-[var(--color-paper-tertiary)] mb-3", "链接" }
                         input {
-                            class: "w-full text-sm bg-[var(--color-paper-theme)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-transparent focus:border-[var(--color-paper-primary)] rounded-xl px-3 py-2 transition-all",
+                            class: "w-full text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-xl px-3 py-2 transition-all",
                             placeholder: "自动生成",
                             value: "{slug}",
                             oninput: move |evt| slug.set(evt.value()),
@@ -512,7 +512,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     div { class: "p-6 border-b border-[var(--color-paper-border)]",
                         label { class: "block text-xs font-semibold uppercase tracking-wide text-[var(--color-paper-tertiary)] mb-3", "标签" }
                         input {
-                            class: "w-full text-sm bg-[var(--color-paper-theme)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-transparent focus:border-[var(--color-paper-primary)] rounded-xl px-3 py-2 transition-all",
+                            class: "w-full text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-xl px-3 py-2 transition-all",
                             placeholder: "逗号分隔...",
                             value: "{tags}",
                             oninput: move |evt| tags.set(evt.value()),
@@ -626,7 +626,7 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
             class: "relative w-full border border-dashed rounded-2xl overflow-hidden transition-all duration-200 group/cover",
             // 空态矮横条；有图/上传中展开成 21:9。
             class: if cover_image().is_empty() && !cover_uploading() { "h-14" } else { "aspect-[21/9]" },
-            class: if cover_drag_active() { "border-[var(--color-paper-primary)] bg-[var(--color-paper-theme)]" } else if cover_image().is_empty() { "border-[var(--color-paper-border)] bg-[var(--color-paper-theme)] hover:border-[var(--color-paper-primary)]" } else { "border-[var(--color-paper-border)] bg-[var(--color-paper-theme)]" },
+            class: if cover_drag_active() { "border-[var(--color-paper-primary)] bg-[var(--color-paper-entry)]" } else if cover_image().is_empty() { "border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] hover:border-[var(--color-paper-primary)]" } else { "border-[var(--color-paper-border)] bg-[var(--color-paper-entry)]" },
 
             // 整个容器可接收拖拽与粘贴（ondragover 必须 prevent_default，否则浏览器直接打开文件）。
             ondragover: move |evt| {
