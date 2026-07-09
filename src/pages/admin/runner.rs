@@ -13,13 +13,15 @@ use crate::components::ui::{ADMIN_CARD_CLASS, BTN_PRIMARY_SM};
 use crate::infra::runner_config::ResourceLimits;
 
 /// 受支持的语言集合（与 LANGUAGES 注册表 / CODE_RUNNER_LANGUAGES 对齐）。
-const SUPPORTED_LANGS: &[&str] = &["python", "node"];
+const SUPPORTED_LANGS: &[&str] = &["python", "node", "go", "rust"];
 
 /// 默认示例源码（按语言）。
 fn default_source(lang: &str) -> String {
     match lang {
         "python" => "print('Hello from author sandbox')\nfor i in range(3):\n    print(f'line {i}')\n".to_string(),
         "node" => "console.log('Hello from author sandbox');\n[0,1,2].forEach(i => console.log(`line ${i}`));\n".to_string(),
+        "go" => "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"Hello from author sandbox\")\n\tfor i := 0; i < 3; i++ {\n\t\tfmt.Printf(\"line %d\\n\", i)\n\t}\n}\n".to_string(),
+        "rust" => "fn main() {\n    println!(\"Hello from author sandbox\");\n    for i in 0..3 {\n        println!(\"line {}\", i);\n    }\n}\n".to_string(),
         _ => String::new(),
     }
 }
