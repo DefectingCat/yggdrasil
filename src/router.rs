@@ -150,9 +150,15 @@ fn ErrorLayout() -> Element {
                 // Parse the captured error to detect 404 vs 500
                 let mut is_404 = false;
                 if let Some(captured_error) = err.error() {
-                    let err_str = format!("{:?}", captured_error);
-                    if err_str.contains("NotFound") || err_str.contains("404") || err_str.contains("not found") {
-                        is_404 = true;
+                    if let Some(ServerFnError::ServerError { code, message, .. }) = captured_error.downcast_ref::<ServerFnError>() {
+                        if *code == 404 || message == "not_found" {
+                            is_404 = true;
+                        }
+                    } else {
+                        let err_str = format!("{:?}", captured_error);
+                        if err_str.contains("NotFound") || err_str.contains("404") || err_str.contains("not found") {
+                            is_404 = true;
+                        }
                     }
                 }
 
@@ -162,13 +168,55 @@ fn ErrorLayout() -> Element {
                     }
                 } else {
                     rsx! {
-                        div { class: "flex flex-col items-center justify-center text-center min-h-[50vh] px-6",
-                            h1 { class: "text-2xl font-bold text-red-500 mb-4", "加载失败" }
-                            p { class: "text-paper-secondary mb-6", "抱歉，加载页面时出现了一些错误，请稍后再试。" }
-                            dioxus::router::components::Link {
-                                class: "px-5 py-2.5 bg-paper-entry border border-paper-border rounded-lg text-sm font-medium text-paper-primary hover:border-paper-secondary transition-all",
-                                to: Route::Home {},
-                                "返回首页"
+                        div { class: "flex flex-col items-center justify-center min-h-[50vh] md:min-h-[55vh] px-6 animate-page-enter",
+                            div { class: "w-full max-w-md bg-paper-entry border border-paper-border rounded-[2rem] p-8 md:p-10 shadow-sm hover:border-paper-secondary transition-all duration-300 flex flex-col items-center text-center",
+                                // Warning / Alert Icon in a soft red container
+                                div { class: "relative mb-6",
+                                    div { class: "w-16 h-16 bg-red-500/10 dark:bg-red-500/20 text-red-500 rounded-full flex items-center justify-center",
+                                        svg {
+                                            xmlns: "http://www.w3.org/2000/svg",
+                                            width: "28",
+                                            height: "28",
+                                            view_box: "0 0 24 24",
+                                            fill: "none",
+                                            stroke: "currentColor",
+                                            stroke_width: "2",
+                                            stroke_linecap: "round",
+                                            stroke_linejoin: "round",
+                                            circle { cx: "12", cy: "12", r: "10" }
+                                            line { x1: "12", y1: "8", x2: "12", y2: "12" }
+                                            line { x1: "12", y1: "16", x2: "12.01", y2: "16" }
+                                        }
+                                    }
+                                }
+
+                                // Premium Typography
+                                h1 { class: "text-lg md:text-xl font-bold tracking-tight text-paper-primary mb-3",
+                                    "加载失败"
+                                }
+                                p { class: "text-sm text-paper-secondary leading-relaxed mb-8 max-w-[280px]",
+                                    "抱歉，加载页面时出现了一些错误，请稍后再试。"
+                                }
+
+                                // CTA: Link back to home, styled with subtle border & background transition
+                                dioxus::router::components::Link {
+                                    to: Route::Home {},
+                                    class: "group inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-paper-primary bg-paper-theme border border-paper-border rounded-full hover:border-paper-secondary hover:bg-paper-border transition-all duration-200 cursor-pointer shadow-sm active:scale-[0.98]",
+                                    svg {
+                                        xmlns: "http://www.w3.org/2000/svg",
+                                        width: "16",
+                                        height: "16",
+                                        view_box: "0 0 24 24",
+                                        fill: "none",
+                                        stroke: "currentColor",
+                                        stroke_width: "2",
+                                        stroke_linecap: "round",
+                                        stroke_linejoin: "round",
+                                        class: "transition-transform group-hover:-translate-x-0.5",
+                                        path { d: "M19 12H5M12 19l-7-7 7-7" }
+                                    }
+                                    "返回首页"
+                                }
                             }
                         }
                     }
