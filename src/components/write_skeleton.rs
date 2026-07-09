@@ -13,8 +13,9 @@ use dioxus::prelude::*;
 #[component]
 pub fn WriteSkeleton() -> Element {
     rsx! {
-        // 根:与 write.rs 根容器一致
-        div { class: "relative flex flex-col flex-1 min-h-0 overflow-hidden",
+        // 根:WriteSkeleton 放在 write.rs 的 absolute inset-0 覆盖层里,
+        // 故用 h-full 撑满该层(父层非 flex,flex-1 无效),内部再 flex flex-col 分配高度。
+        div { class: "relative h-full flex flex-col min-h-0 overflow-hidden",
             // 两栏容器:与真实页面一致,左 flex-1 + 右 w-80
             div { class: "flex-1 min-h-0 flex",
                 // 左栏(主写作区)
