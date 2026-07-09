@@ -419,126 +419,124 @@ fn write_editor(post_id: Option<i32>) -> Element {
                 div { class: "absolute inset-0 z-10 bg-paper-theme", WriteSkeleton {} }
             }
 
-            // 内容区:单独滚动。layout 的 main 不再带 padding/滚动职责,
-            // px-10 py-12 下放到这里,与其它 admin 页面的 main 视觉等价。
-            // min-h-0 是 flex 子元素允许收缩到内容以下、让 overflow 生效的关键。
-            div { class: "flex-1 min-h-0 overflow-y-auto px-10 py-12 flex flex-col",
-                // 顶部元信息区域
-                div { class: "flex-shrink-0 flex flex-col gap-6",
-                    // 页面标题与状态
-                    div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[var(--color-paper-border)]",
+            // 页头条:整宽,提到两栏之上,与内容区水平对齐(px-10 pt-10)。
+            // flex-shrink-0 保证它不参与垂直伸缩。
+            div { class: "flex-shrink-0 px-10 pt-10 pb-6 border-b border-[var(--color-paper-border)]",
+                h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]",
+                    if is_edit { "编辑文章" } else { "撰写新文章" }
+                }
+                p { class: "text-base text-[var(--color-paper-secondary)] mt-2", "内容编辑器" }
+            }
+
+            // 两栏容器:flex-1 分配空间,自身不滚动(min-h-0),滚动职责下放给左右两栏。
+            div { class: "flex-1 min-h-0 flex",
+                // 左栏(主写作区):flex-1 撑满宽度,min-w-0 防止长标题/代码块撑破 flex,
+                // overflow-y-auto 独立滚动。
+                div { class: "flex-1 min-w-0 min-h-0 overflow-y-auto px-10 py-8 flex flex-col",
+                    // 标题输入
+                    input {
+                        class: "w-full text-4xl md:text-5xl font-extrabold bg-transparent text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none tracking-tight leading-tight",
+                        placeholder: "输入文章标题...",
+                        value: "{title}",
+                        oninput: move |evt| title.set(evt.value()),
+                    }
+
+                    // 摘要
+                    textarea {
+                        class: "w-full text-base font-normal bg-transparent text-[var(--color-paper-secondary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none resize-none leading-relaxed mb-4 border-b-2 border-transparent focus:border-[var(--color-paper-border)] pb-2 transition-all mt-6",
+                        placeholder: "摘要（选填）...",
+                        rows: "2",
+                        value: "{summary}",
+                        oninput: move |evt| summary.set(evt.value()),
+                    }
+
+                    // 错误和成功提示
+                    if let Some(err) = load_error() {
+                        div { class: "flex-shrink-0 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30 mb-2",
+                            "{err}"
+                        }
+                    }
+
+                    if let Some(err) = error() {
+                        div { class: "flex-shrink-0 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30 mb-2",
+                            "{err}"
+                        }
+                    }
+
+                    // 上传失败提示：多条堆叠，×关闭同时删除编辑器内失败占位符（避免孤儿）
+                    for err in upload_errors().clone() {
                         div {
-                            h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]", 
-                                if is_edit { "编辑文章" } else { "撰写新文章" }
-                            }
-                            p { class: "text-base text-[var(--color-paper-secondary)] mt-2", "内容编辑器" }
-                        }
-                    }
-
-                    // 核心文本域
-                    div { class: "flex flex-col gap-6",
-                        // 标题输入
-                        input {
-                            class: "w-full text-4xl md:text-5xl font-extrabold bg-transparent text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none tracking-tight leading-tight",
-                            placeholder: "输入文章标题...",
-                            value: "{title}",
-                            oninput: move |evt| title.set(evt.value()),
-                        }
-                        
-                        // 摘要
-                        textarea {
-                            class: "w-full text-base font-normal bg-transparent text-[var(--color-paper-secondary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none resize-none leading-relaxed mb-4 border-b-2 border-transparent focus:border-[var(--color-paper-border)] pb-2 transition-all",
-                            placeholder: "摘要（选填）...",
-                            rows: "2",
-                            value: "{summary}",
-                            oninput: move |evt| summary.set(evt.value()),
-                        }
-                    }
-
-                    // 元信息放在控制面板网格
-                    div { class: "grid grid-cols-1 md:grid-cols-2 gap-6 mt-4",
-                        div { class: "flex flex-col gap-6 p-8 rounded-3xl border border-transparent bg-[var(--color-paper-entry)] hover:border-[var(--color-paper-border)] transition-colors shadow-sm",
-                            div {
-                                label { class: "{META_LABEL_CLASS}", "自定义链接 (Slug)" }
-                                input {
-                                    class: "{META_INPUT_CLASS}",
-                                    placeholder: "自动生成",
-                                    value: "{slug}",
-                                    oninput: move |evt| slug.set(evt.value()),
-                                }
-                            }
-                            div {
-                                label { class: "{META_LABEL_CLASS}", "标签系统" }
-                                input {
-                                    class: "{META_INPUT_CLASS}",
-                                    placeholder: "输入标签，以逗号分隔...",
-                                    value: "{tags}",
-                                    oninput: move |evt| tags.set(evt.value()),
-                                }
-                            }
-                        }
-                        // 封面图放右边
-                        div { class: "flex flex-col p-8 rounded-3xl border border-transparent bg-[var(--color-paper-entry)] hover:border-[var(--color-paper-border)] transition-colors shadow-sm",
-                            label { class: "{META_LABEL_CLASS}", "封面图" }
-                            CoverUploader { cover_image, cover_uploading }
-                        }
-                    }
-                }
-
-                // 编辑器区域 - 整页滚动下用视口高度，保证充裕的编辑空间。
-                // h-[60vh]：随窗口高度自适应；min-h-[400px]：窗口过矮时仍可用。
-                div { class: "h-[60vh] min-h-[400px] flex flex-col my-4",
-                    div {
-                        class: "relative group flex-1 min-h-0 w-full border border-[var(--color-paper-border)] rounded-3xl overflow-hidden bg-[var(--color-paper-entry)] shadow-sm",
-                        id: "tiptap-editor",
-                        img {
-                            src: "/images/xiantiaoxiaogou_input_bg.webp",
-                            alt: "",
-                            class: "absolute bottom-2 right-2 w-24 opacity-10 pointer-events-none z-0",
-                        }
-                    }
-                }
-
-                // 错误和成功提示
-                if let Some(err) = load_error() {
-                    div { class: "flex-shrink-0 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30 mb-2",
-                        "{err}"
-                    }
-                }
-
-                if let Some(err) = error() {
-                    div { class: "flex-shrink-0 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30 mb-2",
-                        "{err}"
-                    }
-                }
-
-                // 上传失败提示：多条堆叠，×关闭同时删除编辑器内失败占位符（避免孤儿）
-                for err in upload_errors().clone() {
-                    div {
-                        key: "{err.id}",
-                        class: "flex-shrink-0 flex items-center justify-between gap-3 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30 mb-2",
-                        span { "图片上传失败: {err.file_name} — {err.message}" }
-                        button {
-                            class: "{BTN_CLOSE_ICON}",
-                            aria_label: "关闭提示",
-                            onclick: {
-                                // 捕获 owned id，避免借用临时值
-                                let id = err.id.clone();
-                                let mut upload_errors = upload_errors;
-                                move |_| {
-                                    // 关闭提示同时删除编辑器内失败占位符（避免孤儿）
-                                    #[cfg(target_arch = "wasm32")]
-                                    if let Some(handle) = &*editor.read() {
-                                        handle.instance().remove_upload_by_upload_id(&id);
+                            key: "{err.id}",
+                            class: "flex-shrink-0 flex items-center justify-between gap-3 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30 mb-2",
+                            span { "图片上传失败: {err.file_name} — {err.message}" }
+                            button {
+                                class: "{BTN_CLOSE_ICON}",
+                                aria_label: "关闭提示",
+                                onclick: {
+                                    // 捕获 owned id，避免借用临时值
+                                    let id = err.id.clone();
+                                    let mut upload_errors = upload_errors;
+                                    move |_| {
+                                        // 关闭提示同时删除编辑器内失败占位符（避免孤儿）
+                                        #[cfg(target_arch = "wasm32")]
+                                        if let Some(handle) = &*editor.read() {
+                                            handle.instance().remove_upload_by_upload_id(&id);
+                                        }
+                                        upload_errors.write().retain(|e| e.id != id);
                                     }
-                                    upload_errors.write().retain(|e| e.id != id);
-                                }
-                            },
-                            "×"
+                                },
+                                "×"
+                            }
                         }
                     }
-                }
-            } // 内容区闭合
+
+                    // 编辑器区域:flex-1 撑满左栏剩余高度,不再硬编码 60vh。
+                    // 编辑器内部 .tiptap-editor/.ProseMirror 均为 height:100% + overflow-y:auto,
+                    // 容器变高编辑器自动跟着变高。min-h-[400px] 保证窗口过矮时仍可用。
+                    div { class: "flex-1 min-h-[400px] flex flex-col my-4",
+                        div {
+                            class: "relative group flex-1 min-h-0 w-full border border-[var(--color-paper-border)] rounded-3xl overflow-hidden bg-[var(--color-paper-entry)] shadow-sm",
+                            id: "tiptap-editor",
+                            img {
+                                src: "/images/xiantiaoxiaogou_input_bg.webp",
+                                alt: "",
+                                class: "absolute bottom-2 right-2 w-24 opacity-10 pointer-events-none z-0",
+                            }
+                        }
+                    }
+                } // 左栏闭合
+
+                // 右栏(侧边栏):固定宽 w-80,flex-shrink-0 不被压缩,独立滚动。
+                // border-l 与页头分割线视觉一致。
+                div { class: "w-80 flex-shrink-0 min-h-0 overflow-y-auto border-l border-[var(--color-paper-border)] px-6 py-8 flex flex-col gap-6",
+                    // Slug + 标签卡片(沿用原元信息卡样式)
+                    div { class: "flex flex-col gap-6 p-8 rounded-3xl border border-transparent bg-[var(--color-paper-entry)] hover:border-[var(--color-paper-border)] transition-colors shadow-sm",
+                        div {
+                            label { class: "{META_LABEL_CLASS}", "自定义链接 (Slug)" }
+                            input {
+                                class: "{META_INPUT_CLASS}",
+                                placeholder: "自动生成",
+                                value: "{slug}",
+                                oninput: move |evt| slug.set(evt.value()),
+                            }
+                        }
+                        div {
+                            label { class: "{META_LABEL_CLASS}", "标签系统" }
+                            input {
+                                class: "{META_INPUT_CLASS}",
+                                placeholder: "输入标签，以逗号分隔...",
+                                value: "{tags}",
+                                oninput: move |evt| tags.set(evt.value()),
+                            }
+                        }
+                    }
+                    // 封面图卡片
+                    div { class: "flex flex-col p-8 rounded-3xl border border-transparent bg-[var(--color-paper-entry)] hover:border-[var(--color-paper-border)] transition-colors shadow-sm",
+                        label { class: "{META_LABEL_CLASS}", "封面图" }
+                        CoverUploader { cover_image, cover_uploading }
+                    }
+                } // 右栏闭合
+            } // 两栏容器闭合
 
             // 底部操作栏 - flex 分区布局的贴底块:作为 main 直接子元素(flex-shrink-0),
             // 永远贴卡片底沿,不随内容区滚动。无需 sticky,不会跳动。
