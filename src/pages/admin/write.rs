@@ -35,9 +35,7 @@ use dioxus::html::HasFileData;
 use dioxus::web::{WebEventExt, WebFileExt};
 
 /// 元信息表单复用的样式常量（label 与 input 各一份，避免多处重复粘贴）。
-/// 提升到模块级以便 write_editor 与 CoverUploader 共用。
-const META_LABEL_CLASS: &str =
-    "block text-sm font-medium text-[var(--color-paper-secondary)] mb-2";
+/// 提升到模块级以便 CoverUploader 的 URL 输入框复用。
 const META_INPUT_CLASS: &str =
     "w-full text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-2xl px-4 py-3 shadow-sm transition-all";
 
@@ -408,7 +406,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
         }
     };
 
-    // 元信息表单复用样式见模块级 META_LABEL_CLASS / META_INPUT_CLASS。
+    // 元信息表单复用样式见模块级 META_INPUT_CLASS。
 
     rsx! {
         // 根容器:flex 分区布局。layout 给 write 的 main 是 flex 容器(无 padding/不滚动),
@@ -497,33 +495,32 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     }
                 } // 左栏闭合
 
-                // 右栏(侧边栏):固定宽 w-80,flex-shrink-0 不被压缩,独立滚动。
-                // border-l 与页头分割线视觉一致。
-                div { class: "w-80 flex-shrink-0 min-h-0 overflow-y-auto border-l border-[var(--color-paper-border)] px-6 py-8 flex flex-col gap-6",
-                    // Slug + 标签卡片(沿用原元信息卡样式)
-                    div { class: "flex flex-col gap-6 p-8 rounded-3xl border border-transparent bg-[var(--color-paper-entry)] hover:border-[var(--color-paper-border)] transition-colors shadow-sm",
-                        div {
-                            label { class: "{META_LABEL_CLASS}", "自定义链接 (Slug)" }
-                            input {
-                                class: "{META_INPUT_CLASS}",
-                                placeholder: "自动生成",
-                                value: "{slug}",
-                                oninput: move |evt| slug.set(evt.value()),
-                            }
-                        }
-                        div {
-                            label { class: "{META_LABEL_CLASS}", "标签系统" }
-                            input {
-                                class: "{META_INPUT_CLASS}",
-                                placeholder: "输入标签，以逗号分隔...",
-                                value: "{tags}",
-                                oninput: move |evt| tags.set(evt.value()),
-                            }
+                // 右栏(侧边栏):分节式布局,每节带小标题,节间用细分隔线分隔。
+                // 抛弃「卡片套卡片」的重结构,改用轻量、清爽的分组式排版。
+                div { class: "w-80 flex-shrink-0 min-h-0 overflow-y-auto border-l border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] flex flex-col",
+                    // Slug 节
+                    div { class: "p-6 border-b border-[var(--color-paper-border)]",
+                        label { class: "block text-xs font-semibold uppercase tracking-wide text-[var(--color-paper-tertiary)] mb-3", "链接" }
+                        input {
+                            class: "w-full text-sm bg-[var(--color-paper-theme)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-transparent focus:border-[var(--color-paper-primary)] rounded-xl px-3 py-2 transition-all",
+                            placeholder: "自动生成",
+                            value: "{slug}",
+                            oninput: move |evt| slug.set(evt.value()),
                         }
                     }
-                    // 封面图卡片
-                    div { class: "flex flex-col p-8 rounded-3xl border border-transparent bg-[var(--color-paper-entry)] hover:border-[var(--color-paper-border)] transition-colors shadow-sm",
-                        label { class: "{META_LABEL_CLASS}", "封面图" }
+                    // 标签节
+                    div { class: "p-6 border-b border-[var(--color-paper-border)]",
+                        label { class: "block text-xs font-semibold uppercase tracking-wide text-[var(--color-paper-tertiary)] mb-3", "标签" }
+                        input {
+                            class: "w-full text-sm bg-[var(--color-paper-theme)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-transparent focus:border-[var(--color-paper-primary)] rounded-xl px-3 py-2 transition-all",
+                            placeholder: "逗号分隔...",
+                            value: "{tags}",
+                            oninput: move |evt| tags.set(evt.value()),
+                        }
+                    }
+                    // 封面图节
+                    div { class: "p-6",
+                        label { class: "block text-xs font-semibold uppercase tracking-wide text-[var(--color-paper-tertiary)] mb-3", "封面图" }
                         CoverUploader { cover_image, cover_uploading }
                     }
                 } // 右栏闭合
@@ -629,7 +626,7 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
             class: "relative w-full border border-dashed rounded-2xl overflow-hidden transition-all duration-200 group/cover",
             // 空态矮横条；有图/上传中展开成 21:9。
             class: if cover_image().is_empty() && !cover_uploading() { "h-14" } else { "aspect-[21/9]" },
-            class: if cover_drag_active() { "border-[var(--color-paper-primary)] bg-[var(--color-paper-entry)]" } else if cover_image().is_empty() { "border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] hover:border-[var(--color-paper-primary)]" } else { "border-[var(--color-paper-border)] bg-[var(--color-paper-entry)]" },
+            class: if cover_drag_active() { "border-[var(--color-paper-primary)] bg-[var(--color-paper-theme)]" } else if cover_image().is_empty() { "border-[var(--color-paper-border)] bg-[var(--color-paper-theme)] hover:border-[var(--color-paper-primary)]" } else { "border-[var(--color-paper-border)] bg-[var(--color-paper-theme)]" },
 
             // 整个容器可接收拖拽与粘贴（ondragover 必须 prevent_default，否则浏览器直接打开文件）。
             ondragover: move |evt| {
