@@ -221,7 +221,22 @@ export class CodeBlockNodeView {
       this.resultArea.setAttribute('contenteditable', 'false');
       this.container.appendChild(this.resultArea);
     }
-    this.resultArea.textContent = initial;
+    // resultArea 位于 ProseMirror 可编辑文档树内部。浏览器对 contenteditable 子树强制
+    // white-space 折叠（此处 computed 为 collapse），CSS 里的 white-space: pre-wrap 被覆盖，
+    // 导致 textContent 里的 \n 与行首空格被吞掉、输出挤成一行。这里改用 <br> 渲染换行、
+    // \u00A0 替换空格与制表符以保留对齐——二者均不依赖 white-space。用 createTextNode
+    // 而非 innerHTML，避免 stdout 内含 <script> 等标签时造成注入。
+    this.resultArea.replaceChildren();
+    const lines = initial.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      if (i > 0) this.resultArea.appendChild(document.createElement('br'));
+      if (lines[i].length > 0) {
+        const preserved = lines[i]
+          .replace(/\t/g, '\u00A0\u00A0\u00A0\u00A0')
+          .replace(/ /g, '\u00A0');
+        this.resultArea.appendChild(document.createTextNode(preserved));
+      }
+    }
   }
 
   /** 渲染运行结果字符串到结果区。 */
