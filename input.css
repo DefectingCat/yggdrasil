@@ -3,6 +3,10 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
+  /* 覆盖 Tailwind v4 默认 --font-sans(ui-sans-serif, system-ui, sans-serif, ...):
+     默认栈不含 CJK sans,font-sans 类一旦生效,body 的中文字体栈会被绕过,
+     中文 fallback 到系统衬线体。这里对齐 body 的 CJK sans 栈,根治全项目。 */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif, 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei';
   --font-serif: 'Source Serif 4', 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', Georgia, serif;
 
   /* Catppuccin Latte（亮色）。语义 token → 调色板角色：
