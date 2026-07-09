@@ -153,6 +153,12 @@ pub fn PostContent(content_html: String) -> Element {
         let selectors_val = js_sys::Object::from(selectors).into();
         let _ = js_sys::Reflect::set(&window, &"__lightboxSelectors".into(), &selectors_val);
         invoke_optional_global(&window, "__initLightbox", &[selectors_val]);
+
+        // 内容挂载后若 URL 带 hash，滚动到对应标题。
+        // 解决骨架屏阶段标题 DOM 缺失导致浏览器原生 fragment-scroll 失效的问题：
+        // PostDetail 用 use_server_future 异步取数，首屏渲染骨架屏，此时标题 DOM
+        // 不存在；浏览器尝试滚动到 #hash 找不到目标留在顶部。此处标题已就绪，补一次。
+        invoke_optional_global(&window, "__scrollToHash", &[]);
     });
 
     rsx! {

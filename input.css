@@ -313,6 +313,12 @@
     color: var(--color-paper-primary);
   }
 
+  /* 锚点目标偏移：scrollIntoView / 原生 fragment-scroll 落点避开 80px sticky header。
+     [id] 限定只作用于带锚点 id 的标题；6rem = 80px header + 16px 呼吸空间。 */
+  .md-content :is(h1, h2, h3, h4, h5, h6)[id] {
+    scroll-margin-top: 6rem;
+  }
+
   .md-content a:not(.anchor) {
     text-underline-offset: 0.3rem;
     text-decoration: underline;
