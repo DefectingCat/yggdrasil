@@ -12,6 +12,9 @@
 // 业务模块
 mod api;
 mod auth;
+// build_info:编译期注入的 git/rustc/构建时间信息。模块内部 gate 在 server feature,
+// 模块声明本身不需要再加 cfg(空模块在 WASM 端也能编译)。
+mod build_info;
 mod cache;
 mod components;
 mod context;
@@ -274,12 +277,17 @@ fn main() {
         // 加载 .env 环境变量
         dotenvy::dotenv().ok();
         // 初始化 tracing 日志，默认级别为 info
-        tracing_subscriber::fmt()
-            .with_env_filter(
-                tracing_subscriber::EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-            )
-            .init();
+            tracing_subscriber::fmt()
+                .with_env_filter(
+                    tracing_subscriber::EnvFilter::try_from_default_env()
+                        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+                )
+                .init();
+
+            // 打印构建元信息(版本 / git / 提交时间 / rustc / 编译时刻)。
+            // 必须在 tracing 初始化之后,否则日志被丢弃。
+            build_info::log_build_info();
+
 
         // 校验数据库连接串，未设置则直接退出
         if std::env::var("DATABASE_URL").is_err() {
