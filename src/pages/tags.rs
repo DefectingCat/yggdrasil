@@ -120,9 +120,24 @@ pub fn TagDetail(tag: String) -> Element {
 ///
 /// 通过 `use_server_future` 调用 `get_posts_by_tag` 获取指定标签下的文章；
 /// 成功时渲染文章总数与文章卡片。
+///
+/// # 反应式取数
+/// 同 `post_detail.rs` / `home.rs`：`tag` 是普通 `String` prop，被 `move` 进
+/// `use_server_future` 闭包后成为冻结快照，不建立反应式订阅。从标签云点击
+/// 切换标签（`/tags/a → /tags/b`，同为 `Route::TagDetail` 变体，复用组件实例）
+/// 时 future 不会重跑。修复：在闭包内通过 `router().current::<Route>()` 读取
+/// 当前 tag 建立订阅，路由变化即重跑。
 #[component]
 fn TagDetailContent(tag: String) -> Element {
-    let posts_res = use_server_future(move || get_posts_by_tag(tag.clone(), None, None))?;
+    let router = dioxus::router::router();
+
+    let posts_res = use_server_future(move || {
+        let current_tag = match router.current::<Route>() {
+            Route::TagDetail { tag } => tag,
+            _ => tag.clone(),
+        };
+        get_posts_by_tag(current_tag, None, None)
+    })?;
 
     // 将结果映射为 (posts, total) 形式以便渲染。
     let posts_data = posts_res.read().as_ref().map(|r| match r {

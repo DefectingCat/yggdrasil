@@ -51,10 +51,26 @@ pub fn HomePage(page: i32) -> Element {
 ///
 /// 通过 `use_server_future` 异步获取当前页文章；
 /// 加载中显示骨架屏，加载失败显示错误提示，成功则渲染文章卡片与分页。
+///
+/// # 反应式取数
+/// 同 `post_detail.rs`：`current_page` 是普通 `i32` prop，被 `move` 进
+/// `use_server_future` 闭包后成为冻结快照，读取它不建立反应式订阅。因此
+/// `/page/1 → /page/2`（同为 `Route::HomePage` 变体，复用组件实例）这样的
+/// 同变体分页导航无法触发 future 重跑。修复方式：在闭包内通过
+/// `router().current::<Route>()` 读取当前 page，建立订阅，路由变化即重跑。
+/// `Home`（`/`）调用时路由变体无 page 字段，兜底用传入的 `current_page`。
 #[component]
 fn HomePosts(current_page: i32) -> Element {
-    // 调用 server function 获取已发布文章分页数据。
-    let posts_res = use_server_future(move || list_published_posts(current_page, POSTS_PER_PAGE))?;
+    let router = dioxus::router::router();
+
+    let posts_res = use_server_future(move || {
+        let page = match router.current::<Route>() {
+            Route::HomePage { page } => page.max(1),
+            // / 路由（Route::Home）及其它变体：用 prop 兜底。
+            _ => current_page,
+        };
+        list_published_posts(page, POSTS_PER_PAGE)
+    })?;
 
     // 将结果映射为更便于本地使用的 (posts, total) 形式。
     let posts_data = posts_res.read().as_ref().map(|r| match r {
