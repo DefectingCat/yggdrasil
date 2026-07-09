@@ -126,9 +126,15 @@ fn invoke_optional_global(window: &web_sys::Window, name: &str, args: &[wasm_bin
 ///   这里仅设置其初始化配置 `__lightboxSelectors` 并兜底调用。
 #[component]
 pub fn PostContent(content_html: String) -> Element {
-    // 拆分片段：use_memo 避免每次渲染重复解析。
-    let fragments =
-        use_memo(move || split_content_fragments(&content_html));
+    // 直接在 render 内拆分片段（纯函数调用，符合渲染纯净性）。
+    //
+    // 不用 use_memo：memo 依赖 ReactiveContext 追踪闭包内读取的 signal 才会重算，
+    // 但 content_html 是普通 String prop，读取它不建立订阅——memo 会永久缓存首次
+    // 解析结果。当上下篇切换、content_html prop 变化时 memo 不重算，返回旧 fragments，
+    // 导致 dangerous_inner_html 收到旧 html、diff 判断属性未变 → 正文 DOM 不更新
+    // （表现为标题/描述更新了但正文停在旧文章）。split_content_fragments 是纯函数，
+    // 每次渲染重新解析开销可控。
+    let fragments = split_content_fragments(&content_html);
 
     #[cfg(target_arch = "wasm32")]
     use_effect(move || {
@@ -151,7 +157,7 @@ pub fn PostContent(content_html: String) -> Element {
 
     rsx! {
         div { class: "post-content md-content",
-            for (i, fragment) in fragments.read().iter().enumerate() {
+            for (i, fragment) in fragments.iter().enumerate() {
                 {match fragment {
                     ContentFragment::Html(html) => rsx! {
                         div { key: "html-{i}", dangerous_inner_html: "{html}" }
