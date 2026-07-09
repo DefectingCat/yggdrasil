@@ -275,7 +275,7 @@ pub fn CodeRunner(
     };
 
     rsx! {
-        div { class: "rounded-2xl overflow-hidden border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)]",
+        div { class: "rounded-2xl overflow-hidden border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] mb-[var(--content-gap-paper)]",
             // 顶栏：语言标签 + 运行按钮
             div { class: "flex justify-between items-center px-4 py-2.5 border-b border-[var(--color-paper-border)] bg-[var(--color-paper-theme)]",
                 div { class: "flex items-center gap-3",
