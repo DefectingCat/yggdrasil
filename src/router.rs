@@ -29,35 +29,37 @@ use crate::theme::{use_theme_provider, ThemePreload};
 #[derive(Clone, Routable, Debug, PartialEq)]
 #[rustfmt::skip]
 pub enum Route {
-    // 前台页面共享布局
-    #[layout(FrontendLayout)]
-        /// 首页
-        #[route("/")]
-        Home {},
-        /// 首页分页
-        #[route("/page/:page")]
-        HomePage { page: i32 },
-        /// 文章归档页
-        #[route("/archives")]
-        Archives {},
-        /// 标签列表页
-        #[route("/tags")]
-        Tags {},
-        /// 单个标签下的文章列表
-        #[route("/tags/:tag")]
-        TagDetail { tag: String },
-        /// 文章详情页，按 slug 匹配
-        #[route("/post/:slug")]
-        PostDetail { slug: String },
-        /// 搜索页
-        #[route("/search")]
-        Search {},
-        /// 关于页面
-        #[route("/about")]
-        About {},
-        /// 404 兜底路由，匹配所有未命中路径
-        #[route("/:..segments")]
-        NotFound { segments: Vec<String> },
+    // 前台页面共享布局，最外层嵌套错误边界布局以拦截报错
+    #[layout(ErrorLayout)]
+        #[layout(FrontendLayout)]
+            /// 首页
+            #[route("/")]
+            Home {},
+            /// 首页分页
+            #[route("/page/:page")]
+            HomePage { page: i32 },
+            /// 文章归档页
+            #[route("/archives")]
+            Archives {},
+            /// 标签列表页
+            #[route("/tags")]
+            Tags {},
+            /// 单个标签下的文章列表
+            #[route("/tags/:tag")]
+            TagDetail { tag: String },
+            /// 文章详情页，按 slug 匹配
+            #[route("/post/:slug")]
+            PostDetail { slug: String },
+            /// 搜索页
+            #[route("/search")]
+            Search {},
+            /// 关于页面
+            #[route("/about")]
+            About {},
+            /// 404 兜底路由，匹配所有未命中路径
+            #[route("/:..segments")]
+            NotFound { segments: Vec<String> },
+        #[end_layout]
     #[end_layout]
 
     // 后台管理路由嵌套在 `/admin` 下
@@ -128,6 +130,51 @@ pub fn AppRouter() -> Element {
         div {
             ThemePreload {}
             Router::<Route> {}
+        }
+    }
+}
+
+#[component]
+fn ErrorLayout() -> Element {
+    rsx! {
+        ErrorBoundary {
+            handle_error: move |err: ErrorContext| {
+                // Commit the status code on the server side
+                #[cfg(feature = "server")]
+                {
+                    if let Some(captured_error) = err.error() {
+                        let _ = dioxus::fullstack::FullstackContext::commit_error_status(captured_error);
+                    }
+                }
+
+                // Parse the captured error to detect 404 vs 500
+                let mut is_404 = false;
+                if let Some(captured_error) = err.error() {
+                    let err_str = format!("{:?}", captured_error);
+                    if err_str.contains("NotFound") || err_str.contains("404") || err_str.contains("not found") {
+                        is_404 = true;
+                    }
+                }
+
+                if is_404 {
+                    rsx! {
+                        NotFound { segments: vec![] }
+                    }
+                } else {
+                    rsx! {
+                        div { class: "flex flex-col items-center justify-center text-center min-h-[50vh] px-6",
+                            h1 { class: "text-2xl font-bold text-red-500 mb-4", "加载失败" }
+                            p { class: "text-paper-secondary mb-6", "抱歉，加载页面时出现了一些错误，请稍后再试。" }
+                            dioxus::router::components::Link {
+                                class: "px-5 py-2.5 bg-paper-entry border border-paper-border rounded-lg text-sm font-medium text-paper-primary hover:border-paper-secondary transition-all",
+                                to: Route::Home {},
+                                "返回首页"
+                            }
+                        }
+                    }
+                }
+            },
+            Outlet::<Route> {}
         }
     }
 }
