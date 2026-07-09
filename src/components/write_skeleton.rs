@@ -1,15 +1,15 @@
 //! 文章编辑器页骨架屏
 //!
 //! 在写文章/编辑文章页面加载时展示，镜像 Write 页面的左右两栏结构：
-//! 左栏(标题+摘要+编辑器) + 右栏(链接/标签/封面) + 底部操作栏。
+//! 左栏(标题+编辑器) + 右栏(链接/标签/摘要/封面) + 底部操作栏。
 
 use crate::components::skeletons::atoms::*;
 use dioxus::prelude::*;
 
 /// 文章编辑器页骨架屏组件。
 ///
-/// 镜像 Write 页面的左右两栏布局：左栏主写作区(标题、摘要、编辑器)，
-/// 右栏侧边栏(链接、标签、封面图)，底部贴底操作栏。
+/// 镜像 Write 页面的左右两栏布局：左栏主写作区(标题、编辑器)，
+/// 右栏侧边栏(链接、标签、摘要、封面图)，底部贴底操作栏。
 #[component]
 pub fn WriteSkeleton() -> Element {
     rsx! {
@@ -22,8 +22,6 @@ pub fn WriteSkeleton() -> Element {
                 div { class: "flex-1 min-w-0 min-h-0 overflow-y-auto px-6 py-8 flex flex-col",
                     // 标题输入
                     SkeletonBox { class: "h-10 w-3/4 rounded-lg" }
-                    // 摘要
-                    SkeletonBox { class: "h-5 w-full rounded mt-6" }
 
                     // 编辑器区域:flex-1 撑满左栏剩余高度
                     div { class: "flex-1 min-h-[400px] flex flex-col my-4",
@@ -59,6 +57,11 @@ pub fn WriteSkeleton() -> Element {
                     div { class: "p-6 border-b border-[var(--color-paper-border)]",
                         SkeletonBox { class: "h-3 w-10 rounded mb-3" }
                         SkeletonBox { class: "h-8 w-full rounded-xl" }
+                    }
+                    // 摘要节
+                    div { class: "p-6 border-b border-[var(--color-paper-border)]",
+                        SkeletonBox { class: "h-3 w-10 rounded mb-3" }
+                        SkeletonBox { class: "h-16 w-full rounded-xl" }
                     }
                     // 封面图节
                     div { class: "p-6",

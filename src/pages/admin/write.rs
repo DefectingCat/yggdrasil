@@ -430,15 +430,6 @@ fn write_editor(post_id: Option<i32>) -> Element {
                         oninput: move |evt| title.set(evt.value()),
                     }
 
-                    // 摘要
-                    textarea {
-                        class: "w-full text-base font-normal bg-transparent text-[var(--color-paper-secondary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none resize-none leading-relaxed mb-4 border-b-2 border-transparent focus:border-[var(--color-paper-border)] pb-2 transition-all mt-6",
-                        placeholder: "摘要（选填）...",
-                        rows: "2",
-                        value: "{summary}",
-                        oninput: move |evt| summary.set(evt.value()),
-                    }
-
                     // 错误和成功提示
                     if let Some(err) = load_error() {
                         div { class: "flex-shrink-0 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30 mb-2",
@@ -516,6 +507,17 @@ fn write_editor(post_id: Option<i32>) -> Element {
                             placeholder: "逗号分隔...",
                             value: "{tags}",
                             oninput: move |evt| tags.set(evt.value()),
+                        }
+                    }
+                    // 摘要节
+                    div { class: "p-6 border-b border-[var(--color-paper-border)]",
+                        label { class: "block text-xs font-semibold uppercase tracking-wide text-[var(--color-paper-tertiary)] mb-3", "摘要" }
+                        textarea {
+                            class: "w-full text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-xl px-3 py-2 transition-all resize-none leading-relaxed",
+                            placeholder: "选填...",
+                            rows: "3",
+                            value: "{summary}",
+                            oninput: move |evt| summary.set(evt.value()),
                         }
                     }
                     // 封面图节
