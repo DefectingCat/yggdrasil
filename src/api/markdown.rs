@@ -726,8 +726,8 @@ console.log(1)
 
     #[test]
     fn render_markdown_runnable_marker_on_unsupported_lang_ignored() {
-        // 语言不在白名单：runnable 标记被忽略，输出普通代码块。
-        let result = render_markdown_enhanced("```rust runnable\nfn main(){}\n```");
+        // 语言不在白名单(rust 已在白名单,改用 ruby)：runnable 标记被忽略,输出普通代码块。
+        let result = render_markdown_enhanced("```ruby runnable\nputs 'hi'\n```");
         assert!(
             !result.html.contains("data-runnable"),
             "不支持的语言不应挂 data-runnable, got: {}",
