@@ -74,7 +74,7 @@ pub fn AdminLayout() -> Element {
     let root_class = "min-h-dvh flex bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] font-sans";
 
     let nav_content = rsx! {
-        aside { class: "w-64 flex-shrink-0 hidden md:flex flex-col h-screen sticky top-0 p-6 bg-[var(--color-paper-entry)]",
+        aside { class: "w-64 flex-shrink-0 hidden md:flex flex-col h-screen sticky top-0 p-4 bg-[var(--color-paper-entry)]",
             // Logo
             div { class: "mb-10 px-4",
                 Link {
