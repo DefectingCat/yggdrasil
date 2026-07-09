@@ -302,3 +302,22 @@ The single most repeated mistake: running only `cargo build --all-features` (ser
 ### Placing util functions: check the feature gate of the target module
 
 `src/utils/text.rs` is `#[cfg(feature = "server")]`-gated and pulls in `regex` (an optional, server-only dep). A frontend-reachable function (e.g. `escape_html`, called from a `#[component]`) **cannot** move there — the WASM build would fail on the missing `regex` crate. Use an ungated module (`src/utils/html.rs`, `src/utils/time.rs`) for code that must compile on both targets. Verify the destination module's cfg before moving anything into it.
+
+### Reactive hooks don't track plain props (`use_server_future` / `use_resource` / `use_memo`)
+
+Dioxus 0.7's reactive hooks (`use_server_future`, `use_resource`, `use_memo`) only re-run/recompute when a **signal read inside their closure** changes. They track dependencies via a `ReactiveContext` that subscribes to signals *during the closure's execution*. **A plain component prop (`String`, `i32`, any non-signal) is a frozen snapshot the moment it's `move`d into the closure — reading it establishes no subscription.** So when the prop later changes (e.g. a route param updates), the hook does **not** re-run. The component re-renders (props are unequal), but the hook's task/memo keeps its first-run value forever.
+
+This bites specifically on **same-route-variant navigation**: `/post/a → /post/b` (both `Route::PostDetail`) reuses the component instance and only updates props, so the frozen prop never refreshes the hook. Cross-variant navigation (`/ → /page/2`, i.e. `Route::Home → Route::HomePage`) mounts a fresh component and runs the hook for the first time, so it looks fine and hides the bug.
+
+This cost three rounds of debugging (commits `79978aa`, `1c56fd8`, `f86cb48`):
+
+1. **`use_server_future` not re-fetching** (`src/pages/post_detail.rs`, `home.rs`, `tags.rs`): `use_server_future(move || get_post_by_slug(slug.clone()))` — clicking prev/next changed the URL but the article content stayed on the old post (only a full browser refresh worked). Fix: read the slug **inside** the closure via `dioxus::router::router().current::<Route>()` — `current()` calls `subscribe_to_current_context()`, registering the subscription in the hook's `ReactiveContext`, so route changes re-run the future.
+
+2. **`use_memo` caching stale derived data** (`src/components/post/post_content.rs`): `use_memo(move || split_content_fragments(&content_html))` — after the route fix made the *title* update, the *body* still showed the old article. The memo permanently cached the first parse because `content_html` is a plain `String` prop. Fix: drop the memo, call the pure `split_content_fragments(&content_html)` directly in the render body (render purity is preserved — it's a pure function call).
+
+**Decision rule:**
+- If the value a hook depends on is a **signal** (from `use_signal`, a `Resource`/`Memo`, `router.current()`, context), the hook re-runs correctly — no action needed.
+- If it's a **plain prop** that can change while the component instance is reused (route params, parent-passed `String`/`i32`), the hook will **silently keep stale data**. Either read a signal source inside the closure, or drop the hook and recompute inline.
+- For one-off derived values from props, prefer **direct inline computation** in the render body (it's pure) over `use_memo` — the memo buys nothing for prop-derived data since it won't recompute anyway, and it introduces this exact staleness bug.
+
+**Suspect areas still open:** `CommentSection` (`src/components/comments/section.rs:86`) reads `post_id` (plain prop) inside `use_resource` — currently safe only because its parent `article` uses `key: "{post.slug}"` and remounts it on every article switch. If that key is ever removed/changed, comments would stop refreshing on navigation.
