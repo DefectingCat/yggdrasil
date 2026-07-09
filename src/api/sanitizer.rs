@@ -339,18 +339,14 @@ fn sanitize(input: &str, config: &SanitizerConfig) -> String {
         Ok(())
     };
 
-    lol_html::rewrite_str(
-        input,
-        lol_html::RewriteStrSettings {
-            element_content_handlers: vec![lol_html::element!("*", element_handler)],
-            document_content_handlers: vec![lol_html::doc_comments!(|c| {
-                c.remove();
-                Ok(())
-            })],
-            ..lol_html::RewriteStrSettings::new()
-        },
-    )
-    .unwrap_or_default()
+    let settings = lol_html::RewriteStrSettings::new()
+        .append_element_content_handler(lol_html::element!("*", element_handler))
+        .append_document_content_handler(lol_html::doc_comments!(|c| {
+            c.remove();
+            Ok(())
+        }));
+
+    lol_html::rewrite_str(input, settings).unwrap_or_default()
 }
 
 #[cfg(feature = "server")]

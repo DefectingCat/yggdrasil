@@ -5,8 +5,12 @@ use tokio::time::timeout;
 use futures::StreamExt;
 
 use bollard::Docker;
-use bollard::container::{Config, CreateContainerOptions, StartContainerOptions, RemoveContainerOptions, LogOutput, WaitContainerOptions};
-use bollard::models::{HostConfig, ResourcesUlimits};
+use bollard::container::LogOutput;
+use bollard::models::{HostConfig, ResourcesUlimits, ContainerCreateBody};
+use bollard::query_parameters::{
+    CreateContainerOptions, StartContainerOptions, RemoveContainerOptions, WaitContainerOptions,
+    AttachContainerOptions,
+};
 use crate::infra::runner_config::{ResourceLimits, RUNNER_CONFIG};
 
 pub static DOCKER_CLIENT: LazyLock<Docker> = LazyLock::new(|| {
@@ -81,7 +85,7 @@ pub async fn run_in_container(
     let setup_cmd = format!("cat > /code/main.{} && exec {}", ext, run_cmd);
     let cmd = vec!["sh".to_string(), "-c".to_string(), setup_cmd];
 
-    let config = Config {
+    let config = ContainerCreateBody {
         image: Some(image_name.to_string()),
         cmd: Some(cmd),
         host_config: Some(host_config),
@@ -96,7 +100,7 @@ pub async fn run_in_container(
     };
 
     let container = docker.create_container(
-        None::<CreateContainerOptions<String>>,
+        None::<CreateContainerOptions>,
         config
     ).await?;
 
@@ -109,11 +113,12 @@ pub async fn run_in_container(
     // Attach to container to stream stdin, stdout, and stderr
     let attach_res = docker.attach_container(
         &container_id,
-        Some(bollard::container::AttachContainerOptions::<String> {
-            stdin: Some(true),
-            stdout: Some(true),
-            stderr: Some(true),
-            stream: Some(true),
+        Some(AttachContainerOptions {
+            stdin: true,
+            stdout: true,
+            stderr: true,
+            stream: true,
+            logs: false,
             ..Default::default()
         })
     ).await;
@@ -125,7 +130,7 @@ pub async fn run_in_container(
 
     // Start container
     docker
-        .start_container(&container_id, None::<StartContainerOptions<String>>)
+        .start_container(&container_id, None::<StartContainerOptions>)
         .await?;
 
     // Write source code to stdin and drop/close the writer
@@ -145,7 +150,7 @@ pub async fn run_in_container(
 
     // Wait for execution with timeout control
     let wait_future = async {
-        let mut wait_stream = docker.wait_container(&container_id, None::<WaitContainerOptions<String>>);
+        let mut wait_stream = docker.wait_container(&container_id, None::<WaitContainerOptions>);
         wait_stream.next().await
     };
 
@@ -162,7 +167,7 @@ pub async fn run_in_container(
         Err(_) => {
             // timeout, kill container
             timed_out = true;
-            let _ = docker.kill_container::<String>(&container_id, None).await;
+            let _ = docker.kill_container(&container_id, None).await;
         }
     }
 
@@ -329,9 +334,10 @@ mod tests {
     #[tokio::test]
     #[serial_test::serial]
     async fn test_run_in_container_cancellation() {
+        use bollard::query_parameters::ListContainersOptions;
         let docker = &*DOCKER_CLIENT;
         
-        let before = docker.list_containers(Some(bollard::container::ListContainersOptions::<String> {
+        let before = docker.list_containers(Some(ListContainersOptions {
             all: true,
             ..Default::default()
         })).await.unwrap();
@@ -364,7 +370,7 @@ mod tests {
 
         tokio::time::sleep(Duration::from_secs(2)).await;
 
-        let after = docker.list_containers(Some(bollard::container::ListContainersOptions::<String> {
+        let after = docker.list_containers(Some(ListContainersOptions {
             all: true,
             ..Default::default()
         })).await.unwrap();
@@ -379,7 +385,7 @@ mod tests {
 
         let leaked_count = leaked.len();
         for id in leaked {
-            let _ = docker.remove_container(&id, Some(bollard::container::RemoveContainerOptions {
+            let _ = docker.remove_container(&id, Some(RemoveContainerOptions {
                 force: true,
                 ..Default::default()
             })).await;

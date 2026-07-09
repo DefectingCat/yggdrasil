@@ -120,14 +120,19 @@ fn check_guards(
 
     for stmt in asts {
         match stmt {
-            // 护栏 1（绝禁）：DROP SCHEMA 永远禁止（ObjectType 无 Database 变体，
-            // DROP DATABASE 仅字符串预检拦截——见 is_absolutely_forbidden）。
-            // 这里在 AST 层结构性禁止 DROP SCHEMA，防 SQL 注释/空白绕过字符串预检。
+            // 护栏 1（绝禁）：DROP SCHEMA 和 DROP DATABASE 永远禁止。
+            // 这里在 AST 层结构性禁止，防 SQL 注释/空白绕过字符串预检。
             Statement::Drop {
                 object_type: ObjectType::Schema,
                 ..
             } => {
                 return GuardResult::Forbidden("禁止 DROP SCHEMA".to_string());
+            }
+            Statement::Drop {
+                object_type: ObjectType::Database,
+                ..
+            } => {
+                return GuardResult::Forbidden("禁止 DROP DATABASE".to_string());
             }
             // 护栏 1（绝禁）：CREATE DATABASE 永远禁止。sqlparser 能解析它，
             // 故在 AST 层补上结构禁止——这是字符串预检之外的第二道防线，
@@ -142,13 +147,13 @@ fn check_guards(
                 }
             }
             // 护栏 2：UPDATE 无 WHERE
-            Statement::Update { selection: None, .. } => {
+            Statement::Update(sqlparser::ast::Update { selection: None, .. }) => {
                 return GuardResult::Forbidden(
                     "UPDATE 缺少 WHERE 子句，将影响全表。请加 WHERE 条件。".to_string(),
                 );
             }
             // 护栏 2：DELETE 无 WHERE
-            Statement::Delete { selection: None, .. } => {
+            Statement::Delete(sqlparser::ast::Delete { selection: None, .. }) => {
                 return GuardResult::Forbidden(
                     "DELETE 缺少 WHERE 子句，将影响全表。请加 WHERE 条件。".to_string(),
                 );
@@ -165,9 +170,9 @@ fn statement_type_name(stmt: &sqlparser::ast::Statement) -> String {
     use sqlparser::ast::Statement;
     let name = match stmt {
         Statement::Query(_) => "Select",
-        Statement::Insert { .. } => "Insert",
-        Statement::Update { .. } => "Update",
-        Statement::Delete { .. } => "Delete",
+        Statement::Insert(_) => "Insert",
+        Statement::Update(_) => "Update",
+        Statement::Delete(_) => "Delete",
         Statement::CreateTable { .. } => "CreateTable",
         Statement::AlterTable { .. } => "AlterTable",
         Statement::Drop { .. } => "Drop",
@@ -475,11 +480,13 @@ mod tests {
     }
 
     #[test]
-    fn drop_database_cannot_be_parsed_so_precheck_is_sole_guard() {
-        // 安全不变量:sqlparser 的 PostgreSqlDialect 无法解析 DROP DATABASE。
-        // 故 is_absolutely_forbidden 是 DROP DATABASE 的唯一防线。
-        // 若未来 sqlparser 升级后能解析它,必须在 check_guards 补 AST 分支。
-        assert!(parse("DROP DATABASE x").is_empty());
+    fn drop_database_is_guarded_by_both_precheck_and_ast_check() {
+        let asts = parse("DROP DATABASE x");
+        assert!(!asts.is_empty(), "DROP DATABASE 应可被 sqlparser 解析");
+        assert!(matches!(
+            check_guards(&asts, true),
+            GuardResult::Forbidden(_)
+        ));
         assert!(is_absolutely_forbidden("DROP DATABASE x").is_some());
     }
 
