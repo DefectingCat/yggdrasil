@@ -5,6 +5,8 @@
 
 use dioxus::prelude::*;
 
+use crate::components::skeletons::atoms::SkeletonBox;
+use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::ui::{
     BTN_OUTLINE, BTN_PRIMARY_SM, BTN_TEXT_AMBER, BTN_TEXT_RED, FilterTabs, LoadingButton,
 };
@@ -86,7 +88,9 @@ pub fn System() -> Element {
             }
 
             // tab 内容
-            div {
+            // key 保证切换 tab 时 Dioxus 完全卸载旧组件、重新挂载新组件，
+            // 避免 hook slot 复用导致 DelayedSkeleton 的 visible 信号残留为 true。
+            div { key: "{active_tab().as_str()}",
                 match active_tab() {
                     SystemTab::DbStatus => rsx! { DbStatusTab {} },
                     SystemTab::ServerStatus => rsx! { ServerStatusTab {} },
@@ -159,9 +163,15 @@ fn DbStatusTab() -> Element {
         loading.set(true);
         #[cfg(target_arch = "wasm32")]
         {
+            let t0 = crate::utils::time::now_millis();
+            web_sys::console::log_1(&format!("[DEBUG-db] fetch start at {t0}").into());
             spawn(async move {
                 match get_db_status().await {
                     Ok(s) => {
+                        let t1 = crate::utils::time::now_millis();
+                        web_sys::console::log_1(
+                            &format!("[DEBUG-db] fetch done at {t1} (Δ={}ms)", t1 - t0).into(),
+                        );
                         status.set(Some(s));
                         error.set(None);
                     }
@@ -405,7 +415,32 @@ fn DbStatusTab() -> Element {
                     }
                 }
             } else if loading() {
-                div { class: "text-paper-secondary py-8", "加载中..." }
+                // 首次加载骨架屏：延迟 200ms 显示，避免快速加载闪烁。
+                DelayedSkeleton {
+                    div { class: "space-y-4",
+                        // 概览卡片骨架
+                        div { class: "grid grid-cols-2 md:grid-cols-4 gap-4",
+                            for _ in 0..4 {
+                                div { class: "rounded-xl bg-paper-entry border border-paper-border p-4 space-y-2",
+                                    SkeletonBox { class: "h-3 w-16 rounded" }
+                                    SkeletonBox { class: "h-6 w-24 rounded" }
+                                }
+                            }
+                        }
+                        // 表清单骨架
+                        div { class: "rounded-xl bg-paper-entry border border-paper-border overflow-hidden",
+                            div { class: "px-4 py-3 border-b border-paper-border",
+                                SkeletonBox { class: "h-4 w-40 rounded" }
+                            }
+                            for _ in 0..5 {
+                                div { class: "flex justify-between px-4 py-3 border-b border-paper-border last:border-0",
+                                    SkeletonBox { class: "h-4 w-24 rounded" }
+                                    SkeletonBox { class: "h-4 w-16 rounded" }
+                                }
+                            }
+                        }
+                    }
+                }
             } else {
                 div { class: "text-paper-secondary py-8", "暂无数据" }
             }
@@ -663,7 +698,41 @@ fn ServerStatusTab() -> Element {
                     }
                 }
             } else if loading() {
-                div { class: "text-paper-secondary py-8", "加载中..." }
+                // 首次加载骨架屏：延迟 200ms 显示，避免快速加载闪烁。
+                DelayedSkeleton {
+                    div { class: "space-y-4",
+                        // 应用内指标卡片骨架
+                        div { class: "grid grid-cols-2 md:grid-cols-4 gap-4",
+                            for _ in 0..4 {
+                                div { class: "rounded-xl bg-paper-entry border border-paper-border p-4 space-y-2",
+                                    SkeletonBox { class: "h-3 w-16 rounded" }
+                                    SkeletonBox { class: "h-6 w-24 rounded" }
+                                }
+                            }
+                        }
+                        // 主机层指标卡片骨架
+                        div { class: "grid grid-cols-2 md:grid-cols-4 gap-4",
+                            for _ in 0..4 {
+                                div { class: "rounded-xl bg-paper-entry border border-paper-border p-4 space-y-2",
+                                    SkeletonBox { class: "h-3 w-16 rounded" }
+                                    SkeletonBox { class: "h-6 w-24 rounded" }
+                                }
+                            }
+                        }
+                        // 缓存命中率表骨架
+                        div { class: "rounded-xl bg-paper-entry border border-paper-border overflow-hidden",
+                            div { class: "px-4 py-3 border-b border-paper-border",
+                                SkeletonBox { class: "h-4 w-24 rounded" }
+                            }
+                            for _ in 0..4 {
+                                div { class: "flex justify-between px-4 py-3 border-b border-paper-border last:border-0",
+                                    SkeletonBox { class: "h-4 w-20 rounded" }
+                                    SkeletonBox { class: "h-4 w-12 rounded" }
+                                }
+                            }
+                        }
+                    }
+                }
             } else {
                 div { class: "text-paper-secondary py-8", "暂无数据" }
             }
