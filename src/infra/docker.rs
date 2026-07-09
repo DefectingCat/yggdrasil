@@ -17,7 +17,10 @@ pub static DOCKER_CLIENT: LazyLock<Docker> = LazyLock::new(|| {
 pub fn build_host_config(limits: &ResourceLimits) -> HostConfig {
     let mut tmpfs = HashMap::new();
     tmpfs.insert("/code".to_string(), "size=16m,uid=1000,gid=1000".to_string());
-    tmpfs.insert("/tmp".to_string(), "size=64m,mode=1777".to_string());
+    // /tmp 必须 exec：编译型语言（go/rust）把编译产物落在 /tmp 后再 exec，
+    // Docker tmpfs 默认 noexec 会让执行二进制时报 EACCES（permission denied）。
+    // 解释型语言（python/node）执行根文件系统的解释器，不受影响。
+    tmpfs.insert("/tmp".to_string(), "size=64m,mode=1777,exec".to_string());
     tmpfs.insert("/run".to_string(), "size=16m,mode=1777".to_string());
 
     let memory = (limits.memory_mb * 1024 * 1024) as i64;
