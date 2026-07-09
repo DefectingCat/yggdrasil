@@ -423,7 +423,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
             div { class: "flex-1 min-h-0 flex",
                 // 左栏(主写作区):flex-1 撑满宽度,min-w-0 防止长标题/代码块撑破 flex,
                 // overflow-y-auto 独立滚动。
-                div { class: "flex-1 min-w-0 min-h-0 overflow-y-auto px-10 py-8 flex flex-col",
+                div { class: "flex-1 min-w-0 min-h-0 overflow-y-auto px-6 py-8 flex flex-col",
                     // 标题输入
                     input {
                         class: "w-full text-4xl md:text-5xl font-extrabold bg-transparent text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none tracking-tight leading-tight",
@@ -531,8 +531,8 @@ fn write_editor(post_id: Option<i32>) -> Element {
 
             // 底部操作栏 - flex 分区布局的贴底块:作为 main 直接子元素(flex-shrink-0),
             // 永远贴卡片底沿,不随内容区滚动。无需 sticky,不会跳动。
-            // px-10 py-4 与内容区水平对齐;border-t 与页头分割线视觉一致。
-            div { class: "flex-shrink-0 px-10 py-4 flex items-center gap-4 border-t border-[var(--color-paper-border)] bg-[var(--color-paper-theme)]",
+            // px-6 py-4 与内容区水平对齐;border-t 与页头分割线视觉一致。
+            div { class: "flex-shrink-0 px-6 py-4 flex items-center gap-4 border-t border-[var(--color-paper-border)] bg-[var(--color-paper-theme)]",
                 button {
                     class: "px-6 py-2 rounded-full text-sm font-medium text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors cursor-pointer",
                     onclick: move |_| {

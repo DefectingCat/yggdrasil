@@ -68,7 +68,7 @@ pub fn AdminLayout() -> Element {
     let main_class = if is_write_route {
         "flex-1 w-full max-w-7xl mx-auto flex flex-col min-h-0"
     } else {
-        "flex-1 w-full max-w-7xl mx-auto px-10 py-12"
+        "flex-1 w-full max-w-7xl mx-auto px-6 py-12"
     };
 
     let root_class = "min-h-dvh flex bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] font-sans";
