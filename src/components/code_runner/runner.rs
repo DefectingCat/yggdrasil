@@ -334,7 +334,7 @@ pub fn CodeRunner(
                         span { class: "font-medium uppercase tracking-wide", "输出" }
                         span { "{exit_info()}" }
                     }
-                    pre { class: "px-4 py-3 m-0 text-xs font-mono text-[var(--color-paper-secondary)] bg-[var(--color-paper-code-block)] overflow-x-auto whitespace-pre-wrap break-words",
+                    pre { class: "px-4 py-3 m-0 text-xs font-mono text-[var(--color-paper-secondary)] bg-[var(--color-paper-code-block)] overflow-auto max-h-80 whitespace-pre-wrap break-words",
                         {output()}
                     }
                 }
