@@ -42,6 +42,7 @@ mod tiptap_bridge;
 // codemirror_bridge：SQL 编辑器的 wasm-bindgen 绑定，结构镜像 tiptap_bridge。
 // 共享类型（SqlSchema/SqlTable）两端都编译；extern 与 EditorHandle 在 #[cfg(wasm32)] 子模块里。
 mod codemirror_bridge;
+mod xterm_bridge;
 mod utils;
 mod webp;
 

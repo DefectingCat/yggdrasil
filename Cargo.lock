@@ -5504,6 +5504,7 @@ dependencies = [
  "sysinfo",
  "tokio",
  "tokio-postgres",
+ "tokio-stream",
  "tower-http 0.7.0",
  "tracing",
  "tracing-subscriber",
