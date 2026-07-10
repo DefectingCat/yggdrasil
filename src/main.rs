@@ -474,6 +474,19 @@ fn main() {
                 ))
                 .layer(axum::middleware::from_fn(crate::api::csrf::csrf_middleware));
 
+            // SSE 流式输出端点：GET /api/exec/stream?task_id=X
+            // 不挂 TimeoutLayer！SSE 是长连接，30s timeout 会杀掉流。
+            // 鉴权 + 限流已在 start_exec_stream server function 完成（校验链），
+            // 此处只校验 task_id 存在；CSRF 对 GET 放行（is_write_method 返回 false）。
+            // CompressionLayer 跳过 text/event-stream（见 compression_layer_from_env 注释），
+            // 但 sse_route 本身不挂 compression，更安全。
+            let sse_route = axum::Router::new()
+                .route(
+                    "/api/exec/stream",
+                    axum::routing::get(crate::api::code_runner::sse::exec_stream),
+                )
+                .layer(axum::middleware::from_fn(crate::api::csrf::csrf_middleware));
+
             // Dioxus 应用路由：自动挂载所有 server function 并渲染前端组件
             let dioxus_app =
                 axum::Router::new().serve_dioxus_application(config, router::AppRouter);
@@ -515,8 +528,12 @@ fn main() {
                     axum::routing::get(|| async { StatusCode::NOT_FOUND }),
                 );
 
-            // 合并：upload 路由保持自己独立的 300s 超时；export 路由 120s；app routes 加可选压缩/30s；static routes 无任何中间件
-            let router = upload_route.merge(export_route).merge(app_routes).merge(static_routes);
+            // 合并：upload 路由 300s 超时；export 路由 120s；sse 路由无超时（长连接）；app routes 加可选压缩/30s；static routes 无任何中间件
+            let router = upload_route
+                .merge(export_route)
+                .merge(sse_route)
+                .merge(app_routes)
+                .merge(static_routes);
 
             Ok(router)
         });

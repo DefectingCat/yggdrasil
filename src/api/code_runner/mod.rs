@@ -77,4 +77,6 @@ pub struct ExecTask {
 pub mod languages;
 #[cfg(feature = "server")]
 pub mod progress;
+#[cfg(feature = "server")]
+pub mod sse;
 pub mod execute;
