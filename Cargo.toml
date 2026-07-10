@@ -49,9 +49,12 @@ md-5 = { version = "0.10", optional = true }
 futures = { version = "0.3", optional = true }
 bytes = { version = "1", optional = true }
 bollard = { version = "0.21", optional = true }
+# 把 mpsc::Receiver 包成 Stream,供 axum SSE handler 使用。
+# axum::response::sse::{Sse,KeepAlive,Event} 随 axum 0.8 自带,无需额外 dep。
+tokio-stream = { version = "0.1", features = ["sync"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3", features = ["Document", "Window", "Storage", "Element", "HtmlElement", "DomTokenList", "MediaQueryList", "HtmlImageElement", "MouseEvent", "KeyboardEvent", "Node", "EventTarget", "Navigator", "File", "FileList", "FormData", "Request", "RequestInit", "Response", "Headers", "ClipboardEvent", "DataTransfer", "HtmlInputElement"] }
+web-sys = { version = "0.3", features = ["Document", "Window", "Storage", "Element", "HtmlElement", "DomTokenList", "MediaQueryList", "HtmlImageElement", "MouseEvent", "KeyboardEvent", "Node", "EventTarget", "Navigator", "File", "FileList", "FormData", "Request", "RequestInit", "Response", "Headers", "ClipboardEvent", "DataTransfer", "HtmlInputElement", "EventSource", "MessageEvent"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
@@ -107,4 +110,5 @@ server = [
     "dep:futures",
     "dep:bytes",
     "dep:bollard",
+    "dep:tokio-stream",
 ]
