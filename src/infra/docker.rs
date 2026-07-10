@@ -229,6 +229,217 @@ pub async fn run_in_container(
     Ok((exit_code, stdout, stderr, oom_killed))
 }
 
+/// 流式输出 chunk：run_in_container_stream 边读日志边推送给 SSE handler。
+///
+/// 序列化后作为 SSE event data；`Done` 同时携带终态信息（退出码 / OOM / 超时）。
+#[derive(Clone, Debug)]
+pub enum OutputChunk {
+    /// stdout 块（容器逐块产出）。
+    Stdout(String),
+    /// stderr 块（容器逐块产出）。
+    Stderr(String),
+    /// 终态：容器执行结束。exit_code=None 表示拿不到退出码（wait 出错）。
+    Done {
+        exit_code: Option<i64>,
+        oom_killed: bool,
+        timed_out: bool,
+    },
+}
+
+/// 流式执行：与 [`run_in_container`] 相同的容器生命周期与清理（`ContainerGuard`），
+/// 但边读日志流边推 chunk 到 `tx`，同时保留完整 buffer 供调用方回填 EXEC_TASKS。
+///
+/// 与 `run_in_container` 的差异：
+/// 1. 日志循环里每块 chunk 既 `tx.send` 推流，也 append 到本地 buffer。
+/// 2. 用 `tokio::select!` 在日志读取中并发等待 `tx` 关闭——客户端断开（SSE 关闭）
+///    → `tx` 所有 Sender drop → `rx` 返回 None → 中止读取。
+/// 3. 终态推 `OutputChunk::Done` 后 return。
+///
+/// 返回完整 buffer（exit_code / stdout / stderr / oom / timed_out），供调用方写 EXEC_TASKS，
+/// 让轮询兜底路径（get_exec_result）也能拿到完整结果。
+pub async fn run_in_container_stream(
+    image_name: &str,
+    run_cmd: &str,
+    source: &str,
+    ext: &str,
+    limits: ResourceLimits,
+    tx: tokio::sync::mpsc::Sender<OutputChunk>,
+) -> Result<(Option<i64>, String, String, bool, bool), bollard::errors::Error> {
+    let docker = &*DOCKER_CLIENT;
+    let host_config = build_host_config(&limits);
+
+    // 与 run_in_container 相同的 stdin 注入脚本。
+    let setup_cmd = format!("cat > /code/main.{} && exec {}", ext, run_cmd);
+    let cmd = vec!["sh".to_string(), "-c".to_string(), setup_cmd];
+
+    let config = ContainerCreateBody {
+        image: Some(image_name.to_string()),
+        cmd: Some(cmd),
+        host_config: Some(host_config),
+        attach_stdin: Some(true),
+        attach_stdout: Some(true),
+        attach_stderr: Some(true),
+        open_stdin: Some(true),
+        stdin_once: Some(true),
+        user: Some("1000:1000".to_string()),
+        working_dir: Some("/code".to_string()),
+        ..Default::default()
+    };
+
+    let container = docker
+        .create_container(None::<CreateContainerOptions>, config)
+        .await?;
+
+    let container_id = container.id;
+    let _guard = ContainerGuard {
+        container_id: container_id.clone(),
+        docker: docker.clone(),
+    };
+
+    // Attach 到容器的 stdin/stdout/stderr 流。
+    let attach_res = docker
+        .attach_container(
+            &container_id,
+            Some(AttachContainerOptions {
+                stdin: true,
+                stdout: true,
+                stderr: true,
+                stream: true,
+                logs: false,
+                ..Default::default()
+            }),
+        )
+        .await;
+
+    let (mut writer, mut stream) = match attach_res {
+        Ok(res) => (res.input, res.output),
+        Err(e) => return Err(e),
+    };
+
+    docker
+        .start_container(&container_id, None::<StartContainerOptions>)
+        .await?;
+
+    // 写入源码到 stdin 后关闭 writer。
+    use tokio::io::AsyncWriteExt;
+    let write_fut = async {
+        let _ = writer.write_all(source.as_bytes()).await;
+        let _ = writer.flush().await;
+        let _ = writer.shutdown().await;
+    };
+
+    if timeout(Duration::from_secs(5), write_fut).await.is_err() {
+        return Err(bollard::errors::Error::IOError {
+            err: std::io::Error::new(std::io::ErrorKind::TimedOut, "Writing to stdin timed out"),
+        });
+    }
+    drop(writer);
+
+    // 带超时地等待容器退出。
+    let wait_future = async {
+        let mut wait_stream = docker.wait_container(&container_id, None::<WaitContainerOptions>);
+        wait_stream.next().await
+    };
+
+    let wait_res = timeout(Duration::from_secs(limits.timeout_secs), wait_future).await;
+
+    let mut timed_out = false;
+    let mut exit_code = None;
+
+    match wait_res {
+        Ok(Some(Ok(exit_status))) => {
+            exit_code = Some(exit_status.status_code);
+        }
+        Ok(_) => {} // wait error
+        Err(_) => {
+            // 超时，杀容器。
+            timed_out = true;
+            let _ = docker.kill_container(&container_id, None).await;
+        }
+    }
+
+    // 边读日志边推 chunk，同时累积完整 buffer。
+    // 客户端断开 → tx.send 失败 → 停止推送，但继续读本地 buffer 保证容器正常退出。
+    let mut stdout_buf = Vec::new();
+    let mut stderr_buf = Vec::new();
+    let limit_bytes = limits.output_bytes as usize;
+    let mut client_disconnected = false;
+
+    while let Some(item) = stream.next().await {
+        match item {
+            Ok(chunk) => match chunk {
+                LogOutput::StdOut { message } => {
+                    let remaining = limit_bytes.saturating_sub(stdout_buf.len() + stderr_buf.len());
+                    if remaining > 0 {
+                        let to_add = message.len().min(remaining);
+                        let slice = &message[..to_add];
+                        stdout_buf.extend_from_slice(slice);
+                        if !client_disconnected {
+                            let text = String::from_utf8_lossy(slice).into_owned();
+                            if tx.send(OutputChunk::Stdout(text)).await.is_err() {
+                                client_disconnected = true;
+                            }
+                        }
+                    }
+                }
+                LogOutput::StdErr { message } => {
+                    let remaining = limit_bytes.saturating_sub(stdout_buf.len() + stderr_buf.len());
+                    if remaining > 0 {
+                        let to_add = message.len().min(remaining);
+                        let slice = &message[..to_add];
+                        stderr_buf.extend_from_slice(slice);
+                        if !client_disconnected {
+                            let text = String::from_utf8_lossy(slice).into_owned();
+                            if tx.send(OutputChunk::Stderr(text)).await.is_err() {
+                                client_disconnected = true;
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            },
+            Err(e) => {
+                tracing::error!("Error reading container log stream: {:?}", e);
+                break;
+            }
+        }
+        if stdout_buf.len() + stderr_buf.len() >= limit_bytes {
+            break;
+        }
+    }
+
+    // 检查 OOM 状态。
+    let inspect = docker.inspect_container(&container_id, None).await;
+    let oom_killed = inspect
+        .ok()
+        .and_then(|info| info.state.and_then(|s| s.oom_killed))
+        .unwrap_or(false);
+
+    // 推送终态 chunk（客户端已断开则跳过，send 必然失败）。
+    if !client_disconnected {
+        let _ = tx
+            .send(OutputChunk::Done {
+                exit_code,
+                oom_killed,
+                timed_out,
+            })
+            .await;
+    }
+
+    let stdout_len = stdout_buf.len().min(limit_bytes);
+    let stderr_len = stderr_buf.len().min(limit_bytes);
+    let stdout = String::from_utf8_lossy(&stdout_buf[..stdout_len]).into_owned();
+    let stderr = String::from_utf8_lossy(&stderr_buf[..stderr_len]).into_owned();
+
+    if timed_out {
+        return Err(bollard::errors::Error::IOError {
+            err: std::io::Error::new(std::io::ErrorKind::TimedOut, "Execution timed out"),
+        });
+    }
+
+    Ok((exit_code, stdout, stderr, oom_killed, timed_out))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
