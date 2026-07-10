@@ -17,6 +17,8 @@ public/yggdrasil-core/
 # Uploads directory is created at runtime; only keep the gitkeep marker.
 uploads/*
 !uploads/.gitkeep
+backups/*
+!backups/.gitkeep
 
 # Docker files themselves are not needed in the build context.
 Dockerfile
