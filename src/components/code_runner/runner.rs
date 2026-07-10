@@ -1,21 +1,31 @@
-//! CodeRunner 组件实现：源码 + 运行按钮 + 轮询 + 输出区。
+//! CodeRunner 组件实现：源码 + 运行按钮 + SSE 流式输出 + xterm.js 终端。
 //!
 //! 编辑器挂载：组件在 WASM 端按自身 `container_id` 调用
 //! `codemirror_bridge::get_module().create(...)` 挂载 CodeMirror，`onChange`
 //! 回写到内部 `source_signal`，`use_drop` 时销毁实例。范式镜像 SQL 控制台
 //!（`src/pages/admin/system.rs`）与 Tiptap 编辑器（`src/pages/admin/write.rs`）。
+//!
+//! 输出渲染：WASM 端按 `output_container_id` 调用 `xterm_bridge::get_module().create(...)`
+//! 挂载 xterm.js 终端（输出专用，无 stdin），SSE stdout/stderr 事件实时写入。
+//! SSE 不可用时降级到轮询 get_exec_result，整段写入终端（writeAll）。
 
 use dioxus::prelude::*;
 
+#[cfg(not(target_arch = "wasm32"))]
 use crate::api::code_runner::execute::{get_exec_result, start_exec};
+#[cfg(target_arch = "wasm32")]
+use crate::api::code_runner::execute::start_exec_stream;
 use crate::api::code_runner::{ExecRequest, ExecStatus};
 use crate::components::ui::SPINNER_SVG;
 use crate::infra::runner_config::ResourceLimits;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::utils::time::sleep_ms;
 
-/// 轮询间隔（毫秒）。
+/// 轮询间隔（毫秒）。仅 server 端 run_code 占位路径使用。
+#[cfg(not(target_arch = "wasm32"))]
 const POLL_INTERVAL_MS: u32 = 500;
 /// 轮询最大次数兜底，避免任务卡在 Running 状态时无限轮询。
+#[cfg(not(target_arch = "wasm32"))]
 const MAX_POLLS: u32 = 240; // 500ms * 240 = 120s 上限
 
 /// 代码运行器组件。
@@ -30,10 +40,10 @@ const MAX_POLLS: u32 = 240; // 500ms * 240 = 120s 上限
 ///   （时间戳 / 随机 / ScopeId）生成的 id，在 SSR 与 hydration 两端会不一致，
 ///   导致 CodeMirror `create()` 在 hydration 时找不到 SSR 渲染的容器元素。
 ///
-/// `mut` 信号仅在 WASM 的 spawn 闭包内被 `.set()`，server 构建会触发 unused_mut，
-/// 故按项目惯例加 `cfg_attr` 放行（参见 AGENTS.md「mut bindings needed only on WASM」）。
+/// `mut` 信号在 WASM 与 server 两套 run_code（#[cfg] 分支）中的 .set() 调用点不同，
+/// 导致任一目标构建都有一组 mut binding 被判为 unused。两端都 allow 放行。
 #[component]
-#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut))]
+#[allow(unused_mut)]
 pub fn CodeRunner(
     source: String,
     language: String,
@@ -60,6 +70,14 @@ pub fn CodeRunner(
     // instance_id 由父组件从纯函数片段解析的索引传入，SSR 与 hydration 同一 content_html
     // → 同一片段序列 → 同一索引 → 同一 id，故 hydration 时 create() 能找到 SSR 渲染的容器。
     let container_id = format!("code-runner-{instance_id}");
+
+    // xterm.js 输出终端容器 id：同样的确定性派生逻辑，SSR 与 hydration 一致。
+    let output_container_id = format!("code-runner-output-{instance_id}");
+
+    // xterm.js 终端实例句柄（仅 WASM）：声明在 cfg block 外的组件作用域，
+    // 使 run_code 的 WASM 版闭包能捕获它。server 构建整行不存在。
+    #[cfg(target_arch = "wasm32")]
+    let mut term_handle: Signal<Option<crate::xterm_bridge::TerminalHandle>> = use_signal(|| None);
 
     // 编辑器是否已挂载就绪。声明在 cfg 块外，使 SSR 端也能读取：
     // SSR 与 hydration 完成前为 false → 容器内渲染骨架屏；CodeMirror 挂载后置 true
@@ -193,85 +211,224 @@ pub fn CodeRunner(
         });
     }
 
+    // —— xterm.js 终端挂载（仅 WASM，输出专用）——
+    // 范式镜像 CodeMirror 挂载：get_module().create() → TerminalHandle，use_drop 销毁。
+    #[cfg(target_arch = "wasm32")]
+    {
+        use crate::theme::{use_resolved_theme, ResolvedTheme};
+        use crate::xterm_bridge;
+        use wasm_bindgen::closure::Closure;
+
+        // 首次挂载：构造 onReady 闭包 + XtermOptions，create 后存进 term_handle。
+        let mount_container_id = output_container_id.clone();
+        use_effect(move || {
+            if term_handle.read().is_some() {
+                return; // 防重复 init
+            }
+
+            let on_ready = Closure::new(|| {});
+            let resolved = use_resolved_theme();
+            let theme_name = if resolved() == ResolvedTheme::Dark {
+                "dark"
+            } else {
+                "light"
+            };
+
+            let opts = xterm_bridge::XtermOptions::new();
+            opts.set_theme(theme_name);
+            opts.set_font_size(13);
+            opts.set_on_ready(&on_ready);
+
+            if let Ok(Some(inst)) =
+                xterm_bridge::get_module().create(&mount_container_id, &opts)
+            {
+                let handle = xterm_bridge::TerminalHandle::new(inst, on_ready);
+                term_handle.set(Some(handle));
+            }
+        });
+
+        // 主题切换时同步终端主题。
+        use_effect(move || {
+            let r = use_resolved_theme();
+            if let Some(h) = term_handle.read().as_ref() {
+                h.instance()
+                    .set_theme(if r() == ResolvedTheme::Dark {
+                        "dark"
+                    } else {
+                        "light"
+                    });
+            }
+        });
+
+        // 组件卸载时销毁终端（TerminalHandle::drop → instance.destroy）。
+        use_drop(move || {
+            term_handle.set(None);
+        });
+    }
+
     // —— run_code：同步段取 signal 当前值，move 进 spawn ——
     let run_language = language.clone();
     let run_overrides = overrides.clone();
-    let run_code = move |_| {
-        if running() {
-            return;
+
+    // WASM 版：start_exec_stream → EventSource SSE 实时写入 xterm.js 终端；
+    // SSE 不可用时降级到轮询 get_exec_result（writeAll 整段写入）。
+    #[cfg(target_arch = "wasm32")]
+    let run_code = {
+        let mut running = running;
+        let mut stage = stage;
+        let mut output = output;
+        let mut exit_info = exit_info;
+        let mut error_msg = error_msg;
+        let mut source_signal = source_signal;
+        let mut term_handle = term_handle;
+        let run_language = run_language.clone();
+        let run_overrides = run_overrides.clone();
+        move |_| {
+            if running() {
+                return;
+            }
+            running.set(true);
+            stage.set("提交中...".to_string());
+            error_msg.set(String::new());
+
+            // 清空终端，准备新一轮输出。
+            if let Some(h) = term_handle.read().as_ref() {
+                h.instance().clear();
+            }
+
+            let run_source = source_signal.read().clone();
+            let req = ExecRequest {
+                language: run_language.clone(),
+                source: run_source,
+                overrides: run_overrides.clone(),
+            };
+
+            spawn(async move {
+                let task_id = match start_exec_stream(req).await {
+                    Ok(id) => id,
+                    Err(e) => {
+                        running.set(false);
+                        let msg = e.to_string();
+                        stage.set(msg.clone());
+                        error_msg.set(msg);
+                        return;
+                    }
+                };
+                stage.set("运行中".to_string());
+
+                // 启动 SSE：用原生 EventSource 消费流，回调写入终端与 signal。
+                // 若 EventSource 创建失败，降级到轮询。
+                if sse_consumer::start_sse(
+                    &task_id,
+                    &term_handle,
+                    &mut running,
+                    &mut exit_info,
+                    &mut error_msg,
+                )
+                .is_err()
+                {
+                    // 降级轮询
+                    sse_consumer::poll_result(
+                        &task_id,
+                        &mut running,
+                        &mut stage,
+                        &mut output,
+                        &mut exit_info,
+                        &mut error_msg,
+                        &term_handle,
+                    )
+                    .await;
+                }
+            });
         }
-        running.set(true);
-        stage.set("提交中...".to_string());
-        output.set(String::new());
-        exit_info.set(String::new());
-        error_msg.set(String::new());
+    };
 
-        // 不能跨 await 持有 signal borrow，先 clone 出 owned 值。
-        let run_source = source_signal.read().clone();
-        let req = ExecRequest {
-            language: run_language.clone(),
-            source: run_source,
-            overrides: run_overrides.clone(),
-        };
+    // Server 版（占位，组件在前端运行）：保留轮询逻辑使双目标都能编译。
+    #[cfg(not(target_arch = "wasm32"))]
+    let run_code = {
+        let mut running = running;
+        let mut stage = stage;
+        let mut output = output;
+        let mut exit_info = exit_info;
+        let mut error_msg = error_msg;
+        let mut source_signal = source_signal;
+        let run_language = run_language.clone();
+        let run_overrides = run_overrides.clone();
+        move |_| {
+            if running() {
+                return;
+            }
+            running.set(true);
+            stage.set("提交中...".to_string());
+            output.set(String::new());
+            exit_info.set(String::new());
+            error_msg.set(String::new());
 
-        spawn(async move {
-            match start_exec(req).await {
-                Ok(task_id) => {
-                    let mut polls = 0u32;
-                    loop {
-                        polls += 1;
-                        sleep_ms(POLL_INTERVAL_MS).await;
-                        match get_exec_result(task_id.clone()).await {
-                            Ok(task) => {
-                                stage.set(task.stage.clone());
-                                let terminal = task.status != ExecStatus::Queued
-                                    && task.status != ExecStatus::Running;
-                                if terminal {
-                                    running.set(false);
-                                    if let Some(res) = task.result {
-                                        let out = format!(
-                                            "Stdout:\n{}\nStderr:\n{}",
-                                            res.stdout, res.stderr
-                                        );
-                                        output.set(out);
-                                        exit_info.set(format!(
-                                            "耗时: {}ms · 状态: {}",
-                                            res.duration_ms,
-                                            status_label(&res.status)
-                                        ));
-                                        if res.status == ExecStatus::Success {
-                                            error_msg.set(String::new());
-                                        } else {
-                                            error_msg
-                                                .set(status_label(&res.status));
+            let run_source = source_signal.read().clone();
+            let req = ExecRequest {
+                language: run_language.clone(),
+                source: run_source,
+                overrides: run_overrides.clone(),
+            };
+
+            spawn(async move {
+                match start_exec(req).await {
+                    Ok(task_id) => {
+                        let mut polls = 0u32;
+                        loop {
+                            polls += 1;
+                            sleep_ms(POLL_INTERVAL_MS).await;
+                            match get_exec_result(task_id.clone()).await {
+                                Ok(task) => {
+                                    stage.set(task.stage.clone());
+                                    let terminal = task.status != ExecStatus::Queued
+                                        && task.status != ExecStatus::Running;
+                                    if terminal {
+                                        running.set(false);
+                                        if let Some(res) = task.result {
+                                            let out = format!(
+                                                "Stdout:\n{}\nStderr:\n{}",
+                                                res.stdout, res.stderr
+                                            );
+                                            output.set(out);
+                                            exit_info.set(format!(
+                                                "耗时: {}ms · 状态: {}",
+                                                res.duration_ms,
+                                                status_label(&res.status)
+                                            ));
+                                            if res.status == ExecStatus::Success {
+                                                error_msg.set(String::new());
+                                            } else {
+                                                error_msg.set(status_label(&res.status));
+                                            }
                                         }
+                                        break;
                                     }
-                                    break;
+                                    if polls >= MAX_POLLS {
+                                        running.set(false);
+                                        stage.set("查询超时".to_string());
+                                        error_msg.set("轮询超时，请重试".to_string());
+                                        break;
+                                    }
                                 }
-                                if polls >= MAX_POLLS {
+                                Err(_) => {
                                     running.set(false);
-                                    stage.set("查询超时".to_string());
-                                    error_msg.set("轮询超时，请重试".to_string());
+                                    stage.set("结果获取异常".to_string());
+                                    error_msg.set("结果获取异常".to_string());
                                     break;
                                 }
-                            }
-                            Err(_) => {
-                                running.set(false);
-                                stage.set("结果获取异常".to_string());
-                                error_msg.set("结果获取异常".to_string());
-                                break;
                             }
                         }
                     }
+                    Err(e) => {
+                        running.set(false);
+                        let msg = e.to_string();
+                        stage.set(msg.clone());
+                        error_msg.set(msg);
+                    }
                 }
-                Err(e) => {
-                    running.set(false);
-                    let msg = e.to_string();
-                    stage.set(msg.clone());
-                    error_msg.set(msg);
-                }
-            }
-        });
+            });
+        }
     };
 
     rsx! {
@@ -327,16 +484,18 @@ pub fn CodeRunner(
                     }
                 }
             }
-            // 输出区
-            if !output().is_empty() {
-                div { class: "border-t border-[var(--color-paper-border)]",
-                    div { class: "flex justify-between items-center px-4 py-2 text-xs text-[var(--color-paper-tertiary)] border-b border-[var(--color-paper-border)] bg-[var(--color-paper-code-block)]",
-                        span { class: "font-medium uppercase tracking-wide", "输出" }
-                        span { "{exit_info()}" }
-                    }
-                    pre { class: "px-4 py-3 m-0 text-xs font-mono text-[var(--color-paper-secondary)] bg-[var(--color-paper-code-block)] overflow-auto max-h-80 whitespace-pre-wrap break-words",
-                        {output()}
-                    }
+            // 输出区：xterm.js 终端容器（WASM 实时流式渲染）。
+            // 终端在 WASM 端按 output_container_id 挂载；未挂载时显示占位。
+            // 始终渲染容器，保证 xterm create() 能找到挂载点。
+            div { class: "border-t border-[var(--color-paper-border)]",
+                div { class: "flex justify-between items-center px-4 py-2 text-xs text-[var(--color-paper-tertiary)] border-b border-[var(--color-paper-border)] bg-[var(--color-paper-code-block)]",
+                    span { class: "font-medium uppercase tracking-wide", "输出" }
+                    span { "{exit_info()}" }
+                }
+                div {
+                    id: "{output_container_id}",
+                    class: "px-2 py-2 bg-[var(--color-paper-code-block)] max-h-80 overflow-hidden text-xs",
+                    // xterm.js 在 WASM 端挂载到此 div；SSR / hydration 前为空。
                 }
             }
             // 错误提示
@@ -360,5 +519,181 @@ fn status_label(status: &ExecStatus) -> String {
         ExecStatus::Error => "运行错误".to_string(),
         ExecStatus::Failed => "系统失败".to_string(),
         ExecStatus::RateLimited => "请求过频".to_string(),
+    }
+}
+
+// —— WASM-only 辅助函数：SSE 消费 + 轮询兜底 ——
+// start_sse 用原生 EventSource 消费 SSE 流，回调写入 xterm.js 终端与 signal。
+// poll_result 是降级路径：轮询 get_exec_result，拿到完整结果后 writeAll 写入终端。
+#[cfg(target_arch = "wasm32")]
+mod sse_consumer {
+    use dioxus::prelude::*;
+    use wasm_bindgen::closure::Closure;
+    use wasm_bindgen::prelude::*;
+    use wasm_bindgen::JsCast;
+    use web_sys::{EventSource, MessageEvent};
+
+    use crate::api::code_runner::execute::get_exec_result;
+    use crate::api::code_runner::ExecStatus;
+    use crate::utils::time::sleep_ms;
+    use crate::xterm_bridge::TerminalHandle;
+
+    /// SSE done 事件的 JSON payload。
+    #[derive(serde::Deserialize)]
+    struct DonePayload {
+        exit_code: Option<i64>,
+        oom_killed: bool,
+        timed_out: bool,
+    }
+
+    /// 启动 EventSource 消费 SSE 流。
+    ///
+    /// 回调写入 xterm.js 终端（stdout/stderr）与 signal（exit_info/error_msg）。
+    /// 返回后 spawn block 的 future 即结束——EventSource 自行维持连接直到 done/error。
+    ///
+    /// 返回 Err 表示 EventSource 创建失败（如 URL 非法），调用方应降级到轮询。
+    pub fn start_sse(
+        task_id: &str,
+        term_handle: &Signal<Option<TerminalHandle>>,
+        running: &mut Signal<bool>,
+        exit_info: &mut Signal<String>,
+        error_msg: &mut Signal<String>,
+    ) -> Result<(), JsValue> {
+        let url = format!("/api/exec/stream?task_id={task_id}");
+        let es = EventSource::new(&url)?;
+
+        // stdout 事件 → 终端 writeStdout
+        let term_for_stdout = *term_handle;
+        let on_stdout = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
+            if let Some(s) = e.data().as_string() {
+                if let Some(h) = term_for_stdout.read().as_ref() {
+                    h.instance().write_stdout(&s);
+                }
+            }
+        });
+        es.add_event_listener_with_callback("stdout", on_stdout.as_ref().unchecked_ref())?;
+        on_stdout.forget();
+
+        // stderr 事件 → 终端 writeStderr（红色）
+        let term_for_stderr = *term_handle;
+        let on_stderr = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
+            if let Some(s) = e.data().as_string() {
+                if let Some(h) = term_for_stderr.read().as_ref() {
+                    h.instance().write_stderr(&s);
+                }
+            }
+        });
+        es.add_event_listener_with_callback("stderr", on_stderr.as_ref().unchecked_ref())?;
+        on_stderr.forget();
+
+        // done 事件 → 解析终态，设 signal，关闭连接
+        let mut running_clone = *running;
+        let mut exit_info_clone = *exit_info;
+        let mut error_msg_clone = *error_msg;
+        let es_for_done = es.clone();
+        let on_done = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
+            let payload: DonePayload = e
+                .data()
+                .as_string()
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or(DonePayload {
+                    exit_code: None,
+                    oom_killed: false,
+                    timed_out: false,
+                });
+
+            let (info, err) = if payload.timed_out {
+                ("耗时: - · 状态: 超时".to_string(), "超时".to_string())
+            } else if payload.oom_killed {
+                ("耗时: - · 状态: 内存超限".to_string(), "内存超限".to_string())
+            } else if payload.exit_code == Some(0) {
+                ("耗时: - · 状态: 成功".to_string(), String::new())
+            } else {
+                (
+                    format!("退出码: {} · 运行错误", payload.exit_code.unwrap_or(-1)),
+                    "运行错误".to_string(),
+                )
+            };
+            exit_info_clone.set(info);
+            error_msg_clone.set(err);
+            running_clone.set(false);
+            es_for_done.close();
+        });
+        es.add_event_listener_with_callback("done", on_done.as_ref().unchecked_ref())?;
+        on_done.forget();
+
+        // error 事件 → EventSource 连接异常，关闭并标记错误
+        let mut running_clone = *running;
+        let mut error_msg_clone = *error_msg;
+        let es_for_error = es.clone();
+        let on_error = Closure::<dyn FnMut(web_sys::Event)>::new(move |_e: web_sys::Event| {
+            error_msg_clone.set("连接异常，请重试".to_string());
+            running_clone.set(false);
+            es_for_error.close();
+        });
+        es.add_event_listener_with_callback("error", on_error.as_ref().unchecked_ref())?;
+        on_error.forget();
+
+        Ok(())
+    }
+
+    /// 轮询兜底路径：SSE 不可用时用 get_exec_result 轮询，
+    /// 拿到完整结果后 writeAll 整段写入终端。
+    pub async fn poll_result(
+        task_id: &str,
+        running: &mut Signal<bool>,
+        stage: &mut Signal<String>,
+        output: &mut Signal<String>,
+        exit_info: &mut Signal<String>,
+        error_msg: &mut Signal<String>,
+        term_handle: &Signal<Option<TerminalHandle>>,
+    ) {
+        let mut polls = 0u32;
+        loop {
+            polls += 1;
+            sleep_ms(500).await;
+            match get_exec_result(task_id.to_string()).await {
+                Ok(task) => {
+                    stage.set(task.stage.clone());
+                    let terminal = task.status != ExecStatus::Queued
+                        && task.status != ExecStatus::Running;
+                    if terminal {
+                        running.set(false);
+                        if let Some(res) = task.result {
+                            let out =
+                                format!("Stdout:\n{}\nStderr:\n{}", res.stdout, res.stderr);
+                            output.set(out);
+                            exit_info.set(format!(
+                                "耗时: {}ms · 状态: {}",
+                                res.duration_ms,
+                                super::status_label(&res.status)
+                            ));
+                            if res.status == ExecStatus::Success {
+                                error_msg.set(String::new());
+                            } else {
+                                error_msg.set(super::status_label(&res.status));
+                            }
+                            // 整段写入终端
+                            if let Some(h) = term_handle.read().as_ref() {
+                                h.instance().write_all(&res.stdout, &res.stderr);
+                            }
+                        }
+                        break;
+                    }
+                    if polls >= 240 {
+                        running.set(false);
+                        stage.set("查询超时".to_string());
+                        error_msg.set("轮询超时，请重试".to_string());
+                        break;
+                    }
+                }
+                Err(_) => {
+                    running.set(false);
+                    stage.set("结果获取异常".to_string());
+                    error_msg.set("结果获取异常".to_string());
+                    break;
+                }
+            }
+        }
     }
 }
