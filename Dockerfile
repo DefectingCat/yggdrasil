@@ -5,16 +5,30 @@
 # -----------------------------------------------------------------------------
 FROM rust:1.96-bookworm AS builder
 
-# Use HTTPS Debian mirrors. A transparent HTTP proxy on the build network can
-# truncate plain-HTTP apt downloads to an HTML error page (apt error
-# "Clearsigned file isn't valid, got 'NOSPLIT'"), while HTTPS passes through.
-RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g; s|http://security.debian.org|https://security.debian.org|g' \
-        /etc/apt/sources.list.d/debian.sources
+# Point every network download at a Chinese mirror so the build is fast/reliable
+# from inside the container (the host proxy at 127.0.0.1:10808 is unreachable
+# from Docker Desktop's NAT, and the official sources are slow or intercepted):
+#   - Debian apt          -> TUNA (Tsinghua)
+#   - Rust + crates.io    -> rsproxy (ByteDance)
+#   - Node.js + npm/pnpm  -> npmmirror (Alibaba)
+#   - Tailwind standalone -> gh-proxy.com (China GitHub-release CDN)
+ARG DEBIAN_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/debian
+ARG DEBIAN_SECURITY_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/debian-security
+ARG NODE_MIRROR=https://registry.npmmirror.com/-/binary/node
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+ARG RS_PROXY=https://rsproxy.cn
+
+# --- Debian apt: rewrite the DEB822 sources to the TUNA mirror. ---
+RUN sed -i \
+    -e "s|http://deb.debian.org/debian|${DEBIAN_MIRROR}|g" \
+    -e "s|http://deb.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
+    -e "s|http://security.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
+    /etc/apt/sources.list.d/debian.sources
 
 # Install system build tooling. Native dependencies are needed for:
 #   - musl-tools: linker for x86_64-unknown-linux-musl
 #   - cmake/clang/nasm/libssl-dev: libwebp (zenwebp), ring, syntect
-#   - curl/gnupg/ca-certificates: NodeSource repository setup
+#   - curl/gnupg/ca-certificates: download tooling
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
@@ -30,17 +44,33 @@ RUN apt-get update \
         git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js 22 (required by Tailwind CSS v4 and the JS libs build) + pnpm.
-RUN mkdir -p /etc/apt/keyrings \
-    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
-       | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
-    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
-       > /etc/apt/sources.list.d/nodesource.list \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends nodejs \
-    && rm -rf /var/lib/apt/lists/* \
+# --- Node.js 22 + pnpm: install from the npmmirror binary mirror instead of
+# the NodeSource apt repo (both TUNA and USTC have dropped their NodeSource
+# mirrors; the upstream repo is slow/unreliable from inside the container). ---
+ARG NODE_VERSION=22.20.0
+RUN ARCH="$(dpkg --print-architecture)" \
+    && case "$ARCH" in \
+        amd64)  NODE_ARCH=x64   ;; \
+        arm64)  NODE_ARCH=arm64 ;; \
+        *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL "${NODE_MIRROR}/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.gz" \
+        | tar -xz -C /usr/local --strip-components=1 \
     && corepack enable \
     && corepack prepare pnpm@11.8.0 --activate
+
+# Configure npm/pnpm to use the npmmirror registry for all subsequent installs.
+RUN npm config set registry "${NPM_REGISTRY}" \
+    && pnpm config set registry "${NPM_REGISTRY}"
+
+# --- Rust: point rustup and cargo at the rsproxy mirror. ---
+ENV RUSTUP_DIST_SERVER=${RS_PROXY}
+ENV RUSTUP_UPDATE_ROOT=${RS_PROXY}/rustup
+RUN mkdir -p /usr/local/cargo \
+    && printf \
+        '[source.crates-io]\nreplace-with = "rsproxy-sparse"\n\n[source.rsproxy-sparse]\nregistry = "sparse+%s/index/"\n' \
+        "${RS_PROXY}" \
+        > /usr/local/cargo/config.toml
 
 # Add the targets used by Dioxus fullstack builds.
 RUN rustup target add wasm32-unknown-unknown x86_64-unknown-linux-musl
@@ -48,10 +78,22 @@ RUN rustup target add wasm32-unknown-unknown x86_64-unknown-linux-musl
 # Install the Dioxus CLI (must match the dioxus crate version).
 RUN cargo install dioxus-cli --version 0.7.9 --locked
 
-# Install the Tailwind CSS v4 standalone binary.
+# --- Tailwind CSS v4: the standalone binary is distributed via GitHub
+# Releases (~106 MB). GitHub's release CDN is slow/unreliable from inside the
+# container, and the host proxy (host.docker.internal:10808) throttles large
+# files to ~16 KB/s. Route the download through a China GitHub proxy CDN
+# instead — gh-proxy.com served the full file at ~430 KB/s in testing.
+# Falls back to the direct GitHub URL if GH_PROXY is set empty. ---
 ARG TAILWIND_VERSION=4.3.1
-RUN curl -fsSL "https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-x64" \
-    -o /usr/local/bin/tailwindcss \
+ARG GH_PROXY=https://gh-proxy.com
+RUN ARCH="$(dpkg --print-architecture)" \
+    && case "$ARCH" in \
+        amd64)  TW_ARCH=x64   ;; \
+        arm64)  TW_ARCH=arm64 ;; \
+        *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
+    esac \
+    && GH_URL="https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-${TW_ARCH}" \
+    && curl -fsSL -o /usr/local/bin/tailwindcss "${GH_PROXY:+${GH_PROXY}/}${GH_URL}" \
     && chmod +x /usr/local/bin/tailwindcss
 
 WORKDIR /build
