@@ -151,8 +151,24 @@ doc:
 doc-open:
 	@RUSTDOCFLAGS="--default-theme=ayu" cargo doc --no-deps --document-private-items --open
 
+# Multi-arch image build via buildx. The Dockerfile builds each platform leg
+# natively (amd64→x86_64 musl, arm64→aarch64 musl), so no cross-compiler or
+# QEMU is needed. Docker Desktop ships a buildx builder that handles this.
+#
+#   make docker              native arch only, load into local daemon (for testing)
+#   make docker-multiarch    build amd64+arm64 and push to a registry
+#                            (multi-arch manifests can't be --load-ed locally)
+#
+# Push examples:
+#   make docker-multiarch IMAGE=ghcr.io/owner/yggdrasil:latest
+#   make docker-multiarch IMAGE=user/yggdrasil:v1 PLATFORMS=linux/amd64
+IMAGE ?= yggdrasil
+PLATFORMS ?= linux/amd64,linux/arm64
 docker:
-	@docker build -t yggdrasil .
+	@docker buildx build --load -t yggdrasil .
+
+docker-multiarch:
+	@docker buildx build --platform $(PLATFORMS) -t $(IMAGE) --push .
 
 clean:
 	@cargo clean

@@ -72,8 +72,10 @@ RUN mkdir -p /usr/local/cargo \
         "${RS_PROXY}" \
         > /usr/local/cargo/config.toml
 
-# Add the targets used by Dioxus fullstack builds.
-RUN rustup target add wasm32-unknown-unknown x86_64-unknown-linux-musl
+# Add the targets used by Dioxus fullstack builds. Both musl targets are
+# installed; each buildx platform leg builds only its native one (see below).
+RUN rustup target add wasm32-unknown-unknown \
+        x86_64-unknown-linux-musl aarch64-unknown-linux-musl
 
 # Install the Dioxus CLI (must match the dioxus crate version).
 RUN cargo install dioxus-cli --version 0.7.9 --locked
@@ -123,14 +125,35 @@ RUN dx build @client --release --debug-symbols=false --wasm-js-cfg false && \
     mkdir -p /build/dist/public && \
     cp -r /build/target/dx/yggdrasil/*/web/public/* /build/dist/public/
 
-# Build the server as a fully static musl binary. musl-gcc is used as the
-# linker driver so that -lc/-ldl are resolved against the static musl C library.
-ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc
-ENV RUSTFLAGS="-C target-feature=+crt-static -C relocation-model=static"
-RUN cargo build --release --target x86_64-unknown-linux-musl --no-default-features --features server
+# Build the server as a fully static musl binary, **natively for the buildx
+# platform leg**. Each leg builds only its own arch, so musl-gcc (which Debian
+# ships for the host arch only) and the target always match — no cross-compiler,
+# no QEMU. Cross-compiling here (e.g. building the x86_64 musl target from an
+# arm64 leg) breaks ring: cc-rs emits -m64 for the x86_64 target and hands it to
+# the arm64 musl-gcc, whose cc1 has no -m64 → "unrecognized command-line option".
+RUN ARCH="$(dpkg --print-architecture)" \
+    && case "$ARCH" in \
+        amd64) MUSL_TARGET=x86_64-unknown-linux-musl  ;; \
+        arm64) MUSL_TARGET=aarch64-unknown-linux-musl ;; \
+        *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
+    esac \
+    && export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
+    && export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
+    && export RUSTFLAGS="-C target-feature=+crt-static -C relocation-model=static" \
+    && cargo build --release --target "$MUSL_TARGET" --no-default-features --features server
 
 # Ensure the uploads directory exists for runtime image caching.
 RUN mkdir -p uploads
+
+# Stage the built binary + assets at arch-independent paths so the scratch
+# runtime stage can COPY them without knowing which musl target was built.
+RUN ARCH="$(dpkg --print-architecture)" \
+    && case "$ARCH" in \
+        amd64) MUSL_TARGET=x86_64-unknown-linux-musl  ;; \
+        arm64) MUSL_TARGET=aarch64-unknown-linux-musl ;; \
+        *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
+    esac \
+    && cp "/build/target/${MUSL_TARGET}/release/yggdrasil" /build/server
 
 # -----------------------------------------------------------------------------
 # Runtime stage: minimal scratch image with the static musl binary
@@ -140,7 +163,7 @@ FROM scratch
 WORKDIR /app
 
 # Copy the static musl server binary and the bundled public assets.
-COPY --from=builder --chown=65534:65534 /build/target/x86_64-unknown-linux-musl/release/yggdrasil /app/server
+COPY --from=builder --chown=65534:65534 /build/server /app/server
 COPY --from=builder --chown=65534:65534 /build/dist/public /app/public
 COPY --from=builder --chown=65534:65534 /build/uploads /app/uploads
 
