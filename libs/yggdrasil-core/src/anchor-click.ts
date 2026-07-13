@@ -14,9 +14,12 @@
  * 走浏览器原生 fragment-scroll 正常——所以问题只在 hydration 后出现。
  *
  * 修复：在 capture 阶段（早于 Dioxus 的 bubble 委托监听器）拦截指向同页 hash 的
- * <a> 点击，stopPropagation 阻止事件到达 Dioxus 的委托监听器，自行 scrollIntoView
- * 并用 history.replaceState 更新 URL hash（不触发 popstate/hashchange，避免抖动）。
+ * <a> 点击，stopPropagation 阻止事件到达 Dioxus 的委托监听器，自行滚动到标题
+ * （scrollToHeading 手动扣除 header 高度）并用 history.replaceState 更新 URL hash
+ * （不触发 popstate/hashchange，避免抖动）。
  */
+
+import { scrollToHeading } from './scroll-to-heading';
 
 let installed = false;
 
@@ -59,8 +62,8 @@ export function initAnchorClick(): void {
       event.stopPropagation();
       event.preventDefault();
 
-      // 平滑滚动到目标标题（scroll-margin-top 在 input.css 里设为 6rem 避开 sticky header）。
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // 平滑滚动到目标标题，手动扣除 sticky header 高度（见 scroll-to-heading.ts）。
+      scrollToHeading(el, true);
 
       // 更新 URL hash 但不产生历史记录抖动：replaceState 不触发 popstate/hashchange。
       // 这样地址栏显示当前章节，刷新页面也能 scrollToHash 回到原位。

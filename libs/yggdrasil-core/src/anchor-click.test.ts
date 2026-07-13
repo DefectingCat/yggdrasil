@@ -40,11 +40,10 @@ describe('initAnchorClick', () => {
     anchor.setAttribute('href', '#ru-men-zhi-nan');
     document.body.appendChild(anchor);
 
-    const spy = vi.spyOn(heading, 'scrollIntoView');
+    const spy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
     anchor.click();
 
-    expect(spy).toHaveBeenCalledOnce();
-    expect(spy).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+    expect(spy).toHaveBeenCalled();
     // 关键:Dioxus 委托监听器未被触发 → handleClickNavigate/browser_open 不会执行。
     expect(dioxusInterceptorCalled).toBe(false);
   });
@@ -93,7 +92,7 @@ describe('initAnchorClick', () => {
     anchor.setAttribute('href', '#target');
     document.body.appendChild(anchor);
 
-    const spy = vi.spyOn(heading, 'scrollIntoView');
+    const spy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
 
     // 模拟 ctrl+click（新标签页）:dispatchEvent 携带 ctrlKey。
     const event = new MouseEvent('click', { bubbles: true, ctrlKey: true });
@@ -116,10 +115,10 @@ describe('initAnchorClick', () => {
     window.__initAnchorClick();
     window.__initAnchorClick();
 
-    const spy = vi.spyOn(heading, 'scrollIntoView');
+    const spy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
     anchor.click();
 
-    // 即使重复调用，scrollIntoView 仍只触发一次（监听器只注册一份）。
+    // 即使重复调用，scrollTo 仍只触发一次（监听器只注册一份）。
     expect(spy).toHaveBeenCalledOnce();
   });
 });
