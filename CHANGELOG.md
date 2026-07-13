@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-13
+
+### Added
+
+- **代码运行器（Code Runner）**：读者可在文章页直接运行 ``` ```lang runnable ``` 代码块，在隔离的 Docker 容器中执行，支持 Python / Node.js / Go / Rust 四种语言；admin 侧 `/admin/runner` 试验沙箱页支持任意代码试跑（跳过速率限制）。三层架构：`src/infra/docker.rs`（bollard 执行层，只读 rootfs + tmpfs + 资源/能力限制 + `ContainerGuard` Drop 强制清理）、`src/api/code_runner/`（任务注册表、语言注册表、双速率限制 + 白名单 + 大小检查）、Markdown 渲染层（`PostContent` 拆分 `Html`/`Runnable` 片段，每块渲染为真实 `<CodeRunner>` vdom 元素）。所有 `CODE_RUNNER_*` 环境变量可调，支持 per-IP 速率与每日上限。
+- **流式代码执行（SSE + xterm.js）**：CodeRunner 切换为 SSE + xterm.js 流式输出方案。新增 `xterm-terminal` IIFE 子工程（xterm.js 6.0）、`xterm_bridge.rs` wasm-bindgen 绑定、`/api/exec/stream` SSE 端点、Docker 执行层流式路径（wait 与 log 读取并发）；支持无缓冲 stdout（`python -u`）、SSE done 事件回传 `duration_ms`、运行前隐藏输出区 + skeleton 占位。
+- **`/admin/system` 管理后台**：全新管理区，5 个 tab —— 数据库状态（表统计/活跃连接/迁移版本）、服务器状态（sysinfo 主机指标 + moka 缓存命中率轮询）、SQL 控制台（全读写，4 道护栏：sqlparser AST 门 + WHERE 缺失拒绝 + 查询超时 + 前端确认；单元格类型化渲染 NULL/布尔/数字、表头 sticky、行截断展开）、数据导出（Axum 流式 SQL/CSV）、备份恢复（`pg_dump` 优先 + COPY 回退、DashMap 任务进度表 + 轮询、备份文件签名校验 + 路径白名单）。
+- **UI 重新设计（工业极简 + Catppuccin）**：全站配色迁移到 Catppuccin（Latte/Mocha），移除 Rust 中硬编码颜色，统一语义色阶；后台重设计为现代极简侧边栏布局（写文章页改为左右两栏、编辑器自适应高度）；圆角 token 化为三档梯度（32/16/8）并统一所有组件；Markdown 表格重设计 + 表格单元格圆角防背景溢出；全局路由切换平滑挂载动画 + View Transitions 圆形展开主题切换动画；编辑器背景图（线条小狗）有内容时自动调淡透明度。
+- **编辑器可运行代码块 NodeView**：CodeBlock 改用 `CodeBlockLowlight` + Catppuccin 高亮配色；新增 CodeBlockNodeView（语言标签 + 运行按钮 + 结果区），点语言标签可编辑语言与配置；斜杠菜单新增「可运行代码块」条目 + 模态框配置 runnable fence info；`make_run_code_closure` 桥接编辑器内运行代码。
+- **编辑器任务列表手动输入**：支持 `- [ ]` 逐字符输入创建任务列表（appendTransaction，非 InputRule 全量替换）；前台与编辑器 checkbox 垂直中线对齐。
+- **SQL 控制台 Ctrl+Enter**：`/admin/system` SQL 控制台接通 Ctrl/Cmd+Enter 运行快捷键。
+- **CodeMirror Vim 模式**：admin CodeRunner 沙箱编辑器支持 Vim 模式开关，默认开启；CodeMirror 编辑器高度自适应与滚动限制。
+- **文章重建内容按钮**：文章列表操作列新增「重建内容」按钮，重建支持并发 loading（spinner 覆盖文字）。
+- **中文 slug 自动转拼音**：中文标题自动转拼音生成 URL slug。
+- **FreeBSD x86_64 交叉编译**：`make build-freebsd` + `make freebsd-sysroot`，clang + lld + sysroot。
+- **构建信息注入**：启动时打印 git/rustc/构建时间信息。
+- **404 页面提交 HTTP 404 状态码**（SSR 层）；`ErrorBoundary` 包裹公开路由，文章详情页 404 等错误上抛至 `ErrorLayout`。
+- **SSR 层 admin 认证守卫**：未登录访问 admin 直接在 SSR 跳转登录页，避免闪烁。
+- **登录表单回车提交**；网站 favicon；评论背景图自动调淡。
+
+### Changed
+
+- **pnpm workspace 重构**：JS 子项目从 npm 迁移到 pnpm workspace，根工作区在 `libs/`，单一 `libs/pnpm-lock.yaml` + 共享 `libs/tsconfig.base.json`；引入 Biome v2.5 monorepo 配置并全量格式化；Makefile 整合 `lint`/`fix`/`test` 目标。
+- **消除 `js_sys::eval`**：DOM 互操作全面从字符串求值迁移到 wasm-bindgen 绑定层（`tiptap_bridge`、`codemirror_bridge`、`xterm_bridge`），清理 wasm32 target 残留 clippy lint。
+- **通用 hooks 抽取**：新增 `use_paginated`（分页加载）、`use_event_listener`（通用事件监听，解决 `use_hook` + `use_effect` + `use_drop` 资源所有权陷阱）。
+- **SQL 控制台组件化**：`SqlConsoleTab` 改用独立 `SqlResultTable` 组件。
+- **按钮 token 化**：新增 `BTN_PRIMARY`/`BTN_OUTLINE` 等按钮令牌与 `LoadingButton` 组件，消除样式散落。
+- **骨架屏统一延迟**：统一骨架屏延迟机制，200ms 内加载完成不显示骨架，避免快网络闪烁。
+- **后台菜单边距收紧**：后台所有页面左右边距统一（`px-10 → px-6`），写文章页移除页头条。
+- **回收站合并入文章列表**：`/admin/trash` 合并为 `/admin/posts` 的 URL 驱动 tab，`PostStats` 新增回收站计数 badge。
+- **依赖升级**：cargo 与 pnpm 依赖全量升级到最新版本；新增 `tokio-stream`（SSE）、`bollard`（Docker）。
+- **Runner 配置**：`CODE_RUNNER_LANGUAGES` 默认开放全部语言；admin runner 页展示 Go/Rust。
+- **Tooltip 组件抽取**：文章列表操作按钮用 `Tooltip` 包裹。
+
+### Fixed
+
+- **反应式 hook 不追踪普通 prop 的陷阱**：修复同一路由变体间导航（如 `/post/a → /post/b`）后文章正文/列表/标签不更新的严重 bug —— 根因是 `use_server_future`/`use_memo`/`use_resource` 不追踪非 signal 依赖。改为在闭包内读 `router.current()` signal 或直接内联计算。同理修复评论区 `CommentSection` 依赖追踪与 SSR hydration 不匹配。
+- **主题切换动画**：修复 VT 动画期间 CodeMirror/xterm 主题同步（避免圆形展开动画期间直接跳变）、清理 VT 期间的 `animate-page-enter` transform（修复代码块被覆盖）、跟随系统模式系统偏好变化时同步 dark class（改回瞬切避免动画冲突）、`prefers-reduced-motion` 降级。
+- **备份恢复假成功**：修复备份恢复实际不写入数据却返回成功（`psql` 未加 `ON_ERROR_STOP=1` 导致语句全错仍 exit 0）；修复备份/恢复任务轮询永不启动导致按钮卡在 loading。
+- **可运行代码块容器清理**：修复容器清理失败静默泄漏（重试 + 日志告警）、编译型语言需 `/tmp` tmpfs 执行权、去掉 `nproc` ulimit 修复容器启动 EAGAIN。
+- **文章锚点导航**：修复直接访问 `#hash` 时标题被 sticky header 遮住、hydration 后点击标题锚点触发整页刷新、hash 锚点跳转失效。
+- **Tiptap 编辑器**：修复斜杠命令创建可运行代码块时模态框被立即关闭、斜杠命令文本残留进新节点（`/code` 带入 codeBlock）、代码块内 Backspace 删整块（`ignoreMutation` 误忽略 contentDOM 编辑）、Backspace 在 lowlight decoration 重建后失效、runnable 块 `classList.add` 抛 `InvalidCharacterError`、语言下拉展开时 Enter 误触发插入、空项 Enter 不退出列表（畸形文档根因）、TaskInputRule 升级后光标被甩到下一行、升级后折叠行被撑高 + 折叠图标垂直不居中、CodeMirror 折叠图标垂直不居中。
+- **CodeMirror 编辑器**：修复编辑回退反馈循环（editing reversion loop）、编辑器塌缩导致上下背景割裂（`height:100%` 失效）、行号区背景与代码区割裂、未撑满容器、SQL 编辑器 gutter 与 content 背景割裂。
+- **后台骨架屏**：修复后台骨架屏不可见、骨架屏→认证→正常页面布局闪烁、写文章页骨架屏高度不撑满（多次迭代）。
+- **路由与分页**：修复 SQL 控制台 Ctrl+Enter 触发 panic（无 dioxus scope）、上下篇切换后可运行代码块消失。
+- **UI 细节**：修复 markdown 表格水平填充渲染、admin 布局滚动条位置、写文章页滚动性、`--font-sans` 补齐 CJK sans 字体栈、暗色 type 色值。
+- **数据库错误日志**：展开迁移错误的 source chain 全链路。
+- 其他构建、CI、Docker 镜像（multi-arch buildx、HTTPS Debian 镜像绕过 HTTP 透明拦截、apk 清华镜像）、格式化与测试修复。
+
+### Security
+
+- **SQL 控制台护栏加固**：`DROP DATABASE`/`DROP SCHEMA`/`CREATE DATABASE` 绝对禁止（字符串预检 + AST 门）；`DROP`/`TRUNCATE`/`ALTER` 需确认；`UPDATE`/`DELETE` 无 `WHERE` 拒绝；多语句默认禁用；结果上限 500 行。
+- **备份文件校验**：备份文件携带签名头，restore 拒绝非系统文件；`backup_path` 路径穿越漏洞修复（补单测）；`pg_dump --clean --if-exists` 使 restore 幂等（drop+recreate 而非 relation 已存在报错）。
+- **备份恢复补单测**：`backup_path` 路径穿越漏洞补表驱动单测。
+
+### Internal
+
+- **新子工程 `xterm-terminal`**：xterm.js 6.0 IIFE 库 + smoke 测试。
+- **新子工程 `codemirror-editor`**：CodeMirror 编辑器 + Rust bridge，Ctrl/Cmd+Enter 运行快捷键。
+- **Docker runner 镜像**：`docker/build-runners.sh` 构建 base → python → node → go → rust 链；Go 镜像重定向 `GOCACHE`/`GOPATH` 到 `/tmp`，Rust 镜像封装 `run-rust.sh` 两步编译+运行 wrapper。
+- **新增 Rust 单测**：SQL 控制台护栏表驱动单测、备份恢复单测、markdown `wrap_images_with_blur` 解耦文件系统依赖。
+- **codemirror-editor smoke 测试**、`xterm-terminal` smoke 测试。
+- **AGENTS.md 文档扩充**：Code Runner 架构说明、双 target 验证陷阱、custom hook 资源所有权陷阱、反应式 hook 不追踪普通 prop 的踩坑记录、Tiptap 交互 bug Playwright 调试方法论。
+- **matt-pocock engineering skills** 引入。
+
 ## [0.3.0] - 2026-06-29
 
 ### Added
