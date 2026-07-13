@@ -361,12 +361,23 @@ fn generate_toc_html(headings: &[(u8, String, String)]) -> String {
 
 #[cfg(feature = "server")]
 /// 将标题文本转换为可用于锚点的 slug。
+///
+/// 汉字转无声调拼音（每字成词，用 `-` 分隔），与 [`crate::api::slug::slugify`]
+/// 保持一致；ASCII 字母数字保留，其余字符作为词分隔。结果为空时回退 `heading`。
 fn slugify_heading(text: &str) -> String {
+    use pinyin::ToPinyin;
+
     let mut slug = String::new();
     let mut prev_dash = true;
 
     for c in text.to_lowercase().chars() {
-        if c.is_alphanumeric() {
+        // 汉字优先转拼音；非汉字（含 ascii）返回 None。
+        // 每个汉字成词，拼音后补 `-` 与后续内容分隔（连续汉字也会被分开）。
+        if let Some(py) = c.to_pinyin() {
+            slug.push_str(py.plain());
+            slug.push('-');
+            prev_dash = true;
+        } else if c.is_alphanumeric() {
             slug.push(c);
             prev_dash = false;
         } else if !prev_dash {
@@ -503,8 +514,14 @@ mod tests {
 
     #[test]
     fn slugify_heading_chinese() {
-        let slug = slugify_heading("你好世界");
-        assert!(!slug.is_empty());
+        // 汉字逐字转拼音，用 `-` 分隔。
+        assert_eq!(slugify_heading("你好世界"), "ni-hao-shi-jie");
+    }
+
+    #[test]
+    fn slugify_heading_mixed_chinese_ascii() {
+        // Rust 入门指南 → rust + ru-men-zhi-nan，词之间用 `-` 分隔。
+        assert_eq!(slugify_heading("Rust 入门指南"), "rust-ru-men-zhi-nan");
     }
 
     #[test]

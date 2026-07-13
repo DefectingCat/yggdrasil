@@ -10,25 +10,33 @@
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
+use pinyin::ToPinyin;
+
+#[cfg(feature = "server")]
 /// 将标题转换为 URL 友好的 slug。
 ///
-/// 非字母数字字符替换为 `-` 并合并连续 `-`，结果截断至 100 字符；
-/// 若全部字符被过滤，则返回当前时间戳作为 slug。
+/// 汉字转为无声调拼音（每字独立成词，用 `-` 分隔，如 `你好` → `ni-hao`）；
+/// ASCII 字母数字与 `-`/`_` 保留；其余字符替换为 `-`，连续 `-` 合并。
+/// 结果截断至 100 字符；若全部被过滤则回退为当前时间戳。
+///
+/// 多音字取默认读音（不处理歧义），博客 slug 场景足够。
 pub fn slugify(title: &str) -> String {
-    let slug: String = title
-        .to_lowercase()
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
-                c
-            } else {
-                '-'
-            }
-        })
-        .collect();
+    let mut out = String::with_capacity(title.len());
+    for c in title.to_lowercase().chars() {
+        // 汉字优先转拼音：to_pinyin() 对非汉字（含 ascii）返回 None。
+        if let Some(py) = c.to_pinyin() {
+            out.push_str(py.plain());
+            // 每个汉字成词，用 `-` 与后续内容分隔。
+            out.push('-');
+        } else if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+            out.push(c);
+        } else {
+            out.push('-');
+        }
+    }
 
     // 合并连续的连字符，并去除首尾空段。
-    let parts: Vec<&str> = slug.split('-').filter(|s| !s.is_empty()).collect();
+    let parts: Vec<&str> = out.split('-').filter(|s| !s.is_empty()).collect();
     let slug = parts.join("-");
 
     if slug.is_empty() {
@@ -116,8 +124,21 @@ mod tests {
 
     #[test]
     fn slugify_chinese_characters() {
-        let slug = slugify("你好世界 hello");
-        assert!(slug.contains("hello"));
+        // 汉字逐字转拼音，用 `-` 分隔；混入的 ascii 自然衔接到末尾。
+        assert_eq!(slugify("你好世界"), "ni-hao-shi-jie");
+        assert_eq!(slugify("你好世界 hello"), "ni-hao-shi-jie-hello");
+    }
+
+    #[test]
+    fn slugify_mixed_chinese_ascii() {
+        // Rust 入门指南 → rust + ru-men-zhi-nan
+        assert_eq!(slugify("Rust 入门指南"), "rust-ru-men-zhi-nan");
+    }
+
+    #[test]
+    fn slugify_chinese_with_punctuation() {
+        // 标点替换为 `-`，随后与拼音分隔符合并。
+        assert_eq!(slugify("你好，世界！"), "ni-hao-shi-jie");
     }
 
     #[test]
