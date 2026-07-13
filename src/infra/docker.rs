@@ -61,12 +61,42 @@ impl Drop for ContainerGuard {
     fn drop(&mut self) {
         let docker = self.docker.clone();
         let container_id = self.container_id.clone();
+        // 容器清理是 fire-and-forget：调用方已返回，无法把错误回传给业务层。
+        // 因此重试几次以抵抗瞬时故障（daemon 繁忙 / socket 抖动），
+        // 仍失败则记录 error 级日志并带上 container_id，便于运维手动 `docker rm -f` 清理，
+        // 避免容器静默泄漏、长期堆积。
         tokio::spawn(async move {
-            let remove_options = Some(RemoveContainerOptions {
-                force: true,
-                ..Default::default()
-            });
-            let _ = docker.remove_container(&container_id, remove_options).await;
+            let max_attempts = 3u8;
+            let mut backoff = Duration::from_millis(200);
+            for attempt in 1..=max_attempts {
+                let remove_options = Some(RemoveContainerOptions {
+                    force: true,
+                    ..Default::default()
+                });
+                match docker.remove_container(&container_id, remove_options).await {
+                    Ok(()) => return,
+                    Err(e) if attempt < max_attempts => {
+                        tracing::warn!(
+                            attempt,
+                            max_attempts,
+                            "remove_container 失败，稍后重试: {:?}",
+                            e
+                        );
+                        tokio::time::sleep(backoff).await;
+                        backoff *= 2;
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            container_id = %container_id,
+                            "重试 {} 次后仍无法删除容器，可能泄漏；请手动执行 `docker rm -f {}`: {:?}",
+                            max_attempts,
+                            container_id,
+                            e
+                        );
+                        return;
+                    }
+                }
+            }
         });
     }
 }
