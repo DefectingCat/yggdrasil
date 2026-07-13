@@ -231,7 +231,7 @@ pub async fn run_in_container(
 
 /// 流式输出 chunk：run_in_container_stream 边读日志边推送给 SSE handler。
 ///
-/// 序列化后作为 SSE event data；`Done` 同时携带终态信息（退出码 / OOM / 超时）。
+/// 序列化后作为 SSE event data；`Done` 同时携带终态信息（退出码 / OOM / 超时 / 耗时）。
 #[derive(Clone, Debug)]
 pub enum OutputChunk {
     /// stdout 块（容器逐块产出）。
@@ -239,10 +239,12 @@ pub enum OutputChunk {
     /// stderr 块（容器逐块产出）。
     Stderr(String),
     /// 终态：容器执行结束。exit_code=None 表示拿不到退出码（wait 出错）。
+    /// duration_ms = start_container 到 wait 完成的耗时。
     Done {
         exit_code: Option<i64>,
         oom_killed: bool,
         timed_out: bool,
+        duration_ms: u64,
     },
 }
 
@@ -319,6 +321,9 @@ pub async fn run_in_container_stream(
     docker
         .start_container(&container_id, None::<StartContainerOptions>)
         .await?;
+
+    // 容器开始执行的时刻，用于计算 duration_ms（start_container 返回即视为起点）。
+    let start_time = std::time::Instant::now();
 
     // 写入源码到 stdin 后关闭 writer。
     use tokio::io::AsyncWriteExt;
@@ -477,12 +482,14 @@ pub async fn run_in_container_stream(
         .unwrap_or(false);
 
     // 推送终态 chunk（客户端已断开则跳过，send 必然失败）。
+    let duration_ms = start_time.elapsed().as_millis() as u64;
     if !client_disconnected {
         let _ = tx
             .send(OutputChunk::Done {
                 exit_code,
                 oom_killed,
                 timed_out,
+                duration_ms,
             })
             .await;
     }

@@ -31,6 +31,7 @@ struct DonePayload {
     exit_code: Option<i64>,
     oom_killed: bool,
     timed_out: bool,
+    duration_ms: u64,
 }
 
 /// SSE handler：从 EXEC_STREAMS 取出 receiver（取出即移除，防重复连接），
@@ -52,12 +53,14 @@ pub async fn exec_stream(
                 exit_code,
                 oom_killed,
                 timed_out,
+                duration_ms,
             } => Event::default()
                 .event("done")
                 .json_data(DonePayload {
                     exit_code,
                     oom_killed,
                     timed_out,
+                    duration_ms,
                 })
                 .unwrap_or_else(|_| Event::default().event("done").data("{}")),
         })

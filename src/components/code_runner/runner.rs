@@ -569,6 +569,7 @@ mod sse_consumer {
         exit_code: Option<i64>,
         oom_killed: bool,
         timed_out: bool,
+        duration_ms: u64,
     }
 
     /// 启动 EventSource 消费 SSE 流。
@@ -630,17 +631,31 @@ mod sse_consumer {
                     exit_code: None,
                     oom_killed: false,
                     timed_out: false,
+                    duration_ms: 0,
                 });
 
             let (info, err) = if payload.timed_out {
-                ("耗时: - · 状态: 超时".to_string(), "超时".to_string())
+                (
+                    format!("耗时: {}ms · 状态: 超时", payload.duration_ms),
+                    "超时".to_string(),
+                )
             } else if payload.oom_killed {
-                ("耗时: - · 状态: 内存超限".to_string(), "内存超限".to_string())
+                (
+                    format!("耗时: {}ms · 状态: 内存超限", payload.duration_ms),
+                    "内存超限".to_string(),
+                )
             } else if payload.exit_code == Some(0) {
-                ("耗时: - · 状态: 成功".to_string(), String::new())
+                (
+                    format!("耗时: {}ms · 状态: 成功", payload.duration_ms),
+                    String::new(),
+                )
             } else {
                 (
-                    format!("退出码: {} · 运行错误", payload.exit_code.unwrap_or(-1)),
+                    format!(
+                        "耗时: {}ms · 退出码: {} · 运行错误",
+                        payload.duration_ms,
+                        payload.exit_code.unwrap_or(-1)
+                    ),
                     "运行错误".to_string(),
                 )
             };
