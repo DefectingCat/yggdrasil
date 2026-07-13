@@ -154,6 +154,12 @@ pub fn PostContent(content_html: String) -> Element {
         let _ = js_sys::Reflect::set(&window, &"__lightboxSelectors".into(), &selectors_val);
         invoke_optional_global(&window, "__initLightbox", &[selectors_val]);
 
+        // 安装 hash 锚点点击拦截器（幂等）。
+        // Dioxus hydration 后其事件委托会接管所有 <a> click（见 handleClickNavigate），
+        // 把 hash 锚点当外部 URL 整页刷新。拦截器在 capture 阶段阻止事件到达 Dioxus，
+        // 自行 scrollIntoView。initAnchorClick 内部幂等，PostContent 多次挂载也安全。
+        invoke_optional_global(&window, "__initAnchorClick", &[]);
+
         // 内容挂载后若 URL 带 hash，滚动到对应标题。
         // 解决骨架屏阶段标题 DOM 缺失导致浏览器原生 fragment-scroll 失效的问题：
         // PostDetail 用 use_server_future 异步取数，首屏渲染骨架屏，此时标题 DOM

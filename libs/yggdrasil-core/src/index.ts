@@ -1,3 +1,4 @@
+import { initAnchorClick } from './anchor-click';
 import { scrollToHash } from './hash-scroll';
 import { initPostContent } from './post-content';
 import { applyResolvedTheme, startThemeTransition } from './theme-transition';
@@ -6,6 +7,7 @@ import './style.css';
 declare global {
   interface Window {
     __initPostContent: (selector: string) => void;
+    __initAnchorClick: () => void;
     __scrollToHash: () => void;
     __startThemeTransition: (x: number, y: number) => void;
     __applyResolvedTheme: (isDark: boolean) => void;
@@ -13,6 +15,7 @@ declare global {
 }
 
 window.__initPostContent = initPostContent;
+window.__initAnchorClick = initAnchorClick;
 window.__scrollToHash = scrollToHash;
 window.__startThemeTransition = startThemeTransition;
 window.__applyResolvedTheme = applyResolvedTheme;
