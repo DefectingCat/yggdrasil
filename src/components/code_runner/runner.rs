@@ -55,6 +55,10 @@ pub fn CodeRunner(
     let mut output = use_signal(String::new);
     let mut exit_info = use_signal(String::new);
     let mut error_msg = use_signal(String::new);
+    // 输出区可见性：点运行后置 true，控制输出区按需出现（而非页面加载就显示空区）。
+    let mut show_output = use_signal(|| false);
+    // 是否已收到首个输出 chunk：收到后骨架屏消失，露出终端实时渲染。
+    let mut has_output = use_signal(|| false);
 
     // 编辑器内容的唯一真源；初始化为 prop 值。
     let mut source_signal = use_signal(|| source.clone());
@@ -220,10 +224,15 @@ pub fn CodeRunner(
         use wasm_bindgen::closure::Closure;
 
         // 首次挂载：构造 onReady 闭包 + XtermOptions，create 后存进 term_handle。
+        // 订阅 show_output：输出区在 show_output 变 true（用户点运行）后才渲染进 DOM，
+        // 容器此前不存在；读 show_output 建立订阅，使其变 true 时重跑本 effect 完成挂载。
         let mount_container_id = output_container_id.clone();
         use_effect(move || {
             if term_handle.read().is_some() {
                 return; // 防重复 init
+            }
+            if !show_output() {
+                return; // 输出区未显示，容器不在 DOM，等 show_output 变 true 再挂载
             }
 
             let on_ready = Closure::new(|| {});
@@ -281,6 +290,8 @@ pub fn CodeRunner(
         let mut error_msg = error_msg;
         let mut source_signal = source_signal;
         let mut term_handle = term_handle;
+        let mut show_output = show_output;
+        let mut has_output = has_output;
         let run_language = run_language.clone();
         let run_overrides = run_overrides.clone();
         move |_| {
@@ -288,6 +299,8 @@ pub fn CodeRunner(
                 return;
             }
             running.set(true);
+            show_output.set(true);
+            has_output.set(false);
             stage.set("提交中...".to_string());
             error_msg.set(String::new());
 
@@ -324,6 +337,7 @@ pub fn CodeRunner(
                     &mut running,
                     &mut exit_info,
                     &mut error_msg,
+                    &mut has_output,
                 )
                 .is_err()
                 {
@@ -336,6 +350,7 @@ pub fn CodeRunner(
                         &mut exit_info,
                         &mut error_msg,
                         &term_handle,
+                        &mut has_output,
                     )
                     .await;
                 }
@@ -352,6 +367,7 @@ pub fn CodeRunner(
         let mut exit_info = exit_info;
         let mut error_msg = error_msg;
         let mut source_signal = source_signal;
+        let mut show_output = show_output;
         let run_language = run_language.clone();
         let run_overrides = run_overrides.clone();
         move |_| {
@@ -359,6 +375,7 @@ pub fn CodeRunner(
                 return;
             }
             running.set(true);
+            show_output.set(true);
             stage.set("提交中...".to_string());
             output.set(String::new());
             exit_info.set(String::new());
@@ -484,18 +501,26 @@ pub fn CodeRunner(
                     }
                 }
             }
-            // 输出区：xterm.js 终端容器（WASM 实时流式渲染）。
-            // 终端在 WASM 端按 output_container_id 挂载；未挂载时显示占位。
-            // 始终渲染容器，保证 xterm create() 能找到挂载点。
-            div { class: "border-t border-[var(--color-paper-border)]",
-                div { class: "flex justify-between items-center px-4 py-2 text-xs text-[var(--color-paper-tertiary)] border-b border-[var(--color-paper-border)] bg-[var(--color-paper-code-block)]",
-                    span { class: "font-medium uppercase tracking-wide", "输出" }
-                    span { "{exit_info()}" }
-                }
-                div {
-                    id: "{output_container_id}",
-                    class: "px-2 py-2 bg-[var(--color-paper-code-block)] max-h-80 overflow-hidden text-xs",
-                    // xterm.js 在 WASM 端挂载到此 div；SSR / hydration 前为空。
+            // 输出区：用户点运行后才显示（show_output）。
+            // running 时显示骨架屏占位（等首个 chunk 到达）；有内容后 xterm 终端渲染。
+            if show_output() {
+                div { class: "border-t border-[var(--color-paper-border)]",
+                    div { class: "flex justify-between items-center px-4 py-2 text-xs text-[var(--color-paper-tertiary)] border-b border-[var(--color-paper-border)] bg-[var(--color-paper-code-block)]",
+                        span { class: "font-medium uppercase tracking-wide", "输出" }
+                        span { "{exit_info()}" }
+                    }
+                    div {
+                        id: "{output_container_id}",
+                        class: "px-2 py-2 bg-[var(--color-paper-code-block)] max-h-80 overflow-hidden text-xs relative min-h-24",
+                        // running 且尚未收到首个 chunk 时，显示骨架屏占位。
+                        if running() && !has_output() {
+                            div { class: "absolute inset-0 flex flex-col justify-center gap-2.5 px-4 py-4 bg-[var(--color-paper-code-block)]",
+                                div { class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse", style: "width: 70%" }
+                                div { class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse", style: "width: 55%" }
+                                div { class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse", style: "width: 85%" }
+                            }
+                        }
+                    }
                 }
             }
             // 错误提示
@@ -558,29 +583,34 @@ mod sse_consumer {
         running: &mut Signal<bool>,
         exit_info: &mut Signal<String>,
         error_msg: &mut Signal<String>,
+        has_output: &mut Signal<bool>,
     ) -> Result<(), JsValue> {
         let url = format!("/api/exec/stream?task_id={task_id}");
         let es = EventSource::new(&url)?;
 
-        // stdout 事件 → 终端 writeStdout
+        // stdout 事件 → 终端 writeStdout + 标记已有输出（骨架屏消失）
         let term_for_stdout = *term_handle;
+        let mut has_output_for_stdout = *has_output;
         let on_stdout = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
             if let Some(s) = e.data().as_string() {
                 if let Some(h) = term_for_stdout.read().as_ref() {
                     h.instance().write_stdout(&s);
                 }
+                has_output_for_stdout.set(true);
             }
         });
         es.add_event_listener_with_callback("stdout", on_stdout.as_ref().unchecked_ref())?;
         on_stdout.forget();
 
-        // stderr 事件 → 终端 writeStderr（红色）
+        // stderr 事件 → 终端 writeStderr（红色）+ 标记已有输出
         let term_for_stderr = *term_handle;
+        let mut has_output_for_stderr = *has_output;
         let on_stderr = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
             if let Some(s) = e.data().as_string() {
                 if let Some(h) = term_for_stderr.read().as_ref() {
                     h.instance().write_stderr(&s);
                 }
+                has_output_for_stderr.set(true);
             }
         });
         es.add_event_listener_with_callback("stderr", on_stderr.as_ref().unchecked_ref())?;
@@ -647,6 +677,7 @@ mod sse_consumer {
         exit_info: &mut Signal<String>,
         error_msg: &mut Signal<String>,
         term_handle: &Signal<Option<TerminalHandle>>,
+        has_output: &mut Signal<bool>,
     ) {
         let mut polls = 0u32;
         loop {
@@ -677,6 +708,7 @@ mod sse_consumer {
                             if let Some(h) = term_handle.read().as_ref() {
                                 h.instance().write_all(&res.stdout, &res.stderr);
                             }
+                            has_output.set(true);
                         }
                         break;
                     }
