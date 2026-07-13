@@ -38,3 +38,20 @@ html.is-theme-transitioning *::before,
 html.is-theme-transitioning *::after {
   transition: none;
 }
+
+/* VT 期间清除动画残留的 transform,避免创建堆叠上下文(stack context)
+   导致 ::view-transition 伪元素无法覆盖可运行代码块区域。
+
+   根因:animate-page-enter 动画用 transform: translateY/scale 做入场,
+   动画结束后因 animation-fill-mode: both 保留计算值(transform: none 被浏览器
+   序列化为 matrix(1,0,0,1,0,0),仍是"非 none"的 transform)。非 none transform
+   会创建堆叠上下文,使 ::view-transition-old/new(root) 顶层伪元素无法正确覆盖
+   其内部的 CodeMirror/xterm——圆形展开扫过时代码块直接瞬切而非被圆形揭示。
+
+   is-theme-transitioning 在 startViewTransition 之前添加(OLD/NEW 快照均含此 class),
+   故 OLD 与 NEW 快照里 transform 都被清为 none,两者一致,不影响动画效果。 */
+html.is-theme-transitioning .animate-page-enter {
+  /* !important 必需:animation-fill-mode: both 保留的关键帧值优先级高于普通
+     规则,只有 !important 能覆盖,确保 VT 期间 transform 被清为 none。 */
+  transform: none !important;
+}
