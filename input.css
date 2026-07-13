@@ -27,7 +27,11 @@
   --color-paper-accent-2: #179299;
   --color-paper-accent-2-soft: #ccd0da;
 
-  --radius-paper: 8px;
+  /* 圆角三档梯度：容器 32 → 内容 16 → 微元素 8。
+     按钮/头像/徽章另用胶囊（Tailwind rounded-full），独立于本梯度。 */
+  --radius-card: 2rem;    /* 32px：文章卡片、封面、admin 主面板 */
+  --radius-paper: 16px;   /* 16px：代码块、正文图片、iframe、表格、输入框、admin 卡片 */
+  --radius-mini: 8px;     /* 8px：标签、复制按钮、toc、paginav */
   --gap-paper: 24px;
   --content-gap-paper: 20px;
   --nav-width-paper: 1024px;
@@ -203,13 +207,13 @@
   details.toc {
     margin-bottom: var(--content-gap-paper);
     background: var(--color-paper-code-bg);
-    border-radius: var(--radius-paper);
+    border-radius: var(--radius-mini);
     border: 1px solid var(--color-paper-border);
   }
 
   details.toc summary {
     padding: 0.3rem 1.2rem;
-    border-radius: var(--radius-paper);
+    border-radius: var(--radius-mini);
     cursor: pointer;
     display: list-item;
     width: 100%;
@@ -277,7 +281,7 @@
   /* 封面用 blur-img 结构：去 margin、保持圆角，内层 img cover 填充 */
   .entry-cover .blur-img {
     margin: 0;
-    border-radius: 2rem;
+    border-radius: var(--radius-card);
     overflow: hidden;
   }
   .entry-cover img {
@@ -421,7 +425,7 @@
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
-    border-radius: 16px;
+    border-radius: var(--radius-paper);
     box-shadow: 0 0 0 1px var(--color-paper-border);
   }
 
@@ -436,19 +440,19 @@
   }
 
   .md-content table thead th:first-child {
-    border-top-left-radius: 16px;
+    border-top-left-radius: var(--radius-paper);
   }
 
   .md-content table thead th:last-child {
-    border-top-right-radius: 16px;
+    border-top-right-radius: var(--radius-paper);
   }
 
   .md-content table tbody tr:last-child td:first-child {
-    border-bottom-left-radius: 16px;
+    border-bottom-left-radius: var(--radius-paper);
   }
 
   .md-content table tbody tr:last-child td:last-child {
-    border-bottom-right-radius: 16px;
+    border-bottom-right-radius: var(--radius-paper);
   }
 
   .md-content table tbody td {
@@ -540,7 +544,7 @@
     right: 8px;
     color: var(--color-paper-theme);
     background: var(--color-paper-tertiary);
-    border-radius: var(--radius-paper);
+    border-radius: var(--radius-mini);
     padding: 4px 8px;
     font-size: 12px;
     user-select: none;
@@ -607,7 +611,7 @@
     font-size: 14px;
     line-height: 34px;
     background: var(--color-paper-code-bg);
-    border-radius: var(--radius-paper);
+    border-radius: var(--radius-mini);
     border: 1px solid var(--color-paper-border);
     text-decoration: none;
     transition: all 0.2s ease-out;
@@ -621,7 +625,7 @@
 
   .paginav {
     display: flex;
-    border-radius: var(--radius-paper);
+    border-radius: var(--radius-mini);
     background: var(--color-paper-code-bg);
     border: 1px solid var(--color-paper-border);
     overflow: hidden;
@@ -738,7 +742,7 @@
     aspect-ratio: var(--ar);
     /* 加载中灰底（占位图未加载完时） */
     background: var(--color-paper-code-bg);
-    border-radius: 6px;
+    border-radius: var(--radius-mini);
     margin: 1em 0;
   }
   .blur-img-placeholder {
