@@ -1097,7 +1097,7 @@ fn ExportTab() -> Element {
     };
 
     rsx! {
-        div { class: "space-y-4 max-w-2xl",
+        div { class: "space-y-4",
             div { class: "{ADMIN_CARD_CLASS} p-4 space-y-4",
                 // 模式选择
                 div { class: "flex items-center gap-4",
