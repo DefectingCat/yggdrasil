@@ -335,76 +335,137 @@ pub async fn run_in_container_stream(
     }
     drop(writer);
 
+    // —— 关键：wait_container 与日志读取必须并发，否则流式失效 ——
+    //
+    // 若先 await wait_container（等容器退出）再读日志流，wait 会阻塞到程序结束，
+    // 届时 attach stream 里已缓冲全部输出，stream.next() 一次性快速读完——
+    // 表现为"等完再一次性输出"，流式名存实亡。
+    //
+    // 用 tokio::select! 让两条分支并发：
+    // - log_reader：持续读 attach stream，每块 chunk 立即 tx.send 推流 + 累积 buffer
+    // - wait_with_timeout：等容器退出（带超时），退出后日志流自然结束（stream 返回 None）
+    // 先完成的一方触发 select 返回；若 wait 超时则 kill 容器。
+    let mut stdout_buf = Vec::new();
+    let mut stderr_buf = Vec::new();
+    let limit_bytes = limits.output_bytes as usize;
+    let mut client_disconnected = false;
+    let mut timed_out = false;
+    let mut exit_code = None;
+
+    // 日志读取循环：逐块推流 + 累积 buffer。
+    // 循环正常退出条件：stream 返回 None（容器退出后 Docker 关闭 attach 流），
+    // 或输出超限 break，或 select 被另一分支抢先完成（log_reader 被 drop）。
+    let log_reader = async {
+        while let Some(item) = stream.next().await {
+            match item {
+                Ok(chunk) => match chunk {
+                    LogOutput::StdOut { message } => {
+                        let remaining = limit_bytes.saturating_sub(stdout_buf.len() + stderr_buf.len());
+                        if remaining > 0 {
+                            let to_add = message.len().min(remaining);
+                            let slice = &message[..to_add];
+                            stdout_buf.extend_from_slice(slice);
+                            if !client_disconnected {
+                                let text = String::from_utf8_lossy(slice).into_owned();
+                                if tx.send(OutputChunk::Stdout(text)).await.is_err() {
+                                    client_disconnected = true;
+                                }
+                            }
+                        }
+                    }
+                    LogOutput::StdErr { message } => {
+                        let remaining = limit_bytes.saturating_sub(stdout_buf.len() + stderr_buf.len());
+                        if remaining > 0 {
+                            let to_add = message.len().min(remaining);
+                            let slice = &message[..to_add];
+                            stderr_buf.extend_from_slice(slice);
+                            if !client_disconnected {
+                                let text = String::from_utf8_lossy(slice).into_owned();
+                                if tx.send(OutputChunk::Stderr(text)).await.is_err() {
+                                    client_disconnected = true;
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                },
+                Err(e) => {
+                    tracing::error!("Error reading container log stream: {:?}", e);
+                    break;
+                }
+            }
+            if stdout_buf.len() + stderr_buf.len() >= limit_bytes {
+                break;
+            }
+        }
+    };
+
     // 带超时地等待容器退出。
     let wait_future = async {
         let mut wait_stream = docker.wait_container(&container_id, None::<WaitContainerOptions>);
         wait_stream.next().await
     };
-
-    let wait_res = timeout(Duration::from_secs(limits.timeout_secs), wait_future).await;
-
-    let mut timed_out = false;
-    let mut exit_code = None;
-
-    match wait_res {
-        Ok(Some(Ok(exit_status))) => {
-            exit_code = Some(exit_status.status_code);
-        }
-        Ok(_) => {} // wait error
-        Err(_) => {
-            // 超时，杀容器。
-            timed_out = true;
-            let _ = docker.kill_container(&container_id, None).await;
-        }
-    }
-
-    // 边读日志边推 chunk，同时累积完整 buffer。
-    // 客户端断开 → tx.send 失败 → 停止推送，但继续读本地 buffer 保证容器正常退出。
-    let mut stdout_buf = Vec::new();
-    let mut stderr_buf = Vec::new();
-    let limit_bytes = limits.output_bytes as usize;
-    let mut client_disconnected = false;
-
-    while let Some(item) = stream.next().await {
-        match item {
-            Ok(chunk) => match chunk {
-                LogOutput::StdOut { message } => {
-                    let remaining = limit_bytes.saturating_sub(stdout_buf.len() + stderr_buf.len());
-                    if remaining > 0 {
-                        let to_add = message.len().min(remaining);
-                        let slice = &message[..to_add];
-                        stdout_buf.extend_from_slice(slice);
-                        if !client_disconnected {
-                            let text = String::from_utf8_lossy(slice).into_owned();
-                            if tx.send(OutputChunk::Stdout(text)).await.is_err() {
-                                client_disconnected = true;
-                            }
-                        }
-                    }
-                }
-                LogOutput::StdErr { message } => {
-                    let remaining = limit_bytes.saturating_sub(stdout_buf.len() + stderr_buf.len());
-                    if remaining > 0 {
-                        let to_add = message.len().min(remaining);
-                        let slice = &message[..to_add];
-                        stderr_buf.extend_from_slice(slice);
-                        if !client_disconnected {
-                            let text = String::from_utf8_lossy(slice).into_owned();
-                            if tx.send(OutputChunk::Stderr(text)).await.is_err() {
-                                client_disconnected = true;
-                            }
-                        }
-                    }
-                }
-                _ => {}
-            },
-            Err(e) => {
-                tracing::error!("Error reading container log stream: {:?}", e);
-                break;
+    let wait_with_timeout = async {
+        match timeout(Duration::from_secs(limits.timeout_secs), wait_future).await {
+            Ok(Some(Ok(exit_status))) => Some(exit_status.status_code),
+            Ok(Some(Err(_))) => None, // wait error
+            Ok(None) => None,         // stream ended
+            Err(_) => {
+                // 超时，杀容器。kill 后 attach stream 会被 Docker 关闭，log_reader 自然结束。
+                timed_out = true;
+                let _ = docker.kill_container(&container_id, None).await;
+                None
             }
         }
-        if stdout_buf.len() + stderr_buf.len() >= limit_bytes {
-            break;
+    };
+
+    // 并发：哪边先完成就先用其结果。
+    // 通常 wait 先完成（容器退出 → Docker 关闭 attach stream → log_reader 也很快结束），
+    // 但若日志流先因输出超限 break，wait 会被 select drop 掉（容器仍在跑，后续 _guard 清理）。
+    tokio::select! {
+        status = wait_with_timeout => {
+            exit_code = status;
+            // 容器已退出，但 attach stream 可能还有缓冲的尾部日志。
+            // 继续读完日志流（非阻塞：stream 即将返回 None）。
+            while let Some(item) = stream.next().await {
+                if let Ok(chunk) = item {
+                    match chunk {
+                        LogOutput::StdOut { message } => {
+                            let remaining = limit_bytes.saturating_sub(stdout_buf.len() + stderr_buf.len());
+                            let to_add = message.len().min(remaining);
+                            if to_add > 0 {
+                                let slice = &message[..to_add];
+                                stdout_buf.extend_from_slice(slice);
+                                if !client_disconnected {
+                                    let text = String::from_utf8_lossy(slice).into_owned();
+                                    let _ = tx.send(OutputChunk::Stdout(text)).await;
+                                }
+                            }
+                        }
+                        LogOutput::StdErr { message } => {
+                            let remaining = limit_bytes.saturating_sub(stdout_buf.len() + stderr_buf.len());
+                            let to_add = message.len().min(remaining);
+                            if to_add > 0 {
+                                let slice = &message[..to_add];
+                                stderr_buf.extend_from_slice(slice);
+                                if !client_disconnected {
+                                    let text = String::from_utf8_lossy(slice).into_owned();
+                                    let _ = tx.send(OutputChunk::Stderr(text)).await;
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        _ = log_reader => {
+            // 日志流先结束（输出超限 break，或 attach 断开）。
+            // 容器可能仍在运行——等它退出拿 exit_code（短超时，避免无限等）。
+            let mut wait_stream = docker.wait_container(&container_id, None::<WaitContainerOptions>);
+            if let Some(Ok(status)) = wait_stream.next().await {
+                exit_code = Some(status.status_code);
+            }
         }
     }
 
