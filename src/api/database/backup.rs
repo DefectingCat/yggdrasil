@@ -2,10 +2,17 @@
 
 //! 备份与恢复（读写，最高风险）。
 //!
-//! 备份：探测 pg_dump 可用性——可用则子进程生成完整 .sql，不可用则回退纯 SQL
-//! （仅数据）。备份文件含签名头。
-//! 恢复：仅接受本系统生成的备份（签名校验）+ 二次确认 + 路径穿越防护。
+//! 备份：探测 pg_dump 可用性——可用则子进程生成完整 .sql（`--clean --if-exists`，
+//! 脚本自带 `DROP ... IF EXISTS`，使恢复幂等），不可用则回退纯 SQL（仅数据）。
+//! 备份文件含签名头。
+//! 恢复：仅接受本系统生成的备份（签名校验）+ 二次确认 + 路径穿越防护；
+//! `psql -v ON_ERROR_STOP=1` 确保任何 SQL 错误立即中止并报失败（不再假成功）；
+//! 成功后全量失效文章缓存与 SSR 世代号。
 //! 长耗时操作走后台任务 + 进度轮询（见 [`crate::api::database::tasks`]）。
+//!
+//! **兼容性提示**：`--clean --if-exists` 是后加的备份参数。本修复之前生成的备份
+//! 文件不含 DROP，对其执行恢复会在第一条「relation already exists」处中止并报
+//! 失败（行为正确，但无法恢复数据）——需重新创建备份才能恢复。
 
 // Component/PathBuf/chrono::Utc 仅 server 构建的备份逻辑用到。
 #[cfg(feature = "server")]
@@ -88,6 +95,10 @@ async fn run_backup(task_id: &str) {
 }
 
 /// pg_dump 模式：子进程生成完整备份（含 schema），前置签名头。
+///
+/// `--clean --if-exists`：生成的脚本含 `DROP ... IF EXISTS`，使恢复幂等
+/// （恢复前自动删除现有对象，避免「relation already exists」/主键冲突导致
+/// 数据零写入）。详见 `run_restore`。
 #[cfg(feature = "server")]
 async fn run_pg_dump_backup(task_id: &str, timestamp: &str) {
     tasks::update(
@@ -154,6 +165,10 @@ async fn run_pg_dump_backup(task_id: &str, timestamp: &str) {
     };
     let child = match std::process::Command::new("pg_dump")
         .arg(&db_url)
+        // --clean --if-exists：生成 DROP ... IF EXISTS，让恢复幂等（先删后建），
+        // 否则恢复时表已存在 → CREATE/COPY 全部失败、数据零写入。
+        .arg("--clean")
+        .arg("--if-exists")
         .stdout(std::process::Stdio::from(stdout_file))
         .stderr(std::process::Stdio::piped())
         .spawn()
@@ -369,6 +384,17 @@ pub async fn restore_backup(filename: String, confirm: bool) -> Result<String, S
 }
 
 /// 后台执行恢复：探测 psql，可用则 psql -f，不可用则报告。
+///
+/// **幂等恢复**：备份由 `pg_dump --clean --if-exists` 生成，脚本自带
+/// `DROP ... IF EXISTS`，恢复时会先删后建，数据完全回到备份时刻。
+///
+/// **错误中止**：`-v ON_ERROR_STOP=1` 让 psql 在第一条 SQL 错误时立即退出
+/// （退出码 3）。否则 psql 即使满屏 ERROR 也返回 0，导致 `status.success()`
+/// 误判为成功——这是「恢复完成却无任何数据变更」假成功的根因。
+///
+/// **恢复成功后失效全量缓存**：恢复会用备份时刻的数据重建 posts 等表，
+/// 现有 moka 缓存（列表/标签/单篇/统计/搜索）与 SSR 世代号必须一并冲刷，
+/// 否则前端仍读旧数据。
 #[cfg(feature = "server")]
 async fn run_restore(task_id: &str, filename: &str) {
     let path = backup_path(filename);
@@ -414,12 +440,21 @@ async fn run_restore(task_id: &str, filename: &str) {
     );
     let output = std::process::Command::new("psql")
         .arg(&db_url)
+        // ON_ERROR_STOP=1：遇 SQL 错误立即中止（退出码 3）。
+        // 不加这个，psql 即使满屏 ERROR 也返回 0，status.success() 误报成功。
+        .arg("-v")
+        .arg("ON_ERROR_STOP=1")
         .arg("-f")
         .arg(&path)
         .stderr(std::process::Stdio::piped())
         .output();
     match output {
         Ok(o) if o.status.success() => {
+            // 恢复用备份时刻的数据重建了 posts 等表，必须冲刷全部文章相关缓存
+            // 与 SSR 世代号，否则前端仍读旧数据（被删的文章不会重新出现）。
+            crate::cache::invalidate_all_post_caches();
+            crate::cache::invalidate_search_results();
+            crate::ssr_cache::bump_global_generation();
             tasks::update(task_id, "恢复完成", 100, TaskStatus::Done, None, None, None);
         }
         Ok(o) => {
