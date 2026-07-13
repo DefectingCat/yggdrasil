@@ -33,7 +33,11 @@ pub static LANGUAGES: LazyLock<HashMap<String, LanguageDef>> = LazyLock::new(|| 
         "python".to_string(),
         LanguageDef {
             image: "yggdrasil-runner-python:latest".to_string(),
-            run_cmd: "python /code/main.py".to_string(),
+            // -u (unbuffered)：强制 stdout/stderr 行刷新。
+            // 容器 attach 用 pipe（非 TTY），Python 默认对 pipe 做块缓冲（4KB），
+            // 导致流式输出失效——print 的内容攒在缓冲区，进程退出才一次性刷出。
+            // -u 等价于 PYTHONUNBUFFERED=1，让每行 print 立即写出。
+            run_cmd: "python -u /code/main.py".to_string(),
             extension: "py".to_string(),
             default_limits: ResourceLimits {
                 cpu_cores: 1.0,
