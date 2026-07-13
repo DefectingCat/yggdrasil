@@ -106,8 +106,8 @@ pub const BTN_ICON: &str =
 /// 分页导航组件。
 ///
 /// 统一了后台与前台的分页 UI，通过 `variant` 切换配色与展示细节：
-/// - `"admin"`：灰黑胶囊按钮，显示页码计数（`{当前} / {总} 页 (共 {total} {unit})`），
-///   首尾页渲染禁用态。
+/// - `"admin"`：描边胶囊按钮（与 `BTN_OUTLINE` 同族），显示页码计数
+///   （`{当前} / {总} 页 (共 {total} {unit})`），首尾页渲染禁用态。
 /// - `"frontend"`：主题绿胶囊按钮，不显示计数，首尾页直接不渲染按钮。
 ///
 /// Props：
@@ -132,11 +132,12 @@ pub fn Pagination(
     let total_pages = ((total + per_page as i64 - 1) / per_page as i64).max(1) as i32;
     let has_next = current_page < total_pages;
 
-    // admin 与 frontend 的配色差异。
+    // admin 与 frontend 的配色差异。admin 上一页/下一页用描边胶囊，与本页其它
+    // 操作按钮（BTN_OUTLINE）同族，避免出现方角实心按钮破坏整体圆角语言。
     let is_admin = variant == "admin";
     let (link_class, link_extra_next) = if is_admin {
         (
-            "inline-flex items-center px-4 py-2 text-xs font-mono tracking-wider text-paper-theme bg-paper-primary rounded-sm hover:brightness-110 active:scale-[0.98] transition-all duration-200 cursor-pointer",
+            "inline-flex items-center px-4 py-2 text-sm font-medium text-paper-primary border border-paper-border rounded-full hover:border-paper-accent hover:text-paper-accent active:scale-[0.98] transition-all duration-200 cursor-pointer",
             "",
         )
     } else {
@@ -146,7 +147,7 @@ pub fn Pagination(
         )
     };
     let disabled_class =
-        "inline-flex items-center px-4 py-2 text-xs font-mono tracking-wider text-paper-secondary bg-paper-entry border border-paper-border rounded-sm cursor-not-allowed";
+        "inline-flex items-center px-4 py-2 text-sm font-medium text-paper-secondary border border-paper-border rounded-full cursor-not-allowed";
 
     // admin 首尾页渲染禁用态；frontend 首尾页直接不渲染。
     rsx! {
