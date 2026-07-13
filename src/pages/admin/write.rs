@@ -432,13 +432,13 @@ fn write_editor(post_id: Option<i32>) -> Element {
 
                     // 错误和成功提示
                     if let Some(err) = load_error() {
-                        div { class: "flex-shrink-0 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30 mb-2",
+                        div { class: "flex-shrink-0 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl text-sm border border-red-100 dark:border-red-900/30 mb-2",
                             "{err}"
                         }
                     }
 
                     if let Some(err) = error() {
-                        div { class: "flex-shrink-0 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30 mb-2",
+                        div { class: "flex-shrink-0 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl text-sm border border-red-100 dark:border-red-900/30 mb-2",
                             "{err}"
                         }
                     }
@@ -447,7 +447,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     for err in upload_errors().clone() {
                         div {
                             key: "{err.id}",
-                            class: "flex-shrink-0 flex items-center justify-between gap-3 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30 mb-2",
+                            class: "flex-shrink-0 flex items-center justify-between gap-3 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl text-sm border border-red-100 dark:border-red-900/30 mb-2",
                             span { "图片上传失败: {err.file_name} — {err.message}" }
                             button {
                                 class: "{BTN_CLOSE_ICON}",
@@ -475,7 +475,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     // 容器变高编辑器自动跟着变高。min-h-[400px] 保证窗口过矮时仍可用。
                     div { class: "flex-1 min-h-[400px] flex flex-col my-4",
                         div {
-                            class: "relative group flex-1 min-h-0 w-full border border-[var(--color-paper-border)] rounded-3xl overflow-hidden bg-[var(--color-paper-entry)] shadow-sm",
+                            class: "relative group flex-1 min-h-0 w-full border border-[var(--color-paper-border)] rounded-2xl overflow-hidden bg-[var(--color-paper-entry)] shadow-sm",
                             id: "tiptap-editor",
                             img {
                                 src: "/images/xiantiaoxiaogou_input_bg.webp",
@@ -493,7 +493,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     div { class: "p-6 border-b border-[var(--color-paper-border)]",
                         label { class: "block text-xs font-semibold uppercase tracking-wide text-[var(--color-paper-tertiary)] mb-3", "链接" }
                         input {
-                            class: "w-full text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-xl px-3 py-2 transition-all",
+                            class: "w-full text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-2xl px-3 py-2 transition-all",
                             placeholder: "自动生成",
                             value: "{slug}",
                             oninput: move |evt| slug.set(evt.value()),
@@ -503,7 +503,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     div { class: "p-6 border-b border-[var(--color-paper-border)]",
                         label { class: "block text-xs font-semibold uppercase tracking-wide text-[var(--color-paper-tertiary)] mb-3", "标签" }
                         input {
-                            class: "w-full text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-xl px-3 py-2 transition-all",
+                            class: "w-full text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-2xl px-3 py-2 transition-all",
                             placeholder: "逗号分隔...",
                             value: "{tags}",
                             oninput: move |evt| tags.set(evt.value()),
@@ -513,7 +513,7 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     div { class: "p-6 border-b border-[var(--color-paper-border)]",
                         label { class: "block text-xs font-semibold uppercase tracking-wide text-[var(--color-paper-tertiary)] mb-3", "摘要" }
                         textarea {
-                            class: "w-full text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-xl px-3 py-2 transition-all resize-none leading-relaxed",
+                            class: "w-full text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-2xl px-3 py-2 transition-all resize-none leading-relaxed",
                             placeholder: "选填...",
                             rows: "3",
                             value: "{summary}",
@@ -842,7 +842,7 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
 
         // 封面上传失败提示：复用页面红色条风格。
         if let Some(err) = cover_error() {
-            div { class: "flex items-center justify-between gap-3 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl text-sm border border-red-100 dark:border-red-900/30 mt-2",
+            div { class: "flex items-center justify-between gap-3 px-4 py-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-2xl text-sm border border-red-100 dark:border-red-900/30 mt-2",
                 span { "封面图: {err}" }
                 button {
                     class: "{BTN_CLOSE_ICON}",

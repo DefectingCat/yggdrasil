@@ -17,7 +17,7 @@ pub fn AdminDashboardSkeleton() -> Element {
             // 统计卡片骨架
             div { class: "grid grid-cols-1 md:grid-cols-3 gap-6",
                 for _ in 0..3 {
-                    div { class: "rounded-xl bg-paper-entry border border-paper-border p-6 text-center space-y-3",
+                    div { class: "rounded-2xl bg-paper-entry border border-paper-border p-6 text-center space-y-3",
                         SkeletonBox { class: "h-9 w-16 mx-auto rounded" }
                         SkeletonBox { class: "h-4 w-20 mx-auto rounded" }
                     }

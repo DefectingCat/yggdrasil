@@ -15,11 +15,11 @@ use crate::router::Route;
 // 样式常量
 // ===========================================================================
 
-/// Admin 卡片容器：大圆角，极简风，现代简约。
-pub const ADMIN_CARD_CLASS: &str = "bg-[var(--color-paper-entry)] rounded-3xl shadow-sm border border-transparent hover:border-[var(--color-paper-border)] transition-colors";
+/// Admin 卡片容器：内容档圆角（16px），作为主面板内的内容卡片，与外壳 32px 形成层次。
+pub const ADMIN_CARD_CLASS: &str = "bg-[var(--color-paper-entry)] rounded-2xl shadow-sm border border-transparent hover:border-[var(--color-paper-border)] transition-colors";
 
-/// Admin 表格容器：大圆角，现代简约，与卡片一致。
-pub const ADMIN_TABLE_CLASS: &str = "bg-[var(--color-paper-entry)] rounded-3xl shadow-sm border border-transparent hover:border-[var(--color-paper-border)] transition-colors overflow-hidden";
+/// Admin 表格容器：内容档圆角（16px），与卡片一致。
+pub const ADMIN_TABLE_CLASS: &str = "bg-[var(--color-paper-entry)] rounded-2xl shadow-sm border border-transparent hover:border-[var(--color-paper-border)] transition-colors overflow-hidden";
 
 /// Admin 表格行 hover 态：底部分割线 + 悬停背景。
 pub const ADMIN_ROW_HOVER: &str =

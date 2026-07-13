@@ -25,7 +25,7 @@ pub fn WriteSkeleton() -> Element {
 
                     // 编辑器区域:flex-1 撑满左栏剩余高度
                     div { class: "flex-1 min-h-[400px] flex flex-col my-4",
-                        div { class: "flex-1 min-h-0 w-full border border-[var(--color-paper-border)] rounded-3xl overflow-hidden bg-[var(--color-paper-entry)] shadow-sm p-4",
+                        div { class: "flex-1 min-h-0 w-full border border-[var(--color-paper-border)] rounded-2xl overflow-hidden bg-[var(--color-paper-entry)] shadow-sm p-4",
                             // 工具栏
                             div { class: "flex gap-2 pb-3 border-b border-[var(--color-paper-border)]",
                                 for _ in 0..8 {
@@ -51,17 +51,17 @@ pub fn WriteSkeleton() -> Element {
                     // 链接节
                     div { class: "p-6 border-b border-[var(--color-paper-border)]",
                         SkeletonBox { class: "h-3 w-10 rounded mb-3" }
-                        SkeletonBox { class: "h-8 w-full rounded-xl" }
+                        SkeletonBox { class: "h-8 w-full rounded-2xl" }
                     }
                     // 标签节
                     div { class: "p-6 border-b border-[var(--color-paper-border)]",
                         SkeletonBox { class: "h-3 w-10 rounded mb-3" }
-                        SkeletonBox { class: "h-8 w-full rounded-xl" }
+                        SkeletonBox { class: "h-8 w-full rounded-2xl" }
                     }
                     // 摘要节
                     div { class: "p-6 border-b border-[var(--color-paper-border)]",
                         SkeletonBox { class: "h-3 w-10 rounded mb-3" }
-                        SkeletonBox { class: "h-16 w-full rounded-xl" }
+                        SkeletonBox { class: "h-16 w-full rounded-2xl" }
                     }
                     // 封面图节
                     div { class: "p-6",

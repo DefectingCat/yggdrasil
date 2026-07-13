@@ -421,14 +421,14 @@ fn DbStatusTab() -> Element {
                         // 概览卡片骨架
                         div { class: "grid grid-cols-2 md:grid-cols-4 gap-4",
                             for _ in 0..4 {
-                                div { class: "rounded-xl bg-paper-entry border border-paper-border p-4 space-y-2",
+                                div { class: "rounded-2xl bg-paper-entry border border-paper-border p-4 space-y-2",
                                     SkeletonBox { class: "h-3 w-16 rounded" }
                                     SkeletonBox { class: "h-6 w-24 rounded" }
                                 }
                             }
                         }
                         // 表清单骨架
-                        div { class: "rounded-xl bg-paper-entry border border-paper-border overflow-hidden",
+                        div { class: "rounded-2xl bg-paper-entry border border-paper-border overflow-hidden",
                             div { class: "px-4 py-3 border-b border-paper-border",
                                 SkeletonBox { class: "h-4 w-40 rounded" }
                             }
@@ -704,7 +704,7 @@ fn ServerStatusTab() -> Element {
                         // 应用内指标卡片骨架
                         div { class: "grid grid-cols-2 md:grid-cols-4 gap-4",
                             for _ in 0..4 {
-                                div { class: "rounded-xl bg-paper-entry border border-paper-border p-4 space-y-2",
+                                div { class: "rounded-2xl bg-paper-entry border border-paper-border p-4 space-y-2",
                                     SkeletonBox { class: "h-3 w-16 rounded" }
                                     SkeletonBox { class: "h-6 w-24 rounded" }
                                 }
@@ -713,14 +713,14 @@ fn ServerStatusTab() -> Element {
                         // 主机层指标卡片骨架
                         div { class: "grid grid-cols-2 md:grid-cols-4 gap-4",
                             for _ in 0..4 {
-                                div { class: "rounded-xl bg-paper-entry border border-paper-border p-4 space-y-2",
+                                div { class: "rounded-2xl bg-paper-entry border border-paper-border p-4 space-y-2",
                                     SkeletonBox { class: "h-3 w-16 rounded" }
                                     SkeletonBox { class: "h-6 w-24 rounded" }
                                 }
                             }
                         }
                         // 缓存命中率表骨架
-                        div { class: "rounded-xl bg-paper-entry border border-paper-border overflow-hidden",
+                        div { class: "rounded-2xl bg-paper-entry border border-paper-border overflow-hidden",
                             div { class: "px-4 py-3 border-b border-paper-border",
                                 SkeletonBox { class: "h-4 w-24 rounded" }
                             }

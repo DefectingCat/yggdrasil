@@ -367,7 +367,7 @@ fn AutoPurgeSettings(settings: Signal<TrashSettings>) -> Element {
     };
 
     rsx! {
-        div { class: "rounded-xl border border-paper-border overflow-hidden bg-paper-entry",
+        div { class: "rounded-2xl border border-paper-border overflow-hidden bg-paper-entry",
             // 顶部可点击摘要条：状态指示灯 + 标题 + 展开箭头
             button {
                 class: "w-full flex items-center gap-3 px-5 py-4 text-left cursor-pointer hover:bg-paper-theme focus:outline-none focus-visible:ring-2 focus-visible:ring-paper-accent/40",

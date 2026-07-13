@@ -111,7 +111,7 @@ pub fn AdminLayout() -> Element {
             div { class: "mt-auto pt-6 border-t border-[var(--color-paper-border)] flex items-center justify-between px-4",
                 ThemeToggle {}
                 button {
-                    class: "text-sm font-medium px-4 py-2 rounded-xl bg-[var(--color-paper-theme)] border border-[var(--color-paper-border)] shadow-sm hover:shadow-md transition-all text-[var(--color-paper-secondary)] hover:text-red-500 cursor-pointer",
+                    class: "text-sm font-medium px-4 py-2 rounded-2xl bg-[var(--color-paper-theme)] border border-[var(--color-paper-border)] shadow-sm hover:shadow-md transition-all text-[var(--color-paper-secondary)] hover:text-red-500 cursor-pointer",
                     onclick: move |_| {
                         spawn(async move {
                             let _ = logout().await;
