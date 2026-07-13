@@ -2,9 +2,11 @@
 export type ThemeName = 'light' | 'dark';
 
 // Catppuccin Latte（浅色）终端配色，与 highlight.css 浅色主题视觉一致。
+// background 用项目 --color-paper-code-block 的色值（Catppuccin Latte Surface0），
+// 保证终端背景与外层容器无缝衔接。
 // 色值取自 https://catppuccin.com/palette/ Latte 调色板。
 export const LIGHT_THEME = {
-  background: '#eff1f5',
+  background: '#dce0e8',
   foreground: '#4c4f69',
   cursor: '#dc8a78',
   cursorAccent: '#eff1f5',
@@ -28,9 +30,11 @@ export const LIGHT_THEME = {
 };
 
 // Catppuccin Mocha（深色）终端配色，与 highlight.css 深色主题视觉一致。
+// background 用项目 --color-paper-code-block 的色值（Catppuccin Mocha Surface0），
+// 保证终端背景与外层容器无缝衔接。
 // 色值取自 https://catppuccin.com/palette/ Mocha 调色板。
 export const DARK_THEME = {
-  background: '#1e1e2e',
+  background: '#313244',
   foreground: '#cdd6f4',
   cursor: '#f5e0dc',
   cursorAccent: '#1e1e2e',
