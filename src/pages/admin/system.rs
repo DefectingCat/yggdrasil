@@ -1254,96 +1254,118 @@ fn BackupTab() -> Element {
     });
 
     // 恢复确认：pending_restore 被设置时弹出原生 confirm，确认后发起 restore_backup
-    // 并开始进度轮询。用 use_future 响应 pending_restore 变化。
-    // _pending_for_confirm 被 clone 进 async move（FnMut 可重入），用 Option::clone 兜底。
-    let _pending_for_confirm = pending_restore.read().clone();
+    // 并开始进度轮询。
+    //
+    // 采用与 DbStatusTab 自动刷新相同的长生命周期 loop 模式：在每次循环内部读
+    // pending_restore() 信号。原先用 use_future 在挂载时快照一次 pending_restore
+    //（彼时为 None），use_future 仅运行一次即 return，用户后续点击"恢复"设置
+    // pending_restore 后 future 不会重跑（Dioxus 的 ReactiveContext 只订阅闭包
+    // *执行期间* 读到的 signal，同步体的 .read().clone() 不建立订阅）→ 确认框
+    // 永不弹出。改成 loop 内读信号后，下一轮迭代即拿到最新值。
     use_future(move || {
         let mut pending_restore = pending_restore;
         let mut busy = busy;
         let mut active_progress = active_progress;
         let mut active_task_id = active_task_id;
         let mut error = error;
-        let pending_for_confirm = _pending_for_confirm.clone();
         async move {
             #[cfg(target_arch = "wasm32")]
             {
-                let fname = match pending_for_confirm {
-                    Some(f) => f,
-                    None => return,
-                };
-                let confirmed = web_sys::window()
-                    .and_then(|w| {
-                        w.confirm_with_message(&format!(
-                            "恢复将覆盖现有数据，确认恢复 {}？\n\n仅本系统生成的备份可恢复。",
-                            fname
-                        ))
-                        .ok()
-                    })
-                    == Some(true);
-                if confirmed {
-                    busy.set(true);
-                    active_progress.set(None);
-                    match restore_backup(fname, true).await {
-                        Ok(id) => active_task_id.set(Some(id)),
-                        Err(e) => {
-                            error.set(Some(e.to_string()));
-                            busy.set(false);
+                loop {
+                    let fname = match pending_restore() {
+                        Some(f) => f,
+                        None => {
+                            // 空闲：短 yield 让事件循环呼吸，避免忙等。
+                            wasm_sleep(200).await;
+                            continue;
+                        }
+                    };
+                    // 取到了：先清空 pending，防止 loop 重入时再次确认。
+                    pending_restore.set(None);
+                    let confirmed = web_sys::window()
+                        .and_then(|w| {
+                            w.confirm_with_message(&format!(
+                                "恢复将覆盖现有数据，确认恢复 {}？\n\n仅本系统生成的备份可恢复。",
+                                fname
+                            ))
+                            .ok()
+                        })
+                        == Some(true);
+                    if confirmed {
+                        busy.set(true);
+                        active_progress.set(None);
+                        match restore_backup(fname, true).await {
+                            Ok(id) => active_task_id.set(Some(id)),
+                            Err(e) => {
+                                error.set(Some(e.to_string()));
+                                busy.set(false);
+                            }
                         }
                     }
+                    // 处理完一轮后回到 loop 顶部继续等待下一个 pending。
                 }
-                // 无论确认与否都清空 pending
-                pending_restore.set(None);
             }
             #[cfg(not(target_arch = "wasm32"))]
             {
-                let _ = (pending_restore, busy, active_progress, active_task_id, error, pending_for_confirm);
+                let _ = (pending_restore, busy, active_progress, active_task_id, error);
             }
         }
     });
 
-    // 任务进度轮询：active_task_id 存在时每 1.5s 拉取进度，Done/Failed 后停止 + 刷新列表
-    // _task_id_for_poll 被 clone 进 async move（FnMut 可重入）。
-    let _task_id_for_poll = active_task_id.read().clone();
+    // 任务进度轮询：active_task_id 存在时每 1.5s 拉取进度，Done/Failed 后停止 + 刷新列表。
+    //
+    // 同样用长生命周期 loop + 循环内读 active_task_id() 的模式。原先在挂载时把
+    // active_task_id 快照进 _task_id_for_poll（彼时为 None），use_future 只跑一次
+    // 即 return；用户点"创建备份"后 create_backup 返回 task id 并设置信号，但
+    // future 已结束 → 轮询永不启动，busy 永远为 true（用户报告的 bug）。
     use_future(move || {
         let mut active_task_id = active_task_id;
         let mut active_progress = active_progress;
         let mut backups_f = backups;
         let mut busy_f = busy;
-        let task_id_for_poll = _task_id_for_poll.clone();
         async move {
             #[cfg(target_arch = "wasm32")]
             {
-                let tid = match task_id_for_poll {
-                    Some(t) => t,
-                    None => return,
-                };
                 loop {
-                    wasm_sleep(1500).await;
-                    match get_task_progress(tid.clone()).await {
-                        Ok(p) => {
-                            let done = p.status == TaskStatus::Done || p.status == TaskStatus::Failed;
-                            active_progress.set(Some(p));
-                            if done {
-                                // 刷新列表（备份完成后新文件出现）并清理任务态
-                                if let Ok(list) = list_backups().await {
-                                    backups_f.set(list);
+                    let tid = match active_task_id() {
+                        Some(t) => t,
+                        None => {
+                            // 空闲：短 yield，最多 200ms 后响应新任务。
+                            wasm_sleep(200).await;
+                            continue;
+                        }
+                    };
+                    // 有任务在途：进入 1.5s 轮询，直到 Done/Failed/出错。
+                    loop {
+                        wasm_sleep(1500).await;
+                        match get_task_progress(tid.clone()).await {
+                            Ok(p) => {
+                                let done = p.status == TaskStatus::Done
+                                    || p.status == TaskStatus::Failed;
+                                active_progress.set(Some(p));
+                                if done {
+                                    // 刷新列表（备份完成后新文件出现）并清理任务态
+                                    if let Ok(list) = list_backups().await {
+                                        backups_f.set(list);
+                                    }
+                                    active_task_id.set(None);
+                                    busy_f.set(false);
+                                    break;
                                 }
+                            }
+                            Err(_) => {
                                 active_task_id.set(None);
                                 busy_f.set(false);
                                 break;
                             }
                         }
-                        Err(_) => {
-                            active_task_id.set(None);
-                            busy_f.set(false);
-                            break;
-                        }
                     }
+                    // 内层 loop 退出后回到外层，继续等待下一个任务或空闲。
                 }
             }
             #[cfg(not(target_arch = "wasm32"))]
             {
-                let _ = (active_task_id, active_progress, backups_f, busy_f, task_id_for_poll);
+                let _ = (active_task_id, active_progress, backups_f, busy_f);
             }
         }
     });
