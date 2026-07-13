@@ -6,8 +6,12 @@
  *
  * 注意:startThemeTransition 只接收 (x, y),目标主题(亮/暗)从 DOM 的 dark class
  * 现状推导(取反),不依赖外部传入——避免与调用方状态不同步。
+ *
+ * 主题变更事件(THEME_CHANGE_EVENT):验证 VT 回调 + 降级路径都同步 dispatch,
+ * 且事件在 applyDarkClass 之前触发(编辑器换肤先于 class 翻转,同一 reflow 捕获)。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { THEME_CHANGE_EVENT } from './theme-transition';
 import './index';
 
 describe('startThemeTransition', () => {
@@ -111,5 +115,87 @@ describe('startThemeTransition', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(true);
 
     delete (document as unknown as { startViewTransition?: unknown }).startViewTransition;
+  });
+
+  it('主路径:VT callback 内 dispatch 主题变更事件,且先于 dark class 翻转', () => {
+    const cbRef: { cb: (() => void) | null } = { cb: null };
+    Object.defineProperty(document, 'startViewTransition', {
+      value: (cb: () => void) => {
+        cbRef.cb = cb;
+        return { ready: Promise.resolve(), finished: Promise.resolve(), skipTransition: () => {} };
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    // 记录事件触发时刻的 dark class 状态——验证事件在 applyDarkClass 之前 dispatch
+    const eventSnapshots: { isDark: boolean; darkClassAtDispatch: boolean }[] = [];
+    const listener = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { isDark: boolean };
+      eventSnapshots.push({
+        isDark: detail.isDark,
+        darkClassAtDispatch: document.documentElement.classList.contains('dark'),
+      });
+    };
+    window.addEventListener(THEME_CHANGE_EVENT, listener);
+
+    // 亮→暗:无 dark class,isDark=true
+    window.__startThemeTransition(0, 0);
+    cbRef.cb?.();
+
+    expect(eventSnapshots).toHaveLength(1);
+    expect(eventSnapshots[0].isDark).toBe(true);
+    // 事件触发时 dark class 尚未翻转(仍是 light)——证明事件先于 applyDarkClass
+    expect(eventSnapshots[0].darkClassAtDispatch).toBe(false);
+    // callback 执行完后 dark class 已翻转
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+
+    window.removeEventListener(THEME_CHANGE_EVENT, listener);
+    delete (document as unknown as { startViewTransition?: unknown }).startViewTransition;
+  });
+
+  it('降级路径:无 VT 时也 dispatch 主题变更事件(亮→暗)', () => {
+    const calls: boolean[] = [];
+    const listener = (e: Event) => {
+      calls.push((e as CustomEvent).detail.isDark);
+    };
+    window.addEventListener(THEME_CHANGE_EVENT, listener);
+
+    // 亮→暗
+    window.__startThemeTransition(0, 0);
+    expect(calls).toEqual([true]);
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+
+    // 暗→亮
+    window.__startThemeTransition(0, 0);
+    expect(calls).toEqual([true, false]);
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+
+    window.removeEventListener(THEME_CHANGE_EVENT, listener);
+  });
+
+  it('applyResolvedTheme:同步 dispatch 主题变更事件 + 翻 dark class', () => {
+    const calls: { isDark: boolean; darkClassAtDispatch: boolean }[] = [];
+    const listener = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { isDark: boolean };
+      calls.push({
+        isDark: detail.isDark,
+        darkClassAtDispatch: document.documentElement.classList.contains('dark'),
+      });
+    };
+    window.addEventListener(THEME_CHANGE_EVENT, listener);
+
+    window.__applyResolvedTheme(true);
+    expect(calls).toEqual([{ isDark: true, darkClassAtDispatch: false }]);
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+
+    window.__applyResolvedTheme(false);
+    expect(calls).toEqual([
+      { isDark: true, darkClassAtDispatch: false },
+      { isDark: false, darkClassAtDispatch: true },
+    ]);
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+
+    window.removeEventListener(THEME_CHANGE_EVENT, listener);
   });
 });

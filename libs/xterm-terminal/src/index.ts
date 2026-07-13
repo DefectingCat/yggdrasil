@@ -1,4 +1,16 @@
 import { TerminalInstance, XtermOptions } from './terminal';
+import type { ThemeName } from './themes';
+
+/**
+ * 主题切换事件名——与 yggdrasil-core 的 THEME_CHANGE_EVENT 保持一致。
+ *
+ * 本包是独立 IIFE,不 import yggdrasil-core,故用同名 string literal 订阅。
+ * yggdrasil-core 在 VT 回调内(NEW 快照捕获前)同步 dispatch 此事件,
+ * 让 xterm 同步 setTheme——否则圆形展开扫过终端区域时 OLD/NEW 快照同色
+ * (背景由 .xterm-scrollable-element 的 inline background-color 注入,不随
+ * .dark 翻转),看不到变化,动画结束后才瞬切。
+ */
+const THEME_CHANGE_EVENT = 'yggdrasil:theme-change';
 
 /**
  * 模块入口：暴露对象字面量 { create } 作为默认导出。
@@ -24,5 +36,27 @@ const XtermTerminal = {
     return instance;
   },
 };
+
+/**
+ * 订阅主题切换事件:VT 回调内同步 dispatch 时,遍历所有存活实例调 setTheme。
+ *
+ * 必须在模块加载时注册一次(IIFE 顶层),确保任何时刻 dispatch 都能命中。
+ * 单实例异常用 try/catch 隔离,避免一个实例失败中断其他实例换肤。
+ * 与 Dioxus use_effect 驱动的 set_theme 幂等共存(setTheme 相同主题是 no-op)。
+ */
+if (typeof window !== 'undefined') {
+  window.addEventListener(THEME_CHANGE_EVENT, (event) => {
+    const detail = (event as CustomEvent).detail as { isDark: boolean } | undefined;
+    if (!detail) return;
+    const theme: ThemeName = detail.isDark ? 'dark' : 'light';
+    XtermTerminal._instances.forEach((instance) => {
+      try {
+        instance.setTheme(theme);
+      } catch (e) {
+        console.error('[XtermTerminal] setTheme failed during theme change:', e);
+      }
+    });
+  });
+}
 
 export default XtermTerminal;
