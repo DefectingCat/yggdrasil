@@ -1221,8 +1221,6 @@ fn BackupTab() -> Element {
     // 当前进行中的任务（备份/恢复）id + 进度
     let active_task_id: Signal<Option<String>> = use_signal(|| None);
     let mut active_progress = use_signal(|| Option::<TaskProgress>::None);
-    // 待恢复的文件名（确认对话框用）
-    let mut pending_restore: Signal<Option<String>> = use_signal(|| None);
     let mut busy = use_signal(|| false);
 
     // 刷新备份列表
@@ -1251,65 +1249,6 @@ fn BackupTab() -> Element {
 
     use_effect(move || {
         refresh_list();
-    });
-
-    // 恢复确认：pending_restore 被设置时弹出原生 confirm，确认后发起 restore_backup
-    // 并开始进度轮询。
-    //
-    // 采用与 DbStatusTab 自动刷新相同的长生命周期 loop 模式：在每次循环内部读
-    // pending_restore() 信号。原先用 use_future 在挂载时快照一次 pending_restore
-    //（彼时为 None），use_future 仅运行一次即 return，用户后续点击"恢复"设置
-    // pending_restore 后 future 不会重跑（Dioxus 的 ReactiveContext 只订阅闭包
-    // *执行期间* 读到的 signal，同步体的 .read().clone() 不建立订阅）→ 确认框
-    // 永不弹出。改成 loop 内读信号后，下一轮迭代即拿到最新值。
-    use_future(move || {
-        let mut pending_restore = pending_restore;
-        let mut busy = busy;
-        let mut active_progress = active_progress;
-        let mut active_task_id = active_task_id;
-        let mut error = error;
-        async move {
-            #[cfg(target_arch = "wasm32")]
-            {
-                loop {
-                    let fname = match pending_restore() {
-                        Some(f) => f,
-                        None => {
-                            // 空闲：短 yield 让事件循环呼吸，避免忙等。
-                            wasm_sleep(200).await;
-                            continue;
-                        }
-                    };
-                    // 取到了：先清空 pending，防止 loop 重入时再次确认。
-                    pending_restore.set(None);
-                    let confirmed = web_sys::window()
-                        .and_then(|w| {
-                            w.confirm_with_message(&format!(
-                                "恢复将覆盖现有数据，确认恢复 {}？\n\n仅本系统生成的备份可恢复。",
-                                fname
-                            ))
-                            .ok()
-                        })
-                        == Some(true);
-                    if confirmed {
-                        busy.set(true);
-                        active_progress.set(None);
-                        match restore_backup(fname, true).await {
-                            Ok(id) => active_task_id.set(Some(id)),
-                            Err(e) => {
-                                error.set(Some(e.to_string()));
-                                busy.set(false);
-                            }
-                        }
-                    }
-                    // 处理完一轮后回到 loop 顶部继续等待下一个 pending。
-                }
-            }
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                let _ = (pending_restore, busy, active_progress, active_task_id, error);
-            }
-        }
     });
 
     // 任务进度轮询：active_task_id 存在时每 1.5s 拉取进度，Done/Failed 后停止 + 刷新列表。
@@ -1467,26 +1406,42 @@ fn BackupTab() -> Element {
                                         size_str: size_str.clone(),
                                         dl_url: dl_url.clone(),
                                         busy: is_busy,
-                                        on_restore: move |f: String| pending_restore.set(Some(f)),
-                                        on_delete: move |_fname_del: String| {
+                                        // 恢复：确认已在 BackupRow 的 Popover 内完成,
+                                        // 这里直接发起 restore_backup 并交由轮询 use_future 接管。
+                                        // pending_restore signal + 确认 use_future 链路已移除
+                                        //（原生 confirm 是阻塞式才需要那套间接机制）。
+                                        on_restore: move |f: String| {
                                             #[cfg(target_arch = "wasm32")]
                                             {
-                                                let fname_del = _fname_del;
-                                                let confirmed = web_sys::window()
-                                                    .and_then(|w| {
-                                                        w.confirm_with_message(&format!("确认删除 {}？", fname_del))
-                                                            .ok()
-                                                    })
-                                                    == Some(true);
-                                                if confirmed {
-                                                    let mut backups = backups;
-                                                    spawn(async move {
-                                                        let _ = delete_backup(fname_del.clone()).await;
-                                                        if let Ok(list) = list_backups().await {
-                                                            backups.set(list);
+                                                let mut busy = busy;
+                                                let mut active_progress = active_progress;
+                                                let mut active_task_id = active_task_id;
+                                                let mut error = error;
+                                                spawn(async move {
+                                                    busy.set(true);
+                                                    active_progress.set(None);
+                                                    match restore_backup(f, true).await {
+                                                        Ok(id) => active_task_id.set(Some(id)),
+                                                        Err(e) => {
+                                                            error.set(Some(e.to_string()));
+                                                            busy.set(false);
                                                         }
-                                                    });
-                                                }
+                                                    }
+                                                });
+                                            }
+                                        },
+                                        // 删除:确认已在 BackupRow 的 Popover 内完成,
+                                        // 直接执行 delete_backup + 刷新列表。
+                                        on_delete: move |fname_del: String| {
+                                            #[cfg(target_arch = "wasm32")]
+                                            {
+                                                let mut backups = backups;
+                                                spawn(async move {
+                                                    let _ = delete_backup(fname_del).await;
+                                                    if let Ok(list) = list_backups().await {
+                                                        backups.set(list);
+                                                    }
+                                                });
                                             }
                                         },
                                     }
@@ -1520,6 +1475,10 @@ fn urlencode_dl(s: &str) -> String {
 }
 
 /// 备份列表单行（抽取为子组件：各自 scope 内 let/clone 不冲突）。
+///
+/// 删除/恢复不再用浏览器原生 confirm()，改用 [`Popover`] 确认框（`position:fixed`
+/// 逃出表格 `overflow-hidden`）。点击按钮读 `MouseEvent::client_coordinates()` 作为
+/// popover 锚点，`confirm` 按钮回调父组件的 `on_delete`/`on_restore`。
 #[derive(Props, Clone, PartialEq)]
 struct BackupRowProps {
     filename: String,
@@ -1532,12 +1491,24 @@ struct BackupRowProps {
 }
 
 #[component]
+#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
 fn BackupRow(props: BackupRowProps) -> Element {
-    // Callback 是 Copy，直接复用；filename 需 clone（两个闭包各取一份）。
+    use crate::components::ui::Popover;
+    use crate::components::ui::BTN_DANGER_OUTLINE;
+
+    // Callback 是 Copy，直接复用；filename 需 clone（确认框闭包各取一份）。
     let on_restore = props.on_restore;
     let on_delete = props.on_delete;
     let fname_for_restore = props.filename.clone();
     let fname_for_delete = props.filename.clone();
+
+    // Popover 状态：哪个动作的确认框打开 + 锚点坐标。None = 都关闭。
+    // 用一个 String("delete"/"restore") 而非两个 bool，避免同时开两个 popover。
+    let mut open_action = use_signal(|| Option::<String>::None);
+    // 锚点坐标：按钮点击的视口坐标（client_coordinates）。
+    let mut anchor_x = use_signal(|| 0i32);
+    let mut anchor_y = use_signal(|| 0i32);
+
     rsx! {
         tr { class: "border-b border-paper-border last:border-0 hover:bg-paper-entry transition-colors",
             td { class: "px-4 py-2 font-mono text-xs text-paper-primary", "{props.filename}" }
@@ -1553,14 +1524,88 @@ fn BackupRow(props: BackupRowProps) -> Element {
                 button {
                     class: "{BTN_TEXT_AMBER} mr-3 disabled:opacity-50",
                     disabled: props.busy,
-                    onclick: move |_| on_restore.call(fname_for_restore.clone()),
+                    // 点击记录坐标并打开恢复确认 popover。client_coordinates 两端编译。
+                    onclick: move |e| {
+                        let c = e.client_coordinates();
+                        anchor_x.set(c.x as i32);
+                        anchor_y.set(c.y as i32);
+                        open_action.set(Some("restore".to_string()));
+                    },
                     "恢复"
                 }
                 button {
                     class: "{BTN_TEXT_RED} disabled:opacity-50",
                     disabled: props.busy,
-                    onclick: move |_| on_delete.call(fname_for_delete.clone()),
+                    onclick: move |e| {
+                        let c = e.client_coordinates();
+                        anchor_x.set(c.x as i32);
+                        anchor_y.set(c.y as i32);
+                        open_action.set(Some("delete".to_string()));
+                    },
                     "删除"
+                }
+            }
+
+            // 恢复确认 popover
+            Popover {
+                open: open_action().as_deref() == Some("restore"),
+                anchor_x: anchor_x(),
+                anchor_y: anchor_y(),
+                placement: "bottom",
+                on_close: move |_| open_action.set(None),
+                div { class: "w-64 space-y-3",
+                    p { class: "text-sm text-paper-primary leading-relaxed",
+                        "恢复将覆盖现有数据，确认恢复 "
+                        span { class: "font-mono text-xs break-all", "{props.filename}" }
+                        "？"
+                    }
+                    p { class: "text-xs text-paper-secondary", "仅本系统生成的备份可恢复。" }
+                    div { class: "flex justify-end gap-2 pt-1",
+                        button {
+                            class: "px-3 py-1.5 text-xs text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer",
+                            onclick: move |_| open_action.set(None),
+                            "取消"
+                        }
+                        button {
+                            class: "{BTN_DANGER_OUTLINE}",
+                            onclick: move |_| {
+                                open_action.set(None);
+                                on_restore.call(fname_for_restore.clone());
+                            },
+                            "确认恢复"
+                        }
+                    }
+                }
+            }
+
+            // 删除确认 popover
+            Popover {
+                open: open_action().as_deref() == Some("delete"),
+                anchor_x: anchor_x(),
+                anchor_y: anchor_y(),
+                placement: "bottom",
+                on_close: move |_| open_action.set(None),
+                div { class: "w-64 space-y-3",
+                    p { class: "text-sm text-paper-primary",
+                        "确认删除 "
+                        span { class: "font-mono text-xs break-all", "{props.filename}" }
+                        "？"
+                    }
+                    div { class: "flex justify-end gap-2 pt-1",
+                        button {
+                            class: "px-3 py-1.5 text-xs text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer",
+                            onclick: move |_| open_action.set(None),
+                            "取消"
+                        }
+                        button {
+                            class: "{BTN_DANGER_OUTLINE}",
+                            onclick: move |_| {
+                                open_action.set(None);
+                                on_delete.call(fname_for_delete.clone());
+                            },
+                            "确认删除"
+                        }
+                    }
                 }
             }
         }

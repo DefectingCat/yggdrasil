@@ -63,6 +63,22 @@
     animation: page-enter 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
+  /* Popover / 确认框淡入缩放(比 page-enter 更轻、更快) */
+  @keyframes popover-enter {
+    0% {
+      opacity: 0;
+      transform: translateX(-50%) scale(0.95);
+    }
+    100% {
+      opacity: 1;
+      transform: translateX(-50%) scale(1);
+    }
+  }
+
+  .animate-popover-enter {
+    animation: popover-enter 150ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
   /* Minimalist custom scrollbars */
   * {
     scrollbar-width: thin;

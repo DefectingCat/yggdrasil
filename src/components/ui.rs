@@ -257,6 +257,130 @@ pub fn Tooltip(
     }
 }
 
+/// Popover 遮罩与面板的层级(z-40 遮罩 < z-50 面板),与 Tooltip/lightbox 同 z-50。
+const POPOVER_OVERLAY_CLASS: &str = "fixed inset-0 z-40";
+/// Popover 面板:卡片化大圆角 + 阴影 + 淡入缩放动画。
+const POPOVER_PANEL_CLASS: &str =
+    "fixed z-50 bg-[var(--color-paper-entry)] rounded-2xl shadow-lg border border-[var(--color-paper-border)] p-4 animate-popover-enter";
+
+/// 受控式通用 Popover(浮层)组件。
+///
+/// 与 [`Tooltip`] 对称——但 Tooltip 是纯 CSS hover、无状态;Popover 是点击触发、
+/// 受控开关,用于承载确认框、轻量表单等交互内容。
+///
+/// ## 定位策略
+///
+/// 父容器常有 `overflow-hidden`(如 `ADMIN_TABLE_CLASS`),`position:absolute` 子节点
+/// 会被裁掉,故面板用 **`position:fixed`**,以触发点击的**视口坐标**(`MouseEvent::
+/// client_coordinates()`)作为锚点(参照 `theme.rs` 圆形展开动画的坐标用法)。无需
+/// `getBoundingClientRect`/`node_ref`。
+///
+/// - `placement: "top"`(默认):面板底边贴点击点上方(`bottom: 100vh - y + gap`)。
+/// - `placement: "bottom"`:面板顶边贴点击点下方(`top: y + gap`)。
+/// - 水平:面板中心对齐点击点(`left: x` + `-translate-x-1/2`)。
+///
+/// ## 关闭路径(三条)
+///
+/// 1. 点遮罩(透明,仅作点击兜底)→ `on_close`。
+/// 2. Escape 键 → `on_close`(组件内 `use_effect` 注册全局 keydown 监听,`use_drop` 清理)。
+/// 3. 面板内确认/取消按钮调用 `on_close`。
+///
+/// ## Props
+///
+/// - `open`:受控开关;`false` 时组件不渲染任何内容(SSR 安全)。
+/// - `anchor_x` / `anchor_y`:触发点击的视口坐标。
+/// - `placement`:`"top"`(默认)/ `"bottom"`。
+/// - `children`:面板内容(确认框等)。
+/// - `on_close`:任一关闭路径触发。
+#[component]
+#[cfg_attr(not(target_arch = "wasm32"), allow(unused_variables))]
+pub fn Popover(
+    open: bool,
+    anchor_x: i32,
+    anchor_y: i32,
+    children: Element,
+    on_close: EventHandler<()>,
+    #[props(default = "top")] placement: &'static str,
+) -> Element {
+    // Escape 关闭:组件 open 时注册全局 keydown 监听,关闭/卸载时移除。
+    // 手写最小 listener 而非复用 use_event_listener——后者 handler 无参,拿不到
+    // KeyboardEvent 的 key()。用 use_hook 持有 Closure,use_effect 注册,use_drop 清理。
+    #[cfg(target_arch = "wasm32")]
+    {
+        use dioxus::prelude::{use_drop, use_effect, use_hook};
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        type EscState = Rc<RefCell<Option<wasm_bindgen::prelude::Closure<dyn FnMut(web_sys::KeyboardEvent)>>>>;
+        let state: EscState = use_hook(|| Rc::new(RefCell::new(None)));
+        let state_for_drop = state.clone();
+        let open_for_effect = open;
+        let on_close_for_esc = on_close;
+        use_effect(move || {
+            if !open_for_effect {
+                return;
+            }
+            let Some(window) = web_sys::window() else {
+                return;
+            };
+            let on_close_for_esc = on_close_for_esc;
+            // Closure 带 KeyboardEvent 参数:浏览器调用 handler 时传入事件对象,
+            // 无需依赖已废弃的 window.event()。as_ref + unchecked_ref 转成 JS Function。
+            let closure = wasm_bindgen::prelude::Closure::wrap(Box::new(move |ev: web_sys::KeyboardEvent| {
+                if ev.key() == "Escape" {
+                    on_close_for_esc.call(());
+                }
+            })
+                as Box<dyn FnMut(web_sys::KeyboardEvent)>);
+            let _ = window.add_event_listener_with_callback(
+                "keydown",
+                wasm_bindgen::JsCast::unchecked_ref(closure.as_ref()),
+            );
+            *state.borrow_mut() = Some(closure);
+        });
+        use_drop(move || {
+            if let Some(closure) = state_for_drop.borrow_mut().take() {
+                if let Some(window) = web_sys::window() {
+                    let _ = window.remove_event_listener_with_callback(
+                        "keydown",
+                        wasm_bindgen::JsCast::unchecked_ref(closure.as_ref()),
+                    );
+                }
+            }
+        });
+    }
+
+    if !open {
+        return rsx! {};
+    }
+
+    // 面板定位:top/bottom 决定垂直方向;水平统一居中于点击点。
+    let style = if placement == "bottom" {
+        format!("top: {y}px; left: {x}px; transform: translateX(-50%);", x = anchor_x, y = anchor_y + 8)
+    } else {
+        // top:面板在点击点上方——用 bottom 锚定 viewport 底,差值即视口高度 - y + 间隙。
+        // 视口高度用 100vh,纯 CSS 无需 JS 读取 scrollHeight。
+        format!(
+            "bottom: calc(100vh - {y}px + 8px); left: {x}px; transform: translateX(-50%);",
+            x = anchor_x,
+            y = anchor_y,
+        )
+    };
+
+    rsx! {
+        // 透明遮罩:拦截外部点击(点遮罩即关)。z-40 < 面板 z-50。
+        div {
+            class: "{POPOVER_OVERLAY_CLASS}",
+            onclick: move |_| on_close.call(()),
+        }
+        // 面板:fixed 定位逃出 overflow-hidden 容器。
+        div {
+            class: "{POPOVER_PANEL_CLASS}",
+            style: "{style}",
+            {children}
+        }
+    }
+}
+
 static TAB_GROUP_ID: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 /// 筛选选项卡组件。
