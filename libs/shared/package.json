@@ -1,16 +1,14 @@
 {
-  "name": "@yggdrasil/core",
+  "name": "@yggdrasil/shared",
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
   "scripts": {
-    "build": "tsc --noEmit && vite build",
-    "dev": "vite",
+    "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
-  },
-  "dependencies": {
-    "@yggdrasil/shared": "workspace:*"
   }
 }

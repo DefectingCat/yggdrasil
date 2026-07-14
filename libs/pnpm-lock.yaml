@@ -62,11 +62,20 @@ importers:
       '@replit/codemirror-vim':
         specifier: ^6.3.0
         version: 6.3.0(@codemirror/commands@6.10.4)(@codemirror/language@6.12.4)(@codemirror/search@6.7.1)(@codemirror/state@6.7.1)(@codemirror/view@6.43.6)
+      '@yggdrasil/shared':
+        specifier: workspace:*
+        version: link:../shared
       codemirror:
         specifier: ^6.0.2
         version: 6.0.2
 
-  lightbox: {}
+  lightbox:
+    dependencies:
+      '@yggdrasil/shared':
+        specifier: workspace:*
+        version: link:../shared
+
+  shared: {}
 
   tiptap-editor:
     dependencies:
@@ -115,8 +124,15 @@ importers:
       '@xterm/xterm':
         specifier: ^6.0.0
         version: 6.0.0
+      '@yggdrasil/shared':
+        specifier: workspace:*
+        version: link:../shared
 
-  yggdrasil-core: {}
+  yggdrasil-core:
+    dependencies:
+      '@yggdrasil/shared':
+        specifier: workspace:*
+        version: link:../shared
 
 packages:
 

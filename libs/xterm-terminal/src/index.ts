@@ -1,16 +1,15 @@
+import { THEME_CHANGE_EVENT } from '@yggdrasil/shared';
 import { TerminalInstance, XtermOptions } from './terminal';
 import type { ThemeName } from './themes';
 
 /**
- * 主题切换事件名——与 yggdrasil-core 的 THEME_CHANGE_EVENT 保持一致。
+ * 主题切换事件由 @yggdrasil/shared 统一定义。
  *
- * 本包是独立 IIFE,不 import yggdrasil-core,故用同名 string literal 订阅。
  * yggdrasil-core 在 VT 回调内(NEW 快照捕获前)同步 dispatch 此事件,
  * 让 xterm 同步 setTheme——否则圆形展开扫过终端区域时 OLD/NEW 快照同色
  * (背景由 .xterm-scrollable-element 的 inline background-color 注入,不随
  * .dark 翻转),看不到变化,动画结束后才瞬切。
  */
-const THEME_CHANGE_EVENT = 'yggdrasil:theme-change';
 
 /**
  * 模块入口：暴露对象字面量 { create } 作为默认导出。

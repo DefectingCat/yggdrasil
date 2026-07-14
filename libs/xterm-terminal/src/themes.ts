@@ -1,5 +1,5 @@
-// 主题名：与 codemirror-editor / 项目 themes/ 下 Catppuccin Latte/Mocha 对齐。
-export type ThemeName = 'light' | 'dark';
+// 主题名由 @yggdrasil/shared 统一定义，re-export 保持本模块 API 不变。
+export type { ThemeName } from '@yggdrasil/shared';
 
 // Catppuccin Latte（浅色）终端配色，与 highlight.css 浅色主题视觉一致。
 // background 用项目 --color-paper-code-block 的色值（Catppuccin Latte Surface0），

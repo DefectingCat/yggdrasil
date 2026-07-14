@@ -3,8 +3,9 @@
 import { catppuccinLatte, catppuccinMocha } from '@catppuccin/codemirror';
 import type { Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import type { ThemeName } from '@yggdrasil/shared';
 
-export type ThemeName = 'light' | 'dark';
+export type { ThemeName };
 
 /**
  * 覆盖 CodeMirror core 内置 base theme 的两处问题：

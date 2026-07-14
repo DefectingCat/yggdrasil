@@ -1,3 +1,4 @@
+import { prefersReducedMotion } from '@yggdrasil/shared';
 import { fitCentered, originalUrl, type Rect, transformFor } from './geometry';
 import './style.css';
 
@@ -33,9 +34,7 @@ declare global {
 
 // ============ 工具函数 ============
 
-function prefersReducedMotion(): boolean {
-  return !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
+// prefersReducedMotion 由 @yggdrasil/shared 提供（lightbox.test.ts 会 mock matchMedia）。
 
 // 读取元素当前在视口里的 rect（用于飞行起点/终点）。
 // 统一映射成 {x,y,w,h}：getBoundingClientRect 返回的 DOMRect 用

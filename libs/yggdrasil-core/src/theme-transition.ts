@@ -10,8 +10,10 @@
  * API 优先级 bug,是目前最稳定的 VT 主题切换方案。
  */
 
+import { prefersReducedMotion, THEME_CHANGE_EVENT } from '@yggdrasil/shared';
+
 /**
- * 主题切换自定义事件名。
+ * 主题切换自定义事件。
  *
  * 在 VT 回调内(NEW 快照捕获前)同步 dispatch,通知 CodeMirror / xterm 等
  * 命令式换肤的组件同步调 setTheme——它们的背景色不随 .dark class 翻转,
@@ -19,14 +21,10 @@
  *
  * 事件 detail: `{ isDark: boolean }`。
  *
- * 各编辑器包(codemirror-editor / xterm-terminal)是独立 IIFE,不 import 本包,
- * 故各自用同名 string literal 订阅;本常量仅用于本包内部 + 测试断言一致性。
+ * 事件名与 prefersReducedMotion 由 @yggdrasil/shared 统一定义,各 IIFE 库
+ * (codemirror-editor / xterm-terminal / lightbox)共享同一真相源。
  */
-export const THEME_CHANGE_EVENT = 'yggdrasil:theme-change';
-
-function prefersReducedMotion(): boolean {
-  return !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
+export { THEME_CHANGE_EVENT };
 
 function maxCornerDistance(x: number, y: number): number {
   const w = window.innerWidth;
