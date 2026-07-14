@@ -38,12 +38,7 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
             .map_err(AppError::query)?;
 
         let Some(slug_row) = slug_row else {
-            return Ok(CreatePostResponse {
-                success: false,
-                message: "文章不存在".to_string(),
-                post_id: None,
-                slug: None,
-            });
+            return Ok(CreatePostResponse::err("文章不存在".to_string()));
         };
         let slug: String = slug_row.get(0);
 
@@ -66,12 +61,7 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
             .map_err(AppError::tx)?;
 
         if result == 0 {
-            return Ok(CreatePostResponse {
-                success: false,
-                message: "文章不存在".to_string(),
-                post_id: None,
-                slug: None,
-            });
+            return Ok(CreatePostResponse::err("文章不存在".to_string()));
         }
 
         tx.commit().await.map_err(AppError::tx)?;
@@ -87,21 +77,11 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
         // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
         crate::ssr_cache::bump_global_generation();
 
-        Ok(CreatePostResponse {
-            success: true,
-            message: "删除成功".to_string(),
-            post_id: Some(post_id),
-            slug: Some(slug),
-        })
+        Ok(CreatePostResponse::ok("删除成功".to_string(), post_id, slug))
     }
 
     #[cfg(not(feature = "server"))]
     {
-        Ok(CreatePostResponse {
-            success: false,
-            message: "server only".to_string(),
-            post_id: None,
-            slug: None,
-        })
+        Ok(CreatePostResponse::err("server only".to_string()))
     }
 }

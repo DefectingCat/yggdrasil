@@ -44,12 +44,7 @@ pub async fn restore_post(post_id: i32) -> Result<CreatePostResponse, ServerFnEr
             .map_err(AppError::query)?;
 
         let Some(row) = row else {
-            return Ok(CreatePostResponse {
-                success: false,
-                message: "文章不在回收站".to_string(),
-                post_id: None,
-                slug: None,
-            });
+            return Ok(CreatePostResponse::err("文章不在回收站".to_string()));
         };
 
         let current_slug: String = row.get("slug");
@@ -76,12 +71,7 @@ pub async fn restore_post(post_id: i32) -> Result<CreatePostResponse, ServerFnEr
             .map_err(AppError::tx)?;
 
         if result == 0 {
-            return Ok(CreatePostResponse {
-                success: false,
-                message: "文章不在回收站".to_string(),
-                post_id: None,
-                slug: None,
-            });
+            return Ok(CreatePostResponse::err("文章不在回收站".to_string()));
         }
 
         tx.commit().await.map_err(AppError::tx)?;
@@ -98,22 +88,12 @@ pub async fn restore_post(post_id: i32) -> Result<CreatePostResponse, ServerFnEr
         // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
         crate::ssr_cache::bump_global_generation();
 
-        Ok(CreatePostResponse {
-            success: true,
-            message: "恢复成功".to_string(),
-            post_id: Some(post_id),
-            slug: Some(new_slug),
-        })
+        Ok(CreatePostResponse::ok("恢复成功".to_string(), post_id, new_slug))
     }
 
     #[cfg(not(feature = "server"))]
     {
-        Ok(CreatePostResponse {
-            success: false,
-            message: "server only".to_string(),
-            post_id: None,
-            slug: None,
-        })
+        Ok(CreatePostResponse::err("server only".to_string()))
     }
 }
 
@@ -140,12 +120,7 @@ pub async fn purge_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErro
             .map_err(AppError::query)?;
 
         let Some(slug_row) = slug_row else {
-            return Ok(CreatePostResponse {
-                success: false,
-                message: "文章不在回收站".to_string(),
-                post_id: None,
-                slug: None,
-            });
+            return Ok(CreatePostResponse::err("文章不在回收站".to_string()));
         };
         let slug: String = slug_row.get(0);
 
@@ -167,12 +142,7 @@ pub async fn purge_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErro
             .map_err(AppError::tx)?;
 
         if result == 0 {
-            return Ok(CreatePostResponse {
-                success: false,
-                message: "文章不在回收站".to_string(),
-                post_id: None,
-                slug: None,
-            });
+            return Ok(CreatePostResponse::err("文章不在回收站".to_string()));
         }
 
         tx.commit().await.map_err(AppError::tx)?;
@@ -188,22 +158,12 @@ pub async fn purge_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErro
         // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
         crate::ssr_cache::bump_global_generation();
 
-        Ok(CreatePostResponse {
-            success: true,
-            message: "彻底删除成功".to_string(),
-            post_id: Some(post_id),
-            slug: Some(slug),
-        })
+        Ok(CreatePostResponse::ok("彻底删除成功".to_string(), post_id, slug))
     }
 
     #[cfg(not(feature = "server"))]
     {
-        Ok(CreatePostResponse {
-            success: false,
-            message: "server only".to_string(),
-            post_id: None,
-            slug: None,
-        })
+        Ok(CreatePostResponse::err("server only".to_string()))
     }
 }
 
@@ -215,12 +175,7 @@ pub async fn batch_restore_posts(post_ids: Vec<i32>) -> Result<CreatePostRespons
     #[cfg(feature = "server")]
     {
         if post_ids.is_empty() {
-            return Ok(CreatePostResponse {
-                success: true,
-                message: "无操作".to_string(),
-                post_id: None,
-                slug: None,
-            });
+            return Ok(CreatePostResponse::ok_msg("无操作".to_string()));
         }
 
         let mut client = get_conn().await.map_err(AppError::db_conn)?;
@@ -301,22 +256,12 @@ pub async fn batch_restore_posts(post_ids: Vec<i32>) -> Result<CreatePostRespons
             crate::ssr_cache::bump_global_generation();
         }
 
-        Ok(CreatePostResponse {
-            success: true,
-            message: format!("已恢复 {restored} 篇"),
-            post_id: None,
-            slug: None,
-        })
+        Ok(CreatePostResponse::ok_msg(format!("已恢复 {restored} 篇")))
     }
 
     #[cfg(not(feature = "server"))]
     {
-        Ok(CreatePostResponse {
-            success: false,
-            message: "server only".to_string(),
-            post_id: None,
-            slug: None,
-        })
+        Ok(CreatePostResponse::err("server only".to_string()))
     }
 }
 
@@ -328,12 +273,7 @@ pub async fn batch_purge_posts(post_ids: Vec<i32>) -> Result<CreatePostResponse,
     #[cfg(feature = "server")]
     {
         if post_ids.is_empty() {
-            return Ok(CreatePostResponse {
-                success: true,
-                message: "无操作".to_string(),
-                post_id: None,
-                slug: None,
-            });
+            return Ok(CreatePostResponse::ok_msg("无操作".to_string()));
         }
 
         let mut client = get_conn().await.map_err(AppError::db_conn)?;
@@ -406,22 +346,12 @@ pub async fn batch_purge_posts(post_ids: Vec<i32>) -> Result<CreatePostResponse,
             crate::ssr_cache::bump_global_generation();
         }
 
-        Ok(CreatePostResponse {
-            success: true,
-            message: format!("已彻底删除 {result}/{total} 篇"),
-            post_id: None,
-            slug: None,
-        })
+        Ok(CreatePostResponse::ok_msg(format!("已彻底删除 {result}/{total} 篇")))
     }
 
     #[cfg(not(feature = "server"))]
     {
-        Ok(CreatePostResponse {
-            success: false,
-            message: "server only".to_string(),
-            post_id: None,
-            slug: None,
-        })
+        Ok(CreatePostResponse::err("server only".to_string()))
     }
 }
 
@@ -492,21 +422,11 @@ pub async fn empty_trash() -> Result<CreatePostResponse, ServerFnError> {
             crate::ssr_cache::bump_global_generation();
         }
 
-        Ok(CreatePostResponse {
-            success: true,
-            message: format!("已清空回收站（{result} 篇）"),
-            post_id: None,
-            slug: None,
-        })
+        Ok(CreatePostResponse::ok_msg(format!("已清空回收站（{result} 篇）")))
     }
 
     #[cfg(not(feature = "server"))]
     {
-        Ok(CreatePostResponse {
-            success: false,
-            message: "server only".to_string(),
-            post_id: None,
-            slug: None,
-        })
+        Ok(CreatePostResponse::err("server only".to_string()))
     }
 }

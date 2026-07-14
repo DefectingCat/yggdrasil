@@ -15,6 +15,41 @@ pub struct CreatePostResponse {
     pub slug: Option<String>,
 }
 
+/// 这些构造器只在 server function body 内调用，WASM 端因 cfg gate 剥离了调用点，
+/// 故对非 server 构建允许 dead_code。
+#[cfg_attr(not(feature = "server"), allow(dead_code))]
+impl CreatePostResponse {
+    /// 构造失败响应（post_id / slug 均为 None）。
+    pub fn err(message: impl Into<String>) -> Self {
+        Self {
+            success: false,
+            message: message.into(),
+            post_id: None,
+            slug: None,
+        }
+    }
+
+    /// 构造成功响应，携带新文章 id 与 slug。
+    pub fn ok(message: impl Into<String>, post_id: i32, slug: impl Into<String>) -> Self {
+        Self {
+            success: true,
+            message: message.into(),
+            post_id: Some(post_id),
+            slug: Some(slug.into()),
+        }
+    }
+
+    /// 构造成功响应（无关联 id/slug，用于批量操作）。
+    pub fn ok_msg(message: impl Into<String>) -> Self {
+        Self {
+            success: true,
+            message: message.into(),
+            post_id: None,
+            slug: None,
+        }
+    }
+}
+
 /// 文章列表响应。
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PostListResponse {

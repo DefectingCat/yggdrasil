@@ -37,22 +37,12 @@ pub async fn create_post(
 
     // 标题不能为空。
     if title.trim().is_empty() {
-        return Ok(CreatePostResponse {
-            success: false,
-            message: "标题不能为空".to_string(),
-            post_id: None,
-            slug: None,
-        });
+        return Ok(CreatePostResponse::err("标题不能为空".to_string()));
     }
 
     // 内容不能为空。
     if content_md.trim().is_empty() {
-        return Ok(CreatePostResponse {
-            success: false,
-            message: "内容不能为空".to_string(),
-            post_id: None,
-            slug: None,
-        });
+        return Ok(CreatePostResponse::err("内容不能为空".to_string()));
     }
 
     // 确定基础 slug：用户传入时校验格式，否则由标题生成。
@@ -60,12 +50,7 @@ pub async fn create_post(
         Some(ref s) if !s.trim().is_empty() => {
             let s = s.trim();
             if !crate::api::slug::is_valid_slug(s) {
-                return Ok(CreatePostResponse {
-                    success: false,
-                    message: "slug 格式无效，只能包含字母、数字、连字符和下划线".to_string(),
-                    post_id: None,
-                    slug: None,
-                });
+                return Ok(CreatePostResponse::err("slug 格式无效，只能包含字母、数字、连字符和下划线".to_string()));
             }
             s.to_string()
         }
@@ -157,21 +142,11 @@ pub async fn create_post(
         // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
         crate::ssr_cache::bump_global_generation();
 
-        Ok(CreatePostResponse {
-            success: true,
-            message: "创建成功".to_string(),
-            post_id: Some(post_id),
-            slug: Some(final_slug),
-        })
+        Ok(CreatePostResponse::ok("创建成功".to_string(), post_id, final_slug))
     }
 
     #[cfg(not(feature = "server"))]
     {
-        Ok(CreatePostResponse {
-            success: false,
-            message: "server only".to_string(),
-            post_id: None,
-            slug: None,
-        })
+        Ok(CreatePostResponse::err("server only".to_string()))
     }
 }

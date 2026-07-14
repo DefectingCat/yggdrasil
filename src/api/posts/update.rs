@@ -84,12 +84,7 @@ pub async fn update_post(
             .is_some();
 
         if !exists {
-            return Ok(CreatePostResponse {
-                success: false,
-                message: "文章不存在或无权限".to_string(),
-                post_id: None,
-                slug: None,
-            });
+            return Ok(CreatePostResponse::err("文章不存在或无权限".to_string()));
         }
 
         // 确定基础 slug：用户传入时校验格式，否则由标题生成。
@@ -97,12 +92,7 @@ pub async fn update_post(
             Some(ref s) if !s.trim().is_empty() => {
                 let s = s.trim();
                 if !crate::api::slug::is_valid_slug(s) {
-                    return Ok(CreatePostResponse {
-                        success: false,
-                        message: "slug 格式无效".to_string(),
-                        post_id: None,
-                        slug: None,
-                    });
+                    return Ok(CreatePostResponse::err("slug 格式无效".to_string()));
                 }
                 s.to_string()
             }
@@ -180,12 +170,7 @@ pub async fn update_post(
             .map_err(AppError::tx)?;
 
         if updated == 0 {
-            return Ok(CreatePostResponse {
-                success: false,
-                message: "文章不存在或无权限".to_string(),
-                post_id: None,
-                slug: None,
-            });
+            return Ok(CreatePostResponse::err("文章不存在或无权限".to_string()));
         }
 
         let tags_cleaned = clean_tags(&tags);
@@ -226,21 +211,11 @@ pub async fn update_post(
         // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
         crate::ssr_cache::bump_global_generation();
 
-        Ok(CreatePostResponse {
-            success: true,
-            message: "更新成功".to_string(),
-            post_id: Some(post_id),
-            slug: Some(final_slug),
-        })
+        Ok(CreatePostResponse::ok("更新成功".to_string(), post_id, final_slug))
     }
 
     #[cfg(not(feature = "server"))]
     {
-        Ok(CreatePostResponse {
-            success: false,
-            message: "server only".to_string(),
-            post_id: None,
-            slug: None,
-        })
+        Ok(CreatePostResponse::err("server only".to_string()))
     }
 }

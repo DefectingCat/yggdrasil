@@ -38,71 +38,29 @@ pub async fn create_comment(
             let parts = ctx.parts_mut();
             let ip = crate::api::rate_limit::get_client_ip(&parts.headers);
             if let Err(msg) = crate::api::rate_limit::check_comment_limit(&ip) {
-                return Ok(CommentResponse {
-                    success: false,
-                    message: msg,
-                    error_code: Some("rate_limited".into()),
-                    comment_id: None,
-                    avatar_url: None,
-                    depth: None,
-                });
+                return Ok(CommentResponse::error("rate_limited", msg));
             }
         }
 
         // 蜜罐字段二次校验：禁用 JS 的机器人可能绕过前端拦截，这里作为服务端防线。
         if let Err(e) = validate_comment_honeypot(&honeypot) {
-            return Ok(CommentResponse {
-                success: false,
-                message: e,
-                error_code: Some("spam_detected".into()),
-                comment_id: None,
-                avatar_url: None,
-                depth: None,
-            });
+            return Ok(CommentResponse::error("spam_detected", e));
         }
 
         // 依次校验昵称、邮箱、网址与评论内容。
         if let Err(e) = validate_comment_name(&author_name) {
-            return Ok(CommentResponse {
-                success: false,
-                message: e,
-                error_code: Some("invalid_input".into()),
-                comment_id: None,
-                avatar_url: None,
-                depth: None,
-            });
+            return Ok(CommentResponse::error("invalid_input", e));
         }
         if let Err(e) = validate_comment_email(&author_email) {
-            return Ok(CommentResponse {
-                success: false,
-                message: e,
-                error_code: Some("invalid_input".into()),
-                comment_id: None,
-                avatar_url: None,
-                depth: None,
-            });
+            return Ok(CommentResponse::error("invalid_input", e));
         }
         if let Some(ref url) = author_url {
             if let Err(e) = validate_comment_url(url) {
-                return Ok(CommentResponse {
-                    success: false,
-                    message: e,
-                    error_code: Some("invalid_input".into()),
-                    comment_id: None,
-                    avatar_url: None,
-                    depth: None,
-                });
+                return Ok(CommentResponse::error("invalid_input", e));
             }
         }
         if let Err(e) = validate_comment_content(&content_md) {
-            return Ok(CommentResponse {
-                success: false,
-                message: e,
-                error_code: Some("invalid_input".into()),
-                comment_id: None,
-                avatar_url: None,
-                depth: None,
-            });
+            return Ok(CommentResponse::error("invalid_input", e));
         }
 
         let mut client = get_conn().await.map_err(AppError::db_conn)?;
@@ -118,27 +76,13 @@ pub async fn create_comment(
 
         match post_row {
             None => {
-                return Ok(CommentResponse {
-                    success: false,
-                    message: "文章不存在".to_string(),
-                    error_code: Some("post_not_found".into()),
-                    comment_id: None,
-                    avatar_url: None,
-                    depth: None,
-                });
+                return Ok(CommentResponse::error("post_not_found", "文章不存在".to_string()));
             }
             Some(row) => {
                 let status: String = row.get("status");
                 let deleted_at: Option<chrono::DateTime<chrono::Utc>> = row.get("deleted_at");
                 if status != "published" || deleted_at.is_some() {
-                    return Ok(CommentResponse {
-                        success: false,
-                        message: "文章不存在".to_string(),
-                        error_code: Some("post_not_found".into()),
-                        comment_id: None,
-                        avatar_url: None,
-                        depth: None,
-                    });
+                    return Ok(CommentResponse::error("post_not_found", "文章不存在".to_string()));
                 }
             }
         }
@@ -156,14 +100,7 @@ pub async fn create_comment(
 
             match parent_row {
                 None => {
-                    return Ok(CommentResponse {
-                        success: false,
-                        message: "父评论不存在".to_string(),
-                        error_code: Some("parent_not_found".into()),
-                        comment_id: None,
-                        avatar_url: None,
-                        depth: None,
-                    });
+                    return Ok(CommentResponse::error("parent_not_found", "父评论不存在".to_string()));
                 }
                 Some(row) => {
                     let parent_post_id: i32 = row.get("post_id");
@@ -171,36 +108,15 @@ pub async fn create_comment(
                     let parent_depth: i32 = row.get("depth");
 
                     if parent_post_id != post_id {
-                        return Ok(CommentResponse {
-                            success: false,
-                            message: "父评论不存在".to_string(),
-                            error_code: Some("parent_not_found".into()),
-                            comment_id: None,
-                            avatar_url: None,
-                            depth: None,
-                        });
+                        return Ok(CommentResponse::error("parent_not_found", "父评论不存在".to_string()));
                     }
                     if parent_status != "approved" {
-                        return Ok(CommentResponse {
-                            success: false,
-                            message: "父评论未通过审核".to_string(),
-                            error_code: Some("parent_not_approved".into()),
-                            comment_id: None,
-                            avatar_url: None,
-                            depth: None,
-                        });
+                        return Ok(CommentResponse::error("parent_not_approved", "父评论未通过审核".to_string()));
                     }
 
                     depth = parent_depth + 1;
                     if depth > 20 {
-                        return Ok(CommentResponse {
-                            success: false,
-                            message: "评论嵌套层级过深".to_string(),
-                            error_code: Some("too_deep".into()),
-                            comment_id: None,
-                            avatar_url: None,
-                            depth: None,
-                        });
+                        return Ok(CommentResponse::error("too_deep", "评论嵌套层级过深".to_string()));
                     }
                 }
             }
@@ -259,14 +175,7 @@ pub async fn create_comment(
         if dup.is_some() {
             // 重复：回滚（释放 advisory 锁）后返回。
             tx.rollback().await.ok();
-            return Ok(CommentResponse {
-                success: false,
-                message: "请勿重复提交".to_string(),
-                error_code: Some("duplicate".into()),
-                comment_id: None,
-                avatar_url: None,
-                depth: None,
-            });
+            return Ok(CommentResponse::error("duplicate", "请勿重复提交".to_string()));
         }
 
         // 插入评论，默认状态为 pending，等待管理员审核。
@@ -305,14 +214,7 @@ pub async fn create_comment(
         cache::invalidate_comments_by_post(post_id).await;
         cache::invalidate_pending_count().await;
 
-        Ok(CommentResponse {
-            success: true,
-            message: "评论已提交，等待审核".to_string(),
-            error_code: None,
-            comment_id: Some(comment_id),
-            avatar_url: Some(avatar_url),
-            depth: Some(depth),
-        })
+        Ok(CommentResponse::created("评论已提交，等待审核".to_string(), comment_id, avatar_url, depth))
     }
     #[cfg(not(feature = "server"))]
     unreachable!()

@@ -34,14 +34,7 @@ pub async fn approve_comment(id: i64) -> Result<CommentResponse, ServerFnError> 
         let post_id: i32 = match row {
             Some(r) => r.get("post_id"),
             None => {
-                return Ok(CommentResponse {
-                    success: false,
-                    message: "评论不存在".to_string(),
-                    error_code: Some("not_found".into()),
-                    comment_id: None,
-                    avatar_url: None,
-                    depth: None,
-                });
+                return Ok(CommentResponse::error("not_found", "评论不存在".to_string()));
             }
         };
 
@@ -72,14 +65,7 @@ pub async fn approve_comment(id: i64) -> Result<CommentResponse, ServerFnError> 
         cache::invalidate_comments_by_post(post_id).await;
         cache::invalidate_pending_count().await;
 
-        Ok(CommentResponse {
-            success: true,
-            message: "已通过".to_string(),
-            error_code: None,
-            comment_id: None,
-            avatar_url: None,
-            depth: None,
-        })
+        Ok(CommentResponse::ok("已通过".to_string()))
     }
     #[cfg(not(feature = "server"))]
     unreachable!()
@@ -127,14 +113,7 @@ pub async fn spam_comment(id: i64) -> Result<CommentResponse, ServerFnError> {
             cache::invalidate_pending_count().await;
         }
 
-        Ok(CommentResponse {
-            success: true,
-            message: "已标记为垃圾".to_string(),
-            error_code: None,
-            comment_id: None,
-            avatar_url: None,
-            depth: None,
-        })
+        Ok(CommentResponse::ok("已标记为垃圾".to_string()))
     }
     #[cfg(not(feature = "server"))]
     unreachable!()
@@ -179,14 +158,7 @@ pub async fn trash_comment(id: i64) -> Result<CommentResponse, ServerFnError> {
             cache::invalidate_pending_count().await;
         }
 
-        Ok(CommentResponse {
-            success: true,
-            message: "已删除".to_string(),
-            error_code: None,
-            comment_id: None,
-            avatar_url: None,
-            depth: None,
-        })
+        Ok(CommentResponse::ok("已删除".to_string()))
     }
     #[cfg(not(feature = "server"))]
     unreachable!()
