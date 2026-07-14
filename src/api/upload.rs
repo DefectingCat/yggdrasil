@@ -24,6 +24,12 @@ const ALLOWED_MIME_TYPES: &[&str] = &["image/jpeg", "image/png", "image/gif", "i
 #[cfg(feature = "server")]
 const MAX_FILE_SIZE: usize = 5 * 1024 * 1024; // 5MB
 
+/// 构造统一的 JSON 错误响应：`{ "success": false, "error": msg }`。
+#[cfg(feature = "server")]
+fn upload_error<T: serde::Serialize>(status: StatusCode, msg: T) -> (StatusCode, Json<Value>) {
+    (status, Json(json!({ "success": false, "error": msg })))
+}
+
 #[cfg(feature = "server")]
 fn mime_to_ext(mime: &str) -> &'static str {
     match mime {
@@ -82,13 +88,7 @@ pub async fn upload_image(
     let peer = connect_info.map(|Extension(ConnectInfo(addr))| addr);
     let ip = crate::api::rate_limit::get_client_ip_with_peer(&headers, peer);
     if let Err(msg) = crate::api::rate_limit::check_upload_limit(&ip) {
-        return Err((
-            StatusCode::TOO_MANY_REQUESTS,
-            Json(json!({
-                "success": false,
-                "error": msg
-            })),
-        ));
+        return Err(upload_error(StatusCode::TOO_MANY_REQUESTS, msg));
     }
 
     // 1. Extract session from cookie
@@ -100,13 +100,7 @@ pub async fn upload_image(
     let token = match parse_session_token(cookie_header) {
         Some(t) => t,
         None => {
-            return Err((
-                StatusCode::UNAUTHORIZED,
-                Json(json!({
-                    "success": false,
-                    "error": "未登录"
-                })),
-            ));
+            return Err(upload_error(StatusCode::UNAUTHORIZED, "未登录"));
         }
     };
 
@@ -114,60 +108,30 @@ pub async fn upload_image(
     let user = match crate::api::auth::get_user_by_token(token).await {
         Ok(Some(u)) => u,
         _ => {
-            return Err((
-                StatusCode::UNAUTHORIZED,
-                Json(json!({
-                    "success": false,
-                    "error": "会话已过期"
-                })),
-            ));
+            return Err(upload_error(StatusCode::UNAUTHORIZED, "会话已过期"));
         }
     };
 
     if user.role != crate::models::user::UserRole::Admin {
-        return Err((
-            StatusCode::FORBIDDEN,
-            Json(json!({
-                "success": false,
-                "error": "权限不足"
-            })),
-        ));
+        return Err(upload_error(StatusCode::FORBIDDEN, "权限不足"));
     }
 
     // 3. Read multipart field
     let field = match multipart.next_field().await {
         Ok(Some(f)) => f,
         Ok(None) => {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(json!({
-                    "success": false,
-                    "error": "未找到文件"
-                })),
-            ));
+            return Err(upload_error(StatusCode::BAD_REQUEST, "未找到文件"));
         }
         Err(e) => {
             tracing::error!("Multipart error: {:?}", e);
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(json!({
-                    "success": false,
-                    "error": "文件读取失败"
-                })),
-            ));
+            return Err(upload_error(StatusCode::BAD_REQUEST, "文件读取失败"));
         }
     };
 
     // 4. Validate mime type
     let mime_type = field.content_type().unwrap_or("").to_string();
     if !ALLOWED_MIME_TYPES.contains(&mime_type.as_str()) {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(json!({
-                "success": false,
-                "error": "不支持的文件类型"
-            })),
-        ));
+        return Err(upload_error(StatusCode::BAD_REQUEST, "不支持的文件类型"));
     }
 
     // 5. Read file data
@@ -175,48 +139,24 @@ pub async fn upload_image(
         Ok(d) => d,
         Err(e) => {
             tracing::error!("Read file error: {:?}", e);
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({
-                    "success": false,
-                    "error": "文件读取失败"
-                })),
-            ));
+            return Err(upload_error(StatusCode::INTERNAL_SERVER_ERROR, "文件读取失败"));
         }
     };
 
     if data.len() > MAX_FILE_SIZE {
-        return Err((
-            StatusCode::PAYLOAD_TOO_LARGE,
-            Json(json!({
-                "success": false,
-                "error": "文件超过大小限制"
-            })),
-        ));
+        return Err(upload_error(StatusCode::PAYLOAD_TOO_LARGE, "文件超过大小限制"));
     }
 
     // 校验文件头 magic bytes，防止仅修改扩展名/Content-Type 上传非图片文件。
     if !validate_image_magic_bytes(&data, mime_type.as_str()) {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(json!({
-                "success": false,
-                "error": "文件类型与内容不符"
-            })),
-        ));
+        return Err(upload_error(StatusCode::BAD_REQUEST, "文件类型与内容不符"));
     }
 
     // 仅读 header 统一校验尺寸/像素上限。三种格式走同一路径:
     // JPEG/PNG/GIF 用 image crate 的 into_dimensions,WebP 用 zenwebp header。
     // 超限直接拒绝,避免大图走 decode 后被静默降级(原 fallback 存原图)。
     if let Err(msg) = crate::api::image::check_upload_dimensions(&data, mime_type.as_str()) {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(json!({
-                "success": false,
-                "error": msg
-            })),
-        ));
+        return Err(upload_error(StatusCode::BAD_REQUEST, msg));
     }
 
     let is_gif = mime_type.as_str() == "image/gif";
@@ -231,23 +171,9 @@ pub async fn upload_image(
             validate_raw_image(&validate_data, validate_mime.as_str())
         })
         .await
-        .map_err(|_| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({
-                    "success": false,
-                    "error": "图片校验任务失败"
-                })),
-            )
-        })?;
+        .map_err(|_| upload_error(StatusCode::INTERNAL_SERVER_ERROR, "图片校验任务失败"))?;
         if !is_valid {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(json!({
-                    "success": false,
-                    "error": "图片文件损坏或格式不正确"
-                })),
-            ));
+            return Err(upload_error(StatusCode::BAD_REQUEST, "图片文件损坏或格式不正确"));
         }
     }
 
@@ -342,24 +268,12 @@ pub async fn upload_image(
 
     if let Err(e) = tokio::fs::create_dir_all(&dir_path).await {
         tracing::error!("Create dir error: {:?}", e);
-        return Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({
-                "success": false,
-                "error": "文件保存失败"
-            })),
-        ));
+        return Err(upload_error(StatusCode::INTERNAL_SERVER_ERROR, "文件保存失败"));
     }
 
     if let Err(e) = tokio::fs::write(&file_path, &final_data).await {
         tracing::error!("Write file error: {:?}", e);
-        return Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({
-                "success": false,
-                "error": "文件保存失败"
-            })),
-        ));
+        return Err(upload_error(StatusCode::INTERNAL_SERVER_ERROR, "文件保存失败"));
     }
 
     tracing::info!("Image uploaded: {} ({} bytes)", file_path, final_data.len());
