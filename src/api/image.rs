@@ -343,31 +343,38 @@ pub fn check_upload_dimensions(data: &[u8], mime_type: &str) -> Result<(), &'sta
 /// 按 MIME 只读 header 拿 (width, height)。失败返回损坏错误。
 fn read_dimensions_by_mime(data: &[u8], mime_type: &str) -> Result<(u32, u32), &'static str> {
     match mime_type {
-        "image/webp" => {
-            // zenwebp 的 WebPDecoder::build 只解析 RIFF header,不解码像素(与 webp::decode 同源)。
-            let decoder =
-                zenwebp::WebPDecoder::build(data).map_err(|_| "图片文件损坏或格式不正确")?;
-            let info = decoder.info();
-            Ok((info.width, info.height))
-        }
+        "image/webp" => read_webp_dimensions(data).ok_or("图片文件损坏或格式不正确"),
         "image/jpeg" | "image/png" | "image/gif" => {
             let format = match mime_type {
                 "image/jpeg" => image::ImageFormat::Jpeg,
                 "image/png" => image::ImageFormat::Png,
                 _ => image::ImageFormat::Gif,
             };
-            let reader = image::ImageReader::with_format(std::io::Cursor::new(data), format);
-            reader
-                .into_dimensions()
-                .map_err(|_| "图片文件损坏或格式不正确")
+            read_image_dimensions(data, format).ok_or("图片文件损坏或格式不正确")
         }
         // 上游已用 ALLOWED_MIME_TYPES 白名单拦截,理论不到这里
         _ => Err("图片文件损坏或格式不正确"),
     }
 }
 
+/// 读 WebP header 拿尺寸（zenwebp 只解析 RIFF header，不解码像素）。
 #[cfg(feature = "server")]
-fn image_reader_limits() -> image::Limits {
+fn read_webp_dimensions(data: &[u8]) -> Option<(u32, u32)> {
+    let decoder = zenwebp::WebPDecoder::build(data).ok()?;
+    let info = decoder.info();
+    Some((info.width, info.height))
+}
+
+/// 读 image crate 支持格式（jpeg/png/gif）的 header 拿尺寸。
+#[cfg(feature = "server")]
+fn read_image_dimensions(data: &[u8], format: image::ImageFormat) -> Option<(u32, u32)> {
+    let reader = image::ImageReader::with_format(std::io::Cursor::new(data), format);
+    reader.into_dimensions().ok()
+}
+
+/// 构造统一的 image::Limits（宽度/高度/分配上限），供 upload 与 image serving 共享。
+#[cfg(feature = "server")]
+pub(crate) fn image_reader_limits() -> image::Limits {
     let mut limits = image::Limits::default();
     limits.max_image_width = Some(*MAX_IMAGE_DIMENSION);
     limits.max_image_height = Some(*MAX_IMAGE_DIMENSION);
@@ -715,19 +722,10 @@ fn read_dimensions_from_bytes(data: &[u8], path: &str) -> Option<(u32, u32)> {
         .to_str()?
         .to_lowercase();
     match ext.as_str() {
-        "webp" => {
-            // zenwebp 的 WebPDecoder::build 只解析 RIFF header，不解码像素
-            let decoder = zenwebp::WebPDecoder::build(data).ok()?;
-            let info = decoder.info();
-            Some((info.width, info.height))
-        }
-        "gif" | "png" | "jpg" | "jpeg" => {
-            // image crate 的 into_dimensions 只读 header
-            let reader = image::ImageReader::new(std::io::Cursor::new(data))
-                .with_guessed_format()
-                .ok()?;
-            reader.into_dimensions().ok()
-        }
+        "webp" => read_webp_dimensions(data),
+        "jpg" | "jpeg" => read_image_dimensions(data, image::ImageFormat::Jpeg),
+        "png" => read_image_dimensions(data, image::ImageFormat::Png),
+        "gif" => read_image_dimensions(data, image::ImageFormat::Gif),
         _ => None,
     }
 }
