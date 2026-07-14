@@ -5,15 +5,6 @@
 
 #![allow(clippy::unused_unit, deprecated)]
 
-/// 转义 HTML 特殊字符，用于无语言信息的代码块。
-#[cfg(feature = "server")]
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-}
-
 /// 清洗评论 HTML，移除危险标签与属性。
 ///
 /// 实际委托给 `crate::api::sanitizer::clean_comment_html` 实现。
@@ -67,7 +58,7 @@ pub fn render_comment_markdown(md: &str) -> String {
                         crate::highlight::server::highlight_code(&code_buffer, Some(lang));
                     format!("<pre><code>{}</code></pre>", highlighted)
                 } else {
-                    format!("<pre><code>{}</code></pre>", html_escape(&code_buffer))
+                    format!("<pre><code>{}</code></pre>", crate::utils::html::escape_html(&code_buffer))
                 };
                 events.push(Event::Html(html.into()));
                 in_codeblock = false;
