@@ -35,4 +35,5 @@ pub use update::batch_update_comment_status;
 /// 将指定评论标记为垃圾评论。
 pub use update::spam_comment;
 /// 将指定评论移入回收站。
+#[allow(unused_imports)]
 pub use update::trash_comment;
