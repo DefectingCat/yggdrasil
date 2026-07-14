@@ -12,6 +12,7 @@ public/tiptap
 public/codemirror
 public/lightbox
 public/yggdrasil-core
+public/xterm
 public/doc
 /static
 .env
