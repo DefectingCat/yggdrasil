@@ -186,10 +186,7 @@ pub async fn update_post(
         tx.commit().await.map_err(AppError::tx)?;
 
         // 失效文章列表、标签、当前 slug 与统计缓存。
-        crate::cache::invalidate_post_lists();
-        crate::cache::invalidate_all_tags();
-        crate::cache::invalidate_post_stats();
-        crate::cache::invalidate_search_results();
+        crate::cache::invalidate_post_metadata();
         crate::cache::invalidate_post_by_slug(&final_slug).await;
 
         // 合并旧标签与新标签，统一失效标签下的文章列表缓存。

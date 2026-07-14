@@ -130,10 +130,7 @@ pub async fn create_post(
         tx.commit().await.map_err(AppError::tx)?;
 
         // 写入成功后按粒度失效相关缓存。
-        crate::cache::invalidate_post_lists();
-        crate::cache::invalidate_all_tags();
-        crate::cache::invalidate_post_stats();
-        crate::cache::invalidate_search_results();
+        crate::cache::invalidate_post_metadata();
         // 失效按 slug 缓存，避免之前缓存的 404 继续命中。
         crate::cache::invalidate_post_by_slug(&final_slug).await;
         // 失效该文章涉及的所有标签下文章列表缓存。

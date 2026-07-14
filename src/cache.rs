@@ -501,6 +501,19 @@ pub fn invalidate_all_post_caches() {
     TAG_POSTS_CACHE.invalidate_all();
 }
 
+/// 失效文章「元数据」类缓存：列表、标签、统计、搜索结果。
+///
+/// 这四项在每次文章写操作（创建/更新/删除/恢复/清空回收站）后都需要一起失效。
+/// 单篇正文与标签下文章列表是定向失效（按 slug / tag），不在此处处理，由调用方
+/// 根据实际涉及的 slug/tags 额外调用 `invalidate_post_by_slug` / `invalidate_tag_posts_for`。
+#[cfg(feature = "server")]
+pub fn invalidate_post_metadata() {
+    invalidate_post_lists();
+    invalidate_all_tags();
+    invalidate_post_stats();
+    invalidate_search_results();
+}
+
 /// 按文章主键读取评论列表缓存。
 #[cfg(feature = "server")]
 pub async fn get_comments_by_post(post_id: i32) -> Option<Vec<PublicComment>> {

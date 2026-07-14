@@ -77,10 +77,7 @@ pub async fn restore_post(post_id: i32) -> Result<CreatePostResponse, ServerFnEr
         tx.commit().await.map_err(AppError::tx)?;
 
         // 精准失效：列表、标签云、统计、旧 slug 与新 slug、相关标签文章。
-        crate::cache::invalidate_post_lists();
-        crate::cache::invalidate_all_tags();
-        crate::cache::invalidate_post_stats();
-        crate::cache::invalidate_search_results();
+        crate::cache::invalidate_post_metadata();
         crate::cache::invalidate_post_by_slug(&current_slug).await;
         crate::cache::invalidate_post_by_slug(&new_slug).await;
         crate::cache::invalidate_tag_posts_for(&tags).await;
@@ -148,10 +145,7 @@ pub async fn purge_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErro
         tx.commit().await.map_err(AppError::tx)?;
 
         // 精准失效相关缓存。
-        crate::cache::invalidate_post_lists();
-        crate::cache::invalidate_all_tags();
-        crate::cache::invalidate_post_stats();
-        crate::cache::invalidate_search_results();
+        crate::cache::invalidate_post_metadata();
         crate::cache::invalidate_post_by_slug(&slug).await;
         crate::cache::invalidate_tag_posts_for(&tags).await;
 
@@ -236,10 +230,7 @@ pub async fn batch_restore_posts(post_ids: Vec<i32>) -> Result<CreatePostRespons
             // 精准失效：先去重 slug，再统一失效列表/标签云/统计/标签文章。
             let unique_slugs: std::collections::HashSet<String> =
                 affected_slugs.into_iter().collect();
-            crate::cache::invalidate_post_lists();
-            crate::cache::invalidate_all_tags();
-            crate::cache::invalidate_post_stats();
-            crate::cache::invalidate_search_results();
+            crate::cache::invalidate_post_metadata();
             for slug in &unique_slugs {
                 crate::cache::invalidate_post_by_slug(slug).await;
             }
@@ -327,10 +318,7 @@ pub async fn batch_purge_posts(post_ids: Vec<i32>) -> Result<CreatePostResponse,
         tx.commit().await.map_err(AppError::tx)?;
 
         if use_precise {
-            crate::cache::invalidate_post_lists();
-            crate::cache::invalidate_all_tags();
-            crate::cache::invalidate_post_stats();
-            crate::cache::invalidate_search_results();
+            crate::cache::invalidate_post_metadata();
             for slug in &slugs {
                 crate::cache::invalidate_post_by_slug(slug).await;
             }
@@ -403,10 +391,7 @@ pub async fn empty_trash() -> Result<CreatePostResponse, ServerFnError> {
         tx.commit().await.map_err(AppError::tx)?;
 
         if use_precise {
-            crate::cache::invalidate_post_lists();
-            crate::cache::invalidate_all_tags();
-            crate::cache::invalidate_post_stats();
-            crate::cache::invalidate_search_results();
+            crate::cache::invalidate_post_metadata();
             for slug in &slugs {
                 crate::cache::invalidate_post_by_slug(slug).await;
             }
