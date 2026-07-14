@@ -392,13 +392,7 @@ pub fn FilterTabs(
                 use wasm_bindgen::JsCast;
 
                 // 等待 DOM 节点更新
-                let promise = js_sys::Promise::new(&mut |resolve, _| {
-                    if let Some(window) = web_sys::window() {
-                        let _ = window
-                            .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 50);
-                    }
-                });
-                let _ = wasm_bindgen_futures::JsFuture::from(promise).await;
+                crate::utils::time::sleep_ms(50).await;
 
                 if let Some(window) = web_sys::window() {
                     if let Some(doc) = window.document() {

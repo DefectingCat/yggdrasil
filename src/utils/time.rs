@@ -11,8 +11,8 @@ use chrono::DateTime;
 
 /// 异步睡眠指定毫秒数。
 ///
-/// 用 `js_sys::Promise` + `web_sys::Window::set_timeout_*` 构造，与
-/// `pages/admin/system.rs::wasm_sleep` 同款写法，避免 `js_sys::eval` 字符串求值。
+/// WASM 端用 `js_sys::Promise` + `web_sys::Window::set_timeout_*` 构造，
+/// 避免 `js_sys::eval` 字符串求值。全项目统一的 sleep 入口。
 #[cfg(target_arch = "wasm32")]
 pub async fn sleep_ms(ms: u32) {
     use wasm_bindgen::JsCast;

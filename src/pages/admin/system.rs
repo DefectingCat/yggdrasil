@@ -119,24 +119,6 @@ fn format_bytes(bytes: i64) -> String {
     }
 }
 
-/// WASM 端异步 sleep（用 web_sys setTimeout 包成 JsFuture，避免引入新依赖）。
-/// 非 wasm32 平台立即返回（自动刷新只在 WASM 前端用）。
-#[cfg(target_arch = "wasm32")]
-async fn wasm_sleep(ms: u32) {
-    use wasm_bindgen::JsCast;
-    use wasm_bindgen_futures::JsFuture;
-    let promise = js_sys::Promise::new(&mut |resolve, _| {
-        web_sys::window()
-            .expect("no window")
-            .set_timeout_with_callback_and_timeout_and_arguments_0(
-                &resolve.unchecked_into(),
-                ms.try_into().unwrap(),
-            )
-            .expect("set_timeout failed");
-    });
-    let _ = JsFuture::from(promise).await;
-}
-
 /// 数据库状态 tab：概览卡片 + 表清单 + 索引 Top + 活跃连接。
 /// 手动刷新按钮 + 自动刷新开关（1s/2s/5s/30s/手动，默认手动）。
 #[allow(non_snake_case)]
@@ -204,10 +186,10 @@ fn DbStatusTab() -> Element {
                 if secs == 0 {
                     // 手动模式：短暂 yield，让事件循环呼吸，避免忙等；
                     // 用户切换到自动模式后最多等 200ms 即响应。
-                    wasm_sleep(200).await;
+                    crate::utils::time::sleep_ms(200).await;
                     continue;
                 }
-                wasm_sleep(secs * 1000).await;
+                crate::utils::time::sleep_ms(secs * 1000).await;
                 // 二次检查：sleep 期间用户可能切回手动。
                 if refresh_interval().is_none() {
                     continue;
@@ -514,10 +496,10 @@ fn ServerStatusTab() -> Element {
             loop {
                 let ms = refresh_ms().unwrap_or(0);
                 if ms == 0 {
-                    wasm_sleep(200).await;
+                    crate::utils::time::sleep_ms(200).await;
                     continue;
                 }
-                wasm_sleep(ms).await;
+                crate::utils::time::sleep_ms(ms).await;
                 if refresh_ms().is_none() {
                     continue;
                 }
@@ -1270,13 +1252,13 @@ fn BackupTab() -> Element {
                         Some(t) => t,
                         None => {
                             // 空闲：短 yield，最多 200ms 后响应新任务。
-                            wasm_sleep(200).await;
+                            crate::utils::time::sleep_ms(200).await;
                             continue;
                         }
                     };
                     // 有任务在途：进入 1.5s 轮询，直到 Done/Failed/出错。
                     loop {
-                        wasm_sleep(1500).await;
+                        crate::utils::time::sleep_ms(1500).await;
                         match get_task_progress(tid.clone()).await {
                             Ok(p) => {
                                 let done = p.status == TaskStatus::Done
