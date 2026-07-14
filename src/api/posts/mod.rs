@@ -54,12 +54,3 @@ pub use types::*;
 #[allow(unused_imports)]
 pub use update::update_post;
 
-/// 将 Markdown 渲染为增强 HTML（含目录）。
-#[cfg(feature = "server")]
-#[allow(unused_imports)]
-pub use crate::api::markdown::render_markdown_enhanced;
-
-/// slug 生成与唯一性校验工具函数。
-#[cfg(feature = "server")]
-#[allow(unused_imports)]
-pub use crate::api::slug::{ensure_unique_slug, is_valid_slug, slugify};

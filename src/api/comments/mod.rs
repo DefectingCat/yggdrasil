@@ -36,8 +36,3 @@ pub use update::batch_update_comment_status;
 pub use update::spam_comment;
 /// 将指定评论移入回收站。
 pub use update::trash_comment;
-
-#[cfg(feature = "server")]
-/// 将评论 Markdown 渲染为安全的 HTML。
-#[allow(unused_imports)]
-pub use markdown::render_comment_markdown;

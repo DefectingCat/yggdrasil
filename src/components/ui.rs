@@ -202,24 +202,6 @@ pub fn StatusBadge(color_class: &'static str, label: String) -> Element {
     }
 }
 
-/// 空状态 / 错误状态组件。
-///
-/// 用于列表页无数据或加载失败时的居中占位提示。
-///
-/// Props：
-/// - `message`：提示文本
-/// - `variant`：`"default"`（灰色，空状态）或 `"error"`（红色，加载失败）
-#[component]
-pub fn EmptyState(message: &'static str, variant: &'static str) -> Element {
-    let class = match variant {
-        "error" => "text-center text-red-500 dark:text-red-400 py-20",
-        _ => "text-center py-20 text-paper-secondary",
-    };
-    rsx! {
-        div { class: "{class}", "{message}" }
-    }
-}
-
 /// Tooltip 定位样式（胶囊：黑底白字，hover 显现）。
 const TOOLTIP_STYLE: &str =
     "pointer-events-none absolute left-1/2 -translate-x-1/2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-paper-primary text-paper-theme shadow-lg z-50";
