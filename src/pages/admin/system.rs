@@ -1476,7 +1476,7 @@ fn urlencode_dl(s: &str) -> String {
 
 /// 备份列表单行（抽取为子组件：各自 scope 内 let/clone 不冲突）。
 ///
-/// 删除/恢复不再用浏览器原生 confirm()，改用 [`Popover`] 确认框（`position:fixed`
+/// 删除/恢复不再用浏览器原生 confirm()，改用 [`Popover`](crate::components::ui::Popover) 确认框（`position:fixed`
 /// 逃出表格 `overflow-hidden`）。点击按钮读 `MouseEvent::client_coordinates()` 作为
 /// popover 锚点，`confirm` 按钮回调父组件的 `on_delete`/`on_restore`。
 #[derive(Props, Clone, PartialEq)]
