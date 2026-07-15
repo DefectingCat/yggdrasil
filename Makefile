@@ -120,11 +120,17 @@ lint:
 	@cargo clippy --all-targets --all-features -- -D warnings
 
 # JS + Rust 自动修复（直接写入文件）。
+# 顺序：Biome → cargo fix（应用编译器建议，重写代码）→ cargo fmt（格式化 Rust）
+# → dx fmt（格式化 RSX 宏）。两道格式化收尾，保证最终文件状态整洁。
 fix:
 	@echo "==> Biome format (libs, 写入文件)"
 	@cd libs && pnpm exec biome format --write .
-	@echo "==> Cargo fix (Rust)"
+	@echo "==> Cargo fix (Rust, 应用编译器建议)"
 	@cargo fix --allow-dirty
+	@echo "==> Cargo fmt (Rust, 格式化)"
+	@cargo fmt
+	@echo "==> Dioxus fmt (RSX 宏, 格式化)"
+	@dx fmt
 
 # 只编译当前 crate 的文档（--no-deps 跳过依赖，--document-private-items
 # 让纯 binary crate 的内部模块/私有项也进文档，否则页面基本是空的）。
