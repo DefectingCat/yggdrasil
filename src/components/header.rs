@@ -42,7 +42,7 @@ pub fn Header(
 
     rsx! {
         header { class: "sticky top-0 z-40 w-full bg-[var(--color-paper-theme)]/70 backdrop-blur-md transition-all duration-300",
-            nav { class: "{max_width} mx-auto px-6 h-[80px] flex items-center justify-between",
+            nav { class: "{max_width} mx-auto px-6 h-16 flex items-center justify-between",
                 Link {
                     class: "text-2xl font-extrabold tracking-tight text-[var(--color-paper-primary)] hover:text-[var(--color-paper-accent)] transition-colors duration-200",
                     to: Route::Home {},
