@@ -169,13 +169,13 @@ pub fn Pagination(
         nav { class: if is_admin { "flex mt-6 justify-between" } else { "flex mt-10 mb-6 justify-between" },
             if has_prev {
                 if let Some(on_prev) = on_prev {
-                    button { class: "{link_class}", onclick: move |_| on_prev.call(()),
+                    button {
+                        class: "{link_class}",
+                        onclick: move |_| on_prev.call(()),
                         {prev_inner}
                     }
                 } else {
-                    Link { class: "{link_class}", to: prev_route,
-                        {prev_inner}
-                    }
+                    Link { class: "{link_class}", to: prev_route, {prev_inner} }
                 }
             } else if is_admin {
                 span { class: "{disabled_class}",
@@ -193,11 +193,15 @@ pub fn Pagination(
 
             if has_next {
                 if let Some(on_next) = on_next {
-                    button { class: "{link_class} {link_extra_next}", onclick: move |_| on_next.call(()),
+                    button {
+                        class: "{link_class} {link_extra_next}",
+                        onclick: move |_| on_next.call(()),
                         {next_inner}
                     }
                 } else {
-                    Link { class: "{link_class} {link_extra_next}", to: next_route,
+                    Link {
+                        class: "{link_class} {link_extra_next}",
+                        to: next_route,
                         {next_inner}
                     }
                 }
@@ -386,11 +390,7 @@ pub fn Popover(
             onclick: move |_| on_close.call(()),
         }
         // 面板:fixed 定位逃出 overflow-hidden 容器。
-        div {
-            class: "{POPOVER_PANEL_CLASS}",
-            style: "{style}",
-            {children}
-        }
+        div { class: "{POPOVER_PANEL_CLASS}", style: "{style}", {children} }
     }
 }
 

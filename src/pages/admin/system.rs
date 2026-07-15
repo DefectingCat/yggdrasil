@@ -65,8 +65,12 @@ pub fn System() -> Element {
             // 页面标题
             div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[var(--color-paper-border)] mb-6",
                 div {
-                    h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]", "系统面板" }
-                    p { class: "text-base text-[var(--color-paper-secondary)] mt-2", "数据库与服务器诊断" }
+                    h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]",
+                        "系统面板"
+                    }
+                    p { class: "text-base text-[var(--color-paper-secondary)] mt-2",
+                        "数据库与服务器诊断"
+                    }
                 }
             }
 
@@ -92,11 +96,21 @@ pub fn System() -> Element {
             // 避免 hook slot 复用导致 DelayedSkeleton 的 visible 信号残留为 true。
             div { key: "{active_tab().as_str()}",
                 match active_tab() {
-                    SystemTab::DbStatus => rsx! { DbStatusTab {} },
-                    SystemTab::ServerStatus => rsx! { ServerStatusTab {} },
-                    SystemTab::SqlConsole => rsx! { SqlConsoleTab {} },
-                    SystemTab::Export => rsx! { ExportTab {} },
-                    SystemTab::Backup => rsx! { BackupTab {} },
+                    SystemTab::DbStatus => rsx! {
+                        DbStatusTab {}
+                    },
+                    SystemTab::ServerStatus => rsx! {
+                        ServerStatusTab {}
+                    },
+                    SystemTab::SqlConsole => rsx! {
+                        SqlConsoleTab {}
+                    },
+                    SystemTab::Export => rsx! {
+                        ExportTab {}
+                    },
+                    SystemTab::Backup => rsx! {
+                        BackupTab {}
+                    },
                 }
             }
         }
@@ -252,13 +266,16 @@ fn DbStatusTab() -> Element {
                         value: "{refresh_interval().map(|s| s.to_string()).unwrap_or_default()}",
                         onchange: move |e| {
                             let v = e.value();
-                            refresh_interval.set(match v.as_str() {
-                                "1" => Some(1),
-                                "2" => Some(2),
-                                "5" => Some(5),
-                                "30" => Some(30),
-                                _ => None,
-                            });
+                            refresh_interval
+                                .set(
+                                    match v.as_str() {
+                                        "1" => Some(1),
+                                        "2" => Some(2),
+                                        "5" => Some(5),
+                                        "30" => Some(30),
+                                        _ => None,
+                                    },
+                                );
                         },
                         option { value: "", "手动" }
                         option { value: "1", "1s" }
@@ -278,15 +295,21 @@ fn DbStatusTab() -> Element {
                 div { class: "grid grid-cols-2 md:grid-cols-4 gap-4",
                     div { class: "{ADMIN_CARD_CLASS} p-4",
                         p { class: "text-xs text-paper-secondary", "数据库总大小" }
-                        p { class: "mt-1 text-lg font-semibold text-paper-primary", "{format_bytes(s.db_size_bytes)}" }
+                        p { class: "mt-1 text-lg font-semibold text-paper-primary",
+                            "{format_bytes(s.db_size_bytes)}"
+                        }
                     }
                     div { class: "{ADMIN_CARD_CLASS} p-4",
                         p { class: "text-xs text-paper-secondary", "连接数" }
-                        p { class: "mt-1 text-lg font-semibold text-paper-primary", "{s.total_connections} / {s.max_connections}" }
+                        p { class: "mt-1 text-lg font-semibold text-paper-primary",
+                            "{s.total_connections} / {s.max_connections}"
+                        }
                     }
                     div { class: "{ADMIN_CARD_CLASS} p-4",
                         p { class: "text-xs text-paper-secondary", "表数量" }
-                        p { class: "mt-1 text-lg font-semibold text-paper-primary", "{s.tables.len()}" }
+                        p { class: "mt-1 text-lg font-semibold text-paper-primary",
+                            "{s.tables.len()}"
+                        }
                     }
                     div { class: "{ADMIN_CARD_CLASS} p-4",
                         p { class: "text-xs text-paper-secondary", "迁移版本" }
@@ -306,24 +329,48 @@ fn DbStatusTab() -> Element {
                             thead {
                                 tr { class: "border-b border-paper-border text-left text-paper-secondary",
                                     th { class: "px-4 py-2 font-medium", "表名" }
-                                    th { class: "px-4 py-2 font-medium text-right", "行数" }
-                                    th { class: "px-4 py-2 font-medium text-right", "表大小" }
-                                    th { class: "px-4 py-2 font-medium text-right", "索引大小" }
-                                    th { class: "px-4 py-2 font-medium text-right", "总大小" }
-                                    th { class: "px-4 py-2 font-medium text-right", "死元组" }
+                                    th { class: "px-4 py-2 font-medium text-right",
+                                        "行数"
+                                    }
+                                    th { class: "px-4 py-2 font-medium text-right",
+                                        "表大小"
+                                    }
+                                    th { class: "px-4 py-2 font-medium text-right",
+                                        "索引大小"
+                                    }
+                                    th { class: "px-4 py-2 font-medium text-right",
+                                        "总大小"
+                                    }
+                                    th { class: "px-4 py-2 font-medium text-right",
+                                        "死元组"
+                                    }
                                 }
                             }
                             tbody {
                                 for t in s.tables.iter() {
                                     tr { class: "border-b border-paper-border last:border-0 hover:bg-paper-entry transition-colors",
-                                        td { class: "px-4 py-2 font-mono text-paper-primary", "{t.name}" }
-                                        td { class: "px-4 py-2 text-right text-paper-secondary",
-                                            if t.row_count_estimated { "~{t.row_count}" } else { "{t.row_count}" }
+                                        td { class: "px-4 py-2 font-mono text-paper-primary",
+                                            "{t.name}"
                                         }
-                                        td { class: "px-4 py-2 text-right text-paper-secondary", "{format_bytes(t.table_size_bytes)}" }
-                                        td { class: "px-4 py-2 text-right text-paper-secondary", "{format_bytes(t.index_size_bytes)}" }
-                                        td { class: "px-4 py-2 text-right text-paper-primary font-medium", "{format_bytes(t.total_size_bytes)}" }
-                                        td { class: "px-4 py-2 text-right text-paper-secondary", "{t.dead_tuples}" }
+                                        td { class: "px-4 py-2 text-right text-paper-secondary",
+                                            if t.row_count_estimated {
+                                                "~{t.row_count}"
+                                            } else {
+                                                "{t.row_count}"
+                                            }
+                                        }
+                                        td { class: "px-4 py-2 text-right text-paper-secondary",
+                                            "{format_bytes(t.table_size_bytes)}"
+                                        }
+                                        td { class: "px-4 py-2 text-right text-paper-secondary",
+                                            "{format_bytes(t.index_size_bytes)}"
+                                        }
+                                        td { class: "px-4 py-2 text-right text-paper-primary font-medium",
+                                            "{format_bytes(t.total_size_bytes)}"
+                                        }
+                                        td { class: "px-4 py-2 text-right text-paper-secondary",
+                                            "{t.dead_tuples}"
+                                        }
                                     }
                                 }
                             }
@@ -343,15 +390,23 @@ fn DbStatusTab() -> Element {
                                     tr { class: "border-b border-paper-border text-left text-paper-secondary",
                                         th { class: "px-4 py-2 font-medium", "索引名" }
                                         th { class: "px-4 py-2 font-medium", "所属表" }
-                                        th { class: "px-4 py-2 font-medium text-right", "大小" }
+                                        th { class: "px-4 py-2 font-medium text-right",
+                                            "大小"
+                                        }
                                     }
                                 }
                                 tbody {
                                     for i in s.top_indexes.iter() {
                                         tr { class: "border-b border-paper-border last:border-0 hover:bg-paper-entry transition-colors",
-                                            td { class: "px-4 py-2 font-mono text-paper-primary", "{i.name}" }
-                                            td { class: "px-4 py-2 font-mono text-paper-secondary", "{i.table_name}" }
-                                            td { class: "px-4 py-2 text-right text-paper-secondary", "{format_bytes(i.size_bytes)}" }
+                                            td { class: "px-4 py-2 font-mono text-paper-primary",
+                                                "{i.name}"
+                                            }
+                                            td { class: "px-4 py-2 font-mono text-paper-secondary",
+                                                "{i.table_name}"
+                                            }
+                                            td { class: "px-4 py-2 text-right text-paper-secondary",
+                                                "{format_bytes(i.size_bytes)}"
+                                            }
                                         }
                                     }
                                 }
@@ -372,20 +427,30 @@ fn DbStatusTab() -> Element {
                                     th { class: "px-4 py-2 font-medium", "PID" }
                                     th { class: "px-4 py-2 font-medium", "用户" }
                                     th { class: "px-4 py-2 font-medium", "状态" }
-                                    th { class: "px-4 py-2 font-medium text-right", "时长(秒)" }
+                                    th { class: "px-4 py-2 font-medium text-right",
+                                        "时长(秒)"
+                                    }
                                     th { class: "px-4 py-2 font-medium", "查询" }
                                 }
                             }
                             tbody {
                                 for c in s.active_connections.iter() {
                                     tr { class: "border-b border-paper-border last:border-0 hover:bg-paper-entry transition-colors",
-                                        td { class: "px-4 py-2 text-paper-secondary", "{c.pid}" }
-                                        td { class: "px-4 py-2 text-paper-secondary", "{c.user}" }
+                                        td { class: "px-4 py-2 text-paper-secondary",
+                                            "{c.pid}"
+                                        }
+                                        td { class: "px-4 py-2 text-paper-secondary",
+                                            "{c.user}"
+                                        }
                                         td { class: "px-4 py-2 text-paper-secondary",
                                             {c.state.clone().unwrap_or_else(|| "—".to_string())}
                                         }
                                         td { class: "px-4 py-2 text-right text-paper-secondary",
-                                            {c.query_duration_secs.map(|d| format!("{:.1}", d)).unwrap_or_else(|| "—".to_string())}
+                                            {
+                                                c.query_duration_secs
+                                                    .map(|d| format!("{:.1}", d))
+                                                    .unwrap_or_else(|| "—".to_string())
+                                            }
                                         }
                                         td { class: "px-4 py-2 font-mono text-xs text-paper-secondary max-w-md truncate",
                                             {c.query.clone().unwrap_or_else(|| "—".to_string())}
@@ -553,7 +618,7 @@ fn ServerStatusTab() -> Element {
 
     rsx! {
         div { class: "space-y-6",
-        div { class: "flex items-center justify-between",
+            div { class: "flex items-center justify-between",
                 LoadingButton {
                     label: "刷新".to_string(),
                     loading: loading(),
@@ -586,13 +651,16 @@ fn ServerStatusTab() -> Element {
                         value: "{refresh_ms().map(|s| s.to_string()).unwrap_or_default()}",
                         onchange: move |e| {
                             let v = e.value();
-                            refresh_ms.set(match v.as_str() {
-                                "500" => Some(500),
-                                "1000" => Some(1000),
-                                "2000" => Some(2000),
-                                "5000" => Some(5000),
-                                _ => None,
-                            });
+                            refresh_ms
+                                .set(
+                                    match v.as_str() {
+                                        "500" => Some(500),
+                                        "1000" => Some(1000),
+                                        "2000" => Some(2000),
+                                        "5000" => Some(5000),
+                                        _ => None,
+                                    },
+                                );
                         },
                         option { value: "", "手动" }
                         option { value: "500", "500ms" }
@@ -612,20 +680,30 @@ fn ServerStatusTab() -> Element {
                 div { class: "grid grid-cols-2 md:grid-cols-4 gap-4",
                     div { class: "{ADMIN_CARD_CLASS} p-4",
                         p { class: "text-xs text-paper-secondary", "运行时间" }
-                        p { class: "mt-1 text-lg font-semibold text-paper-primary", "{format_uptime(s.uptime_secs)}" }
+                        p { class: "mt-1 text-lg font-semibold text-paper-primary",
+                            "{format_uptime(s.uptime_secs)}"
+                        }
                     }
                     div { class: "{ADMIN_CARD_CLASS} p-4",
                         p { class: "text-xs text-paper-secondary", "DB 连接池" }
-                        p { class: "mt-1 text-lg font-semibold text-paper-primary", "{s.pool_size} / {s.pool_max_size}" }
-                        p { class: "text-xs text-paper-secondary", "空闲 {s.pool_available} · 等待 {s.pool_waiting}" }
+                        p { class: "mt-1 text-lg font-semibold text-paper-primary",
+                            "{s.pool_size} / {s.pool_max_size}"
+                        }
+                        p { class: "text-xs text-paper-secondary",
+                            "空闲 {s.pool_available} · 等待 {s.pool_waiting}"
+                        }
                     }
                     div { class: "{ADMIN_CARD_CLASS} p-4",
                         p { class: "text-xs text-paper-secondary", "活跃会话" }
-                        p { class: "mt-1 text-lg font-semibold text-paper-primary", "{s.active_sessions}" }
+                        p { class: "mt-1 text-lg font-semibold text-paper-primary",
+                            "{s.active_sessions}"
+                        }
                     }
                     div { class: "{ADMIN_CARD_CLASS} p-4",
                         p { class: "text-xs text-paper-secondary", "CPU" }
-                        p { class: "mt-1 text-lg font-semibold text-paper-primary", "{cpu_pct}" }
+                        p { class: "mt-1 text-lg font-semibold text-paper-primary",
+                            "{cpu_pct}"
+                        }
                     }
                 }
 
@@ -633,19 +711,27 @@ fn ServerStatusTab() -> Element {
                 div { class: "grid grid-cols-2 md:grid-cols-4 gap-4",
                     div { class: "{ADMIN_CARD_CLASS} p-4",
                         p { class: "text-xs text-paper-secondary", "内存" }
-                        p { class: "mt-1 text-lg font-semibold text-paper-primary", "{format_bytes(s.host.used_memory as i64)} / {format_bytes(s.host.total_memory as i64)}" }
+                        p { class: "mt-1 text-lg font-semibold text-paper-primary",
+                            "{format_bytes(s.host.used_memory as i64)} / {format_bytes(s.host.total_memory as i64)}"
+                        }
                     }
                     div { class: "{ADMIN_CARD_CLASS} p-4",
                         p { class: "text-xs text-paper-secondary", "磁盘" }
-                        p { class: "mt-1 text-lg font-semibold text-paper-primary", "{format_bytes((s.host.disk_total - s.host.disk_available) as i64)} / {format_bytes(s.host.disk_total as i64)}" }
+                        p { class: "mt-1 text-lg font-semibold text-paper-primary",
+                            "{format_bytes((s.host.disk_total - s.host.disk_available) as i64)} / {format_bytes(s.host.disk_total as i64)}"
+                        }
                     }
                     div { class: "{ADMIN_CARD_CLASS} p-4",
                         p { class: "text-xs text-paper-secondary", "Load (1m)" }
-                        p { class: "mt-1 text-lg font-semibold text-paper-primary", "{load_1}" }
+                        p { class: "mt-1 text-lg font-semibold text-paper-primary",
+                            "{load_1}"
+                        }
                     }
                     div { class: "{ADMIN_CARD_CLASS} p-4",
                         p { class: "text-xs text-paper-secondary", "系统" }
-                        p { class: "mt-1 text-sm font-medium text-paper-primary truncate", "{s.host.os_name}" }
+                        p { class: "mt-1 text-sm font-medium text-paper-primary truncate",
+                            "{s.host.os_name}"
+                        }
                     }
                 }
 
@@ -659,20 +745,38 @@ fn ServerStatusTab() -> Element {
                             thead {
                                 tr { class: "border-b border-paper-border text-left text-paper-secondary",
                                     th { class: "px-4 py-2 font-medium", "缓存" }
-                                    th { class: "px-4 py-2 font-medium text-right", "条目" }
-                                    th { class: "px-4 py-2 font-medium text-right", "命中" }
-                                    th { class: "px-4 py-2 font-medium text-right", "未命中" }
-                                    th { class: "px-4 py-2 font-medium text-right", "命中率" }
+                                    th { class: "px-4 py-2 font-medium text-right",
+                                        "条目"
+                                    }
+                                    th { class: "px-4 py-2 font-medium text-right",
+                                        "命中"
+                                    }
+                                    th { class: "px-4 py-2 font-medium text-right",
+                                        "未命中"
+                                    }
+                                    th { class: "px-4 py-2 font-medium text-right",
+                                        "命中率"
+                                    }
                                 }
                             }
                             tbody {
                                 for (name, entry_count, hits, misses, rate_pct) in cache_rows.iter() {
                                     tr { class: "border-b border-paper-border last:border-0 hover:bg-paper-entry transition-colors",
-                                        td { class: "px-4 py-2 text-paper-primary", "{name}" }
-                                        td { class: "px-4 py-2 text-right text-paper-secondary", "{entry_count}" }
-                                        td { class: "px-4 py-2 text-right text-paper-secondary", "{hits}" }
-                                        td { class: "px-4 py-2 text-right text-paper-secondary", "{misses}" }
-                                        td { class: "px-4 py-2 text-right text-paper-primary font-medium", "{rate_pct}" }
+                                        td { class: "px-4 py-2 text-paper-primary",
+                                            "{name}"
+                                        }
+                                        td { class: "px-4 py-2 text-right text-paper-secondary",
+                                            "{entry_count}"
+                                        }
+                                        td { class: "px-4 py-2 text-right text-paper-secondary",
+                                            "{hits}"
+                                        }
+                                        td { class: "px-4 py-2 text-right text-paper-secondary",
+                                            "{misses}"
+                                        }
+                                        td { class: "px-4 py-2 text-right text-paper-primary font-medium",
+                                            "{rate_pct}"
+                                        }
                                     }
                                 }
                             }
@@ -968,9 +1072,13 @@ fn SqlConsoleTab() -> Element {
                 div { class: "flex justify-between items-center px-4 py-2.5 border-b border-[var(--color-paper-border)] bg-[var(--color-paper-theme)]",
                     div { class: "flex items-center gap-2",
                         span { class: "w-2 h-2 rounded-full bg-[var(--color-paper-accent)]" }
-                        span { class: "font-mono text-sm font-semibold text-[var(--color-paper-primary)]", "SQL" }
+                        span { class: "font-mono text-sm font-semibold text-[var(--color-paper-primary)]",
+                            "SQL"
+                        }
                     }
-                    span { class: "text-xs text-[var(--color-paper-tertiary)] font-mono", "⌘↵ 执行" }
+                    span { class: "text-xs text-[var(--color-paper-tertiary)] font-mono",
+                        "⌘↵ 执行"
+                    }
                 }
                 // CodeMirror 容器：用 flex 让 .cm-editor(flex:1) 填满整个高度，
                 // 避免编辑器塌缩到内容高度、底部透出容器背景造成上下色差。
@@ -1068,7 +1176,9 @@ fn SqlConsoleTab() -> Element {
                     div { class: "px-4 py-2 border-b border-paper-border text-sm font-medium text-paper-primary",
                         "执行计划"
                     }
-                    pre { class: "p-4 text-xs font-mono text-paper-secondary overflow-x-auto whitespace-pre m-0", "{explain}" }
+                    pre { class: "p-4 text-xs font-mono text-paper-secondary overflow-x-auto whitespace-pre m-0",
+                        "{explain}"
+                    }
                 }
             }
         }
@@ -1143,12 +1253,16 @@ fn ExportTab() -> Element {
                             value: "{table_name}",
                             oninput: move |e| table_name.set(e.value()),
                         }
-                        p { class: "text-xs text-paper-secondary mt-1", "仅支持 public schema 下的用户表，表名需为合法标识符" }
+                        p { class: "text-xs text-paper-secondary mt-1",
+                            "仅支持 public schema 下的用户表，表名需为合法标识符"
+                        }
                     }
                 } else {
                     // 查询输入
                     div {
-                        label { class: "block text-sm text-paper-secondary mb-1", "SELECT 查询（只读）" }
+                        label { class: "block text-sm text-paper-secondary mb-1",
+                            "SELECT 查询（只读）"
+                        }
                         textarea {
                             class: "w-full px-3 py-2 text-sm border border-paper-border rounded bg-paper-theme text-paper-primary font-mono",
                             rows: "4",
@@ -1182,11 +1296,7 @@ fn ExportTab() -> Element {
                     }
                 }
 
-                button {
-                    class: "{BTN_PRIMARY_SM}",
-                    onclick: move |_| do_export(),
-                    "导出并下载"
-                }
+                button { class: "{BTN_PRIMARY_SM}", onclick: move |_| do_export(), "导出并下载" }
             }
             p { class: "text-xs text-paper-secondary",
                 "导出走流式响应，大表不会占满内存。SQL 格式仅含 INSERT 语句（不含 DDL/schema）。"
@@ -1357,7 +1467,10 @@ fn BackupTab() -> Element {
                             spawn(async move {
                                 match create_backup().await {
                                     Ok(id) => active_task_id.set(Some(id)),
-                                    Err(e) => { error.set(Some(e.to_string())); busy.set(false); }
+                                    Err(e) => {
+                                        error.set(Some(e.to_string()));
+                                        busy.set(false);
+                                    }
                                 }
                             });
                         }
@@ -1379,13 +1492,18 @@ fn BackupTab() -> Element {
                         span { class: "text-sm text-paper-secondary", "{p.percent}%" }
                     }
                     div { class: "w-full bg-paper-entry rounded-full h-2 overflow-hidden",
-                        div { class: "bg-paper-accent h-full transition-all", style: "width: {p.percent}%" }
+                        div {
+                            class: "bg-paper-accent h-full transition-all",
+                            style: "width: {p.percent}%",
+                        }
                     }
                     if let Some(detail) = p.detail {
                         p { class: "text-xs text-paper-secondary mt-2", "{detail}" }
                     }
                     if let Some(err) = p.error {
-                        p { class: "text-xs text-red-600 dark:text-red-400 mt-2", "错误：{err}" }
+                        p { class: "text-xs text-red-600 dark:text-red-400 mt-2",
+                            "错误：{err}"
+                        }
                     }
                 }
             }
@@ -1406,8 +1524,12 @@ fn BackupTab() -> Element {
                                 tr { class: "border-b border-paper-border text-left text-paper-secondary",
                                     th { class: "px-4 py-2 font-medium", "文件名" }
                                     th { class: "px-4 py-2 font-medium", "模式" }
-                                    th { class: "px-4 py-2 font-medium text-right", "大小" }
-                                    th { class: "px-4 py-2 font-medium text-right", "操作" }
+                                    th { class: "px-4 py-2 font-medium text-right",
+                                        "大小"
+                                    }
+                                    th { class: "px-4 py-2 font-medium text-right",
+                                        "操作"
+                                    }
                                 }
                             }
                             tbody {
@@ -1572,7 +1694,9 @@ fn BackupRow(props: BackupRowProps) -> Element {
                         span { class: "font-mono text-xs break-all", "{props.filename}" }
                         "？"
                     }
-                    p { class: "text-xs text-paper-secondary", "仅本系统生成的备份可恢复。" }
+                    p { class: "text-xs text-paper-secondary",
+                        "仅本系统生成的备份可恢复。"
+                    }
                     div { class: "flex justify-end gap-2 pt-1",
                         button {
                             class: "px-3 py-1.5 text-xs text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer",

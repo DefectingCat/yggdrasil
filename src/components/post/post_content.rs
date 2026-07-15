@@ -170,23 +170,25 @@ pub fn PostContent(content_html: String) -> Element {
     rsx! {
         div { class: "post-content md-content",
             for (i, fragment) in fragments.iter().enumerate() {
-                {match fragment {
-                    ContentFragment::Html(html) => rsx! {
-                        div { key: "html-{i}", dangerous_inner_html: "{html}" }
-                    },
-                    ContentFragment::Runnable { lang, source, overrides } => rsx! {
-                        CodeRunner {
-                            key: "runner-{i}",
-                            source: source.clone(),
-                            language: lang.clone(),
-                            overrides: overrides.clone(),
-                            // i 是片段序列中的确定性索引（来自纯函数 split_content_fragments
-                            // 对同一 content_html 的解析），SSR 与 hydration 一致，用作容器
-                            // id 后缀保证 hydration 时 CodeMirror 能找到 SSR 渲染的容器。
-                            instance_id: i,
-                        }
-                    },
-                }}
+                {
+                    match fragment {
+                        ContentFragment::Html(html) => rsx! {
+                            div { key: "html-{i}", dangerous_inner_html: "{html}" }
+                        },
+                        ContentFragment::Runnable { lang, source, overrides } => rsx! { // i 是片段序列中的确定性索引（来自纯函数 split_content_fragments
+                            CodeRunner {
+                                key: "runner-{i}",
+                                source: source.clone(),
+                                language: lang.clone(),
+                                overrides: overrides.clone(),
+                                // i 是片段序列中的确定性索引（来自纯函数 split_content_fragments
+                                // 对同一 content_html 的解析），SSR 与 hydration 一致，用作容器
+                                // id 后缀保证 hydration 时 CodeMirror 能找到 SSR 渲染的容器。
+                                instance_id: i,
+                            }
+                        },
+                    }
+                }
             }
         }
     }

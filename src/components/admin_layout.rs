@@ -95,12 +95,7 @@ pub fn AdminLayout() -> Element {
                             "text-[var(--color-paper-secondary)] hover:bg-[var(--color-paper-theme)]/50 hover:text-[var(--color-paper-primary)] border border-transparent"
                         };
                         rsx! {
-                            Link {
-                                key: "{label}",
-                                class: "{base_class} {text_class}",
-                                to: dest,
-                                "{label}"
-                            }
+                            Link { key: "{label}", class: "{base_class} {text_class}", to: dest, "{label}" }
                         }
                     }
                 }
@@ -149,8 +144,12 @@ pub fn AdminLayout() -> Element {
                                 div { class: "flex-1 min-h-0 flex flex-col animate-pulse",
                                     {
                                         match route {
-                                            Route::Write {} => rsx! { WriteSkeleton {} },
-                                            _ => rsx! { AdminDashboardSkeleton {} },
+                                            Route::Write {} => rsx! {
+                                                WriteSkeleton {}
+                                            },
+                                            _ => rsx! {
+                                                AdminDashboardSkeleton {}
+                                            },
                                         }
                                     }
                                 }

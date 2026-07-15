@@ -55,20 +55,16 @@ pub fn Admin() -> Element {
             // 顶部标题和全局操作栏
             div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8 border-b border-[var(--color-paper-border)]/50",
                 div {
-                    h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]", "仪表盘" }
-                    p { class: "text-base text-[var(--color-paper-secondary)] mt-2", "数据概览与近期活动" }
+                    h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]",
+                        "仪表盘"
+                    }
+                    p { class: "text-base text-[var(--color-paper-secondary)] mt-2",
+                        "数据概览与近期活动"
+                    }
                 }
                 div { class: "flex items-center gap-3",
-                    Link {
-                        class: "{BTN_SECONDARY}",
-                        to: Route::Posts {},
-                        "管理文章"
-                    }
-                    Link {
-                        class: "{BTN_PRIMARY}",
-                        to: Route::Write {},
-                        "发布文章"
-                    }
+                    Link { class: "{BTN_SECONDARY}", to: Route::Posts {}, "管理文章" }
+                    Link { class: "{BTN_PRIMARY}", to: Route::Write {}, "发布文章" }
                 }
             }
 
@@ -77,9 +73,21 @@ pub fn Admin() -> Element {
                 match stats() {
                     Some(s) => {
                         rsx! {
-                            StatCard { value: s.total.to_string(), label: "总文章数".to_string(), trend: "+12%".to_string() }
-                            StatCard { value: s.published.to_string(), label: "已发布".to_string(), trend: "活跃".to_string() }
-                            StatCard { value: s.drafts.to_string(), label: "草稿".to_string(), trend: "待处理".to_string() }
+                            StatCard {
+                                value: s.total.to_string(),
+                                label: "总文章数".to_string(),
+                                trend: "+12%".to_string(),
+                            }
+                            StatCard {
+                                value: s.published.to_string(),
+                                label: "已发布".to_string(),
+                                trend: "活跃".to_string(),
+                            }
+                            StatCard {
+                                value: s.drafts.to_string(),
+                                label: "草稿".to_string(),
+                                trend: "待处理".to_string(),
+                            }
                         }
                     }
                     None => {
@@ -103,13 +111,19 @@ pub fn Admin() -> Element {
                             let (color_class, text_class) = if count > 0 {
                                 ("text-amber-500", "text-amber-500")
                             } else {
-                                ("text-[var(--color-paper-secondary)]", "text-[var(--color-paper-primary)]")
-                            };
+                                (
+                                    "text-[var(--color-paper-secondary)]",
+                                    "text-[var(--color-paper-primary)]",
+                                )
+                            }
+                            }
                             rsx! {
                                 div { class: "text-sm font-medium {color_class}", "待审评论" }
                                 div { class: "flex items-baseline justify-between mt-4",
                                     div { class: "text-4xl font-light tracking-tight {text_class}", "{count}" }
-                                    div { class: "text-xs font-medium text-[var(--color-paper-secondary)] group-hover:text-[var(--color-paper-primary)] transition-colors", "去审核 →" }
+                                    div { class: "text-xs font-medium text-[var(--color-paper-secondary)] group-hover:text-[var(--color-paper-primary)] transition-colors",
+                                        "去审核 →"
+                                    }
                                 }
                             }
                         }
@@ -126,7 +140,9 @@ pub fn Admin() -> Element {
             // 最近文章列表
             div { class: "mt-12",
                 div { class: "flex items-center justify-between mb-6",
-                    h2 { class: "text-xl font-bold text-[var(--color-paper-primary)] tracking-tight", "近期文章" }
+                    h2 { class: "text-xl font-bold text-[var(--color-paper-primary)] tracking-tight",
+                        "近期文章"
+                    }
                 }
                 match recent_posts() {
                     // 空库 / 无文章：展示空状态占位（与 posts.rs 列表页一致）。
@@ -180,10 +196,16 @@ fn StatCard(value: String, label: String, trend: String) -> Element {
     rsx! {
         div { class: "{ADMIN_CARD_CLASS} p-8 flex flex-col justify-between h-36 relative group hover:-translate-y-1 hover:shadow-md transition-all duration-300",
             div { class: "flex justify-between items-start",
-                div { class: "text-sm font-medium text-[var(--color-paper-secondary)]", "{label}" }
-                div { class: "text-xs px-2 py-0.5 rounded-full border border-[var(--color-paper-border)] text-[var(--color-paper-tertiary)]", "{trend}" }
+                div { class: "text-sm font-medium text-[var(--color-paper-secondary)]",
+                    "{label}"
+                }
+                div { class: "text-xs px-2 py-0.5 rounded-full border border-[var(--color-paper-border)] text-[var(--color-paper-tertiary)]",
+                    "{trend}"
+                }
             }
-            div { class: "text-4xl font-light tracking-tight text-[var(--color-paper-primary)] mt-4", "{value}" }
+            div { class: "text-4xl font-light tracking-tight text-[var(--color-paper-primary)] mt-4",
+                "{value}"
+            }
         }
     }
 }
@@ -197,11 +219,19 @@ fn RecentPostItem(post: PostListItem) -> Element {
     rsx! {
         div { class: "flex flex-col sm:flex-row sm:justify-between sm:items-center px-8 py-5 hover:bg-[var(--color-paper-accent-soft)] transition-colors cursor-pointer group",
             div { class: "flex items-center gap-6",
-                span { class: "text-xs font-mono text-[var(--color-paper-tertiary)] w-12 hidden sm:block", "#{post.id:04}" }
-                span { class: "text-base font-semibold text-[var(--color-paper-primary)] group-hover:text-[var(--color-paper-accent)] transition-colors", "{post.title}" }
-                span { class: "text-xs px-3 py-1 font-medium rounded-full {status_class}", "{status_label}" }
+                span { class: "text-xs font-mono text-[var(--color-paper-tertiary)] w-12 hidden sm:block",
+                    "#{post.id:04}"
+                }
+                span { class: "text-base font-semibold text-[var(--color-paper-primary)] group-hover:text-[var(--color-paper-accent)] transition-colors",
+                    "{post.title}"
+                }
+                span { class: "text-xs px-3 py-1 font-medium rounded-full {status_class}",
+                    "{status_label}"
+                }
             }
-            span { class: "text-sm text-[var(--color-paper-secondary)] mt-2 sm:mt-0", "{date_str}" }
+            span { class: "text-sm text-[var(--color-paper-secondary)] mt-2 sm:mt-0",
+                "{date_str}"
+            }
         }
     }
 }

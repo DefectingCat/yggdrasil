@@ -491,7 +491,9 @@ fn write_editor(post_id: Option<i32>) -> Element {
                 div { class: "w-80 flex-shrink-0 min-h-0 overflow-y-auto border-l border-[var(--color-paper-border)] flex flex-col",
                     // Slug 节
                     div { class: "p-6 border-b border-[var(--color-paper-border)]",
-                        label { class: "block text-xs font-semibold uppercase tracking-wide text-[var(--color-paper-tertiary)] mb-3", "链接" }
+                        label { class: "block text-xs font-semibold uppercase tracking-wide text-[var(--color-paper-tertiary)] mb-3",
+                            "链接"
+                        }
                         input {
                             class: "w-full text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-2xl px-3 py-2 transition-all",
                             placeholder: "自动生成",
@@ -501,7 +503,9 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     }
                     // 标签节
                     div { class: "p-6 border-b border-[var(--color-paper-border)]",
-                        label { class: "block text-xs font-semibold uppercase tracking-wide text-[var(--color-paper-tertiary)] mb-3", "标签" }
+                        label { class: "block text-xs font-semibold uppercase tracking-wide text-[var(--color-paper-tertiary)] mb-3",
+                            "标签"
+                        }
                         input {
                             class: "w-full text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-2xl px-3 py-2 transition-all",
                             placeholder: "逗号分隔...",
@@ -511,7 +515,9 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     }
                     // 摘要节
                     div { class: "p-6 border-b border-[var(--color-paper-border)]",
-                        label { class: "block text-xs font-semibold uppercase tracking-wide text-[var(--color-paper-tertiary)] mb-3", "摘要" }
+                        label { class: "block text-xs font-semibold uppercase tracking-wide text-[var(--color-paper-tertiary)] mb-3",
+                            "摘要"
+                        }
                         textarea {
                             class: "w-full text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-2xl px-3 py-2 transition-all resize-none leading-relaxed",
                             placeholder: "选填...",
@@ -522,7 +528,9 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     }
                     // 封面图节
                     div { class: "p-6",
-                        label { class: "block text-xs font-semibold uppercase tracking-wide text-[var(--color-paper-tertiary)] mb-3", "封面图" }
+                        label { class: "block text-xs font-semibold uppercase tracking-wide text-[var(--color-paper-tertiary)] mb-3",
+                            "封面图"
+                        }
                         CoverUploader { cover_image, cover_uploading }
                     }
                 } // 右栏闭合
@@ -681,7 +689,9 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
             // —— 上传中：骨架占位 + 文案 ——
             if cover_uploading() {
                 div { class: "absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[var(--color-paper-tertiary)]/30 animate-pulse",
-                    span { class: "text-sm font-medium text-[var(--color-paper-secondary)]", "正在上传..." }
+                    span { class: "text-sm font-medium text-[var(--color-paper-secondary)]",
+                        "正在上传..."
+                    }
                 }
             }
 
@@ -735,7 +745,9 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
                 }
                 // 底部渐变遮罩 + "更换封面"提示（hover 出现）。
                 div { class: "absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-end justify-center pb-2 pointer-events-none",
-                    span { class: "text-sm font-medium text-white/90 drop-shadow-md", "点击更换封面" }
+                    span { class: "text-sm font-medium text-white/90 drop-shadow-md",
+                        "点击更换封面"
+                    }
                 }
             }
 

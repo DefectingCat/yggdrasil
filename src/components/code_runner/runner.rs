@@ -487,7 +487,9 @@ pub fn CodeRunner(
             div { class: "flex justify-between items-center px-4 py-2.5 border-b border-[var(--color-paper-border)] bg-[var(--color-paper-theme)]",
                 div { class: "flex items-center gap-3",
                     span { class: "w-2 h-2 rounded-full bg-[var(--color-paper-accent)]" }
-                    span { class: "font-mono text-sm font-semibold text-[var(--color-paper-primary)]", "{language}" }
+                    span { class: "font-mono text-sm font-semibold text-[var(--color-paper-primary)]",
+                        "{language}"
+                    }
                     button {
                         class: format!(
                             "text-[10px] px-1.5 py-0.5 rounded border transition cursor-pointer {}",
@@ -495,7 +497,7 @@ pub fn CodeRunner(
                                 "bg-[var(--color-paper-accent)]/15 text-[var(--color-paper-accent)] border-[var(--color-paper-accent)]/30 font-semibold"
                             } else {
                                 "bg-transparent text-[var(--color-paper-tertiary)] border-[var(--color-paper-border)] hover:text-[var(--color-paper-primary)]"
-                            }
+                            },
                         ),
                         onclick: toggle_vim,
                         "Vim"
@@ -506,7 +508,8 @@ pub fn CodeRunner(
                     disabled: running(),
                     onclick: run_code,
                     if running() {
-                        span { class: "inline-block w-3.5 h-3.5 text-[var(--color-paper-theme)]",
+                        span {
+                            class: "inline-block w-3.5 h-3.5 text-[var(--color-paper-theme)]",
                             dangerous_inner_html: SPINNER_SVG,
                         }
                         "{stage()}"
@@ -523,14 +526,28 @@ pub fn CodeRunner(
                 // editor_ready 由挂载 effect 置 true 后，此处 if 分支消失，骨架屏从 DOM 移除。
                 // 用绝对定位覆盖在（始终存在的）容器上方，不影响 CodeMirror 的 getElementById 挂载。
                 if !editor_ready() {
-                    div {
-                        class: "absolute inset-0 flex flex-col justify-center gap-2.5 px-4 py-4 bg-[var(--color-paper-code-block)]",
+                    div { class: "absolute inset-0 flex flex-col justify-center gap-2.5 px-4 py-4 bg-[var(--color-paper-code-block)]",
                         // 代码行占位条：递减宽度模拟代码缩进，贴合等宽字体语境。
-                        div { class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse", style: "width: 90%" }
-                        div { class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse", style: "width: 70%" }
-                        div { class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse", style: "width: 55%" }
-                        div { class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse", style: "width: 85%" }
-                        div { class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse", style: "width: 40%" }
+                        div {
+                            class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse",
+                            style: "width: 90%",
+                        }
+                        div {
+                            class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse",
+                            style: "width: 70%",
+                        }
+                        div {
+                            class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse",
+                            style: "width: 55%",
+                        }
+                        div {
+                            class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse",
+                            style: "width: 85%",
+                        }
+                        div {
+                            class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse",
+                            style: "width: 40%",
+                        }
                     }
                 }
             }
@@ -548,9 +565,18 @@ pub fn CodeRunner(
                         // running 且尚未收到首个 chunk 时，显示骨架屏占位。
                         if running() && !has_output() {
                             div { class: "absolute inset-0 flex flex-col justify-center gap-2.5 px-4 py-4 bg-[var(--color-paper-code-block)]",
-                                div { class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse", style: "width: 70%" }
-                                div { class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse", style: "width: 55%" }
-                                div { class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse", style: "width: 85%" }
+                                div {
+                                    class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse",
+                                    style: "width: 70%",
+                                }
+                                div {
+                                    class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse",
+                                    style: "width: 55%",
+                                }
+                                div {
+                                    class: "h-3 rounded bg-[var(--color-paper-tertiary)]/25 dark:bg-gray-600/50 animate-pulse",
+                                    style: "width: 85%",
+                                }
                             }
                         }
                     }

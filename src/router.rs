@@ -133,25 +133,29 @@ fn ErrorLayout() -> Element {
                 #[cfg(feature = "server")]
                 {
                     if let Some(captured_error) = err.error() {
-                        let _ = dioxus::fullstack::FullstackContext::commit_error_status(captured_error);
+                        let _ = dioxus::fullstack::FullstackContext::commit_error_status(
+                            captured_error,
+                        );
                     }
                 }
-
-                // Parse the captured error to detect 404 vs 500
                 let mut is_404 = false;
                 if let Some(captured_error) = err.error() {
-                    if let Some(ServerFnError::ServerError { code, message, .. }) = captured_error.downcast_ref::<ServerFnError>() {
+                    if let Some(ServerFnError::ServerError { code, message, .. }) = captured_error
+                        .downcast_ref::<ServerFnError>()
+
+                    {
                         if *code == 404 || message == "not_found" {
                             is_404 = true;
                         }
-                    } else {
+                    } else { // Warning / Alert Icon in a soft red container
                         let err_str = format!("{:?}", captured_error);
-                        if err_str.contains("NotFound") || err_str.contains("404") || err_str.contains("not found") {
+                        if err_str.contains("NotFound") || err_str.contains("404")
+                            || err_str.contains("not found")
+                        {
                             is_404 = true;
                         }
                     }
                 }
-
                 if is_404 {
                     rsx! {
                         NotFound { segments: vec![] }
@@ -174,8 +178,18 @@ fn ErrorLayout() -> Element {
                                             stroke_linecap: "round",
                                             stroke_linejoin: "round",
                                             circle { cx: "12", cy: "12", r: "10" }
-                                            line { x1: "12", y1: "8", x2: "12", y2: "12" }
-                                            line { x1: "12", y1: "16", x2: "12.01", y2: "16" }
+                                            line {
+                                                x1: "12",
+                                                y1: "8",
+                                                x2: "12",
+                                                y2: "12",
+                                            }
+                                            line {
+                                                x1: "12",
+                                                y1: "16",
+                                                x2: "12.01",
+                                                y2: "16",
+                                            }
                                         }
                                     }
                                 }

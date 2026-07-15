@@ -59,22 +59,22 @@ pub fn PostCard(post: PostListItem) -> Element {
                 }
                 div { class: "mt-4 flex flex-wrap items-center gap-3 text-sm font-medium text-[var(--color-paper-tertiary)]",
                     span { class: "tracking-wide", "{date_str}" }
-                if !post.tags.is_empty() {
-                    span { "·" }
-                    for tag in post.tags.clone().into_iter() {
-                        span { key: "{tag}",
-                            Link {
-                                class: "relative z-10 px-3 py-1 rounded-full border border-[var(--color-paper-border)] hover:bg-[var(--color-paper-accent)] hover:border-[var(--color-paper-accent)] hover:text-white transition-all duration-200",
-                                to: Route::TagDetail {
-                                    tag: tag.clone(),
-                                },
-                                onclick: move |evt: dioxus::events::MouseEvent| evt.stop_propagation(),
-                                "{tag}"
+                    if !post.tags.is_empty() {
+                        span { "·" }
+                        for tag in post.tags.clone().into_iter() {
+                            span { key: "{tag}",
+                                Link {
+                                    class: "relative z-10 px-3 py-1 rounded-full border border-[var(--color-paper-border)] hover:bg-[var(--color-paper-accent)] hover:border-[var(--color-paper-accent)] hover:text-white transition-all duration-200",
+                                    to: Route::TagDetail {
+                                        tag: tag.clone(),
+                                    },
+                                    onclick: move |evt: dioxus::events::MouseEvent| evt.stop_propagation(),
+                                    "{tag}"
+                                }
                             }
                         }
                     }
                 }
-            }
             }
             // 覆盖层链接：铺满卡片，承担整卡跳转。
             // z-[2] 高于封面完整图 (.blur-img-full z-index:1, input.css:611)，

@@ -57,7 +57,9 @@ pub fn Runner() -> Element {
             // 页头：与 dashboard / posts / system 对齐（h1 text-4xl + 底部分割线）
             div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8 border-b border-[var(--color-paper-border)]/50",
                 div {
-                    h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]", "代码试运行沙箱" }
+                    h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]",
+                        "代码试运行沙箱"
+                    }
                     p { class: "text-base text-[var(--color-paper-secondary)] mt-2",
                         "在此快速试运行代码，验证文章中可运行代码块的预期输出。资源钳制与读者侧一致，速率限制对 admin 放行。"
                     }
@@ -68,7 +70,9 @@ pub fn Runner() -> Element {
             div { class: "{ADMIN_CARD_CLASS} p-8 flex flex-col gap-6",
                 // 语言切换
                 div { class: "flex flex-col gap-2",
-                    label { class: "text-sm font-medium text-[var(--color-paper-secondary)]", "语言" }
+                    label { class: "text-sm font-medium text-[var(--color-paper-secondary)]",
+                        "语言"
+                    }
                     div { class: "flex gap-2",
                         for l in SUPPORTED_LANGS {
                             button {
@@ -77,7 +81,8 @@ pub fn Runner() -> Element {
                                     BTN_PRIMARY_SM
                                 } else {
                                     "px-4 py-1.5 text-sm font-medium rounded-full text-[var(--color-paper-secondary)] bg-[var(--color-paper-theme)] hover:bg-[var(--color-paper-border)] hover:text-[var(--color-paper-primary)] transition cursor-pointer"
-                                }).to_string(),
+                                })
+                                    .to_string(),
                                 onclick: {
                                     let ll = (*l).to_string();
                                     move |_| {
@@ -119,7 +124,7 @@ pub fn Runner() -> Element {
             CodeRunner {
                 source: source(),
                 language: lang(),
-                overrides: overrides,
+                overrides,
                 instance_id: 0,
             }
         }

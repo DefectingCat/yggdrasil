@@ -29,7 +29,9 @@ pub fn Tags() -> Element {
     rsx! {
         div { class: "animate-page-enter",
             header { class: "page-header mb-6",
-                h1 { class: "text-4xl font-bold text-paper-primary tracking-tight", "标签" }
+                h1 { class: "text-4xl font-bold text-paper-primary tracking-tight",
+                    "标签"
+                }
             }
             TagsContent {}
         }
@@ -109,7 +111,9 @@ pub fn TagDetail(tag: String) -> Element {
     rsx! {
         div { class: "animate-page-enter",
             header { class: "page-header mb-6",
-                h1 { class: "text-4xl font-bold text-paper-primary tracking-tight", "{tag}" }
+                h1 { class: "text-4xl font-bold text-paper-primary tracking-tight",
+                    "{tag}"
+                }
             }
             TagDetailContent { tag: tag.clone() }
         }

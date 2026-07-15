@@ -106,11 +106,7 @@ pub fn Posts() -> Element {
                 if active_tab() == PostsTab::All {
                     div { class: "flex items-center gap-3",
                         RebuildCacheBar {}
-                        Link {
-                            class: "{BTN_PRIMARY}",
-                            to: Route::Write {},
-                            "发布文章"
-                        }
+                        Link { class: "{BTN_PRIMARY}", to: Route::Write {}, "发布文章" }
                     }
                 }
             }
@@ -125,8 +121,12 @@ pub fn Posts() -> Element {
             // key 化条件渲染：切 tab 完全卸载/重挂，隔离各自 use_paginated 状态。
             div { key: "{active_tab().as_str()}",
                 match active_tab() {
-                    PostsTab::All => rsx! { AllPostsList {} },
-                    PostsTab::Trash => rsx! { PostsTrashPanel {} },
+                    PostsTab::All => rsx! {
+                        AllPostsList {}
+                    },
+                    PostsTab::Trash => rsx! {
+                        PostsTrashPanel {}
+                    },
                 }
             }
         }
@@ -184,13 +184,9 @@ fn AllPostsList() -> Element {
                     thead {
                         tr { class: "border-b border-paper-border text-left text-paper-secondary",
                             th { class: "px-4 py-3 font-medium", "标题" }
-                            th { class: "px-4 py-3 font-medium w-24 text-center",
-                                "状态"
-                            }
+                            th { class: "px-4 py-3 font-medium w-24 text-center", "状态" }
                             th { class: "px-4 py-3 font-medium w-32", "日期" }
-                            th { class: "px-4 py-3 font-medium w-44 text-right",
-                                "操作"
-                            }
+                            th { class: "px-4 py-3 font-medium w-44 text-right", "操作" }
                         }
                     }
                     tbody {
@@ -310,10 +306,7 @@ fn RebuildCacheBar() -> Element {
                         class: if rebuilding() { "relative px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { BTN_OUTLINE },
                         disabled: rebuilding(),
                         onclick: move |_| do_rebuild(false),
-                        span {
-                            class: if rebuilding() { "opacity-40" } else { "" },
-                            "重建内容"
-                        }
+                        span { class: if rebuilding() { "opacity-40" } else { "" }, "重建内容" }
                         if rebuilding() {
                             span {
                                 class: "absolute inset-0 flex items-center justify-center",
@@ -329,10 +322,7 @@ fn RebuildCacheBar() -> Element {
                         class: if rebuilding() { "relative px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed text-paper-secondary border border-paper-border" } else { BTN_OUTLINE },
                         disabled: rebuilding(),
                         onclick: move |_| do_rebuild(true),
-                        span {
-                            class: if rebuilding() { "opacity-40" } else { "" },
-                            "重建全部"
-                        }
+                        span { class: if rebuilding() { "opacity-40" } else { "" }, "重建全部" }
                         if rebuilding() {
                             span {
                                 class: "absolute inset-0 flex items-center justify-center",
@@ -344,9 +334,7 @@ fn RebuildCacheBar() -> Element {
             }
             // 重建结果消息：独立成行，右对齐，与按钮行同属本组件。
             if let Some(msg) = rebuild_result() {
-                div { class: "text-xs text-paper-secondary whitespace-pre-line",
-                    "{msg}"
-                }
+                div { class: "text-xs text-paper-secondary whitespace-pre-line", "{msg}" }
             }
         }
     }
@@ -388,20 +376,12 @@ fn PostRow(
                         to: Route::WriteEdit { id: post.id },
                         "编辑"
                     }
-                    Tooltip {
-                        tip: "重新渲染这篇文章的 HTML".to_string(),
+                    Tooltip { tip: "重新渲染这篇文章的 HTML".to_string(),
                         button {
-                            class: if rebuilding {
-                                "relative inline-flex items-center text-xs text-paper-accent cursor-not-allowed"
-                            } else {
-                                BTN_TEXT_ACCENT
-                            },
+                            class: if rebuilding { "relative inline-flex items-center text-xs text-paper-accent cursor-not-allowed" } else { BTN_TEXT_ACCENT },
                             disabled: rebuilding,
                             onclick: move |_| on_rebuild.call(post.id),
-                            span {
-                                class: if rebuilding { "opacity-40" } else { "" },
-                                "重建"
-                            }
+                            span { class: if rebuilding { "opacity-40" } else { "" }, "重建" }
                             if rebuilding {
                                 span {
                                     class: "absolute inset-0 flex items-center justify-center",
@@ -411,17 +391,10 @@ fn PostRow(
                         }
                     }
                     button {
-                        class: if deleting {
-                            "relative inline-flex items-center text-xs text-paper-secondary cursor-not-allowed"
-                        } else {
-                            BTN_TEXT_RED
-                        },
+                        class: if deleting { "relative inline-flex items-center text-xs text-paper-secondary cursor-not-allowed" } else { BTN_TEXT_RED },
                         disabled: deleting,
                         onclick: move |_| on_delete.call(post.id),
-                        span {
-                            class: if deleting { "opacity-40" } else { "" },
-                            "删除"
-                        }
+                        span { class: if deleting { "opacity-40" } else { "" }, "删除" }
                         if deleting {
                             span {
                                 class: "absolute inset-0 flex items-center justify-center",
@@ -498,31 +471,18 @@ pub(super) fn PostsTabs(
         div { class: "relative flex items-center gap-4 border-b border-paper-border",
             button {
                 id: "posts-tab-{id_prefix}-all",
-                class: if !is_trash {
-                    "inline-flex items-center px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-primary transition-colors cursor-pointer"
-                } else {
-                    "inline-flex items-center px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer"
-                },
+                class: if !is_trash { "inline-flex items-center px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-primary transition-colors cursor-pointer" } else { "inline-flex items-center px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer" },
                 onclick: move |_| on_change.call(PostsTab::All),
                 "全部文章"
             }
             button {
                 id: "posts-tab-{id_prefix}-trash",
-                class: if is_trash {
-                    "inline-flex items-center gap-1.5 px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-primary transition-colors cursor-pointer"
-                } else {
-                    "inline-flex items-center gap-1.5 px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer"
-                },
+                class: if is_trash { "inline-flex items-center gap-1.5 px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-primary transition-colors cursor-pointer" } else { "inline-flex items-center gap-1.5 px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer" },
                 onclick: move |_| on_change.call(PostsTab::Trash),
                 "回收站"
                 // 数量角标：有数据才显示。0 显示中性灰，>0 用主题强调色提醒。
                 if let Some(count) = trash_count() {
-                    span {
-                        class: if count > 0 {
-                            "inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[0.625rem] font-semibold normal-case tracking-normal bg-paper-accent-soft text-paper-accent"
-                        } else {
-                            "inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[0.625rem] font-semibold normal-case tracking-normal bg-paper-tertiary text-paper-secondary"
-                        },
+                    span { class: if count > 0 { "inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[0.625rem] font-semibold normal-case tracking-normal bg-paper-accent-soft text-paper-accent" } else { "inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[0.625rem] font-semibold normal-case tracking-normal bg-paper-tertiary text-paper-secondary" },
                         "{count}"
                     }
                 }

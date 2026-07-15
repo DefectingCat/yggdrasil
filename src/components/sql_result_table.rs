@@ -47,8 +47,7 @@ fn render_cell(value: &serde_json::Value) -> Element {
             }
         },
         Value::String(s) => rsx! {
-            span {
-                class: "block font-mono text-xs text-[var(--color-paper-secondary)] truncate {TEXT_CELL_MAX_WIDTH_CLASS}",
+            span { class: "block font-mono text-xs text-[var(--color-paper-secondary)] truncate {TEXT_CELL_MAX_WIDTH_CLASS}",
                 "{s}"
             }
         },
@@ -79,9 +78,7 @@ fn render_expanded_value(col: &str, value: &serde_json::Value) -> Element {
             span { class: "shrink-0 font-mono text-xs text-[var(--color-paper-tertiary)] min-w-[6rem]",
                 "{col}"
             }
-            span { class: "font-mono text-xs text-[var(--color-paper-secondary)]",
-                "{display}"
-            }
+            span { class: "font-mono text-xs text-[var(--color-paper-secondary)]", "{display}" }
         }
     }
 }
@@ -114,8 +111,7 @@ pub fn SqlResultTable(props: SqlResultTableProps) -> Element {
                         tr { class: "border-b border-[var(--color-paper-border)] sticky top-0 bg-[var(--color-paper-entry)] z-10",
                             th { class: "w-8 px-2 py-2", "" }
                             for col in props.result.columns.iter() {
-                                th {
-                                    class: "px-4 py-2 text-left font-medium whitespace-nowrap text-[var(--color-paper-secondary)]",
+                                th { class: "px-4 py-2 text-left font-medium whitespace-nowrap text-[var(--color-paper-secondary)]",
                                     "{col}"
                                 }
                             }
@@ -135,22 +131,23 @@ pub fn SqlResultTable(props: SqlResultTableProps) -> Element {
                                     }
                                 },
                                 td { class: "px-2 py-2 text-center text-[var(--color-paper-tertiary)] text-xs select-none",
-                                    if expanded_row() == Some(row_idx) { "▾" } else { "▸" }
+                                    if expanded_row() == Some(row_idx) {
+                                        "▾"
+                                    } else {
+                                        "▸"
+                                    }
                                 }
                                 for cell in row.iter() {
-                                    td {
-                                        class: "px-4 py-2 align-top",
-                                        {render_cell(cell)}
-                                    }
+                                    td { class: "px-4 py-2 align-top", {render_cell(cell)} }
                                 }
                             }
                             // 展开详情行（跨列）
                             if expanded_row() == Some(row_idx) {
                                 tr {
-                                    td { colspan: "{expand_colspan}",
+                                    td {
+                                        colspan: "{expand_colspan}",
                                         class: "px-4 py-3 bg-[var(--color-paper-theme)]",
-                                        div {
-                                            class: "{EXPAND_MAX_HEIGHT_CLASS} overflow-y-auto space-y-0.5 whitespace-pre-wrap break-all",
+                                        div { class: "{EXPAND_MAX_HEIGHT_CLASS} overflow-y-auto space-y-0.5 whitespace-pre-wrap break-all",
                                             for (ci, col) in props.result.columns.iter().enumerate() {
                                                 {render_expanded_value(col, row.get(ci).unwrap_or(&serde_json::Value::Null))}
                                             }
