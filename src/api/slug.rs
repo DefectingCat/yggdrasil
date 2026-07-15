@@ -20,30 +20,79 @@ use pinyin::ToPinyin;
 /// 结果截断至 100 字符；若全部被过滤则回退为当前时间戳。
 ///
 /// 多音字取默认读音（不处理歧义），博客 slug 场景足够。
+///
+/// 单遍状态机实现：旧实现 `to_lowercase` 分配一次 String + `split.collect::<Vec>` +
+/// `join` 再分配 + `take.collect` 第三次分配，共 4 次堆分配、3 遍扫描。
+/// 现用 `prev_dash` 状态在单遍内合并连续 `-` 并按需截断，1 次分配、1 遍扫描。
 pub fn slugify(title: &str) -> String {
     let mut out = String::with_capacity(title.len());
-    for c in title.to_lowercase().chars() {
+    // prev_dash = true 表示当前不应再输出 `-`（处于开头，或上一输出字符已是 `-`）。
+    // 等价于旧实现字符流 + split('-').filter(!empty).join('-') 的合并/去首尾效果。
+    let mut prev_dash = true;
+    let mut len = 0usize;
+
+    /// 输出一个字符，截断到 100。返回 false 表示已达上限应停止。
+    fn push_char(out: &mut String, len: &mut usize, c: char) -> bool {
+        if *len >= 100 {
+            return false;
+        }
+        out.push(c);
+        *len += 1;
+        true
+    }
+
+    for c in title.chars() {
         // 汉字优先转拼音：to_pinyin() 对非汉字（含 ascii）返回 None。
         if let Some(py) = c.to_pinyin() {
-            out.push_str(py.plain());
-            // 每个汉字成词，用 `-` 与后续内容分隔。
-            out.push('-');
-        } else if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
-            out.push(c);
+            // 拼音内部不含 `-`；连续字母直接拼接，与旧实现 push_str 行为一致。
+            for pc in py.plain().chars() {
+                if !push_char(&mut out, &mut len, pc) {
+                    break;
+                }
+            }
+            prev_dash = false;
+            // 汉字成词，后接 `-`（合并连续、去除尾部由末尾清理负责）。
+            if !push_char(&mut out, &mut len, '-') {
+                break;
+            }
+            prev_dash = true;
         } else {
-            out.push('-');
+            // ASCII 小写化避免对整串 to_lowercase 的全量分配。
+            let lc = c.to_ascii_lowercase();
+            if lc.is_ascii_alphanumeric() {
+                if !push_char(&mut out, &mut len, lc) {
+                    break;
+                }
+                prev_dash = false;
+            } else if lc == '_' {
+                // 下划线保留原样（split('-') 不把它当分隔符，行为一致）。
+                if !push_char(&mut out, &mut len, '_') {
+                    break;
+                }
+                prev_dash = false;
+            } else {
+                // `-` 或其他字符（空格/标点）：仅当前面非分隔符时输出一个 `-`，
+                // 连续分隔符合并为一个；首尾的 `-` 由 prev_dash 初值和末尾清理负责。
+                if !prev_dash {
+                    if !push_char(&mut out, &mut len, '-') {
+                        break;
+                    }
+                    prev_dash = true;
+                }
+            }
         }
     }
 
-    // 合并连续的连字符，并去除首尾空段。
-    let parts: Vec<&str> = out.split('-').filter(|s| !s.is_empty()).collect();
-    let slug = parts.join("-");
-
-    if slug.is_empty() {
-        return format!("{}", chrono::Utc::now().timestamp());
+    // 去除尾部 `-`（开头已被 prev_dash 初值 true 挡住）。
+    while out.ends_with('-') {
+        out.pop();
     }
 
-    slug.chars().take(100).collect()
+    if out.is_empty() {
+        return chrono::Utc::now().timestamp().to_string();
+    }
+
+    out
 }
 
 #[cfg(feature = "server")]
