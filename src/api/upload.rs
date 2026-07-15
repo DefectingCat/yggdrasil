@@ -164,8 +164,9 @@ pub async fn upload_image(
 
     // 对不经过重编码的格式做解码验证。GIF 走 image::load_from_memory 会完整解码，
     // 移到阻塞线程池避免拖住 async 运行时。
+    // data 是引用计数的 Bytes，clone 廉价（原子 +1），避免 to_vec() 的全文件深拷贝。
     if is_gif || is_webp {
-        let validate_data = data.to_vec();
+        let validate_data = data.clone();
         let validate_mime = mime_type.clone();
         let is_valid = tokio::task::spawn_blocking(move || {
             validate_raw_image(&validate_data, validate_mime.as_str())
@@ -178,12 +179,14 @@ pub async fn upload_image(
     }
 
     // GIF 与 WebP 保持原格式；其余格式尝试转 WebP。
-    let (final_data, final_ext) = if is_gif {
+    // Bytes clone 廉价（引用计数 +1），move 进阻塞闭包无需全文件深拷贝；
+    // 仅在「保留原格式」回退分支才 to_vec() 出落盘所需的 Vec<u8>。
+    let (final_data, final_ext): (Vec<u8>, String) = if is_gif {
         (data.to_vec(), "gif".to_string())
     } else if is_webp {
         (data.to_vec(), "webp".to_string())
     } else {
-        let original_data = data.to_vec();
+        let original_data = data.clone();
         let mime = mime_type.clone();
         let config = crate::webp::WEBP_CONFIG.clone();
         // 在阻塞线程中执行图片解码与 WebP 编码，避免阻塞异步运行时。
@@ -222,12 +225,12 @@ pub async fn upload_image(
                                     img.width(), img.height(),
                                     original_data.len(), webp_data.len()
                                 );
-                                (original_data, mime_to_ext(&mime).to_string(), false)
+                                (original_data.to_vec(), mime_to_ext(&mime).to_string(), false)
                             }
                         }
                         Err(e) => {
                             tracing::warn!("WebP encode failed ({}), keeping original format", e);
-                            (original_data, mime_to_ext(&mime).to_string(), false)
+                            (original_data.to_vec(), mime_to_ext(&mime).to_string(), false)
                         }
                     };
                     result
@@ -235,7 +238,7 @@ pub async fn upload_image(
                 Err(e) => {
                     // 到这里尺寸校验已通过(超限在 header 阶段被拒),decode 失败只能是真损坏。
                     tracing::warn!("Failed to decode image ({}), keeping original format", e);
-                    (original_data, mime_to_ext(&mime).to_string(), false)
+                    (original_data.to_vec(), mime_to_ext(&mime).to_string(), false)
                 }
             }
         })
@@ -251,16 +254,15 @@ pub async fn upload_image(
     };
 
     // 按上传时间组织目录：uploads/YYYY/MM/DD。
+    // chrono 的 DelayedFormat 实现 Display，可直接进 format!，省掉 year/month/day 三个中间 String。
     let now = chrono::Utc::now();
-    let year = now.format("%Y").to_string();
-    let month = now.format("%m").to_string();
-    let day = now.format("%d").to_string();
+    let date = now.format("%Y/%m/%d");
     let uuid = uuid::Uuid::new_v4().to_string();
 
-    let dir_path = format!("uploads/{}/{}/{}", year, month, day);
+    let dir_path = format!("uploads/{}", date);
     let file_name = format!("{}.{}.{}", now.format("%H%M%S"), uuid, final_ext);
     let file_path = format!("{}/{}", dir_path, file_name);
-    let url_path = format!("/uploads/{}/{}/{}/{}", year, month, day, file_name);
+    let url_path = format!("/uploads/{}/{}", date, file_name);
 
     if let Err(e) = tokio::fs::create_dir_all(&dir_path).await {
         tracing::error!("Create dir error: {:?}", e);
