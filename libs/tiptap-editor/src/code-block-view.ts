@@ -154,7 +154,7 @@ export class CodeBlockNodeView {
     if (mutation.target === this.contentDOM && mutation.type === 'attributes') return true;
     // contentDOM 内的 mutation（characterData/childList）：交给 ProseMirror（编辑核心）
     // 注意 contains 对 target===contentDOM 自身也返回 true，故上面的 attributes 判断须在前。
-    if (this.contentDOM && this.contentDOM.contains(mutation.target)) return false;
+    if (this.contentDOM?.contains(mutation.target)) return false;
     // 工具栏/结果区等装饰元素的 mutation：忽略
     return true;
   }

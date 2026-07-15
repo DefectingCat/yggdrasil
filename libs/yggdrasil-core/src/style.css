@@ -53,5 +53,6 @@ html.is-theme-transitioning *::after {
 html.is-theme-transitioning .animate-page-enter {
   /* !important 必需:animation-fill-mode: both 保留的关键帧值优先级高于普通
      规则,只有 !important 能覆盖,确保 VT 期间 transform 被清为 none。 */
+  /* biome-ignore lint/complexity/noImportantStyles: animation-fill-mode: both 保留非 none transform 创建堆叠上下文,仅 !important 可覆盖(详见上方注释) */
   transform: none !important;
 }
