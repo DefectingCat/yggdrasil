@@ -85,6 +85,7 @@ self.items.retain(|item| item.in_stock);
 **触发**：从 `&mut T` / `Option<T>` 取值时用了 `.clone()`，或想"取出旧值替换为默认"。
 
 **动作**：
+
 - `Option<T>` 取值 → `option.take()`（取出并留 `None`，无 clone）
 - `T: Default` 取出旧值 → `std::mem::take(dest)`（旧值返回，`dest` 变默认）
 - 交换值 → `std::mem::replace(dest, src)`（无深拷贝）
@@ -170,13 +171,13 @@ fn normalize<'a>(name: &'a str) -> Cow<'a, str> {
 
 **量化收益示例**（写到改动说明里）：
 
-| 改动 | 复杂度 / 分配变化 |
-|---|---|
-| `remove` → `swap_remove` | O(n) → O(1) 内存搬移 |
-| 循环+clone → `retain` | 省 1 次堆分配 + N 次 clone |
-| `clone` → `take` | 省 1 次堆分配 |
+| 改动                       | 复杂度 / 分配变化           |
+| -------------------------- | --------------------------- |
+| `remove` → `swap_remove`   | O(n) → O(1) 内存搬移        |
+| 循环+clone → `retain`      | 省 1 次堆分配 + N 次 clone  |
+| `clone` → `take`           | 省 1 次堆分配               |
 | `Vec` → `SmallVec<[T; 4]>` | 堆分配 → 栈分配（小负载时） |
-| `String` → `Cow<str>` | 读路径：1 次分配 → 0 次 |
+| `String` → `Cow<str>`      | 读路径：1 次分配 → 0 次     |
 
 ## 自检清单（提交 Rust 改动前逐条过）
 
@@ -201,9 +202,9 @@ fn normalize<'a>(name: &'a str) -> Cow<'a, str> {
 
 **决策速查**：
 
-| 情况 | 推荐 |
-|---|---|
-| 非热点、简单工具函数 | 直接 `Vec`/`String`/`clone`，别上模式 |
-| 公开 API 返回类型 | 慎用 `Cow<'_, str>`/生命周期——会传染调用方 |
-| 真热点 + 内部函数 | 放心上 Cow/SmallVec/借用切片 |
-| 新增依赖 | 先看能否用 `[T; N]` / 迭代器 / 现有类型替代 |
+| 情况                 | 推荐                                        |
+| -------------------- | ------------------------------------------- |
+| 非热点、简单工具函数 | 直接 `Vec`/`String`/`clone`，别上模式       |
+| 公开 API 返回类型    | 慎用 `Cow<'_, str>`/生命周期——会传染调用方  |
+| 真热点 + 内部函数    | 放心上 Cow/SmallVec/借用切片                |
+| 新增依赖             | 先看能否用 `[T; N]` / 迭代器 / 现有类型替代 |

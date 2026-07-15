@@ -109,6 +109,12 @@
       "skillPath": "skills/minimalist-skill/SKILL.md",
       "computedHash": "08873a3131d3be27bef9bf3304b310b16b44ca6e3561aebe532797be3443f6bd"
     },
+    "optimizing-rust-performance": {
+      "source": "DefectingCat/optimizing-rust-performance",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "96bf0221d116e617055f5dc038bb33d92dd61b7808d804f92da78d32c01e6934"
+    },
     "prototype": {
       "source": "mattpocock/skills",
       "sourceType": "github",
