@@ -85,10 +85,7 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
             .await
             .map_err(AppError::query)?;
 
-        let mut posts = Vec::new();
-        for row in &rows {
-            posts.push(row_to_post_list_item(row));
-        }
+        let posts: Vec<_> = rows.iter().map(row_to_post_list_item).collect();
 
         let total = posts.len() as i64;
         cache::set_search_results(&cache_key, posts.clone(), total).await;

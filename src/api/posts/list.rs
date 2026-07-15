@@ -98,10 +98,7 @@ pub async fn list_published_posts(
             .await
             .map_err(AppError::query)?;
 
-        let mut posts = Vec::new();
-        for row in &rows {
-            posts.push(row_to_post_list_item(row));
-        }
+        let posts: Vec<_> = rows.iter().map(row_to_post_list_item).collect();
 
         crate::cache::set_post_list(&cache_key, posts.clone(), total).await;
         Ok(PostListResponse { posts, total })
@@ -156,10 +153,7 @@ pub async fn list_posts(page: i32, per_page: i32) -> Result<PostListResponse, Se
             .await
             .map_err(AppError::query)?;
 
-        let mut posts = Vec::new();
-        for row in &rows {
-            posts.push(row_to_post_list_item(row));
-        }
+        let posts: Vec<_> = rows.iter().map(row_to_post_list_item).collect();
 
         Ok(PostListResponse { posts, total })
     }
@@ -219,10 +213,7 @@ pub async fn list_deleted_posts(
             .await
             .map_err(AppError::query)?;
 
-        let mut posts = Vec::new();
-        for row in &rows {
-            posts.push(row_to_post_list_item(row));
-        }
+        let posts: Vec<_> = rows.iter().map(row_to_post_list_item).collect();
 
         Ok(PostListResponse { posts, total })
     }
@@ -312,10 +303,7 @@ pub async fn get_posts_by_tag(
                 .await
                 .map_err(AppError::query)?;
 
-            let mut posts = Vec::new();
-            for row in &rows {
-                posts.push(row_to_post_list_item(row));
-            }
+            let posts: Vec<_> = rows.iter().map(row_to_post_list_item).collect();
 
             crate::cache::set_posts_by_tag_paged(&cache_key, posts.clone(), total).await;
             Ok(PostListResponse { posts, total })
@@ -364,10 +352,7 @@ pub async fn get_posts_by_tag(
                 .await
                 .map_err(AppError::query)?;
 
-            let mut posts = Vec::new();
-            for row in &rows {
-                posts.push(row_to_post_list_item(row));
-            }
+            let posts: Vec<_> = rows.iter().map(row_to_post_list_item).collect();
 
             // total 为真实 COUNT(*)，不再用 posts.len()。
             crate::cache::set_posts_by_tag(&tag_name, posts.clone(), total).await;

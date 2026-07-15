@@ -24,13 +24,9 @@ pub(super) fn row_to_post_list_item(row: &tokio_postgres::Row) -> PostListItem {
     let status_str: String = row.get("status");
     let status = PostStatus::from_str(&status_str).unwrap_or(PostStatus::Draft);
 
-    // 聚合标签并过滤空字符串。
-    let tags: Vec<String> = row
-        .try_get::<_, Vec<String>>("tags")
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|t| !t.is_empty())
-        .collect();
+    // 聚合标签并原地过滤空字符串（retain 避免 into_iter+filter+collect 的二次 Vec 分配）。
+    let mut tags: Vec<String> = row.try_get::<_, Vec<String>>("tags").unwrap_or_default();
+    tags.retain(|t| !t.is_empty());
 
     let word_count: i32 = row.get("word_count");
     let reading_time: i32 = row.get("reading_time");
@@ -66,13 +62,9 @@ pub(super) async fn row_to_post_full(
     let role_str: String = row.get("status");
     let status = PostStatus::from_str(&role_str).unwrap_or(PostStatus::Draft);
 
-    // 聚合标签并过滤空字符串。
-    let tags: Vec<String> = row
-        .try_get::<_, Vec<String>>("tags")
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|t| !t.is_empty())
-        .collect();
+    // 聚合标签并原地过滤空字符串（retain 避免 into_iter+filter+collect 的二次 Vec 分配）。
+    let mut tags: Vec<String> = row.try_get::<_, Vec<String>>("tags").unwrap_or_default();
+    tags.retain(|t| !t.is_empty());
 
     // 解析上一篇文章导航。
     let prev_post = if let Ok(prev_title) = row.try_get::<_, String>("prev_title") {

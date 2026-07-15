@@ -50,8 +50,8 @@ pub fn slugify(title: &str) -> String {
                     break;
                 }
             }
-            prev_dash = false;
             // 汉字成词，后接 `-`（合并连续、去除尾部由末尾清理负责）。
+            // 拼音后必然接 `-`，所以 prev_dash 在此无条件置 true，中间无读。
             if !push_char(&mut out, &mut len, '-') {
                 break;
             }
