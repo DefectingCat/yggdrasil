@@ -115,18 +115,24 @@ pub const BTN_ICON: &str =
 /// - `current_page`：当前页码（从 1 开始）
 /// - `total`：数据总条数
 /// - `per_page`：每页条数，用于计算总页数
-/// - `prev_route`：点击上一页跳转的目标路由
-/// - `next_route`：点击下一页跳转的目标路由
+/// - `prev_route`：点击上一页跳转的目标路由（路由式翻页用）
+/// - `next_route`：点击下一页跳转的目标路由（路由式翻页用）
 /// - `unit`：计数单位（"篇" / "条"），仅 admin 显示计数时使用
+/// - `on_prev` / `on_next`：可选回调。传入时渲染 `<button onclick>` 走客户端
+///   signal 翻页（与路由式 `prev_route`/`next_route` 互斥，回调优先）；不传则保持
+///   原路由式 `<Link>`。后台单路由 tab（如「管理文章」列表）用回调翻页，
+///   前台/其他分页页面仍走路由，零影响。
 #[component]
 pub fn Pagination(
     variant: &'static str,
     current_page: i32,
     total: i64,
     per_page: i32,
-    prev_route: Route,
-    next_route: Route,
+    #[props(default = Route::Home {})] prev_route: Route,
+    #[props(default = Route::Home {})] next_route: Route,
     unit: &'static str,
+    #[props(default)] on_prev: Option<EventHandler<()>>,
+    #[props(default)] on_next: Option<EventHandler<()>>,
 ) -> Element {
     let has_prev = current_page > 1;
     let total_pages = ((total + per_page as i64 - 1) / per_page as i64).max(1) as i32;
@@ -150,12 +156,26 @@ pub fn Pagination(
         "inline-flex items-center px-4 py-2 text-sm font-medium text-paper-secondary border border-paper-border rounded-full cursor-not-allowed";
 
     // admin 首尾页渲染禁用态；frontend 首尾页直接不渲染。
+    // on_prev/on_next 存在时走回调式 button（客户端 signal 翻页），否则走路由式 Link。
+    let prev_inner = rsx! {
+        span { class: "mr-1", "«" }
+        "上一页"
+    };
+    let next_inner = rsx! {
+        "下一页"
+        span { class: "ml-1", "»" }
+    };
     rsx! {
         nav { class: if is_admin { "flex mt-6 justify-between" } else { "flex mt-10 mb-6 justify-between" },
             if has_prev {
-                Link { class: "{link_class}", to: prev_route,
-                    span { class: "mr-1", "«" }
-                    "上一页"
+                if let Some(on_prev) = on_prev {
+                    button { class: "{link_class}", onclick: move |_| on_prev.call(()),
+                        {prev_inner}
+                    }
+                } else {
+                    Link { class: "{link_class}", to: prev_route,
+                        {prev_inner}
+                    }
                 }
             } else if is_admin {
                 span { class: "{disabled_class}",
@@ -172,9 +192,14 @@ pub fn Pagination(
             }
 
             if has_next {
-                Link { class: "{link_class} {link_extra_next}", to: next_route,
-                    "下一页"
-                    span { class: "ml-1", "»" }
+                if let Some(on_next) = on_next {
+                    button { class: "{link_class} {link_extra_next}", onclick: move |_| on_next.call(()),
+                        {next_inner}
+                    }
+                } else {
+                    Link { class: "{link_class} {link_extra_next}", to: next_route,
+                        {next_inner}
+                    }
                 }
             } else if is_admin {
                 span { class: "{disabled_class}",
