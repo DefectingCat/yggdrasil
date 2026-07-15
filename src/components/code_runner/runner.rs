@@ -126,6 +126,10 @@ pub fn CodeRunner(
 
         let mut editor_handle: Signal<Option<codemirror_bridge::EditorHandle>> =
             use_signal(|| None);
+        // 在 cfg 块顶层（渲染路径）取主题 memo，move 进下方 effect 闭包；闭包内只
+        // 调用 memo（resolved()）读值——调用 memo 本身不是 hook，use_resolved_theme
+        // 这个 hook 必须在组件体顶层调用，不能放进 use_effect 闭包（dx check 会报）。
+        let resolved_theme = use_resolved_theme();
 
         // 首次挂载：构造 closure + options，create 后存进 editor_handle。
         // 用 resolved() 读取主题作为初始值（同时订阅，但主题切换由下方独立 effect 处理）。
@@ -146,8 +150,7 @@ pub fn CodeRunner(
             // 但 EditorHandle 签名要求该闭包，传 no-op 满足生命周期。
             let on_run_shortcut = Closure::new(|| {});
 
-            let resolved = use_resolved_theme();
-            let theme_name = if resolved() == ResolvedTheme::Dark {
+            let theme_name = if resolved_theme() == ResolvedTheme::Dark {
                 "dark"
             } else {
                 "light"
@@ -186,7 +189,6 @@ pub fn CodeRunner(
         // 期间跳过,让 VT 事件负责换肤;动画结束后此 effect 会因 resolved 信号变化重跑
         // (此时 is-theme-transitioning 已移除),做一次幂等的兜底同步。
         use_effect(move || {
-            let r = use_resolved_theme();
             #[cfg(target_arch = "wasm32")]
             {
                 let transitioning = web_sys::window()
@@ -200,7 +202,7 @@ pub fn CodeRunner(
             }
             if let Some(h) = editor_handle.read().as_ref() {
                 h.instance()
-                    .set_theme(if r() == ResolvedTheme::Dark {
+                    .set_theme(if resolved_theme() == ResolvedTheme::Dark {
                         "dark"
                     } else {
                         "light"
@@ -242,6 +244,10 @@ pub fn CodeRunner(
         use crate::xterm_bridge;
         use wasm_bindgen::closure::Closure;
 
+        // 在 cfg 块顶层（渲染路径）取主题 memo，move 进下方 effect 闭包；闭包内只
+        // 调用 memo（resolved_theme()）读值——调用 memo 本身不是 hook。
+        let resolved_theme = use_resolved_theme();
+
         // 首次挂载：构造 onReady 闭包 + XtermOptions，create 后存进 term_handle。
         // 订阅 show_output：输出区在 show_output 变 true（用户点运行）后才渲染进 DOM，
         // 容器此前不存在；读 show_output 建立订阅，使其变 true 时重跑本 effect 完成挂载。
@@ -255,8 +261,7 @@ pub fn CodeRunner(
             }
 
             let on_ready = Closure::new(|| {});
-            let resolved = use_resolved_theme();
-            let theme_name = if resolved() == ResolvedTheme::Dark {
+            let theme_name = if resolved_theme() == ResolvedTheme::Dark {
                 "dark"
             } else {
                 "light"
@@ -278,7 +283,6 @@ pub fn CodeRunner(
         // 主题切换时同步终端主题。
         // VT 动画期间跳过(同 CodeMirror 的 use_effect,见上方注释)。
         use_effect(move || {
-            let r = use_resolved_theme();
             #[cfg(target_arch = "wasm32")]
             {
                 let transitioning = web_sys::window()
@@ -292,7 +296,7 @@ pub fn CodeRunner(
             }
             if let Some(h) = term_handle.read().as_ref() {
                 h.instance()
-                    .set_theme(if r() == ResolvedTheme::Dark {
+                    .set_theme(if resolved_theme() == ResolvedTheme::Dark {
                         "dark"
                     } else {
                         "light"
