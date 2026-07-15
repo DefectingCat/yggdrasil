@@ -1,4 +1,4 @@
-.PHONY: dev build build-linux build-freebsd freebsd-sysroot docker docker-amd64 docker-apple docker-multiarch css css-watch clean build-libs build-editor build-codemirror build-lightbox build-core highlight-css test doc doc-open start lint fix restore-webp
+.PHONY: dev build build-linux build-freebsd freebsd-sysroot docker docker-amd64 docker-apple docker-multiarch css css-watch clean build-libs build-editor build-codemirror build-lightbox build-core build-xterm highlight-css test doc doc-open start lint fix restore-webp
 
 build:
 	@cd libs && pnpm install --frozen-lockfile
@@ -82,7 +82,7 @@ restore-webp:
 highlight-css:
 	@cargo run --bin generate_highlight_css
 
-# 并行构建全部 4 个 libs/ 子项目（pnpm -r 拓扑顺序，无相互依赖则并发）。
+# 并行构建全部 libs/ 子项目（pnpm -r 拓扑顺序，无相互依赖则并发）。
 # 依赖安装由调用方负责（build/build-linux 用 pnpm install --frozen-lockfile，
 # dev 假设 node_modules 已存在）。
 build-libs:
@@ -93,6 +93,7 @@ build-editor:     ; @cd libs && pnpm --filter @yggdrasil/tiptap-editor run build
 build-codemirror: ; @cd libs && pnpm --filter @yggdrasil/codemirror-editor run build
 build-lightbox:   ; @cd libs && pnpm --filter @yggdrasil/lightbox run build
 build-core:       ; @cd libs && pnpm --filter @yggdrasil/core run build
+build-xterm:      ; @cd libs && pnpm --filter @yggdrasil/xterm-terminal run build
 
 dev: build-libs highlight-css
 	@echo "Cleaning static/..."

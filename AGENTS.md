@@ -14,14 +14,14 @@
 ## Development Commands
 
 ```bash
-make dev           # 增量构建 4 个 libs (pnpm -r run build) + tailwindcss watch + dx serve (needs PostgreSQL, SSR_CACHE_SECS=0)
+make dev           # 增量构建全部 libs (pnpm -r run build) + tailwindcss watch + dx serve (needs PostgreSQL, SSR_CACHE_SECS=0)
 make build         # pnpm install → build-libs → highlight-css → tailwindcss → doc → dx build --release → restore-webp
 make build-linux   # 客户端 + 服务端分离构建,target x86_64-unknown-linux-musl
 make build-freebsd # cross-compile FreeBSD x86_64 server binary (clang + lld + sysroot, via cargo, not dx)
 make freebsd-sysroot # download/extract FreeBSD base.txz → .freebsd-sysroot/ (idempotent)
 make css           # one-shot Tailwind build
 make css-watch     # Tailwind watch mode
-make test          # cargo test + pnpm -r run test (all 4 libs: tiptap-editor / lightbox / yggdrasil-core / codemirror-editor)
+make test          # cargo test + pnpm -r run test (全部 libs: tiptap-editor / lightbox / yggdrasil-core / codemirror-editor / xterm-terminal)
 make doc           # cargo doc (ayu 主题) → 拷贝到 public/doc/，随 build 发布
 make doc-open      # 同 doc，生成后自动用浏览器打开（本地预览，不拷贝）
 make lint          # Biome check (libs) + cargo clippy (严格模式,warning 即失败)
@@ -29,11 +29,11 @@ make fix           # biome format --write (libs) + cargo fix --allow-dirty
 make clean         # cargo clean + rm public/{style.css,highlight.css,doc} + rm -rf uploads/.cache + rm -rf libs/node_modules libs/*/node_modules
 ```
 
-**Build order matters**: `make build` runs `pnpm install --frozen-lockfile` (in `libs/`) → `build-libs` (`pnpm -r run build`, all 4 libs in parallel) → `highlight-css` (`cargo run --bin generate_highlight_css`) → `tailwindcss --minify` → `doc` → `dx build --release` → `restore-webp`. Do not run `dx build --release` alone.
+**Build order matters**: `make build` runs `pnpm install --frozen-lockfile` (in `libs/`) → `build-libs` (`pnpm -r run build`, all libs in parallel) → `highlight-css` (`cargo run --bin generate_highlight_css`) → `tailwindcss --minify` → `doc` → `dx build --release` → `restore-webp`. Do not run `dx build --release` alone.
 
 **`restore-webp` workaround**: dx build 0.7.9 re-encodes `public/*.webp` into VP8L lossless stills (drops animation frames, 7-8× larger), contradicting the "verbatim copy" promise. `restore-webp` overwrites `.webp` in `target/dx/**/web/public/` from source `public/`. SVG/ICO are unaffected. Remove once upstream fixes it.
 
-**JS workspace lives under `libs/`**: `libs/` is a pnpm workspace — root `libs/package.json` hoists the 4 shared devDeps (`happy-dom`/`typescript`/`vite`/`vitest`) + Biome; `libs/pnpm-workspace.yaml` lists `libs/*` packages; `libs/pnpm-lock.yaml` is the single lockfile. First-time setup: `cd libs && pnpm install`. All Makefile recipes `cd libs && pnpm ...`. Build a single lib: `make build-editor` (≈ `cd libs && pnpm --filter @yggdrasil/tiptap-editor run build`).
+**JS workspace lives under `libs/`**: `libs/` is a pnpm workspace — root `libs/package.json` hoists the 4 shared devDeps (`happy-dom`/`typescript`/`vite`/`vitest`) + Biome; `libs/pnpm-workspace.yaml` lists `libs/*` packages; `libs/pnpm-lock.yaml` is the single lockfile. First-time setup: `cd libs && pnpm install`. All Makefile recipes `cd libs && pnpm ...`. Build a single lib: `make build-editor` (≈ `cd libs && pnpm --filter @yggdrasil/tiptap-editor run build`). There is also `@yggdrasil/shared` (`libs/shared/`) — a non-IIFE **internal source-shared package** (exports `ThemeName`/`THEME_CHANGE_EVENT`/`prefersReducedMotion`, `main` points at `src/index.ts` with no Vite build) consumed via `workspace:*` by codemirror-editor/lightbox/xterm-terminal/yggdrasil-core and inlined into each lib's IIFE bundle at build time; it has no `public/` artifact.
 
 ## Prerequisites
 
@@ -180,7 +180,7 @@ Readers can execute fenced code blocks in isolated Docker containers; authors ge
 
 - **Execution layer** (`src/infra/docker.rs`, server-only): `bollard` client over Unix socket (`DOCKER_CLIENT` LazyLock). `run_in_container` creates a read-only-rootfs container (tmpfs `/code`,`/tmp`,`/run`; cpu/memory/pids/ulimits cap; `cap_drop=ALL`; `no-new-privileges`; non-root `1000:1000`; `network_mode` none/bridge), injects source via stdin, waits with timeout, captures stdout/stderr (truncated to `output_bytes`), inspects OOM, force-removes via `ContainerGuard` Drop. `src/infra/runner_config.rs` (`RUNNER_CONFIG`) reads all `CODE_RUNNER_*` env vars; `clamp_limits` AND-merges request overrides × language `allow_network` × global switch.
 - **API layer** (`src/api/code_runner/`): shared `ExecRequest`/`ExecResult`/`ExecStatus`/`ExecTask` structs (compile on both targets); `progress.rs` = DashMap task registry + `gc_old_tasks`; `languages.rs` = `LANGUAGES` registry + `parse_fence_info`; `execute.rs` = `StartExec`/`GetExecResult` server functions (double rate-limit → whitelist → size check → enqueue → `tokio::spawn` + `RUNNER_SEMAPHORE` concurrency cap → clamp → run_in_container). System errors are sanitized to 「系统暂时不可用」 for anonymous callers; full errors in server logs only.
-- **Markdown/render layer**: a fenced block ` ```python runnable {...overrides} ` renders to `<pre data-runnable="true" data-lang="python" data-overrides="..." data-source="...">` (sanitizer whitelists these 4 attrs on `<pre>`). `PostContent` (`src/components/post/post_content.rs`) splits `content_html` into `Html`/`Runnable` fragments so each runnable block renders as a real `<CodeRunner>` vdom element (no manual DOM mutation → no hydration conflict). `CodeRunner` component polls `GetExecResult` via WASM-friendly `sleep_ms`.
+- **Markdown/render layer**: a fenced block ` ```python runnable {...overrides} ` renders to `<pre data-runnable="true" data-lang="python" data-overrides="..." data-source="...">` (sanitizer whitelists these 4 attrs on `<pre>`). `PostContent` (`src/components/post/post_content.rs`) splits `content_html` into `Html`/`Runnable` fragments so each runnable block renders as a real `<CodeRunner>` vdom element (no manual DOM mutation → no hydration conflict). `CodeRunner` component polls `GetExecResult` via WASM-friendly `sleep_ms`. Output is rendered into an xterm.js terminal instance (`src/xterm_bridge.rs` + `libs/xterm-terminal`, mirroring the codemirror bridge pattern) — stdout/stderr streamed via SSE, with full-buffer `writeAll` as a polling fallback.
 
 **Critical WASM-visibility rule**: `code_runner/execute.rs` is **not** cfg-gated (server functions must be visible to the client), but every server-only `use`/static inside it is individually `#[cfg(feature = "server")]`. The shared `use` of `ExecRequest`/`ExecTask` (used in signatures) stays ungated. `code_runner/languages.rs` and `code_runner/progress.rs` (pure server helpers) are wholly gated. Mirrors the `posts/` module convention.
 
@@ -190,7 +190,7 @@ Readers can execute fenced code blocks in isolated Docker containers; authors ge
 
 ## Frontend Lib Subprojects
 
-Four Vite-built IIFE libraries under `libs/`, managed as a **pnpm workspace** (single `libs/pnpm-lock.yaml`, shared `libs/tsconfig.base.json` + `libs/biome.json`, hoisted devDeps). Built artifacts go to `public/<name>/` — **do not edit `public/<name>/` files; they are build artifacts**. Each `build` script is `tsc --noEmit && vite build` (type-check before bundle). Output is IIFE because Dioxus `[web.resource] script` injects bare `<script src>` without `type="module"` support. Registered globally in `Dioxus.toml` `script`/`style` arrays.
+Five Vite-built IIFE libraries under `libs/` (plus `libs/shared/`, an internal source-shared package with no `public/` artifact — see below), managed as a **pnpm workspace** (single `libs/pnpm-lock.yaml`, shared `libs/tsconfig.base.json` + `libs/biome.json`, hoisted devDeps). Built artifacts go to `public/<name>/` — **do not edit `public/<name>/` files; they are build artifacts**. Each `build` script is `tsc --noEmit && vite build` (type-check before bundle). Output is IIFE because Dioxus `[web.resource] script` injects bare `<script src>` without `type="module"` support. Registered globally in `Dioxus.toml` `script`/`style` arrays.
 
 | Lib                       | Output dir                                                   | Exposes                                                                                                       | Wiring                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -198,6 +198,7 @@ Four Vite-built IIFE libraries under `libs/`, managed as a **pnpm workspace** (s
 | `libs/codemirror-editor/` | `public/codemirror/` (`editor.js`/`.map`, **no CSS**)        | `window.CodeMirrorEditor` (object literal `{ create }`) + `window.EditorOptions` (class, survives TS erasure) | `src/codemirror_bridge.rs` mirrors tiptap — `get_module()` uses `Reflect::get` + `unchecked_into` (object literal, NOT a constructor extern). Themes are JS `Extension`s from `@catppuccin/codemirror` (Latte/Mocha), hot-swapped via `Compartment.reconfigure`.                                                                                                              |
 | `libs/lightbox/`          | `public/lightbox/` (`lightbox.js`/`.css`/`.map`)             | self-initializing IIFE                                                                                        | **Not** wasm-bindgen. `src/components/post/post_content.rs` sets `window.__lightboxSelectors` before load; IIFE tail reads it and self-initializes. Direct fallback call if already loaded.                                                                                                                                                                                   |
 | `libs/yggdrasil-core/`    | `public/yggdrasil-core/` (`yggdrasil-core.js`/`.css`/`.map`) | `window.__initPostContent`, `window.__startThemeTransition`                                                   | Designated home for all new core JS — add here, not to `public/js/`. Rust calls entry points via `js_sys::Reflect::get` + `Function::apply` (no `js_sys::eval`), silently no-oping if undefined. Theme reveal uses View Transitions API (`startViewTransition` + `@keyframes tt-expand` `clip-path` expand); falls back to instant switch when VT / `prefers-reduced-motion`. |
+| `libs/xterm-terminal/`    | `public/xterm/` (`terminal.js`/`.css`/`.map`)                | `window.XtermTerminal` (object literal `{ create }`)                                                          | `src/xterm_bridge.rs` mirrors codemirror — `get_module()` uses `Reflect::get` + `unchecked_into` (object literal, NOT a constructor extern). `TerminalHandle` holds instance + `onReady` closure, Drop → `destroy()`. **Output-only** (no stdin); `write_stdout`/`write_stderr`/`write_all` stream the Code Runner's stdout/stderr into the terminal. `@xterm/xterm` ^6 + `@xterm/addon-fit`; theme hot-swap via `THEME_CHANGE_EVENT`. |
 
 Run a single lib's tests: `cd libs && pnpm --filter @yggdrasil/<name> test` (Vitest + happy-dom). Watch mode: append `-- test:watch`.
 
@@ -233,7 +234,7 @@ Admin area at `/admin/system` (menu "系统") with 5 tabs: 数据库状态 / 服
 ## Testing
 
 ```bash
-make test # cargo test (Rust) + pnpm -r run test in all 4 libs
+make test # cargo test (Rust) + pnpm -r run test in all libs
 make lint # Biome check (libs) + cargo clippy --all-targets --all-features -- -D warnings
 dx check  # Dioxus type-check (catches component/Router issues)
 ```
