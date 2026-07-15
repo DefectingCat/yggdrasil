@@ -1,0 +1,184 @@
+//! 后台系统管理页面（数据库 + 服务器状态 + SQL 控制台 + 导出 + 备份）。
+//!
+//! 用顶部 tab 切换 5 个功能，tab 状态用 `use_signal`（不深链 / 不走分页路由）。
+//! 各 tab 拆分为独立子模块，状态完全独立、互不共享——切换 tab 时父组件用 `key`
+//! 强制卸载旧 tab 组件，其内部 signal 随之销毁。
+
+mod backup;
+mod db_status;
+mod export;
+mod server_status;
+mod sql_console;
+
+use backup::BackupTab;
+use db_status::DbStatusTab;
+use dioxus::prelude::*;
+use export::ExportTab;
+use server_status::ServerStatusTab;
+use sql_console::SqlConsoleTab;
+
+use crate::components::ui::FilterTabs;
+
+/// 系统管理的 5 个功能 tab。
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum SystemTab {
+    /// 数据库运行状态（表/连接/死元组/迁移版本）。
+    DbStatus,
+    /// 服务器状态（应用内 + 主机层 CPU/内存/磁盘）。
+    ServerStatus,
+    /// SQL 控制台（全读写 + 护栏）。
+    SqlConsole,
+    /// 数据导出（SQL/CSV 流式下载）。
+    Export,
+    /// 备份恢复（pg_dump + 任务进度）。
+    Backup,
+}
+
+impl SystemTab {
+    /// 变体 → 稳定字符串 key(用于与基于 String 的 `FilterTabs` 组件桥接)。
+    /// 改这些 key 会破坏潜在的持久化/调试场景,见 `from_str` 的反向映射。
+    fn as_str(&self) -> &'static str {
+        match self {
+            SystemTab::DbStatus => "db_status",
+            SystemTab::ServerStatus => "server_status",
+            SystemTab::SqlConsole => "sql_console",
+            SystemTab::Export => "export",
+            SystemTab::Backup => "backup",
+        }
+    }
+
+    /// 字符串 key → 变体。未知/空串返回 Err(调用方 fallback 到默认 tab)。
+    /// 与 `as_str` 严格对应;大小写敏感。
+    fn from_str(s: &str) -> Result<SystemTab, &'static str> {
+        match s {
+            "db_status" => Ok(SystemTab::DbStatus),
+            "server_status" => Ok(SystemTab::ServerStatus),
+            "sql_console" => Ok(SystemTab::SqlConsole),
+            "export" => Ok(SystemTab::Export),
+            "backup" => Ok(SystemTab::Backup),
+            _ => Err("unknown tab key"),
+        }
+    }
+}
+
+/// 系统管理入口组件。
+#[component]
+pub fn System() -> Element {
+    // tab 状态：默认进第一个 tab（数据库状态）。用 signal 而非 URL query——
+    // tab 切换无需深链/书签，避免新增路由变体。
+    let mut active_tab = use_signal(|| SystemTab::DbStatus);
+
+    rsx! {
+        div { class: "w-full max-w-7xl mx-auto space-y-6",
+            // 页面标题
+            div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-[var(--color-paper-border)] mb-6",
+                div {
+                    h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]",
+                        "系统面板"
+                    }
+                    p { class: "text-base text-[var(--color-paper-secondary)] mt-2",
+                        "数据库与服务器诊断"
+                    }
+                }
+            }
+
+            // 顶部 tab 切换栏:复用公共 FilterTabs 组件(String API,经 as_str/from_str 桥接枚举)。
+            // 视觉与评论页一致:平滑滑动指示条 + 选中文字 text-paper-primary。
+            FilterTabs {
+                items: vec![
+                    ("db_status", "数据库状态"),
+                    ("server_status", "服务器状态"),
+                    ("sql_console", "SQL 控制台"),
+                    ("export", "数据导出"),
+                    ("backup", "备份恢复"),
+                ],
+                active_value: active_tab().as_str().to_string(),
+                on_change: move |v: String| {
+                    // 未知 key fallback 到默认 tab,保证状态始终有效。
+                    active_tab.set(SystemTab::from_str(&v).unwrap_or(SystemTab::DbStatus));
+                },
+            }
+
+            // tab 内容
+            // key 保证切换 tab 时 Dioxus 完全卸载旧组件、重新挂载新组件，
+            // 避免 hook slot 复用导致 DelayedSkeleton 的 visible 信号残留为 true。
+            div { key: "{active_tab().as_str()}",
+                match active_tab() {
+                    SystemTab::DbStatus => rsx! {
+                        DbStatusTab {}
+                    },
+                    SystemTab::ServerStatus => rsx! {
+                        ServerStatusTab {}
+                    },
+                    SystemTab::SqlConsole => rsx! {
+                        SqlConsoleTab {}
+                    },
+                    SystemTab::Export => rsx! {
+                        ExportTab {}
+                    },
+                    SystemTab::Backup => rsx! {
+                        BackupTab {}
+                    },
+                }
+            }
+        }
+    }
+}
+
+/// 字节数 → 人类可读（如 1.2 MB）。db_status / server_status / backup 三个 tab 共用。
+pub(super) fn format_bytes(bytes: i64) -> String {
+    const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
+    let mut size = bytes as f64;
+    let mut unit = 0;
+    while size.abs() >= 1024.0 && unit < UNITS.len() - 1 {
+        size /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{} {}", bytes, UNITS[0])
+    } else {
+        format!("{:.2} {}", size, UNITS[unit])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SystemTab;
+
+    #[test]
+    fn as_str_roundtrips_all_variants() {
+        // 每个变体经 as_str -> from_str 必须还原为自身。
+        for tab in [
+            SystemTab::DbStatus,
+            SystemTab::ServerStatus,
+            SystemTab::SqlConsole,
+            SystemTab::Export,
+            SystemTab::Backup,
+        ] {
+            let s = tab.as_str();
+            assert_eq!(
+                SystemTab::from_str(s),
+                Ok(tab),
+                "roundtrip failed for {tab:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn as_str_returns_stable_keys() {
+        // 字符串 key 必须稳定(改 key 会破坏 URL/调试/未来持久化),锁定之。
+        assert_eq!(SystemTab::DbStatus.as_str(), "db_status");
+        assert_eq!(SystemTab::ServerStatus.as_str(), "server_status");
+        assert_eq!(SystemTab::SqlConsole.as_str(), "sql_console");
+        assert_eq!(SystemTab::Export.as_str(), "export");
+        assert_eq!(SystemTab::Backup.as_str(), "backup");
+    }
+
+    #[test]
+    fn from_str_rejects_unknown_and_empty() {
+        assert!(SystemTab::from_str("nonsense").is_err());
+        assert!(SystemTab::from_str("").is_err());
+        // 大小写敏感:不接受大写变体,避免歧义。
+        assert!(SystemTab::from_str("DbStatus").is_err());
+    }
+}
