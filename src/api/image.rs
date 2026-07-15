@@ -143,26 +143,30 @@ impl ImageParams {
     }
 
     fn cache_key(&self, path: &str) -> String {
-        let mut parts = vec![path.to_string()];
+        use std::fmt::Write as _;
+        // 旧实现 vec![path.to_string()] + 最多 6 个 format! + join，最坏 9 次堆分配。
+        // 单次 with_capacity + write! 直写，1 次分配。
+        let mut key = String::with_capacity(path.len() + 64);
+        key.push_str(path);
         if let Some(w) = self.w {
-            parts.push(format!("w={}", w));
+            let _ = write!(key, "|w={}", w);
         }
         if let Some(h) = self.h {
-            parts.push(format!("h={}", h));
+            let _ = write!(key, "|h={}", h);
         }
         if let Some(ref thumb) = self.thumb {
-            parts.push(format!("thumb={}", thumb));
+            let _ = write!(key, "|thumb={}", thumb);
         }
         if let Some(r) = self.rotate {
-            parts.push(format!("rotate={}", r));
+            let _ = write!(key, "|rotate={}", r);
         }
         if let Some(ref fmt) = self.format {
-            parts.push(format!("format={}", fmt));
+            let _ = write!(key, "|format={}", fmt);
         }
         if let Some(q) = self.quality {
-            parts.push(format!("quality={}", q));
+            let _ = write!(key, "|quality={}", q);
         }
-        parts.join("|")
+        key
     }
 
     /// 校验参数合法性，返回 HTTP 400 状态码表示非法。
@@ -208,20 +212,25 @@ impl ImageParams {
 }
 
 #[cfg(feature = "server")]
-fn detect_format(path: &str) -> image::ImageFormat {
-    let lower = path.to_lowercase();
-    if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
-        image::ImageFormat::Jpeg
-    } else if lower.ends_with(".png") {
-        image::ImageFormat::Png
-    } else if lower.ends_with(".webp") {
-        image::ImageFormat::WebP
-    } else if lower.ends_with(".gif") {
-        image::ImageFormat::Gif
+fn detect_format(path: &str) -> ImageFmt {
+    // 仅对路径后缀做大小写不敏感匹配，避免 to_lowercase() 对整条路径的 String 分配。
+    // path 形如 `uploads/2026/06/22/abc.webp`，rsplit('.') 取最后一段后缀即可。
+    let ext = path.rsplit('.').next().unwrap_or("");
+    if ext.eq_ignore_ascii_case("jpg") || ext.eq_ignore_ascii_case("jpeg") {
+        ImageFmt::Jpeg
+    } else if ext.eq_ignore_ascii_case("png") {
+        ImageFmt::Png
+    } else if ext.eq_ignore_ascii_case("webp") {
+        ImageFmt::WebP
+    } else if ext.eq_ignore_ascii_case("gif") {
+        ImageFmt::Gif
     } else {
-        image::ImageFormat::Jpeg
+        ImageFmt::Jpeg
     }
 }
+
+/// detect_format 的轻量返回类型，避免在热路径上构造 image::ImageFormat。
+type ImageFmt = image::ImageFormat;
 
 #[cfg(feature = "server")]
 fn content_type(format: image::ImageFormat) -> HeaderValue {
