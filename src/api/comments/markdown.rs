@@ -58,7 +58,10 @@ pub fn render_comment_markdown(md: &str) -> String {
                         crate::highlight::server::highlight_code(&code_buffer, Some(lang));
                     format!("<pre><code>{}</code></pre>", highlighted)
                 } else {
-                    format!("<pre><code>{}</code></pre>", crate::utils::html::escape_html(&code_buffer))
+                    format!(
+                        "<pre><code>{}</code></pre>",
+                        crate::utils::html::escape_html(&code_buffer)
+                    )
                 };
                 events.push(Event::Html(html.into()));
                 in_codeblock = false;

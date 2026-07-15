@@ -22,8 +22,8 @@ use crate::components::empty_state::{EmptyState, EmptyStateAction};
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::posts_skeleton::PostsSkeleton;
 use crate::components::ui::{
-    Pagination, StatusBadge, Tooltip, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_OUTLINE,
-    BTN_PRIMARY, BTN_TEXT_ACCENT, BTN_TEXT_RED, SPINNER_SVG,
+    Pagination, StatusBadge, Tooltip, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_OUTLINE, BTN_PRIMARY,
+    BTN_TEXT_ACCENT, BTN_TEXT_RED, SPINNER_SVG,
 };
 use crate::hooks::query::use_paginated;
 use crate::models::post::PostListItem;
@@ -473,10 +473,9 @@ pub(super) fn PostsTabs(
             {
                 use wasm_bindgen::JsCast;
                 crate::utils::time::sleep_ms(50).await;
-                if let Some(el) = web_sys::window()
-                    .and_then(|w| w.document())
-                    .and_then(|d| d.get_element_by_id(&format!("posts-tab-{id_prefix}-{active_key}")))
-                {
+                if let Some(el) = web_sys::window().and_then(|w| w.document()).and_then(|d| {
+                    d.get_element_by_id(&format!("posts-tab-{id_prefix}-{active_key}"))
+                }) {
                     if let Ok(html_el) = el.dyn_into::<web_sys::HtmlElement>() {
                         indicator_style.set(format!(
                             "left: {}px; width: {}px; opacity: 1;",

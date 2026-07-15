@@ -317,7 +317,8 @@ pub fn Popover(
         use dioxus::prelude::{use_drop, use_effect, use_hook};
         use std::cell::RefCell;
         use std::rc::Rc;
-        type EscState = Rc<RefCell<Option<wasm_bindgen::prelude::Closure<dyn FnMut(web_sys::KeyboardEvent)>>>>;
+        type EscState =
+            Rc<RefCell<Option<wasm_bindgen::prelude::Closure<dyn FnMut(web_sys::KeyboardEvent)>>>>;
         let state: EscState = use_hook(|| Rc::new(RefCell::new(None)));
         let state_for_drop = state.clone();
         let open_for_effect = open;
@@ -332,12 +333,13 @@ pub fn Popover(
             let on_close_for_esc = on_close_for_esc;
             // Closure 带 KeyboardEvent 参数:浏览器调用 handler 时传入事件对象,
             // 无需依赖已废弃的 window.event()。as_ref + unchecked_ref 转成 JS Function。
-            let closure = wasm_bindgen::prelude::Closure::wrap(Box::new(move |ev: web_sys::KeyboardEvent| {
-                if ev.key() == "Escape" {
-                    on_close_for_esc.call(());
-                }
-            })
-                as Box<dyn FnMut(web_sys::KeyboardEvent)>);
+            let closure =
+                wasm_bindgen::prelude::Closure::wrap(Box::new(move |ev: web_sys::KeyboardEvent| {
+                    if ev.key() == "Escape" {
+                        on_close_for_esc.call(());
+                    }
+                })
+                    as Box<dyn FnMut(web_sys::KeyboardEvent)>);
             let _ = window.add_event_listener_with_callback(
                 "keydown",
                 wasm_bindgen::JsCast::unchecked_ref(closure.as_ref()),
@@ -362,7 +364,11 @@ pub fn Popover(
 
     // 面板定位:top/bottom 决定垂直方向;水平统一居中于点击点。
     let style = if placement == "bottom" {
-        format!("top: {y}px; left: {x}px; transform: translateX(-50%);", x = anchor_x, y = anchor_y + 8)
+        format!(
+            "top: {y}px; left: {x}px; transform: translateX(-50%);",
+            x = anchor_x,
+            y = anchor_y + 8
+        )
     } else {
         // top:面板在点击点上方——用 bottom 锚定 viewport 底,差值即视口高度 - y + 间隙。
         // 视口高度用 100vh,纯 CSS 无需 JS 读取 scrollHeight。

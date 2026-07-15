@@ -85,10 +85,7 @@ mod tests {
         let task_id = "test-task-progress-123".to_string();
         insert_task(task_id.clone());
         assert!(EXEC_TASKS.contains_key(&task_id));
-        assert_eq!(
-            EXEC_TASKS.get(&task_id).unwrap().status,
-            ExecStatus::Queued
-        );
+        assert_eq!(EXEC_TASKS.get(&task_id).unwrap().status, ExecStatus::Queued);
 
         update_task_stage(&task_id, ExecStatus::Running, "运行中");
         assert_eq!(

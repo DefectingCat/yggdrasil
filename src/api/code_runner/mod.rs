@@ -73,10 +73,10 @@ pub struct ExecTask {
 
 // execute.rs 含 server function，需对双目标可见（不能 cfg-gate）；其 server-only
 // 依赖在文件内单独 gate。languages / progress 是纯 server 辅助，整体 gate。
+pub mod execute;
 #[cfg(feature = "server")]
 pub mod languages;
 #[cfg(feature = "server")]
 pub mod progress;
 #[cfg(feature = "server")]
 pub mod sse;
-pub mod execute;

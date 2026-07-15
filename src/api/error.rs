@@ -45,19 +45,13 @@ impl AppError {
 
     /// 记录并包装 SQL 查询错误。
     pub fn query(e: impl std::error::Error) -> Self {
-        tracing::error!(
-            "Query failed: {}",
-            crate::db::format_with_sources(&e)
-        );
+        tracing::error!("Query failed: {}", crate::db::format_with_sources(&e));
         AppError::Query("query error".to_string())
     }
 
     /// 记录并包装数据库事务错误。
     pub fn tx(e: impl std::error::Error) -> Self {
-        tracing::error!(
-            "Transaction failed: {}",
-            crate::db::format_with_sources(&e)
-        );
+        tracing::error!("Transaction failed: {}", crate::db::format_with_sources(&e));
         AppError::Transaction("transaction error".to_string())
     }
 }

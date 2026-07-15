@@ -172,8 +172,9 @@ mod tests {
 
     #[test]
     fn parse_fence_info_with_overrides() {
-        let (lang, runnable, overrides) =
-            parse_fence_info(r#"node runnable {"timeout_secs":10,"memory_mb":512,"allow_network":true,"cpu_cores":1.0,"output_bytes":1024}"#);
+        let (lang, runnable, overrides) = parse_fence_info(
+            r#"node runnable {"timeout_secs":10,"memory_mb":512,"allow_network":true,"cpu_cores":1.0,"output_bytes":1024}"#,
+        );
         assert_eq!(lang, "node");
         assert!(runnable);
         let limits = overrides.unwrap();

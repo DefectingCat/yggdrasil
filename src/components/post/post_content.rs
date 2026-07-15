@@ -262,9 +262,6 @@ mod tests {
     #[test]
     fn decode_html_entities_roundtrip() {
         assert_eq!(decode_html_entities("print(&#x27;hi&#x27;)"), "print('hi')");
-        assert_eq!(
-            decode_html_entities("&quot;&lt;&gt;&amp;"),
-            "\"<>&"
-        );
+        assert_eq!(decode_html_entities("&quot;&lt;&gt;&amp;"), "\"<>&");
     }
 }

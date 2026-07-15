@@ -17,7 +17,7 @@ use crate::api::posts::{
 #[cfg(target_arch = "wasm32")]
 use crate::tiptap_bridge::{consume_upload_event, upload_image_file, EditorHandle};
 // 共享上传状态类型：两端都编译（rsx 在 server SSR 时也要渲染这些结构）。
-use crate::components::ui::{BTN_CLOSE_ICON, BTN_PRIMARY_SM, LoadingButton};
+use crate::components::ui::{LoadingButton, BTN_CLOSE_ICON, BTN_PRIMARY_SM};
 use crate::components::write_skeleton::WriteSkeleton;
 use crate::models::post::Post;
 use crate::router::Route;

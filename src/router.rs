@@ -11,7 +11,9 @@ use crate::components::admin_layout::AdminLayout;
 use crate::components::frontend_layout::FrontendLayout;
 use crate::context::UserContext;
 use crate::pages::about::About;
-use crate::pages::admin::{Admin, AdminComments, AdminCommentsPage, Posts, Runner, System, Write, WriteEdit};
+use crate::pages::admin::{
+    Admin, AdminComments, AdminCommentsPage, Posts, Runner, System, Write, WriteEdit,
+};
 use crate::pages::archives::Archives;
 use crate::pages::home::{Home, HomePage};
 use crate::pages::login::Login;

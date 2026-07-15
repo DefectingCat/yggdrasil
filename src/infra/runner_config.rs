@@ -41,20 +41,51 @@ pub static RUNNER_CONFIG: LazyLock<RunnerConfig> = LazyLock::new(|| {
     // CODE_RUNNER_LANGUAGES 未设置时默认全开（None）：注册表里的语言均可用，
     // 新增语言无需同步白名单。设置为逗号分隔列表则收窄到这些语言。
     let languages = env::var("CODE_RUNNER_LANGUAGES").ok().map(|s| {
-        s.split(',').map(|t| t.trim().to_lowercase()).filter(|t| !t.is_empty()).collect()
+        s.split(',')
+            .map(|t| t.trim().to_lowercase())
+            .filter(|t| !t.is_empty())
+            .collect()
     });
 
     RunnerConfig {
-        max_cpu_cores: env::var("CODE_RUNNER_MAX_CPU_CORES").ok().and_then(|v| v.parse().ok()).unwrap_or(2.0),
-        max_memory_mb: env::var("CODE_RUNNER_MAX_MEMORY_MB").ok().and_then(|v| v.parse().ok()).unwrap_or(1024),
-        max_timeout_secs: env::var("CODE_RUNNER_MAX_TIMEOUT_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(30),
-        max_output_bytes: env::var("CODE_RUNNER_MAX_OUTPUT_BYTES").ok().and_then(|v| v.parse().ok()).unwrap_or(1048576),
-        max_source_bytes: env::var("CODE_RUNNER_MAX_SOURCE_BYTES").ok().and_then(|v| v.parse().ok()).unwrap_or(65536),
-        allow_network: env::var("CODE_RUNNER_ALLOW_NETWORK").ok().map(|v| parse_allow_network(&v)).unwrap_or(false),
-        max_concurrent: env::var("CODE_RUNNER_MAX_CONCURRENT").ok().and_then(|v| v.parse().ok()).unwrap_or(4),
-        queue_timeout_secs: env::var("CODE_RUNNER_QUEUE_TIMEOUT_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(30),
-        task_ttl_secs: env::var("CODE_RUNNER_TASK_TTL_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(300),
-        docker_socket_path: env::var("DOCKER_SOCKET_PATH").unwrap_or_else(|_| "/var/run/docker.sock".to_string()),
+        max_cpu_cores: env::var("CODE_RUNNER_MAX_CPU_CORES")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(2.0),
+        max_memory_mb: env::var("CODE_RUNNER_MAX_MEMORY_MB")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1024),
+        max_timeout_secs: env::var("CODE_RUNNER_MAX_TIMEOUT_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(30),
+        max_output_bytes: env::var("CODE_RUNNER_MAX_OUTPUT_BYTES")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1048576),
+        max_source_bytes: env::var("CODE_RUNNER_MAX_SOURCE_BYTES")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(65536),
+        allow_network: env::var("CODE_RUNNER_ALLOW_NETWORK")
+            .ok()
+            .map(|v| parse_allow_network(&v))
+            .unwrap_or(false),
+        max_concurrent: env::var("CODE_RUNNER_MAX_CONCURRENT")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(4),
+        queue_timeout_secs: env::var("CODE_RUNNER_QUEUE_TIMEOUT_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(30),
+        task_ttl_secs: env::var("CODE_RUNNER_TASK_TTL_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(300),
+        docker_socket_path: env::var("DOCKER_SOCKET_PATH")
+            .unwrap_or_else(|_| "/var/run/docker.sock".to_string()),
         languages,
     }
 });
@@ -65,8 +96,16 @@ pub fn clamp_limits(merged: ResourceLimits, lang_allows_network: bool) -> Resour
 }
 
 #[cfg(feature = "server")]
-fn clamp_limits_impl(merged: ResourceLimits, lang_allows_network: bool, config: &RunnerConfig) -> ResourceLimits {
-    let max_cpu = if config.max_cpu_cores.is_nan() { 2.0 } else { config.max_cpu_cores };
+fn clamp_limits_impl(
+    merged: ResourceLimits,
+    lang_allows_network: bool,
+    config: &RunnerConfig,
+) -> ResourceLimits {
+    let max_cpu = if config.max_cpu_cores.is_nan() {
+        2.0
+    } else {
+        config.max_cpu_cores
+    };
     let min_cpu = 0.1f64.min(max_cpu);
     let cpu_cores = if merged.cpu_cores.is_nan() {
         min_cpu
@@ -78,7 +117,9 @@ fn clamp_limits_impl(merged: ResourceLimits, lang_allows_network: bool, config: 
     let memory_mb = merged.memory_mb.clamp(min_mem, config.max_memory_mb);
 
     let min_timeout = 1.min(config.max_timeout_secs);
-    let timeout_secs = merged.timeout_secs.clamp(min_timeout, config.max_timeout_secs);
+    let timeout_secs = merged
+        .timeout_secs
+        .clamp(min_timeout, config.max_timeout_secs);
 
     ResourceLimits {
         cpu_cores,

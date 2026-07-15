@@ -1,22 +1,58 @@
+use futures::StreamExt;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 use std::time::Duration;
 use tokio::time::timeout;
-use futures::StreamExt;
 
-use bollard::Docker;
-use bollard::container::LogOutput;
-use bollard::models::{HostConfig, ResourcesUlimits, ContainerCreateBody};
-use bollard::query_parameters::{
-    CreateContainerOptions, StartContainerOptions, RemoveContainerOptions, WaitContainerOptions,
-    AttachContainerOptions,
-};
 use crate::infra::runner_config::{ResourceLimits, RUNNER_CONFIG};
+use bollard::container::LogOutput;
+use bollard::models::{ContainerCreateBody, HostConfig, ResourcesUlimits};
+use bollard::query_parameters::{
+    AttachContainerOptions, CreateContainerOptions, RemoveContainerOptions, StartContainerOptions,
+    WaitContainerOptions,
+};
+use bollard::Docker;
 
-pub static DOCKER_CLIENT: LazyLock<Docker> = LazyLock::new(|| {
-    Docker::connect_with_unix(&RUNNER_CONFIG.docker_socket_path, 120, bollard::API_DEFAULT_VERSION)
-        .expect("Failed to connect to Docker daemon via unix socket")
+/// 共享的 Docker 客户端。
+///
+/// `connect_with_unix` 会立即探测 socket 是否存在：缺失（未安装 / 未运行 Docker，
+/// 或 `DOCKER_SOCKET_PATH` 指错）时返回 `SocketNotFoundError`。
+///
+/// 连接失败不 panic：release profile 是 `panic = "abort"`，会让整个服务进程一起挂掉，
+/// 而博客本身并不依赖 Docker。改为记 error 日志后返回 `None`，代码运行器把
+/// `None` 转成普通 bollard 错误向上冒泡，最终在 execute.rs 的错误脱敏层统一映射为
+/// 「系统暂时不可用」，其余功能不受影响。
+pub static DOCKER_CLIENT: LazyLock<Option<Docker>> = LazyLock::new(|| {
+    match Docker::connect_with_unix(
+        &RUNNER_CONFIG.docker_socket_path,
+        120,
+        bollard::API_DEFAULT_VERSION,
+    ) {
+        Ok(d) => Some(d),
+        Err(e) => {
+            tracing::error!(
+                error = ?e,
+                socket = %RUNNER_CONFIG.docker_socket_path,
+                "无法连接 Docker daemon，代码运行功能将不可用。\
+                 请确认 Docker 已安装并运行，或设置正确的 DOCKER_SOCKET_PATH",
+            );
+            None
+        }
+    }
 });
+
+/// 取共享 Docker 客户端；daemon 不可用时返回 IOError（NotFound）。
+///
+/// `NotFound` 既不命中 `TimedOut` 也不命中超时判断，会走 execute.rs 的通用失败路径
+/// （`ExecStatus::Failed` + 「系统暂时不可用」），不会误报成超时。
+fn get_docker() -> Result<&'static Docker, bollard::errors::Error> {
+    DOCKER_CLIENT.as_ref().ok_or_else(|| bollard::errors::Error::IOError {
+        err: std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Docker daemon 不可用（未安装或未运行）",
+        ),
+    })
+}
 
 pub fn build_host_config(limits: &ResourceLimits) -> HostConfig {
     let mut tmpfs = HashMap::new();
@@ -38,7 +74,11 @@ pub fn build_host_config(limits: &ResourceLimits) -> HostConfig {
         cpu_period: Some(100_000),
         memory: Some(memory),
         memory_swap: Some(memory), // = memory, disable swap
-        network_mode: Some(if limits.allow_network { "bridge".to_string() } else { "none".to_string() }),
+        network_mode: Some(if limits.allow_network {
+            "bridge".to_string()
+        } else {
+            "none".to_string()
+        }),
         readonly_rootfs: Some(true),
         tmpfs: Some(tmpfs),
         pids_limit: Some(64),
@@ -46,9 +86,11 @@ pub fn build_host_config(limits: &ResourceLimits) -> HostConfig {
         // 不设 nproc：RLIMIT_NPROC 在 setrlimit 时按 UID 计数，配合 non-root 用户会让
         // 容器初始 exec /bin/sh 直接 EAGAIN（"exec: resource temporarily unavailable"），
         // 与容器内实际进程数无关。pids_limit 已在 cgroup 层兜底，nproc 是冗余且有害的双重约束。
-        ulimits: Some(vec![
-            ResourcesUlimits { name: Some("nofile".to_string()), soft: Some(64), hard: Some(64) },
-        ]),
+        ulimits: Some(vec![ResourcesUlimits {
+            name: Some("nofile".to_string()),
+            soft: Some(64),
+            hard: Some(64),
+        }]),
         cap_drop: Some(vec!["ALL".to_string()]),
         security_opt: Some(vec!["no-new-privileges".to_string()]),
         auto_remove: Some(false), // must be false to avoid premature removal before getting logs
@@ -112,7 +154,7 @@ pub async fn run_in_container(
     ext: &str,
     limits: ResourceLimits,
 ) -> Result<(Option<i64>, String, String, bool), bollard::errors::Error> {
-    let docker = &*DOCKER_CLIENT;
+    let docker = get_docker()?;
     let host_config = build_host_config(&limits);
 
     // Source injection script: use sh -c to first receive stdin and write to file, then exec the actual command
@@ -133,10 +175,9 @@ pub async fn run_in_container(
         ..Default::default()
     };
 
-    let container = docker.create_container(
-        None::<CreateContainerOptions>,
-        config
-    ).await?;
+    let container = docker
+        .create_container(None::<CreateContainerOptions>, config)
+        .await?;
 
     let container_id = container.id;
     let _guard = ContainerGuard {
@@ -145,17 +186,19 @@ pub async fn run_in_container(
     };
 
     // Attach to container to stream stdin, stdout, and stderr
-    let attach_res = docker.attach_container(
-        &container_id,
-        Some(AttachContainerOptions {
-            stdin: true,
-            stdout: true,
-            stderr: true,
-            stream: true,
-            logs: false,
-            ..Default::default()
-        })
-    ).await;
+    let attach_res = docker
+        .attach_container(
+            &container_id,
+            Some(AttachContainerOptions {
+                stdin: true,
+                stdout: true,
+                stderr: true,
+                stream: true,
+                logs: false,
+                ..Default::default()
+            }),
+        )
+        .await;
 
     let (mut writer, mut stream) = match attach_res {
         Ok(res) => (res.input, res.output),
@@ -177,7 +220,7 @@ pub async fn run_in_container(
 
     if timeout(Duration::from_secs(5), write_fut).await.is_err() {
         return Err(bollard::errors::Error::IOError {
-            err: std::io::Error::new(std::io::ErrorKind::TimedOut, "Writing to stdin timed out")
+            err: std::io::Error::new(std::io::ErrorKind::TimedOut, "Writing to stdin timed out"),
         });
     }
     drop(writer);
@@ -214,14 +257,16 @@ pub async fn run_in_container(
             Ok(chunk) => {
                 match chunk {
                     LogOutput::StdOut { message } => {
-                        let remaining = (limits.output_bytes as usize).saturating_sub(stdout_buf.len() + stderr_buf.len());
+                        let remaining = (limits.output_bytes as usize)
+                            .saturating_sub(stdout_buf.len() + stderr_buf.len());
                         if remaining > 0 {
                             let to_add = message.len().min(remaining);
                             stdout_buf.extend_from_slice(&message[..to_add]);
                         }
                     }
                     LogOutput::StdErr { message } => {
-                        let remaining = (limits.output_bytes as usize).saturating_sub(stdout_buf.len() + stderr_buf.len());
+                        let remaining = (limits.output_bytes as usize)
+                            .saturating_sub(stdout_buf.len() + stderr_buf.len());
                         if remaining > 0 {
                             let to_add = message.len().min(remaining);
                             stderr_buf.extend_from_slice(&message[..to_add]);
@@ -242,9 +287,10 @@ pub async fn run_in_container(
 
     // Check OOM status
     let inspect = docker.inspect_container(&container_id, None).await;
-    let oom_killed = inspect.ok().and_then(|info| {
-        info.state.and_then(|s| s.oom_killed)
-    }).unwrap_or(false);
+    let oom_killed = inspect
+        .ok()
+        .and_then(|info| info.state.and_then(|s| s.oom_killed))
+        .unwrap_or(false);
 
     // Truncate output to limits.output_bytes
     let limit_bytes = limits.output_bytes as usize;
@@ -256,7 +302,7 @@ pub async fn run_in_container(
 
     if timed_out {
         return Err(bollard::errors::Error::IOError {
-            err: std::io::Error::new(std::io::ErrorKind::TimedOut, "Execution timed out")
+            err: std::io::Error::new(std::io::ErrorKind::TimedOut, "Execution timed out"),
         });
     }
 
@@ -301,7 +347,7 @@ pub async fn run_in_container_stream(
     limits: ResourceLimits,
     tx: tokio::sync::mpsc::Sender<OutputChunk>,
 ) -> Result<(Option<i64>, String, String, bool, bool), bollard::errors::Error> {
-    let docker = &*DOCKER_CLIENT;
+    let docker = get_docker()?;
     let host_config = build_host_config(&limits);
 
     // 与 run_in_container 相同的 stdin 注入脚本。
@@ -399,7 +445,8 @@ pub async fn run_in_container_stream(
             match item {
                 Ok(chunk) => match chunk {
                     LogOutput::StdOut { message } => {
-                        let remaining = limit_bytes.saturating_sub(stdout_buf.len() + stderr_buf.len());
+                        let remaining =
+                            limit_bytes.saturating_sub(stdout_buf.len() + stderr_buf.len());
                         if remaining > 0 {
                             let to_add = message.len().min(remaining);
                             let slice = &message[..to_add];
@@ -413,7 +460,8 @@ pub async fn run_in_container_stream(
                         }
                     }
                     LogOutput::StdErr { message } => {
-                        let remaining = limit_bytes.saturating_sub(stdout_buf.len() + stderr_buf.len());
+                        let remaining =
+                            limit_bytes.saturating_sub(stdout_buf.len() + stderr_buf.len());
                         if remaining > 0 {
                             let to_add = message.len().min(remaining);
                             let slice = &message[..to_add];
@@ -625,14 +673,7 @@ mod tests {
             output_bytes: 1024,
             allow_network: false,
         };
-        let res = run_in_container(
-            "alpine:latest",
-            "sleep 10",
-            "",
-            "txt",
-            limits,
-        )
-        .await;
+        let res = run_in_container("alpine:latest", "sleep 10", "", "txt", limits).await;
 
         assert!(res.is_err());
         let err = res.unwrap_err();
@@ -648,13 +689,17 @@ mod tests {
     #[serial_test::serial]
     async fn test_run_in_container_cancellation() {
         use bollard::query_parameters::ListContainersOptions;
-        let docker = &*DOCKER_CLIENT;
-        
-        let before = docker.list_containers(Some(ListContainersOptions {
-            all: true,
-            ..Default::default()
-        })).await.unwrap();
-        let before_ids: std::collections::HashSet<String> = before.into_iter().map(|c| c.id.unwrap()).collect();
+        let docker = get_docker().expect("test requires a running Docker daemon");
+
+        let before = docker
+            .list_containers(Some(ListContainersOptions {
+                all: true,
+                ..Default::default()
+            }))
+            .await
+            .unwrap();
+        let before_ids: std::collections::HashSet<String> =
+            before.into_iter().map(|c| c.id.unwrap()).collect();
 
         let limits = ResourceLimits {
             cpu_cores: 1.0,
@@ -664,13 +709,7 @@ mod tests {
             allow_network: false,
         };
 
-        let run_fut = run_in_container(
-            "alpine:latest",
-            "sleep 100",
-            "",
-            "txt",
-            limits,
-        );
+        let run_fut = run_in_container("alpine:latest", "sleep 100", "", "txt", limits);
 
         tokio::select! {
             _ = run_fut => {
@@ -683,10 +722,13 @@ mod tests {
 
         tokio::time::sleep(Duration::from_secs(2)).await;
 
-        let after = docker.list_containers(Some(ListContainersOptions {
-            all: true,
-            ..Default::default()
-        })).await.unwrap();
+        let after = docker
+            .list_containers(Some(ListContainersOptions {
+                all: true,
+                ..Default::default()
+            }))
+            .await
+            .unwrap();
 
         let mut leaked = Vec::new();
         for c in after {
@@ -698,10 +740,15 @@ mod tests {
 
         let leaked_count = leaked.len();
         for id in leaked {
-            let _ = docker.remove_container(&id, Some(RemoveContainerOptions {
-                force: true,
-                ..Default::default()
-            })).await;
+            let _ = docker
+                .remove_container(
+                    &id,
+                    Some(RemoveContainerOptions {
+                        force: true,
+                        ..Default::default()
+                    }),
+                )
+                .await;
         }
 
         assert_eq!(leaked_count, 0, "Found {} leaked containers", leaked_count);

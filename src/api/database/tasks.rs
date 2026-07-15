@@ -15,9 +15,9 @@ use serde::{Deserialize, Serialize};
 use crate::api::auth::get_current_admin_user;
 // DashMap / LazyLock 仅 server 构建持有任务进度表；WASM 端只序列化 TaskProgress。
 #[cfg(feature = "server")]
-use std::sync::LazyLock;
-#[cfg(feature = "server")]
 use dashmap::DashMap;
+#[cfg(feature = "server")]
+use std::sync::LazyLock;
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub enum TaskKind {
@@ -93,7 +93,9 @@ pub(super) fn update(
 #[cfg(feature = "server")]
 fn gc_old() {
     let cutoff = Utc::now() - chrono::Duration::hours(1);
-    TASKS.retain(|_, p| !(matches!(p.status, TaskStatus::Done | TaskStatus::Failed) && p.created_at < cutoff));
+    TASKS.retain(|_, p| {
+        !(matches!(p.status, TaskStatus::Done | TaskStatus::Failed) && p.created_at < cutoff)
+    });
 }
 
 /// 查询任务进度（轮询用）。
@@ -103,7 +105,8 @@ pub async fn get_task_progress(task_id: String) -> Result<TaskProgress, ServerFn
     #[cfg(feature = "server")]
     {
         gc_old();
-        TASKS.get(&task_id)
+        TASKS
+            .get(&task_id)
             .map(|p| p.clone())
             .ok_or_else(|| crate::api::error::AppError::NotFound("任务不存在").into())
     }

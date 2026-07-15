@@ -16,9 +16,11 @@
 pub fn escape_html(input: &str) -> String {
     // 快速路径：无特殊字符直接 clone（大多纯文本走这里，零额外扫描）。
     // memchr 风格的逐字节查找比总是分配 + 遍历更省。
-    if !input.as_bytes().iter().any(|&b| {
-        matches!(b, b'&' | b'<' | b'>' | b'"' | b'\'')
-    }) {
+    if !input
+        .as_bytes()
+        .iter()
+        .any(|&b| matches!(b, b'&' | b'<' | b'>' | b'"' | b'\''))
+    {
         return input.to_string();
     }
     let mut out = String::with_capacity(input.len());

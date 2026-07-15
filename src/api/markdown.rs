@@ -475,7 +475,11 @@ mod tests {
             *received.borrow_mut() = p.to_string();
             Some((100, 100))
         });
-        assert_eq!(received.borrow().as_str(), "2026/x.webp", "rel_path 应去 query");
+        assert_eq!(
+            received.borrow().as_str(),
+            "2026/x.webp",
+            "rel_path 应去 query"
+        );
     }
 
     #[test]
@@ -493,10 +497,7 @@ mod tests {
     fn wrap_images_with_blur_omits_alt_attr_when_empty() {
         let html = r#"<img src="/uploads/x.webp">"#;
         let result = wrap_images_with_blur_with(html, |_| None);
-        assert!(
-            !result.contains("alt=\""),
-            "无 alt 时不应生成空 alt 属性"
-        );
+        assert!(!result.contains("alt=\""), "无 alt 时不应生成空 alt 属性");
     }
 
     #[test]
@@ -717,7 +718,9 @@ mod tests {
         );
         // data-source 携带 HTML 转义后的原始源码（单引号转义为 &#x27;）。
         assert!(
-            result.html.contains(r#"data-source="print(&#x27;hi&#x27;)"#),
+            result
+                .html
+                .contains(r#"data-source="print(&#x27;hi&#x27;)"#),
             "data-source 应含转义后的源码, got: {}",
             result.html
         );
@@ -740,7 +743,9 @@ console.log(1)
         // overrides JSON 应被 HTML 转义后放入属性（双引号变 &quot;），不得出现裸引号越界。
         // 字段顺序按 serde 派生默认（字母序），cpu_cores 在前。
         assert!(
-            result.html.contains("data-overrides=\"{&quot;cpu_cores&quot;:1.0"),
+            result
+                .html
+                .contains("data-overrides=\"{&quot;cpu_cores&quot;:1.0"),
             "overrides 应 HTML 转义, got: {}",
             result.html
         );
@@ -767,7 +772,9 @@ console.log(1)
     fn render_markdown_plain_fence_without_runnable_no_data_attrs() {
         let result = render_markdown_enhanced("```python\nprint(1)\n```");
         assert!(!result.html.contains("data-runnable"));
-        assert!(result.html.contains(r#"<pre><code class="language-python">"#));
+        assert!(result
+            .html
+            .contains(r#"<pre><code class="language-python">"#));
     }
 
     #[test]

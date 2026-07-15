@@ -11,8 +11,8 @@
 use dioxus::prelude::*;
 
 use crate::api::posts::{search_posts, PostListResponse};
-use crate::components::post_card::PostCard;
 use crate::components::empty_state::EmptyState;
+use crate::components::post_card::PostCard;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::search_skeleton::SearchSkeleton;
 

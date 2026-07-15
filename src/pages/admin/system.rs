@@ -8,7 +8,7 @@ use dioxus::prelude::*;
 use crate::components::skeletons::atoms::SkeletonBox;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::ui::{
-    BTN_OUTLINE, BTN_PRIMARY_SM, BTN_TEXT_AMBER, BTN_TEXT_RED, FilterTabs, LoadingButton,
+    FilterTabs, LoadingButton, BTN_OUTLINE, BTN_PRIMARY_SM, BTN_TEXT_AMBER, BTN_TEXT_RED,
 };
 
 /// 系统管理的 5 个功能 tab。
@@ -452,9 +452,9 @@ fn format_uptime(secs: u64) -> String {
 #[allow(non_snake_case)]
 #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
 fn ServerStatusTab() -> Element {
-    use crate::api::database::system_status::ServerStatus;
     #[cfg(target_arch = "wasm32")]
     use crate::api::database::system_status::get_server_status;
+    use crate::api::database::system_status::ServerStatus;
     use crate::components::ui::{ADMIN_CARD_CLASS, ADMIN_TABLE_CLASS};
 
     let mut status = use_signal(|| Option::<ServerStatus>::None);
@@ -728,15 +728,15 @@ fn ServerStatusTab() -> Element {
 #[allow(non_snake_case)]
 #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
 fn SqlConsoleTab() -> Element {
+    #[cfg(target_arch = "wasm32")]
+    use crate::api::database::schema::get_db_schema;
     use crate::api::database::sql_console::SqlResult;
     #[cfg(target_arch = "wasm32")]
     use crate::api::database::sql_console::{execute_sql, ExecuteSqlOpts};
     #[cfg(target_arch = "wasm32")]
-    use crate::api::database::schema::get_db_schema;
+    use crate::codemirror_bridge;
     use crate::components::sql_result_table::SqlResultTable;
     use crate::components::ui::ADMIN_TABLE_CLASS;
-    #[cfg(target_arch = "wasm32")]
-    use crate::codemirror_bridge;
     // use_resolved_theme 两种构建都用：resolved() 在 wasm 块内消费，非 wasm 仅引用避免警告。
     use crate::theme::use_resolved_theme;
     #[cfg(target_arch = "wasm32")]
@@ -775,9 +775,17 @@ fn SqlConsoleTab() -> Element {
         };
         // 护栏 4：写操作前端二次确认（简单判断：含 UPDATE/DELETE/INSERT/ALTER/DROP/TRUNCATE/CREATE 关键词）
         let lower = sql.to_lowercase();
-        let looks_write = ["update ", "delete ", "insert ", "alter ", "drop ", "truncate ", "create "]
-            .iter()
-            .any(|k| lower.contains(k));
+        let looks_write = [
+            "update ",
+            "delete ",
+            "insert ",
+            "alter ",
+            "drop ",
+            "truncate ",
+            "create ",
+        ]
+        .iter()
+        .any(|k| lower.contains(k));
         if looks_write && !confirm_dangerous() {
             // 简单提示；真正的高危放行靠 confirm_dangerous 开关
             let confirmed = web_sys::window().and_then(|w| {
@@ -828,11 +836,14 @@ fn SqlConsoleTab() -> Element {
             // （Closure::new 要求 Fn 可重复调用）。闭包包装走借用调用，每次都读最新值。
             #[allow(clippy::redundant_closure)]
             let on_run_shortcut = Closure::new(move || {
-                dioxus::core::Runtime::current()
-                    .in_scope(scope_id, || execute_for_editor());
+                dioxus::core::Runtime::current().in_scope(scope_id, || execute_for_editor());
             });
 
-            let theme_name = if resolved() == ResolvedTheme::Dark { "dark" } else { "light" };
+            let theme_name = if resolved() == ResolvedTheme::Dark {
+                "dark"
+            } else {
+                "light"
+            };
             let opts = codemirror_bridge::EditorOptions::new();
             opts.set_language("sql");
             opts.set_theme(theme_name);
@@ -870,7 +881,11 @@ fn SqlConsoleTab() -> Element {
         use_effect(move || {
             let r = resolved();
             if let Some(h) = editor_handle.read().as_ref() {
-                h.instance().set_theme(if r == ResolvedTheme::Dark { "dark" } else { "light" });
+                h.instance().set_theme(if r == ResolvedTheme::Dark {
+                    "dark"
+                } else {
+                    "light"
+                });
             }
         });
     }
@@ -890,9 +905,17 @@ fn SqlConsoleTab() -> Element {
             };
             // 护栏 4：写操作前端二次确认（简单判断：含 UPDATE/DELETE/INSERT/ALTER/DROP/TRUNCATE/CREATE 关键词）
             let lower = sql.to_lowercase();
-            let looks_write = ["update ", "delete ", "insert ", "alter ", "drop ", "truncate ", "create "]
-                .iter()
-                .any(|k| lower.contains(k));
+            let looks_write = [
+                "update ",
+                "delete ",
+                "insert ",
+                "alter ",
+                "drop ",
+                "truncate ",
+                "create ",
+            ]
+            .iter()
+            .any(|k| lower.contains(k));
             if looks_write && !confirm_dangerous() {
                 // 简单提示；真正的高危放行靠 confirm_dangerous 开关
                 let confirmed = web_sys::window().and_then(|w| {
@@ -923,12 +946,18 @@ fn SqlConsoleTab() -> Element {
     let current_result = result.read().clone();
     let current_error = error.read().clone();
     let elapsed = current_result.as_ref().map(|r| r.elapsed_ms).unwrap_or(0);
-    let affected = current_result.as_ref().map(|r| r.affected_rows).unwrap_or(0);
+    let affected = current_result
+        .as_ref()
+        .map(|r| r.affected_rows)
+        .unwrap_or(0);
     let stmt_type = current_result
         .as_ref()
         .map(|r| r.statement_type.clone())
         .unwrap_or_default();
-    let truncated = current_result.as_ref().map(|r| r.truncated).unwrap_or(false);
+    let truncated = current_result
+        .as_ref()
+        .map(|r| r.truncated)
+        .unwrap_or(false);
     let explain = current_result.as_ref().and_then(|r| r.explain.clone());
 
     rsx! {
@@ -1188,9 +1217,11 @@ fn urlencode(s: &str) -> String {
 #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
 fn BackupTab() -> Element {
     use crate::api::database::backup::BackupInfo;
-    use crate::api::database::tasks::TaskProgress;
     #[cfg(target_arch = "wasm32")]
-    use crate::api::database::backup::{create_backup, delete_backup, list_backups, restore_backup};
+    use crate::api::database::backup::{
+        create_backup, delete_backup, list_backups, restore_backup,
+    };
+    use crate::api::database::tasks::TaskProgress;
     #[cfg(target_arch = "wasm32")]
     use crate::api::database::tasks::{get_task_progress, TaskStatus};
     use crate::components::ui::{ADMIN_CARD_CLASS, ADMIN_TABLE_CLASS};
@@ -1261,8 +1292,8 @@ fn BackupTab() -> Element {
                         crate::utils::time::sleep_ms(1500).await;
                         match get_task_progress(tid.clone()).await {
                             Ok(p) => {
-                                let done = p.status == TaskStatus::Done
-                                    || p.status == TaskStatus::Failed;
+                                let done =
+                                    p.status == TaskStatus::Done || p.status == TaskStatus::Failed;
                                 active_progress.set(Some(p));
                                 if done {
                                     // 刷新列表（备份完成后新文件出现）并清理任务态
@@ -1609,7 +1640,11 @@ mod tests {
             SystemTab::Backup,
         ] {
             let s = tab.as_str();
-            assert_eq!(SystemTab::from_str(s), Ok(tab), "roundtrip failed for {tab:?}");
+            assert_eq!(
+                SystemTab::from_str(s),
+                Ok(tab),
+                "roundtrip failed for {tab:?}"
+            );
         }
     }
 

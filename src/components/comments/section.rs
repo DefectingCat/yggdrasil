@@ -40,12 +40,10 @@ pub struct CommentContext {
 /// - 空评论时展示提示文案
 #[component]
 pub fn CommentSection(post_id: i32) -> Element {
-    let mut ctx = use_context_provider(|| {
-        CommentContext {
-            active_reply: Signal::new(None),
-            refresh_trigger: Signal::new(false),
-            pending_comments: Signal::new(Vec::new()),
-        }
+    let mut ctx = use_context_provider(|| CommentContext {
+        active_reply: Signal::new(None),
+        refresh_trigger: Signal::new(false),
+        pending_comments: Signal::new(Vec::new()),
     });
 
     // 挂载后从本地存储异步加载待审核评论以防 SSR Hydration Mismatch
@@ -72,7 +70,9 @@ pub fn CommentSection(post_id: i32) -> Element {
                         .collect();
                     if !to_remove.is_empty() {
                         comment_storage::remove_pending_ids(post_id, &to_remove);
-                        ctx.pending_comments.write().retain(|c| !to_remove.contains(&c.id));
+                        ctx.pending_comments
+                            .write()
+                            .retain(|c| !to_remove.contains(&c.id));
                     }
                 }
                 Err(_e) => {
@@ -85,9 +85,7 @@ pub fn CommentSection(post_id: i32) -> Element {
     // 评论数据资源，refresh_trigger 变化时自动重新加载
     let comments_resource = use_resource(move || {
         let _ = (ctx.refresh_trigger)();
-        async move {
-            get_comments(post_id).await
-        }
+        async move { get_comments(post_id).await }
     });
 
     let data = comments_resource.read();

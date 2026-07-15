@@ -228,7 +228,8 @@ impl CacheStats {
         self.hits.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
     fn record_miss(&self) {
-        self.misses.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.misses
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
@@ -266,14 +267,15 @@ pub struct CacheStatSnapshot {
 /// 聚合所有缓存的统计快照（供 get_server_status 调用）。
 #[cfg(feature = "server")]
 pub fn cache_stats() -> Vec<CacheStatSnapshot> {
-    fn snap(
-        stats: &CacheStats,
-        entry_count: u64,
-    ) -> CacheStatSnapshot {
+    fn snap(stats: &CacheStats, entry_count: u64) -> CacheStatSnapshot {
         let hits = stats.hits.load(std::sync::atomic::Ordering::Relaxed);
         let misses = stats.misses.load(std::sync::atomic::Ordering::Relaxed);
         let total = hits + misses;
-        let hit_rate = if total == 0 { 0.0 } else { hits as f64 / total as f64 };
+        let hit_rate = if total == 0 {
+            0.0
+        } else {
+            hits as f64 / total as f64
+        };
         CacheStatSnapshot {
             name: stats.name,
             entry_count,

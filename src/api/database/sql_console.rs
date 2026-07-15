@@ -112,10 +112,7 @@ enum GuardResult {
 
 /// 护栏 1+2：sqlparser 解析后遍历 AST，检查高危语句与无 WHERE 的 UPDATE/DELETE。
 #[cfg(feature = "server")]
-fn check_guards(
-    asts: &[sqlparser::ast::Statement],
-    confirm_dangerous: bool,
-) -> GuardResult {
+fn check_guards(asts: &[sqlparser::ast::Statement], confirm_dangerous: bool) -> GuardResult {
     use sqlparser::ast::{ObjectType, Statement};
 
     for stmt in asts {
@@ -147,13 +144,17 @@ fn check_guards(
                 }
             }
             // 护栏 2：UPDATE 无 WHERE
-            Statement::Update(sqlparser::ast::Update { selection: None, .. }) => {
+            Statement::Update(sqlparser::ast::Update {
+                selection: None, ..
+            }) => {
                 return GuardResult::Forbidden(
                     "UPDATE 缺少 WHERE 子句，将影响全表。请加 WHERE 条件。".to_string(),
                 );
             }
             // 护栏 2：DELETE 无 WHERE
-            Statement::Delete(sqlparser::ast::Delete { selection: None, .. }) => {
+            Statement::Delete(sqlparser::ast::Delete {
+                selection: None, ..
+            }) => {
                 return GuardResult::Forbidden(
                     "DELETE 缺少 WHERE 子句，将影响全表。请加 WHERE 条件。".to_string(),
                 );
@@ -187,17 +188,18 @@ fn statement_type_name(stmt: &sqlparser::ast::Statement) -> String {
 #[cfg(feature = "server")]
 fn is_read_only(stmt: &sqlparser::ast::Statement) -> bool {
     use sqlparser::ast::Statement;
-    matches!(
-        stmt,
-        Statement::Query(_) | Statement::Explain { .. }
-    )
+    matches!(stmt, Statement::Query(_) | Statement::Explain { .. })
 }
 
 /// 把一列的值转成 JSON（按 PG 类型名分发）。
 #[cfg(feature = "server")]
 fn col_to_json(row: &tokio_postgres::Row, idx: usize) -> serde_json::Value {
     use serde_json::json;
-    let ty = row.columns().get(idx).map(|c| c.type_().name()).unwrap_or("");
+    let ty = row
+        .columns()
+        .get(idx)
+        .map(|c| c.type_().name())
+        .unwrap_or("");
     match ty {
         "int2" => row
             .try_get::<_, Option<i16>>(idx)
@@ -349,18 +351,10 @@ async fn execute_one(
 
     if read_only {
         // 只读：取结果集。列名从第一行取（空结果集时无列名，前端容错）。
-        let rows = client
-            .query(stmt_sql, &[])
-            .await
-            .map_err(AppError::query)?;
+        let rows = client.query(stmt_sql, &[]).await.map_err(AppError::query)?;
         let columns: Vec<String> = rows
             .first()
-            .map(|r| {
-                r.columns()
-                    .iter()
-                    .map(|c| c.name().to_string())
-                    .collect()
-            })
+            .map(|r| r.columns().iter().map(|c| c.name().to_string()).collect())
             .unwrap_or_default();
         let mut data: Vec<Vec<serde_json::Value>> = Vec::new();
         let mut truncated = false;
@@ -431,10 +425,7 @@ mod tests {
             "CREATE DATABASE evil",
             "Drop Database x",
         ] {
-            assert!(
-                is_absolutely_forbidden(sql).is_some(),
-                "应拦截: {sql:?}"
-            );
+            assert!(is_absolutely_forbidden(sql).is_some(), "应拦截: {sql:?}");
         }
     }
 
@@ -458,9 +449,18 @@ mod tests {
 
     #[test]
     fn precheck_returns_canonical_name_for_error_message() {
-        assert_eq!(is_absolutely_forbidden("DROP DATABASE x"), Some("DROP DATABASE"));
-        assert_eq!(is_absolutely_forbidden("drop schema public"), Some("DROP SCHEMA"));
-        assert_eq!(is_absolutely_forbidden("CREATE DATABASE evil"), Some("CREATE DATABASE"));
+        assert_eq!(
+            is_absolutely_forbidden("DROP DATABASE x"),
+            Some("DROP DATABASE")
+        );
+        assert_eq!(
+            is_absolutely_forbidden("drop schema public"),
+            Some("DROP SCHEMA")
+        );
+        assert_eq!(
+            is_absolutely_forbidden("CREATE DATABASE evil"),
+            Some("CREATE DATABASE")
+        );
     }
 
     #[test]
@@ -499,10 +499,7 @@ mod tests {
             "DELETE FROM t WHERE id = 1",
             "CREATE INDEX idx ON t (col)",
         ] {
-            assert!(
-                is_absolutely_forbidden(sql).is_none(),
-                "不应误拦: {sql:?}"
-            );
+            assert!(is_absolutely_forbidden(sql).is_none(), "不应误拦: {sql:?}");
         }
     }
 
@@ -513,10 +510,9 @@ mod tests {
         // 即使字符串预检被某种方式绕过,AST 层仍绝禁 DROP SCHEMA。
         let asts = parse("DROP SCHEMA public");
         match check_guards(&asts, true) {
-            GuardResult::Forbidden(msg) => assert!(
-                msg.contains("SCHEMA"),
-                "DROP SCHEMA 应被禁止, 得到: {msg}"
-            ),
+            GuardResult::Forbidden(msg) => {
+                assert!(msg.contains("SCHEMA"), "DROP SCHEMA 应被禁止, 得到: {msg}")
+            }
             other => panic!("DROP SCHEMA 应 Forbidden, 得到 {other:?}"),
         }
     }

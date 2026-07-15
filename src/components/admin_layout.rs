@@ -20,7 +20,6 @@ pub fn AdminLayout() -> Element {
     let navigator = dioxus::router::navigator();
     let route = use_route::<Route>();
 
-
     use_effect(move || {
         if !(ctx.checked)() {
             (ctx.checked).set(true);
@@ -58,14 +57,19 @@ pub fn AdminLayout() -> Element {
     // write 路由例外:卡片不滚动(overflow-hidden),main 作为 flex 容器不带头尾 padding,
     // 由 write 页面自身组织 [内容区 flex-1 overflow-y-auto] + [底栏 flex-shrink-0] 的分区布局,
     // 这样底栏永远贴卡片底部不随内容滚动,也不会出现 sticky + 负 margin 的跳动。
-    let card_overflow = if is_write_route { "overflow-hidden" } else { "overflow-y-auto" };
+    let card_overflow = if is_write_route {
+        "overflow-hidden"
+    } else {
+        "overflow-y-auto"
+    };
     let main_class = if is_write_route {
         "flex-1 w-full max-w-7xl mx-auto flex flex-col min-h-0"
     } else {
         "flex-1 w-full max-w-7xl mx-auto px-6 py-12"
     };
 
-    let root_class = "min-h-dvh flex bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] font-sans";
+    let root_class =
+        "min-h-dvh flex bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] font-sans";
 
     let nav_content = rsx! {
         aside { class: "w-64 flex-shrink-0 hidden md:flex flex-col h-screen sticky top-0 p-4 bg-[var(--color-paper-entry)]",

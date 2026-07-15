@@ -363,7 +363,9 @@ pub async fn restore_backup(filename: String, confirm: bool) -> Result<String, S
         // 签名校验：首行需含签名
         let content = std::fs::read_to_string(&path).unwrap_or_default();
         if !has_valid_signature(&content) {
-            return Err(AppError::BadRequest("非本系统生成的备份文件，拒绝恢复".to_string()).into());
+            return Err(
+                AppError::BadRequest("非本系统生成的备份文件，拒绝恢复".to_string()).into(),
+            );
         }
 
         let task_id = uuid::Uuid::new_v4().to_string();
@@ -680,10 +682,7 @@ mod tests {
             "a.sql",
             "A-B_C.123",
         ] {
-            assert!(
-                is_valid_backup_filename(name),
-                "正常文件名应通过: {name}"
-            );
+            assert!(is_valid_backup_filename(name), "正常文件名应通过: {name}");
         }
     }
 
@@ -697,10 +696,7 @@ mod tests {
             "a/../../b",
             "backup.sql/../../etc",
         ] {
-            assert!(
-                !is_valid_backup_filename(evil),
-                "路径穿越应被拒: {evil}"
-            );
+            assert!(!is_valid_backup_filename(evil), "路径穿越应被拒: {evil}");
         }
     }
 
@@ -715,10 +711,7 @@ mod tests {
             "a`b`.sql",
             "",
         ] {
-            assert!(
-                !is_valid_backup_filename(evil),
-                "特殊字符应被拒: {evil:?}"
-            );
+            assert!(!is_valid_backup_filename(evil), "特殊字符应被拒: {evil:?}");
         }
     }
 
@@ -728,7 +721,10 @@ mod tests {
     fn backup_path_stays_in_backup_dir_for_normal_name() {
         let p = backup_path("backup_20260702.sql");
         assert!(p.starts_with(BACKUP_DIR), "应在 {BACKUP_DIR}/ 下");
-        assert_eq!(p.file_name().and_then(|n| n.to_str()), Some("backup_20260702.sql"));
+        assert_eq!(
+            p.file_name().and_then(|n| n.to_str()),
+            Some("backup_20260702.sql")
+        );
     }
 
     #[test]
@@ -739,7 +735,8 @@ mod tests {
             let p = backup_path(evil);
             // 不应逃出 BACKUP_DIR(应为 BACKUP_DIR 本身,不含文件名)
             assert_eq!(
-                p, PathBuf::from(BACKUP_DIR),
+                p,
+                PathBuf::from(BACKUP_DIR),
                 "穿越应被规约回 {BACKUP_DIR}: {evil}"
             );
         }

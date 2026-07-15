@@ -139,12 +139,18 @@ pub async fn upload_image(
         Ok(d) => d,
         Err(e) => {
             tracing::error!("Read file error: {:?}", e);
-            return Err(upload_error(StatusCode::INTERNAL_SERVER_ERROR, "文件读取失败"));
+            return Err(upload_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "文件读取失败",
+            ));
         }
     };
 
     if data.len() > MAX_FILE_SIZE {
-        return Err(upload_error(StatusCode::PAYLOAD_TOO_LARGE, "文件超过大小限制"));
+        return Err(upload_error(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "文件超过大小限制",
+        ));
     }
 
     // 校验文件头 magic bytes，防止仅修改扩展名/Content-Type 上传非图片文件。
@@ -174,7 +180,10 @@ pub async fn upload_image(
         .await
         .map_err(|_| upload_error(StatusCode::INTERNAL_SERVER_ERROR, "图片校验任务失败"))?;
         if !is_valid {
-            return Err(upload_error(StatusCode::BAD_REQUEST, "图片文件损坏或格式不正确"));
+            return Err(upload_error(
+                StatusCode::BAD_REQUEST,
+                "图片文件损坏或格式不正确",
+            ));
         }
     }
 
@@ -266,12 +275,18 @@ pub async fn upload_image(
 
     if let Err(e) = tokio::fs::create_dir_all(&dir_path).await {
         tracing::error!("Create dir error: {:?}", e);
-        return Err(upload_error(StatusCode::INTERNAL_SERVER_ERROR, "文件保存失败"));
+        return Err(upload_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "文件保存失败",
+        ));
     }
 
     if let Err(e) = tokio::fs::write(&file_path, &final_data).await {
         tracing::error!("Write file error: {:?}", e);
-        return Err(upload_error(StatusCode::INTERNAL_SERVER_ERROR, "文件保存失败"));
+        return Err(upload_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "文件保存失败",
+        ));
     }
 
     tracing::info!("Image uploaded: {} ({} bytes)", file_path, final_data.len());

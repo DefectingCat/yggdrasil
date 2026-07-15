@@ -302,15 +302,12 @@ pub async fn ensure_database() -> Result<(), String> {
     // 5. 不存在则创建。db_name 已通过 is_simple_ident 校验，可安全拼到 SQL。
     tracing::info!("target database {:?} does not exist, creating", db_name);
     let stmt = format!("CREATE DATABASE {db_name}");
-    client
-        .batch_execute(&stmt)
-        .await
-        .map_err(|e| {
-            format!(
-                "failed to create database {db_name:?}: {}",
-                crate::db::format_with_sources(&e)
-            )
-        })?;
+    client.batch_execute(&stmt).await.map_err(|e| {
+        format!(
+            "failed to create database {db_name:?}: {}",
+            crate::db::format_with_sources(&e)
+        )
+    })?;
     tracing::info!("created database {:?}", db_name);
     Ok(())
 }

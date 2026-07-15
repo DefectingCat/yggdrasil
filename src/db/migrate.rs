@@ -95,10 +95,18 @@ impl std::fmt::Display for MigrateError {
         // 无信息量的 `db error`，真正的 message/SQLSTATE/约束名藏在 source() 里。
         match self {
             MigrateError::Pool(e) => {
-                write!(f, "database pool error: {}", crate::db::format_with_sources(e))
+                write!(
+                    f,
+                    "database pool error: {}",
+                    crate::db::format_with_sources(e)
+                )
             }
             MigrateError::Query(e) => {
-                write!(f, "database query error: {}", crate::db::format_with_sources(e))
+                write!(
+                    f,
+                    "database query error: {}",
+                    crate::db::format_with_sources(e)
+                )
             }
             MigrateError::Apply { version, source } => {
                 write!(

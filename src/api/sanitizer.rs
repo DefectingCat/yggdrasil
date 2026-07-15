@@ -636,7 +636,8 @@ mod tests {
     #[test]
     fn clean_html_input_rejects_type_image() {
         // type=image 是已知的 input 滥用面（可配合 src 触发请求），必须整体移除
-        let input = r#"<ul><li><input type="image" src="https://evil.example/x.png">文本</li></ul>"#;
+        let input =
+            r#"<ul><li><input type="image" src="https://evil.example/x.png">文本</li></ul>"#;
         let result = clean_html(input);
         assert!(
             !result.contains("input"),
@@ -703,7 +704,10 @@ mod tests {
         // 仅放行白名单的三个 data-* 属性，其它 data-*（如恶意 data-onclick）应被剥离。
         let input = r#"<pre data-runnable="true" data-evil="x"><code>x</code></pre>"#;
         let result = clean_html(input);
-        assert!(result.contains("data-runnable"), "白名单 data-runnable 应保留");
+        assert!(
+            result.contains("data-runnable"),
+            "白名单 data-runnable 应保留"
+        );
         assert!(
             !result.contains("data-evil"),
             "未知 data-* 应被剥离, got: {result}"

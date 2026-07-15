@@ -11,10 +11,10 @@
 
 use dioxus::prelude::*;
 
-#[cfg(not(target_arch = "wasm32"))]
-use crate::api::code_runner::execute::{get_exec_result, start_exec};
 #[cfg(target_arch = "wasm32")]
 use crate::api::code_runner::execute::start_exec_stream;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::api::code_runner::execute::{get_exec_result, start_exec};
 use crate::api::code_runner::{ExecRequest, ExecStatus};
 use crate::components::ui::SPINNER_SVG;
 use crate::infra::runner_config::ResourceLimits;
@@ -272,9 +272,7 @@ pub fn CodeRunner(
             opts.set_font_size(13);
             opts.set_on_ready(&on_ready);
 
-            if let Ok(Some(inst)) =
-                xterm_bridge::get_module().create(&mount_container_id, &opts)
-            {
+            if let Ok(Some(inst)) = xterm_bridge::get_module().create(&mount_container_id, &opts) {
                 let handle = xterm_bridge::TerminalHandle::new(inst, on_ready);
                 term_handle.set(Some(handle));
             }
@@ -736,13 +734,12 @@ mod sse_consumer {
             match get_exec_result(task_id.to_string()).await {
                 Ok(task) => {
                     stage.set(task.stage.clone());
-                    let terminal = task.status != ExecStatus::Queued
-                        && task.status != ExecStatus::Running;
+                    let terminal =
+                        task.status != ExecStatus::Queued && task.status != ExecStatus::Running;
                     if terminal {
                         running.set(false);
                         if let Some(res) = task.result {
-                            let out =
-                                format!("Stdout:\n{}\nStderr:\n{}", res.stdout, res.stderr);
+                            let out = format!("Stdout:\n{}\nStderr:\n{}", res.stdout, res.stderr);
                             output.set(out);
                             exit_info.set(format!(
                                 "耗时: {}ms · 状态: {}",

@@ -76,13 +76,19 @@ pub async fn create_comment(
 
         match post_row {
             None => {
-                return Ok(CommentResponse::error("post_not_found", "文章不存在".to_string()));
+                return Ok(CommentResponse::error(
+                    "post_not_found",
+                    "文章不存在".to_string(),
+                ));
             }
             Some(row) => {
                 let status: String = row.get("status");
                 let deleted_at: Option<chrono::DateTime<chrono::Utc>> = row.get("deleted_at");
                 if status != "published" || deleted_at.is_some() {
-                    return Ok(CommentResponse::error("post_not_found", "文章不存在".to_string()));
+                    return Ok(CommentResponse::error(
+                        "post_not_found",
+                        "文章不存在".to_string(),
+                    ));
                 }
             }
         }
@@ -100,7 +106,10 @@ pub async fn create_comment(
 
             match parent_row {
                 None => {
-                    return Ok(CommentResponse::error("parent_not_found", "父评论不存在".to_string()));
+                    return Ok(CommentResponse::error(
+                        "parent_not_found",
+                        "父评论不存在".to_string(),
+                    ));
                 }
                 Some(row) => {
                     let parent_post_id: i32 = row.get("post_id");
@@ -108,15 +117,24 @@ pub async fn create_comment(
                     let parent_depth: i32 = row.get("depth");
 
                     if parent_post_id != post_id {
-                        return Ok(CommentResponse::error("parent_not_found", "父评论不存在".to_string()));
+                        return Ok(CommentResponse::error(
+                            "parent_not_found",
+                            "父评论不存在".to_string(),
+                        ));
                     }
                     if parent_status != "approved" {
-                        return Ok(CommentResponse::error("parent_not_approved", "父评论未通过审核".to_string()));
+                        return Ok(CommentResponse::error(
+                            "parent_not_approved",
+                            "父评论未通过审核".to_string(),
+                        ));
                     }
 
                     depth = parent_depth + 1;
                     if depth > 20 {
-                        return Ok(CommentResponse::error("too_deep", "评论嵌套层级过深".to_string()));
+                        return Ok(CommentResponse::error(
+                            "too_deep",
+                            "评论嵌套层级过深".to_string(),
+                        ));
                     }
                 }
             }
@@ -175,7 +193,10 @@ pub async fn create_comment(
         if dup.is_some() {
             // 重复：回滚（释放 advisory 锁）后返回。
             tx.rollback().await.ok();
-            return Ok(CommentResponse::error("duplicate", "请勿重复提交".to_string()));
+            return Ok(CommentResponse::error(
+                "duplicate",
+                "请勿重复提交".to_string(),
+            ));
         }
 
         // 插入评论，默认状态为 pending，等待管理员审核。
@@ -214,7 +235,12 @@ pub async fn create_comment(
         cache::invalidate_comments_by_post(post_id).await;
         cache::invalidate_pending_count().await;
 
-        Ok(CommentResponse::created("评论已提交，等待审核".to_string(), comment_id, avatar_url, depth))
+        Ok(CommentResponse::created(
+            "评论已提交，等待审核".to_string(),
+            comment_id,
+            avatar_url,
+            depth,
+        ))
     }
     #[cfg(not(feature = "server"))]
     unreachable!()

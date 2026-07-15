@@ -48,11 +48,7 @@ pub struct PaginatedState<T> {
 /// ```
 #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut))]
 #[allow(unused_variables)]
-pub fn use_paginated<T, P, F, Fut, E>(
-    page: P,
-    per_page: i32,
-    fetch: F,
-) -> PaginatedState<T>
+pub fn use_paginated<T, P, F, Fut, E>(page: P, per_page: i32, fetch: F) -> PaginatedState<T>
 where
     T: PartialEq + Clone + 'static,
     P: Fn() -> i32 + Copy + 'static,

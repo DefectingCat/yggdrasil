@@ -261,7 +261,10 @@ pub fn use_theme_provider() -> Signal<Theme> {
         use_event_listener(
             || {
                 let window = web_sys::window()?;
-                window.match_media("(prefers-color-scheme: dark)").ok().flatten()
+                window
+                    .match_media("(prefers-color-scheme: dark)")
+                    .ok()
+                    .flatten()
             },
             "change",
             move || {

@@ -159,9 +159,7 @@ pub async fn start_exec(req: ExecRequest) -> Result<String, ServerFnError> {
             final_limits,
         )
         .await;
-        let duration_ms = (chrono::Utc::now() - start_time)
-            .num_milliseconds()
-            .max(0) as u64;
+        let duration_ms = (chrono::Utc::now() - start_time).num_milliseconds().max(0) as u64;
 
         drop(ticket); // 显式释放信号量
 
@@ -287,9 +285,7 @@ pub async fn start_exec_stream(req: ExecRequest) -> Result<String, ServerFnError
             tx,
         )
         .await;
-        let duration_ms = (chrono::Utc::now() - start_time)
-            .num_milliseconds()
-            .max(0) as u64;
+        let duration_ms = (chrono::Utc::now() - start_time).num_milliseconds().max(0) as u64;
 
         drop(ticket); // 显式释放信号量
 

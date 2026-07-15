@@ -26,9 +26,9 @@ use crate::components::empty_state::EmptyState;
 use crate::components::skeletons::atoms::SkeletonBox;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::ui::{
-    Pagination, StatusBadge, ADMIN_CARD_CLASS, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS,
+    LoadingButton, Pagination, StatusBadge, ADMIN_CARD_CLASS, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS,
     BTN_DANGER_OUTLINE, BTN_ICON, BTN_SOLID_GREEN, BTN_SOLID_RED, BTN_TEXT_ACCENT, BTN_TEXT_RED,
-    CHECKBOX_CLASS, LoadingButton,
+    CHECKBOX_CLASS,
 };
 use crate::hooks::query::use_paginated;
 use crate::models::post::PostListItem;

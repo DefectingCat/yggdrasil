@@ -6,6 +6,8 @@
 
 /// 认证相关的 Dioxus server function。
 pub mod auth;
+/// 代码运行接口与数据结构。
+pub mod code_runner;
 /// 评论相关接口。
 pub mod comments;
 /// CSRF 防护中间件。
@@ -32,5 +34,3 @@ pub mod settings;
 pub mod slug;
 /// 图片上传的 Axum 处理器。
 pub mod upload;
-/// 代码运行接口与数据结构。
-pub mod code_runner;

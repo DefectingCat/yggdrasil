@@ -91,8 +91,15 @@ mod tests {
     fn build_time_parses_as_unix_seconds() {
         // build.rs 存的是 Unix 秒,运行时应能解析回时间戳。
         let parsed = BUILD_INFO.build_time.parse::<i64>();
-        assert!(parsed.is_ok(), "build_time not a unix second: {}", BUILD_INFO.build_time);
-        assert!(parsed.unwrap() > 1_600_000_000, "build_time implausibly old");
+        assert!(
+            parsed.is_ok(),
+            "build_time not a unix second: {}",
+            BUILD_INFO.build_time
+        );
+        assert!(
+            parsed.unwrap() > 1_600_000_000,
+            "build_time implausibly old"
+        );
     }
 
     #[test]

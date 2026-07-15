@@ -107,9 +107,7 @@ fn parse_source(source: &str) -> Result<(String, String), (StatusCode, String)> 
 
 /// 简单标识符校验（字母数字下划线，防 SQL 注入与路径穿越）。
 fn is_simple_ident(s: &str) -> bool {
-    !s.is_empty()
-        && s.chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+    !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 /// 判断 AST 是否只读（SELECT/EXPLAIN）。
@@ -169,9 +167,7 @@ async fn export_sql(
     };
 
     for r in &rows {
-        let vals: Vec<String> = (0..r.len())
-            .map(|i| sql_quote_cell(r, i))
-            .collect();
+        let vals: Vec<String> = (0..r.len()).map(|i| sql_quote_cell(r, i)).collect();
         out.push_str(&format!(
             "INSERT INTO {} {} VALUES ({});\n",
             &table_name,
@@ -190,7 +186,11 @@ async fn export_sql(
 
 /// 把一个单元格值转成 SQL 字面量（字符串单引号转义，数字原样，NULL）。
 fn sql_quote_cell(row: &tokio_postgres::Row, idx: usize) -> String {
-    let ty = row.columns().get(idx).map(|c| c.type_().name()).unwrap_or("");
+    let ty = row
+        .columns()
+        .get(idx)
+        .map(|c| c.type_().name())
+        .unwrap_or("");
     match ty {
         "int2" => row
             .try_get::<_, Option<i16>>(idx)

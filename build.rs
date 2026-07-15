@@ -51,7 +51,11 @@ fn git_output(args: &[&str]) -> Option<String> {
     if !out.status.success() {
         return None;
     }
-    String::from_utf8(out.stdout).ok()?.trim().to_string().into()
+    String::from_utf8(out.stdout)
+        .ok()?
+        .trim()
+        .to_string()
+        .into()
 }
 
 /// `rustc --version`,采集编译工具链。

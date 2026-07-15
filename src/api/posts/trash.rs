@@ -85,7 +85,11 @@ pub async fn restore_post(post_id: i32) -> Result<CreatePostResponse, ServerFnEr
         // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
         crate::ssr_cache::bump_global_generation();
 
-        Ok(CreatePostResponse::ok("恢复成功".to_string(), post_id, new_slug))
+        Ok(CreatePostResponse::ok(
+            "恢复成功".to_string(),
+            post_id,
+            new_slug,
+        ))
     }
 
     #[cfg(not(feature = "server"))]
@@ -152,7 +156,11 @@ pub async fn purge_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErro
         // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
         crate::ssr_cache::bump_global_generation();
 
-        Ok(CreatePostResponse::ok("彻底删除成功".to_string(), post_id, slug))
+        Ok(CreatePostResponse::ok(
+            "彻底删除成功".to_string(),
+            post_id,
+            slug,
+        ))
     }
 
     #[cfg(not(feature = "server"))]
@@ -334,7 +342,9 @@ pub async fn batch_purge_posts(post_ids: Vec<i32>) -> Result<CreatePostResponse,
             crate::ssr_cache::bump_global_generation();
         }
 
-        Ok(CreatePostResponse::ok_msg(format!("已彻底删除 {result}/{total} 篇")))
+        Ok(CreatePostResponse::ok_msg(format!(
+            "已彻底删除 {result}/{total} 篇"
+        )))
     }
 
     #[cfg(not(feature = "server"))]
@@ -407,7 +417,9 @@ pub async fn empty_trash() -> Result<CreatePostResponse, ServerFnError> {
             crate::ssr_cache::bump_global_generation();
         }
 
-        Ok(CreatePostResponse::ok_msg(format!("已清空回收站（{result} 篇）")))
+        Ok(CreatePostResponse::ok_msg(format!(
+            "已清空回收站（{result} 篇）"
+        )))
     }
 
     #[cfg(not(feature = "server"))]

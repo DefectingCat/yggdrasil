@@ -74,7 +74,11 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
         // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
         crate::ssr_cache::bump_global_generation();
 
-        Ok(CreatePostResponse::ok("删除成功".to_string(), post_id, slug))
+        Ok(CreatePostResponse::ok(
+            "删除成功".to_string(),
+            post_id,
+            slug,
+        ))
     }
 
     #[cfg(not(feature = "server"))]

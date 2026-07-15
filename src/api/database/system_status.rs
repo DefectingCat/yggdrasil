@@ -71,7 +71,10 @@ pub async fn get_server_status() -> Result<ServerStatus, ServerFnError> {
         // 活跃会话数
         let client = get_conn().await.map_err(AppError::db_conn)?;
         let active_sessions: i64 = client
-            .query_one("SELECT count(*) FROM sessions WHERE expires_at > now()", &[])
+            .query_one(
+                "SELECT count(*) FROM sessions WHERE expires_at > now()",
+                &[],
+            )
             .await
             .map_err(AppError::query)?
             .get(0);

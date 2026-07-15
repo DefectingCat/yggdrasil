@@ -42,8 +42,7 @@ where
 
     // 用 use_hook 持有 (Closure, target)，在整个组件生命周期内复用；
     // use_drop 时 take 出来移除监听，防止泄漏。
-    type ListenerState<T> =
-        Rc<RefCell<Option<(wasm_bindgen::prelude::Closure<dyn FnMut()>, T)>>>;
+    type ListenerState<T> = Rc<RefCell<Option<(wasm_bindgen::prelude::Closure<dyn FnMut()>, T)>>>;
     let state: ListenerState<T> = use_hook(|| Rc::new(RefCell::new(None)));
     let state_for_drop = state.clone();
 
@@ -53,14 +52,17 @@ where
     let mut handler = Some(handler);
 
     use_effect(move || {
-        let Some(acquire) = acquire.take() else { return };
-        let Some(mut handler) = handler.take() else { return };
+        let Some(acquire) = acquire.take() else {
+            return;
+        };
+        let Some(mut handler) = handler.take() else {
+            return;
+        };
         let Some(target) = acquire() else { return };
         let target_clone = target.clone();
         let closure = wasm_bindgen::prelude::Closure::wrap(Box::new(move || {
             handler();
-        })
-            as Box<dyn FnMut()>);
+        }) as Box<dyn FnMut()>);
         let _ = target_clone.as_ref().add_event_listener_with_callback(
             event,
             wasm_bindgen::JsCast::unchecked_ref(closure.as_ref()),

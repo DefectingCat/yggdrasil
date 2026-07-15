@@ -34,7 +34,10 @@ pub async fn approve_comment(id: i64) -> Result<CommentResponse, ServerFnError> 
         let post_id: i32 = match row {
             Some(r) => r.get("post_id"),
             None => {
-                return Ok(CommentResponse::error("not_found", "评论不存在".to_string()));
+                return Ok(CommentResponse::error(
+                    "not_found",
+                    "评论不存在".to_string(),
+                ));
             }
         };
 
