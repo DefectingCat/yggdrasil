@@ -51,14 +51,8 @@ pub fn AdminLayout() -> Element {
 
     let is_write_route =
         matches!(route, Route::Write {}) || matches!(route, Route::WriteEdit { .. });
-    // 「管理文章」高亮覆盖其下所有子路由：列表、分页、回收站 tab。
-    let is_posts_route = matches!(
-        route,
-        Route::Posts {}
-            | Route::PostsPage { .. }
-            | Route::PostsTrash {}
-            | Route::PostsTrashPage { .. }
-    );
+    // 「管理文章」高亮：单路由 /admin/posts（列表 + 回收站 tab 均归此项）。
+    let is_posts_route = matches!(route, Route::Posts {});
 
     // 所有 admin 页面共用同一 shell:外层圆角卡片(滚动容器) + 内部 main 负责居中限宽。
     // write 路由例外:卡片不滚动(overflow-hidden),main 作为 flex 容器不带头尾 padding,

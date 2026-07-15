@@ -1,11 +1,13 @@
-//! 回收站（文章管理下的 tab）。
+//! 回收站（文章管理下的 tab，由 `posts.rs::Posts` 容器渲染）。
 //!
 //! 展示已软删除文章，支持恢复、彻底删除、批量操作、一键清空，
 //! 以及自动清理配置（启用开关 + 保留天数）。
 //! 数据加载与操作仅在 WASM 前端通过 Dioxus server functions 交互。
 //!
-//! 回收站原为独立路由 `/admin/trash`，现合并为 `/admin/posts/trash` tab，
-//! 与文章列表共享「管理文章」导航项与 tab 栏（见 `posts.rs::PostsTabs`）。
+//! 本组件作为 `PostsTrashPanel` 被 `/admin/posts` 单路由下的 tab 容器（见
+//! `posts.rs::Posts`）渲染：header 与 tab 栏由容器统一提供，本组件只负责
+//! 回收站列表内容（自动清理配置 + 批量栏 + 列表 + 分页）。翻页走客户端 signal，
+//! 与全部文章 tab 状态通过容器层的 key 化挂载隔离。
 
 use std::collections::HashSet;
 
@@ -31,33 +33,25 @@ use crate::components::ui::{
 use crate::hooks::query::use_paginated;
 use crate::models::post::PostListItem;
 use crate::models::settings::TrashSettings;
-use crate::router::Route;
-// 文章管理共享的 tab 栏（同目录 posts 模块）。
-use super::posts::PostsTabs;
 
 /// 每页展示的回收站文章数量。
 const TRASH_PER_PAGE: i32 = 20;
 
-/// 回收站入口组件，默认展示第 1 页。
-#[component]
-pub fn PostsTrash() -> Element {
-    rsx! {
-        PostsTrashPage { page: 1 }
-    }
-}
-
-/// 回收站分页组件。
+/// 回收站 tab 内容：列表 + 批量操作 + 自动清理配置。
 ///
-/// 支持单条/批量恢复与彻底删除、一键清空，以及内联自动清理配置。
+/// 作为 `PostsTrashPanel` 被 `posts.rs::Posts` 容器的 tab match 渲染。翻页用客户端
+/// signal 驱动（`current_page` signal + `use_paginated` 闭包内读取建立依赖），
+/// 不走路由。支持单条/批量恢复与彻底删除、一键清空，以及内联自动清理配置。
 #[allow(unused_mut, unused_variables)]
 #[component]
-pub fn PostsTrashPage(page: i32) -> Element {
-    let current_page = page.max(1);
+pub(super) fn PostsTrashPanel() -> Element {
+    let current_page = use_signal(|| 1);
     let mut selected_ids: Signal<HashSet<i32>> = use_signal(HashSet::new);
 
     // 分页列表加载（loading / posts / total / error）由 use_paginated 统一管理。
+    // 闭包内读取 current_page（.with）建立 reactive 依赖，翻页时自动重新请求。
     let paginated = use_paginated(
-        move || current_page,
+        move || current_page.with(|p| *p),
         TRASH_PER_PAGE,
         |p, pp| async move {
             list_deleted_posts(p, pp)
@@ -84,18 +78,7 @@ pub fn PostsTrashPage(page: i32) -> Element {
     };
 
     rsx! {
-        div { class: "w-full max-w-7xl mx-auto space-y-6",
-            // 页面标题
-            div { class: "flex items-end justify-between pb-6 border-b border-paper-border mb-6",
-                div {
-                    h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]", "回收站" }
-                    p { class: "text-base text-[var(--color-paper-secondary)] mt-2", "已删除文章 ({total()})" }
-                }
-            }
-
-            // tab 栏：文章 / 回收站。URL 驱动，与全部文章页共用（见 posts::PostsTabs）。
-            PostsTabs {}
-
+        div { class: "space-y-6",
             // 自动清理配置卡片（抽取为子组件 AutoPurgeSettings，见文件末尾）。
             AutoPurgeSettings { settings }
 
@@ -299,16 +282,22 @@ pub fn PostsTrashPage(page: i32) -> Element {
                         }
                         Pagination {
                             variant: "admin",
-                            current_page,
+                            current_page: current_page(),
                             total: total(),
                             per_page: TRASH_PER_PAGE,
-                            prev_route: if current_page - 1 <= 1 { Route::PostsTrash {} } else { Route::PostsTrashPage {
-                                page: current_page - 1,
-                            } },
-                            next_route: Route::PostsTrashPage {
-                                page: current_page + 1,
-                            },
                             unit: "篇",
+                            on_prev: {
+                                let mut page = current_page;
+                                move |_| {
+                                    page.with_mut(|p| *p = (*p - 1).max(1));
+                                }
+                            },
+                            on_next: {
+                                let mut page = current_page;
+                                move |_| {
+                                    page.with_mut(|p| *p += 1);
+                                }
+                            },
                         }
                     }
                 }

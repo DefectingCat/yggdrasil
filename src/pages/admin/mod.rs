@@ -21,10 +21,8 @@ pub mod write;
 pub use comments::{AdminComments, AdminCommentsPage};
 /// 管理后台仪表盘组件。
 pub use dashboard::Admin;
-/// 文章管理列表组件（带默认分页）。
-pub use posts::{Posts, PostsPage};
-/// 回收站管理组件（带默认分页，文章管理下的 tab）。
-pub use posts_trash::{PostsTrash, PostsTrashPage};
+/// 文章管理入口组件（列表 + 回收站，单路由 + 客户端 tab）。
+pub use posts::Posts;
 /// 代码试运行沙箱组件。
 pub use runner::Runner;
 /// 系统管理入口组件。
