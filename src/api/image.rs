@@ -230,6 +230,7 @@ fn detect_format(path: &str) -> ImageFmt {
 }
 
 /// detect_format 的轻量返回类型，避免在热路径上构造 image::ImageFormat。
+#[cfg(feature = "server")]
 type ImageFmt = image::ImageFormat;
 
 #[cfg(feature = "server")]
