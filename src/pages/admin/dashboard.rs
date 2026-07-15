@@ -115,8 +115,7 @@ pub fn Admin() -> Element {
                                     "text-[var(--color-paper-secondary)]",
                                     "text-[var(--color-paper-primary)]",
                                 )
-                            }
-                            }
+                            };
                             rsx! {
                                 div { class: "text-sm font-medium {color_class}", "待审评论" }
                                 div { class: "flex items-baseline justify-between mt-4",

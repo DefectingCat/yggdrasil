@@ -121,7 +121,6 @@ pub fn CommentSection(post_id: i32) -> Element {
                         rsx! {
                             p { class: "text-paper-tertiary text-center py-8", "暂无评论，成为第一个评论的人吧！" }
                         }
-                    }
                     } else {
                         rsx! {
                             CommentList {
