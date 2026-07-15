@@ -42,9 +42,9 @@ mod tiptap_bridge;
 // codemirror_bridge：SQL 编辑器的 wasm-bindgen 绑定，结构镜像 tiptap_bridge。
 // 共享类型（SqlSchema/SqlTable）两端都编译；extern 与 EditorHandle 在 #[cfg(wasm32)] 子模块里。
 mod codemirror_bridge;
-mod xterm_bridge;
 mod utils;
 mod webp;
+mod xterm_bridge;
 
 /// 压缩算法配置。
 #[cfg(feature = "server")]
@@ -231,10 +231,10 @@ async fn admin_guard(
     req: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
+    use crate::models::user::UserRole;
     use axum::body::Body;
     use axum::http::{header, StatusCode};
     use axum::response::Response;
-    use crate::models::user::UserRole;
 
     let path = req.uri().path().to_string();
     if !path.starts_with("/admin") {
@@ -278,17 +278,16 @@ fn main() {
         // 加载 .env 环境变量
         dotenvy::dotenv().ok();
         // 初始化 tracing 日志，默认级别为 info
-            tracing_subscriber::fmt()
-                .with_env_filter(
-                    tracing_subscriber::EnvFilter::try_from_default_env()
-                        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
-                )
-                .init();
+        tracing_subscriber::fmt()
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+            )
+            .init();
 
-            // 打印构建元信息(版本 / git / 提交时间 / rustc / 编译时刻)。
-            // 必须在 tracing 初始化之后,否则日志被丢弃。
-            build_info::log_build_info();
-
+        // 打印构建元信息(版本 / git / 提交时间 / rustc / 编译时刻)。
+        // 必须在 tracing 初始化之后,否则日志被丢弃。
+        build_info::log_build_info();
 
         // 校验数据库连接串，未设置则直接退出
         if std::env::var("DATABASE_URL").is_err() {
@@ -506,8 +505,7 @@ fn main() {
             ));
             // admin_guard 置于最外层（最后添加 = 最先执行）：未登录的 /admin* 请求
             // 在 CSRF / cache / SSR 渲染之前就被 302 短路，零渲染开销。
-            let app_routes =
-                app_routes.layer(axum::middleware::from_fn(admin_guard));
+            let app_routes = app_routes.layer(axum::middleware::from_fn(admin_guard));
 
             // 静态资源路由：图片文件服务。
             // 注意：`dioxus::server::serve()` 接管了 listener 与 `into_make_service`
