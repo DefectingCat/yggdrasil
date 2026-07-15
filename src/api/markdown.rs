@@ -36,18 +36,23 @@ pub struct RenderedContent {
 /// 增强版 Markdown 渲染：生成 TOC、标题锚点与语法高亮代码块。
 pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
     use pulldown_cmark::{Event, HeadingLevel, Options, Tag, TagEnd};
+    use std::fmt::Write as _;
 
-    // 两遍解析使用相同的 Options，避免 TOC 收集与正文渲染对 Markdown 扩展语法
-    // （表格、删除线、脚注等）的处理不一致。
+    // 两遍遍历使用相同的 Options 与同一份解析结果，避免 TOC 收集与正文渲染对
+    // Markdown 扩展语法（表格、删除线、脚注等）的处理不一致。
     let opts = Options::all();
 
-    // 1. Parse markdown and collect headings for TOC
-    let parser = pulldown_cmark::Parser::new_ext(md, opts);
+    // pulldown-cmark 只解析一次，collect 成 Vec<Event> 后两遍遍历复用。
+    // 旧实现对同一份 md 调用两次 Parser::new_ext，等于两倍的 tokenize + 解析 CPU。
+    // Event 内含 CowStr（借用 md 切片），collect 后仍可重复借用。
+    let events: Vec<Event> = pulldown_cmark::Parser::new_ext(md, opts).collect();
+
+    // 1. 第一遍：收集标题（level, text, id），用 iter() 借用不消费 events。
     // (level, text, id)
     let mut headings: Vec<(u8, String, String)> = Vec::new();
     let mut current_heading: Option<(u8, String)> = None;
 
-    for event in parser {
+    for event in &events {
         match event {
             Event::Start(Tag::Heading { level, .. }) => {
                 let lvl = match level {
@@ -62,12 +67,12 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
             }
             Event::Text(text) => {
                 if let Some((_, ref mut content)) = current_heading {
-                    content.push_str(&text);
+                    content.push_str(text);
                 }
             }
             Event::Code(code) => {
                 if let Some((_, ref mut content)) = current_heading {
-                    content.push_str(&code);
+                    content.push_str(code);
                 }
             }
             Event::End(TagEnd::Heading(_)) => {
@@ -83,9 +88,9 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
     // 2. Generate TOC HTML
     let toc_html = generate_toc_html(&headings);
 
-    // 3. Generate HTML with heading anchors
-    let parser = pulldown_cmark::Parser::new_ext(md, opts);
-    let mut html = String::new();
+    // 3. 第二遍：生成 HTML，用 into_iter() 消费 events（非标题事件需 move 进 push_html）。
+    // HTML 输出通常比 md 长（标签包裹），按 md 长度 + 256 预分配，避免 String::new 的多次 realloc。
+    let mut html = String::with_capacity(md.len() + 256);
     let mut heading_idx = 0;
     let mut in_heading = false;
     let mut in_codeblock = false;
@@ -97,7 +102,7 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
     let mut code_buffer = String::new();
     let mut non_heading_events: Vec<Event> = Vec::new();
 
-    for event in parser {
+    for event in events {
         match event {
             Event::Start(Tag::Heading { level, .. }) => {
                 // 先把累积的普通事件刷入 HTML，再开始新标题。
@@ -116,7 +121,8 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
                         HeadingLevel::H5 => "h5",
                         HeadingLevel::H6 => "h6",
                     };
-                    html.push_str(&format!("<{} id=\"{}\">", tag, id));
+                    // write! 直写目标 String，零中间分配（format! 会先分配临时 String 再 push_str）。
+                    let _ = write!(html, "<{tag} id=\"{id}\">");
                 }
             }
             Event::End(TagEnd::Heading(level)) => {
@@ -130,10 +136,10 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
                         HeadingLevel::H5 => "h5",
                         HeadingLevel::H6 => "h6",
                     };
-                    html.push_str(&format!(
-                        "<a class=\"anchor\" aria-hidden=\"true\" href=\"#{}\">#</a></{}>",
-                        id, tag
-                    ));
+                    let _ = write!(
+                        html,
+                        "<a class=\"anchor\" aria-hidden=\"true\" href=\"#{id}\">#</a></{tag}>"
+                    );
                     heading_idx += 1;
                 }
                 in_heading = false;
@@ -181,13 +187,14 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
                 let highlighted =
                     crate::highlight::server::highlight_code(&code_buffer, code_lang.as_deref());
                 // 可运行代码块：在 <pre> 上挂 data-runnable / data-lang / data-overrides / data-source，
-                // 阅读器（post_content.rs）客户端扫描这些标记原地挂载 CodeRunner 组件。
+                // 阅读者（post_content.rs）客户端扫描这些标记原地挂载 CodeRunner 组件。
                 // data-source 为 HTML 转义后的原始源码，供阅读器无损提取（避免反解高亮 HTML）。
                 if let Some((lang, overrides_escaped)) = code_runnable.take() {
                     let source_escaped = crate::utils::html::escape_html(&code_buffer);
-                    html.push_str(&format!(
+                    let _ = write!(
+                        html,
                         r#"<pre data-runnable="true" data-lang="{lang}" data-overrides="{overrides_escaped}" data-source="{source_escaped}"><code class="language-{lang}">"#
-                    ));
+                    );
                 } else {
                     html.push_str("<pre><code");
                     if let Some(lang) = &code_lang {
@@ -195,7 +202,7 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
                         // 高亮的 language-xxx 取纯语言 token（首个空白前）。
                         let clean_lang = lang.split_whitespace().next().unwrap_or("");
                         if !clean_lang.is_empty() {
-                            html.push_str(&format!(" class=\"language-{clean_lang}\""));
+                            let _ = write!(html, " class=\"language-{clean_lang}\"");
                         }
                     }
                     html.push('>');
@@ -304,11 +311,15 @@ where
 #[cfg(feature = "server")]
 /// 根据标题层级生成嵌套目录 HTML。
 fn generate_toc_html(headings: &[(u8, String, String)]) -> String {
+    use std::fmt::Write as _;
+
     if headings.is_empty() {
         return String::new();
     }
 
-    let mut html = String::from("<ul>");
+    // TOC 大小按标题数估算（每个 li+a 约 64 字节起），避免 String::new 的多次 realloc。
+    let mut html = String::with_capacity(headings.len() * 64 + 16);
+    html.push_str("<ul>");
     let mut stack: Vec<u8> = vec![headings[0].0];
 
     for (i, (level, text, id)) in headings.iter().enumerate() {
@@ -342,10 +353,10 @@ fn generate_toc_html(headings: &[(u8, String, String)]) -> String {
         // 因此正文与属性两处都走 escape_heading_text（转义 & < > " '）。原先用 clean_html
         // 处理属性上下文会漏掉 `"`，标题中的双引号会越出 aria-label 边界。
         let escaped_text = escape_heading_text(text);
-        html.push_str(&format!(
-            "<li><a href=\"#{}\" aria-label=\"{}\">{}</a>",
-            id, escaped_text, escaped_text
-        ));
+        let _ = write!(
+            html,
+            "<li><a href=\"#{id}\" aria-label=\"{escaped_text}\">{escaped_text}</a>"
+        );
     }
 
     // Close remaining lists
