@@ -46,12 +46,14 @@ pub static DOCKER_CLIENT: LazyLock<Option<Docker>> = LazyLock::new(|| {
 /// `NotFound` 既不命中 `TimedOut` 也不命中超时判断，会走 execute.rs 的通用失败路径
 /// （`ExecStatus::Failed` + 「系统暂时不可用」），不会误报成超时。
 fn get_docker() -> Result<&'static Docker, bollard::errors::Error> {
-    DOCKER_CLIENT.as_ref().ok_or_else(|| bollard::errors::Error::IOError {
-        err: std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "Docker daemon 不可用（未安装或未运行）",
-        ),
-    })
+    DOCKER_CLIENT
+        .as_ref()
+        .ok_or_else(|| bollard::errors::Error::IOError {
+            err: std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Docker daemon 不可用（未安装或未运行）",
+            ),
+        })
 }
 
 pub fn build_host_config(limits: &ResourceLimits) -> HostConfig {
