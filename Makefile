@@ -1,4 +1,4 @@
-.PHONY: dev build build-linux build-freebsd freebsd-sysroot docker css css-watch clean build-libs build-editor build-codemirror build-lightbox build-core highlight-css test doc doc-open start lint fix restore-webp
+.PHONY: dev build build-linux build-freebsd freebsd-sysroot docker docker-amd64 docker-apple docker-multiarch css css-watch clean build-libs build-editor build-codemirror build-lightbox build-core highlight-css test doc doc-open start lint fix restore-webp
 
 build:
 	@cd libs && pnpm install --frozen-lockfile
@@ -156,6 +156,8 @@ doc-open:
 # QEMU is needed. Docker Desktop ships a buildx builder that handles this.
 #
 #   make docker              native arch only, load into local daemon (for testing)
+#   make docker-amd64        x86_64 only, load into local daemon (buildx + QEMU on Apple Silicon)
+#   make docker-apple        x86_64 only, via Apple Container CLI (macOS 26+, Apple Silicon native; no Docker needed)
 #   make docker-multiarch    build amd64+arm64 and push to a registry
 #                            (multi-arch manifests can't be --load-ed locally)
 #
@@ -166,6 +168,18 @@ IMAGE ?= yggdrasil
 PLATFORMS ?= linux/amd64,linux/arm64
 docker:
 	@docker buildx build --load -t yggdrasil .
+
+# Cross-build x86_64 into the local daemon. buildx 仿真非原生架构,无需修改 Dockerfile
+# (它本就按 dpkg --print-architecture 自适应选 musl target)。Apple Silicon 上走 QEMU,
+# 比 native 慢;产物可直接 docker run / docker save 导出。
+docker-amd64:
+	@docker buildx build --platform linux/amd64 --load -t yggdrasil:amd64 .
+
+# Apple Container CLI 构建 x86_64 镜像。前提:macOS 26 Tahoe + 已安装 `container`。
+# 无需 Docker Desktop;使用 --arch 而非 --platform(Apple Container 用裸架构名,OS 固定 linux)。
+# 产出标准 OCI 镜像,可 container push 到 registry 后在 Linux 上用 docker compose 运行。
+docker-apple:
+	@container build --arch amd64 -t yggdrasil:amd64 .
 
 docker-multiarch:
 	@docker buildx build --platform $(PLATFORMS) -t $(IMAGE) --push .
