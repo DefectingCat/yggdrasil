@@ -435,40 +435,84 @@ fn PostRow(
     }
 }
 
+/// tab 组 id 自增计数器：给每处 PostsTabs 实例一个唯一前缀，用于 DOM 测量滑块位置。
+/// （ui.rs 的 FilterTabs 有同款 TAB_GROUP_ID，此处为避免跨模块可见性污染，本地自建。）
+static POSTS_TAB_GROUP_ID: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 /// 文章管理 tab 栏：「全部文章」与「回收站」。
 ///
 /// tab 状态由父组件传入的 `active` signal 驱动（非路由），点击即调用 `on_change`
 /// 切换。回收站 tab 带 `trash_count` 数量角标，便于发现待清理文章。
 ///
-/// 对齐修复：两个 tab 均用 `inline-flex items-center` 同盒模型，外层容器加
-/// `items-center`，根除原先「全部文章」(inline 文本) 与「回收站」(inline-flex
-/// 带角标) 盒模型不一致导致的垂直错位。
+/// 底部带**平滑滑动指示器**（绝对定位的滑块 + transition），切换 tab 时滑块从
+/// 一个 tab 平滑滑到另一个，与 FilterTabs（system/comments 页）视觉一致。滑块
+/// 位置通过 WASM 端测量目标 button 的 offsetLeft/offsetWidth 动态计算。
+///
+/// 两个 tab 均用 `inline-flex items-center` 同盒模型，外层容器加 `items-center`，
+/// 根除原先「全部文章」(inline 文本) 与「回收站」(inline-flex 带角标) 盒模型
+/// 不一致导致的垂直错位。
 #[component]
+#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
 pub(super) fn PostsTabs(
     active: Signal<PostsTab>,
     trash_count: Signal<Option<i64>>,
     on_change: EventHandler<PostsTab>,
 ) -> Element {
     let is_trash = active() == PostsTab::Trash;
+    // 滑块样式（left/width/opacity）：WASM 端测量目标 button 定位后写入。
+    let mut indicator_style = use_signal(|| "left: 0px; width: 0px; opacity: 0;".to_string());
+    let id_prefix =
+        use_hook(|| POSTS_TAB_GROUP_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
+
+    // 测量目标 tab 的 offsetLeft/offsetWidth，更新滑块定位。WASM 端异步等待 DOM
+    // 更新后读取；server 端空操作（SSR 不渲染动画）。
+    let update_indicator = move |active_key: &str| {
+        let active_key = active_key.to_string();
+        spawn(async move {
+            #[cfg(target_arch = "wasm32")]
+            {
+                use wasm_bindgen::JsCast;
+                crate::utils::time::sleep_ms(50).await;
+                if let Some(el) = web_sys::window()
+                    .and_then(|w| w.document())
+                    .and_then(|d| d.get_element_by_id(&format!("posts-tab-{id_prefix}-{active_key}")))
+                {
+                    if let Ok(html_el) = el.dyn_into::<web_sys::HtmlElement>() {
+                        indicator_style.set(format!(
+                            "left: {}px; width: {}px; opacity: 1;",
+                            html_el.offset_left(),
+                            html_el.offset_width()
+                        ));
+                    }
+                }
+            }
+        });
+    };
+
+    // active 变化时（含首次挂载）触发滑块定位。
+    use_effect(move || {
+        update_indicator(active().as_str());
+    });
 
     rsx! {
-        // items-center 让两个 tab 垂直居中对齐；两个 button 同为 inline-flex items-center，
-        // 盒模型一致，根除基线/盒高错位。
-        div { class: "flex items-center gap-4 border-b border-paper-border",
+        // relative 容器：承载绝对定位滑块；items-center 让两个 tab 垂直居中对齐。
+        div { class: "relative flex items-center gap-4 border-b border-paper-border",
             button {
+                id: "posts-tab-{id_prefix}-all",
                 class: if !is_trash {
-                    "inline-flex items-center px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-primary transition-colors cursor-pointer border-b-2 border-paper-primary -mb-px"
+                    "inline-flex items-center px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-primary transition-colors cursor-pointer"
                 } else {
-                    "inline-flex items-center px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer border-b-2 border-transparent -mb-px"
+                    "inline-flex items-center px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer"
                 },
                 onclick: move |_| on_change.call(PostsTab::All),
                 "全部文章"
             }
             button {
+                id: "posts-tab-{id_prefix}-trash",
                 class: if is_trash {
-                    "inline-flex items-center gap-1.5 px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-primary transition-colors cursor-pointer border-b-2 border-paper-primary -mb-px"
+                    "inline-flex items-center gap-1.5 px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-primary transition-colors cursor-pointer"
                 } else {
-                    "inline-flex items-center gap-1.5 px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer border-b-2 border-transparent -mb-px"
+                    "inline-flex items-center gap-1.5 px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer"
                 },
                 onclick: move |_| on_change.call(PostsTab::Trash),
                 "回收站"
@@ -483,6 +527,11 @@ pub(super) fn PostsTabs(
                         "{count}"
                     }
                 }
+            }
+            // 绝对定位的滑动指示器：贴底边（-1px 盖住外层 border-b），transition 驱动滑动动画。
+            div {
+                class: "absolute bottom-[-1px] h-[2px] bg-paper-primary transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] pointer-events-none",
+                style: "{indicator_style}",
             }
         }
     }
