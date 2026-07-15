@@ -1,25 +1,80 @@
+# ---------------------------------------------------------------------------
+# Local environment & secrets — must never enter the build context.
+# .env holds the real DATABASE_URL (with password); .env.example is just a
+# template but is not a build input either.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+
+# ---------------------------------------------------------------------------
+# Build outputs & dependency caches — regenerated inside the container.
+# ---------------------------------------------------------------------------
 target/
-.git/
 dist/
 .dioxus/
+static/
 node_modules/
 libs/node_modules/
 libs/*/node_modules/
 
-# Generated assets are rebuilt inside the container.
+# Generated assets under public/ are rebuilt by the Dockerfile
+# (build-libs → highlight-css → tailwindcss → dx build). Keep the source
+# runtime assets (favicon.ico, icons/, images/) but drop generated ones.
 public/style.css
 public/highlight.css
 public/tiptap/
 public/codemirror/
 public/lightbox/
 public/yggdrasil-core/
+public/xterm/
+public/doc/
 
-# Uploads directory is created at runtime; only keep the gitkeep marker.
+# ---------------------------------------------------------------------------
+# Runtime data — created at startup, not part of the image build.
+# ---------------------------------------------------------------------------
 uploads/*
 !uploads/.gitkeep
-backups/*
-!backups/.gitkeep
+backups/
 
+# ---------------------------------------------------------------------------
+# Machine-local / unrelated directories — not build inputs.
+#   others/            — vendored reference blog (DansBlog)
+#   .freebsd-sysroot/  — FreeBSD cross-compile sysroot (local-only)
+#   docker/            — runner image sources, built separately
+#   docs/ tests/ scripts/ — docs & standalone scripts, not compiled in
+# ---------------------------------------------------------------------------
+others/
+.freebsd-sysroot/
+docker/
+docs/
+tests/
+scripts/
+
+# ---------------------------------------------------------------------------
+# Agent / IDE / CI tooling — never needed by the build.
+# ---------------------------------------------------------------------------
+.zcode/
+.superpowers/
+.agents/
+.gitea/
+.claude/
+.vscode/
+.idea/
+*.swp
+.DS_Store
+rust-analyzer.toml
+
+# ---------------------------------------------------------------------------
 # Docker files themselves are not needed in the build context.
+# ---------------------------------------------------------------------------
 Dockerfile
 .dockerignore
+compose*.yaml
+compose*.yml
+
+# ---------------------------------------------------------------------------
+# Misc local artifacts.
+# ---------------------------------------------------------------------------
+.git/
+.worktrees/
+profile.json.gz
