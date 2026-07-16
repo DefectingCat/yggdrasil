@@ -3,7 +3,10 @@
 # -----------------------------------------------------------------------------
 # Builder stage: compile the static-linked musl server binary and frontend assets
 # -----------------------------------------------------------------------------
-FROM rust:1.96-bookworm AS builder
+# Trixie (Debian 13, glibc 2.41) — required because the prebuilt `dx` v0.7.9
+# binary (aarch64/x86_64-unknown-linux-gnu) needs GLIBC_2.39; Bookworm only
+# ships 2.36, so `dx --version` fails with "version `GLIBC_2.39' not found".
+FROM rust:1.96-trixie AS builder
 
 # Point every network download at a Chinese mirror so the build is fast/reliable
 # from inside the container (the host proxy at 127.0.0.1:10808 is unreachable
@@ -79,12 +82,21 @@ RUN rustup target add wasm32-unknown-unknown \
 # Install the Dioxus CLI from the official prebuilt binary (GitHub Releases),
 # NOT `cargo install` (which compiles dx-cli's huge dep tree from source — the
 # slowest single Docker step). The release tag v0.7.9 matches the crate version
-# we previously pinned. dx runs only in this builder stage (to emit the WASM
-# client bundle); it never enters the static-musl runtime image, so the glibc
-# (linux-gnu) linking of the prebuilt binary is fine here. Each buildx platform
-# leg downloads only its native arch; the sha256 pins the exact artifact
-# (supply-chain integrity, verified against the release's .sha256 sidecar).
+# we previously pinned. The prebuilt dx is a glibc (linux-gnu) binary requiring
+# GLIBC_2.39 — that's why the builder stage above uses Trixie (glibc 2.41), not
+# Bookworm (glibc 2.36). dx runs only in this builder stage (to emit the WASM
+# client bundle); it never enters the static-musl runtime image. Each buildx
+# platform leg downloads only its native arch; the sha256 pins the exact
+# artifact (supply-chain integrity, verified against the release's .sha256
+# sidecar).
 ARG DX_VERSION=0.7.9
+# The 32 MB dx tarball sits on github.com releases; from China it downloads at
+# ~300 KB/s and the connection is frequently reset mid-transfer with
+# "curl: (56) ... unexpected eof while reading" — the same flaky-upstream
+# problem the mirror rewrites above solve for apt/crates/npm. --retry with
+# --retry-all-errors (curl 7.71+, Trixie ships 8.x) covers SSL/EOF resets, and
+# --continue-at - resumes the partial file instead of restarting from zero on
+# each retry. The sha256 pin still catches a corrupted/partial download.
 RUN ARCH="$(dpkg --print-architecture)" \
     && case "$ARCH" in \
         amd64) DX_TRIPLET=x86_64-unknown-linux-gnu  DX_SHA256=3b132551b480bc96f938f9f0d37936ee1190f994977539dcc347eaf38540d005 ;; \
@@ -92,7 +104,7 @@ RUN ARCH="$(dpkg --print-architecture)" \
         *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
     esac \
     && DX_URL="https://github.com/DioxusLabs/dioxus/releases/download/v${DX_VERSION}/dx-${DX_TRIPLET}.tar.gz" \
-    && curl -fsSL "${DX_URL}" -o /tmp/dx.tar.gz \
+    && curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors --retry-connrefused --continue-at - "${DX_URL}" -o /tmp/dx.tar.gz \
     && echo "${DX_SHA256}  /tmp/dx.tar.gz" | sha256sum -c - \
     && tar -xzf /tmp/dx.tar.gz -C /usr/local/bin \
     && rm /tmp/dx.tar.gz \
