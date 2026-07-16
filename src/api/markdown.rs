@@ -183,6 +183,21 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
                 code_buffer.push_str(&text);
             }
             Event::End(TagEnd::CodeBlock) => {
+                // mermaid 代码块：前端 yggdrasil-core 扫描 language-mermaid 渲染成 SVG，
+                // 源码不应被 syntect 高亮（无语法定义，且会包 <span> 污染 textContent 提取）。
+                // 直接输出转义后的纯源码，前端 textContent 无损拿到原始 mermaid 文本。
+                let is_mermaid = code_lang
+                    .as_deref()
+                    .map(|l| l.split_whitespace().next() == Some("mermaid"))
+                    .unwrap_or(false);
+                if is_mermaid {
+                    let escaped = crate::utils::html::escape_html(&code_buffer);
+                    html.push_str(r#"<pre><code class="language-mermaid">"#);
+                    html.push_str(&escaped);
+                    html.push_str("</code></pre>");
+                    in_codeblock = false;
+                    continue;
+                }
                 // 使用 syntect 对代码块进行服务端语法高亮。
                 let highlighted =
                     crate::highlight::server::highlight_code(&code_buffer, code_lang.as_deref());
@@ -906,5 +921,25 @@ console.log(1)
             "坏公式不应破坏后文, got: {}",
             result.html
         );
+    }
+
+    #[test]
+    fn render_markdown_mermaid_block_not_highlighted() {
+        // mermaid 块跳过 syntect 高亮：源码应是转义纯文本，不被 <span> 包裹。
+        // 前端 mermaid.ts 用 textContent 无损提取渲染成 SVG。
+        let result = render_markdown_enhanced("```mermaid\ngraph LR\n    A --> B\n```");
+        assert!(
+            result.html.contains(r#"class="language-mermaid""#),
+            "应保留 language-mermaid class, got: {}",
+            result.html
+        );
+        // 不应被 syntect 高亮（无 text plain span）。
+        assert!(
+            !result.html.contains("text plain"),
+            "mermaid 源码不应被 syntect 高亮, got: {}",
+            result.html
+        );
+        // 源码内容保留（HTML 转义后）。
+        assert!(result.html.contains("graph LR"));
     }
 }
