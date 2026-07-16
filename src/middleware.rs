@@ -78,7 +78,8 @@ pub(crate) fn parse_compression_algorithms(env: &str) -> Option<CompressionAlgor
 }
 
 /// 根据 COMPRESSION_ALGORITHMS 环境变量构造 CompressionLayer。
-/// 未设置或设置为 "all" 时启用全部算法；设置为 ""、"none" 或 "off" 时禁用。
+/// 默认（未设置时）关闭压缩；显式设为 "all" 启用全部算法，设为 "gzip,brotli,..."
+/// 按需选择；设为 ""、"none" 或 "off" 等价于不启用。
 ///
 /// CompressionLayer 使用 tower-http 的 `DefaultPredicate`，开箱即用即：
 /// - 跳过 `image/*` content-type（WebP/PNG/JPEG/GIF 等已是压缩格式，再压浪费 CPU，
@@ -91,7 +92,7 @@ pub(crate) fn parse_compression_algorithms(env: &str) -> Option<CompressionAlgor
 pub(crate) fn compression_layer_from_env() -> Option<tower_http::compression::CompressionLayer> {
     use tower_http::compression::CompressionLayer;
 
-    let env = std::env::var("COMPRESSION_ALGORITHMS").unwrap_or_else(|_| "all".to_string());
+    let env = std::env::var("COMPRESSION_ALGORITHMS").unwrap_or_else(|_| "off".to_string());
     let algorithms = parse_compression_algorithms(&env)?;
 
     Some(
@@ -303,12 +304,9 @@ mod tests {
     }
 
     #[test]
-    fn compression_default_env_is_all() {
+    fn compression_default_env_is_off() {
         // 模拟未设置环境变量时的默认值
-        assert_eq!(
-            parse_compression_algorithms("all"),
-            Some(CompressionAlgorithms::all_enabled())
-        );
+        assert_eq!(parse_compression_algorithms("off"), None);
     }
 
     #[test]
