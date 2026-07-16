@@ -2,7 +2,7 @@
 
 use dioxus::prelude::*;
 
-use crate::components::ui::{BTN_OUTLINE, BTN_TEXT_AMBER, BTN_TEXT_RED, LoadingButton};
+use crate::components::ui::{LoadingButton, BTN_OUTLINE, BTN_TEXT_AMBER, BTN_TEXT_RED};
 
 use super::format_bytes;
 

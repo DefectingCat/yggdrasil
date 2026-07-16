@@ -35,9 +35,9 @@ pub mod infra;
 mod highlight;
 // middleware：Axum 中间件与启动期纯函数（cache-control / admin 守卫 / 压缩层），
 // server-only。从 main.rs 抽出以便独立测试，路由组装处以 crate::middleware::xxx 调用。
+mod hooks;
 #[cfg(feature = "server")]
 mod middleware;
-mod hooks;
 mod models;
 mod pages;
 mod router;
@@ -349,7 +349,9 @@ fn main() {
             // layer 顺序：后加的最外层先执行。CSRF 最外层先拦截非法来源。
             let mut app_routes = dioxus_app
                 .layer(axum::middleware::from_fn(ssr_generation_middleware))
-                .layer(axum::middleware::from_fn(crate::middleware::add_cache_control))
+                .layer(axum::middleware::from_fn(
+                    crate::middleware::add_cache_control,
+                ))
                 .layer(axum::middleware::from_fn(crate::api::csrf::csrf_middleware));
             if let Some(layer) = crate::middleware::compression_layer_from_env() {
                 app_routes = app_routes.layer(layer);
@@ -360,9 +362,8 @@ fn main() {
             ));
             // admin_guard 置于最外层（最后添加 = 最先执行）：未登录的 /admin* 请求
             // 在 CSRF / cache / SSR 渲染之前就被 302 短路，零渲染开销。
-            let app_routes = app_routes.layer(axum::middleware::from_fn(
-                crate::middleware::admin_guard,
-            ));
+            let app_routes =
+                app_routes.layer(axum::middleware::from_fn(crate::middleware::admin_guard));
 
             // 静态资源路由：图片文件服务。
             // 注意：`dioxus::server::serve()` 接管了 listener 与 `into_make_service`
