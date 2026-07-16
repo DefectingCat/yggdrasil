@@ -154,6 +154,25 @@ fn main() {
                 eprintln!("HINT: check the logs above; verify DATABASE_URL and that PostgreSQL is healthy.");
                 std::process::exit(1);
             }
+
+            // 端口预探测：dioxus::server::serve() 内部对
+            // `TcpListener::bind(addr).await...unwrap()`（dioxus-server 0.7.9 launch.rs:143）
+            // 失败会直接 panic（SIGABRT）。这里在交接给 serve() 之前先探测同一地址，
+            // 失败则走统一的 exit(1) 路径，输出可操作的提示，而不是丢一个裸 panic 栈。
+            // 探测用的 listener 立即 drop，由 serve() 重新绑定（同进程内快速 rebind，
+            // 不经过 TIME_WAIT，无窗口问题）。
+            let addr = dioxus::cli_config::fullstack_address_or_localhost();
+            if let Err(e) = tokio::net::TcpListener::bind(addr).await {
+                tracing::error!("无法绑定监听地址 {addr}: {e}");
+                eprintln!("ERROR: 无法绑定监听地址 {addr}: {e}");
+                eprintln!(
+                    "HINT: 端口 {} 可能已被占用。用 `lsof -i :{}` 查看占用进程，\
+                     或设置 PORT 环境变量换一个端口。",
+                    addr.port(),
+                    addr.port()
+                );
+                std::process::exit(1);
+            }
         });
         // 迁移 runtime 用完即弃，显式 drop 以在 serve() 前释放其线程资源。
         drop(migrate_rt);
