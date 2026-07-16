@@ -205,5 +205,6 @@ clean:
 	@rm -rf public/katex
 	@rm -rf public/mermaid
 	@rm -rf public/doc
+	@rm -rf static/
 	@rm -rf uploads/.cache
 	@rm -rf libs/node_modules libs/*/node_modules
