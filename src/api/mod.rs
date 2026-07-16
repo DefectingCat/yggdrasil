@@ -20,6 +20,9 @@ pub mod error;
 pub mod health;
 /// 图片服务的 Axum 处理器。
 pub mod image;
+/// KaTeX 服务端数学公式渲染（server-only）。
+#[cfg(feature = "server")]
+pub mod katex;
 /// Markdown 渲染与 HTML 清理。
 pub mod markdown;
 /// 文章 CRUD 相关接口。

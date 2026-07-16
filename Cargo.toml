@@ -58,6 +58,11 @@ tokio-stream = { version = "0.1", features = ["sync"], optional = true }
 # 且对全静态 musl 链接友好（生产 Docker 镜像即 musl 目标）。
 # server-only：经 server feature 启用；WASM 前端构建不编译（见 main.rs cfg 门控）。
 mimalloc = { version = "0.1", optional = true }
+# KaTeX 服务端数学公式渲染：纯 Rust 重实现（无 JS 运行时），渲染 $...$ / $$...$$
+# 为 HTML span。库名是 katex（crate 名 katex-rs），代码用 `use katex::...`。
+# 默认 features 为空即原生服务端编译；wasm feature 仅前端构建才需，这里不开。
+# 配套前端需引入 katex.min.css + 字体（见 public/katex/、Makefile katex-css）。
+katex-rs = { version = "0.2", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = ["Document", "Window", "Storage", "Element", "HtmlElement", "DomTokenList", "MediaQueryList", "HtmlImageElement", "MouseEvent", "KeyboardEvent", "Node", "EventTarget", "Navigator", "File", "FileList", "FormData", "Request", "RequestInit", "Response", "Headers", "ClipboardEvent", "DataTransfer", "HtmlInputElement", "EventSource", "MessageEvent"] }
@@ -119,4 +124,5 @@ server = [
     "dep:bollard",
     "dep:tokio-stream",
     "dep:mimalloc",
+    "dep:katex-rs",
 ]
