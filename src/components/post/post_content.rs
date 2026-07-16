@@ -143,6 +143,13 @@ pub fn PostContent(content_html: String) -> Element {
     #[cfg(target_arch = "wasm32")]
     let resolved_theme = crate::theme::use_resolved_theme();
 
+    // scrollToHash 的一次性守卫：仅首次 effect 运行时调用。
+    // 下方 use_effect 因读取 resolved_theme() 建立订阅，主题切换时会重跑（为重跑
+    // mermaid 主题）。但 scrollToHash 是首屏异步取数后的补救滚动，不应随主题切换
+    // 再次触发——否则切换主题会把页面跳回 URL hash 位置（即使 hash 已不在用户视野）。
+    #[cfg(target_arch = "wasm32")]
+    let mut did_scroll = use_signal(|| false);
+
     #[cfg(target_arch = "wasm32")]
     use_effect(move || {
         let window = web_sys::window().unwrap();
@@ -181,7 +188,13 @@ pub fn PostContent(content_html: String) -> Element {
         // 解决骨架屏阶段标题 DOM 缺失导致浏览器原生 fragment-scroll 失效的问题：
         // PostDetail 用 use_server_future 异步取数，首屏渲染骨架屏，此时标题 DOM
         // 不存在；浏览器尝试滚动到 #hash 找不到目标留在顶部。此处标题已就绪，补一次。
-        invoke_optional_global(&window, "__scrollToHash", &[]);
+        //
+        // 仅首次运行：此 effect 因读取 resolved_theme() 而在主题切换时重跑，但
+        // hash 滚动是首屏补救措施，重跑会导致切主题时页面跳回 URL hash 位置。
+        if !did_scroll() {
+            did_scroll.set(true);
+            invoke_optional_global(&window, "__scrollToHash", &[]);
+        }
     });
 
     rsx! {
