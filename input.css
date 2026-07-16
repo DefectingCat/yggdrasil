@@ -274,6 +274,82 @@
     opacity: 1;
   }
 
+  /* 正文折叠块（作者手写的 <details>，区别于 .toc 导航块）。
+     复用代码块/blockquote 的视觉语言：同款底色 + 边框 + 16px 圆角；
+     自绘 chevron 替代浏览器原生三角，展开时旋转 90°。
+     :not(.toc) 避免与上面的 TOC 专用样式冲突。 */
+  .md-content details:not(.toc) {
+    margin: 1rem 0;
+    background: var(--color-paper-code-bg);
+    border: 1px solid var(--color-paper-border);
+    border-radius: var(--radius-paper);
+  }
+
+  .md-content details:not(.toc) > summary {
+    padding: 0.6rem 1rem;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    color: var(--color-paper-primary);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: background-color 120ms ease;
+  }
+
+  /* 去掉 WebKit/Blink 原生三角，统一用 ::before 自绘 chevron。 */
+  .md-content details:not(.toc) > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  /* 自绘 chevron：实心三角，展开时旋转 90° 平滑过渡。
+     用 currentColor 继承 summary 文字色，随主题变化。 */
+  .md-content details:not(.toc) > summary::before {
+    content: "";
+    display: inline-block;
+    flex-shrink: 0;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 0.32rem 0.42rem 0.32rem 0;
+    border-color: transparent currentColor transparent transparent;
+    transform: rotate(0deg);
+    transition: transform 150ms ease;
+    margin-inline-start: 0.1rem;
+  }
+
+  .md-content details:not(.toc)[open] > summary::before {
+    transform: rotate(90deg);
+  }
+
+  .md-content details:not(.toc) > summary:hover {
+    background-color: color-mix(in srgb, var(--color-paper-accent) 8%, transparent);
+  }
+
+  /* 键盘可访问：focus-visible 给可见轮廓（WCAG 2.4.7）。
+     .dark 前缀走暗色主题色。 */
+  .md-content details:not(.toc) > summary:focus-visible {
+    outline: 2px solid var(--color-paper-accent);
+    outline-offset: -2px;
+    border-radius: var(--radius-paper);
+  }
+
+  /* 展开内容左右内边距（代码块/段落不贴边），末元素留底部呼吸空间。 */
+  .md-content details:not(.toc)[open] > *:not(summary) {
+    padding-inline: 1rem;
+  }
+
+  /* 首元素紧接 summary 去顶部 margin，末元素去底部 margin（容器已留白）。 */
+  .md-content details:not(.toc)[open] > *:not(summary):first-of-type {
+    margin-top: 0;
+  }
+
+  .md-content details:not(.toc)[open] > *:not(summary):last-child {
+    margin-bottom: 0;
+    padding-bottom: 0.8rem;
+  }
+
   .entry-cover {
     margin-bottom: var(--content-gap-paper);
   }
