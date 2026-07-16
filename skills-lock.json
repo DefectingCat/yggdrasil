@@ -30,12 +30,6 @@
       "sourceType": "github",
       "skillPath": "rust-advanced-performance/SKILL.md",
       "computedHash": "dc4863bc85f63bb2810e61c3001d06730e2df520ca08a4bd800f662cdfb5d12c"
-    },
-    "writing-great-skills": {
-      "source": "mattpocock/skills",
-      "sourceType": "github",
-      "skillPath": "skills/productivity/writing-great-skills/SKILL.md",
-      "computedHash": "4deb21855fb4deeeb1b8217b041faff003fd0c915d24a22f636851c520bc9c5c"
     }
   }
 }
