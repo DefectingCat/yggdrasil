@@ -144,15 +144,20 @@ RUN cd libs && pnpm install --frozen-lockfile
 # Copy the rest of the source tree and build everything.
 COPY . .
 
-# Build all 4 JS libs, syntax-highlight CSS and Tailwind stylesheet.
-# These steps produce the contents of the public/ directory.
-RUN make build-libs && make highlight-css && tailwindcss -i input.css -o public/style.css --minify
+# Build all 4 JS libs, syntax-highlight CSS, KaTeX CSS + fonts and Tailwind
+# stylesheet. These steps produce the contents of the public/ directory.
+# Must stay in sync with make build-linux — katex-css was previously missing,
+# which left math rendering as bare spans without KaTeX fonts.
+RUN make build-libs && make highlight-css && make katex-css && tailwindcss -i input.css -o public/style.css --minify
 
 # Build the client-side Dioxus WASM bundle. We use dx only for the client assets;
 # dx's linker wrapper is incompatible with a raw static linker, so the server
 # binary is built with plain cargo in the next step. The client build emits a
 # ready-to-serve public/ directory under target/dx/yggdrasil/*/web/public.
+# restore-webp overwrites dx's re-encoded VP8L .webp stills with the source
+# originals — keep in sync with make build-linux, which runs the same target.
 RUN dx build @client --release --debug-symbols=false --wasm-js-cfg false && \
+    make restore-webp && \
     mkdir -p /build/dist/public && \
     cp -r /build/target/dx/yggdrasil/*/web/public/* /build/dist/public/
 
