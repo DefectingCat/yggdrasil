@@ -170,7 +170,7 @@ async fn export_sql(
         let vals: Vec<String> = (0..r.len()).map(|i| sql_quote_cell(r, i)).collect();
         out.push_str(&format!(
             "INSERT INTO {} {} VALUES ({});\n",
-            &table_name,
+            table_name,
             col_clause,
             vals.join(", ")
         ));
