@@ -182,12 +182,6 @@ docker:
 docker-amd64:
 	@docker buildx build --platform linux/amd64 --load -t yggdrasil:amd64 .
 
-# Apple Container CLI 构建 x86_64 镜像。前提:macOS 26 Tahoe + 已安装 `container`。
-# 无需 Docker Desktop;使用 --arch 而非 --platform(Apple Container 用裸架构名,OS 固定 linux)。
-# 产出标准 OCI 镜像,可 container push 到 registry 后在 Linux 上用 docker compose 运行。
-docker-apple:
-	@container build --arch amd64 -t yggdrasil:amd64 .
-
 docker-multiarch:
 	@docker buildx build --platform $(PLATFORMS) -t $(IMAGE) --push .
 
