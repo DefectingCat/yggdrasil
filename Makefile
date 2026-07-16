@@ -1,6 +1,7 @@
 .PHONY: dev build build-linux build-freebsd freebsd-sysroot docker docker-amd64 docker-apple docker-multiarch css css-watch clean build-libs build-editor build-codemirror build-lightbox build-core build-xterm highlight-css katex-css test doc doc-open start lint fix restore-webp
 
 build:
+	@rm -rf static/
 	@cd libs && pnpm install --frozen-lockfile
 	@$(MAKE) build-libs
 	@$(MAKE) highlight-css
