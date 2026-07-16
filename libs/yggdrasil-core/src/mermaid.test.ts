@@ -117,4 +117,67 @@ describe('initMermaid', () => {
       expect(root.querySelector('pre')?.classList.contains('mermaid-error')).toBe(true);
     });
   });
+
+  it('主题切换时重渲染已渲染的块', async () => {
+    const root = document.createElement('div');
+    root.className = 'post-content';
+    root.innerHTML = '<pre><code class="language-mermaid">graph TD; A--&gt;B</code></pre>';
+    document.body.appendChild(root);
+
+    // 首次渲染（light）
+    window.__initMermaid('.post-content', 'light');
+    await vi.waitFor(() => {
+      expect(root.querySelector('pre')?.dataset.mermaidRendered).toBe('true');
+    });
+    expect(root.querySelector('pre')?.dataset.mermaidTheme).toBe('light');
+    const firstRenderCalls = mockRender.mock.calls.length;
+
+    // 主题切换 → dark：应触发重渲染
+    window.__initMermaid('.post-content', 'dark');
+    await vi.waitFor(() => {
+      expect(mockRender.mock.calls.length).toBeGreaterThan(firstRenderCalls);
+    });
+    expect(mockInitialize).toHaveBeenLastCalledWith(expect.objectContaining({ theme: 'dark' }));
+    expect(root.querySelector('pre')?.dataset.mermaidTheme).toBe('dark');
+  });
+
+  it('主题未变时重渲染路径幂等（同主题跳过）', async () => {
+    const root = document.createElement('div');
+    root.className = 'post-content';
+    root.innerHTML = '<pre><code class="language-mermaid">graph TD; A--&gt;B</code></pre>';
+    document.body.appendChild(root);
+
+    window.__initMermaid('.post-content', 'light');
+    await vi.waitFor(() => {
+      expect(root.querySelector('pre')?.dataset.mermaidRendered).toBe('true');
+    });
+    mockRender.mockClear();
+
+    // 同主题再调（模拟上下篇切换复用组件实例、effect 重跑）
+    window.__initMermaid('.post-content', 'light');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockRender).not.toHaveBeenCalled();
+  });
+
+  it('主题切换重渲染用唯一 render id（避免 mermaid 残留节点冲突）', async () => {
+    const root = document.createElement('div');
+    root.className = 'post-content';
+    root.innerHTML = '<pre><code class="language-mermaid">graph TD; A--&gt;B</code></pre>';
+    document.body.appendChild(root);
+
+    window.__initMermaid('.post-content', 'light');
+    await vi.waitFor(() => {
+      expect(root.querySelector('pre')?.dataset.mermaidRendered).toBe('true');
+    });
+    const firstId = mockRender.mock.calls[0][0];
+
+    window.__initMermaid('.post-content', 'dark');
+    await vi.waitFor(() => {
+      expect(mockRender.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+    const secondId = mockRender.mock.calls[mockRender.mock.calls.length - 1][0];
+
+    // 两次 render 的 id 必须不同，否则撞上 mermaid 内部残留的 d-前缀节点（#357）
+    expect(secondId).not.toBe(firstId);
+  });
 });

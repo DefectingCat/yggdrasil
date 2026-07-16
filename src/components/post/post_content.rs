@@ -137,9 +137,9 @@ pub fn PostContent(content_html: String) -> Element {
     let fragments = split_content_fragments(&content_html);
 
     // mermaid 流程图主题需随当前生效主题（light/dark）切换。读 use_resolved_theme()
-    // 建立订阅：主题变化时下方 use_effect 重跑，重新调用 __initMermaid（幂等，
-    // 已渲染的块由 dataset.mermaidRendered 守卫跳过；主题切换暂不强制重渲染图，
-    // 后续如需可在 mermaid.ts 监听 THEME_CHANGE_EVENT）。
+    // 建立订阅：主题变化时下方 use_effect 重跑，重调 __initMermaid 传入新 theme；
+    // mermaid.ts 用 dataset.mermaidTheme 记住上次渲染主题，检测到主题变化时按缓存
+    // 源码重渲染（mermaid 颜色烤进 SVG 内联样式，无法靠 CSS 原地切主题）。
     #[cfg(target_arch = "wasm32")]
     let resolved_theme = crate::theme::use_resolved_theme();
 
