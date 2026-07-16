@@ -166,7 +166,21 @@ pub fn PostContent(content_html: String) -> Element {
         } else {
             "light".into()
         };
-        invoke_optional_global(&window, "__initMermaid", &[".post-content".into(), theme_str.into()]);
+        // VT 动画期间跳过:手动点击主题按钮时,__startThemeTransition 的 VT 回调内已通过
+        // onThemeChange registry 同步触发 mermaid 重渲染(被 VT 等待,出现在 NEW 快照里)。
+        // 但本 effect 在 theme.set(next) 后立即触发——早于 VT 回调的异步执行,会抢先改
+        // 实时 DOM。VT 动画播的是伪元素快照,实时 DOM 改动会穿透伪元素,表现为「圆形
+        // 还没展开到流程图,流程图就瞬切」。is-theme-transitioning 期间跳过,让 VT 回调
+        // 内的 registry 重渲染负责;动画结束后此 effect 因 resolved 信号变化重跑(此时
+        // is-theme-transitioning 已移除),做幂等兜底。照搬 code_runner/runner.rs 的守卫。
+        let transitioning = window
+            .document()
+            .and_then(|d| d.document_element())
+            .map(|el| el.class_list().contains("is-theme-transitioning"))
+            .unwrap_or(false);
+        if !transitioning {
+            invoke_optional_global(&window, "__initMermaid", &[".post-content".into(), theme_str.into()]);
+        }
 
         // lightbox 改由 Dioxus.toml 全局 <script src> 加载（不再 include_str!）。
         // 双保险契约：先设配置,若 lightbox.js 已加载则立即调用;

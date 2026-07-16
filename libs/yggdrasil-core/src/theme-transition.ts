@@ -53,16 +53,47 @@ function applyDarkClass(isDark: boolean): void {
 }
 
 /**
- * 同步通知命令式换肤的组件(CodeMirror / xterm)切换主题。
+ * 主题切换 registry:命令式 / 异步换肤组件注册的回调。
  *
- * CustomEvent 的 dispatch 是同步的:listener 在本函数返回前执行完毕,
- * 故编辑器的 setTheme(reconfigure / options.theme =) 在调用方继续前已完成。
- * 这对 VT 至关重要——必须在 NEW 快照捕获前完成换肤,否则快照里仍是旧色。
- *
- * 幂等:与 Dioxus use_effect 驱动的 set_theme 并存,重复设置相同主题是 no-op。
+ * 与 THEME_CHANGE_EVENT 事件并存:
+ * - 事件(CustomEvent):同步 dispatch,供 CodeMirror / xterm 等同步换肤组件用
+ *   (它们在 listener 里同步 setTheme,被同一 reflow 捕获进 NEW 快照)。事件拿不到
+ *   listener 返回值,fire-and-forget。
+ * - registry:回调**可返回 Promise**,调用方(如 VT callback)能 await 它,等异步换肤
+ *   组件(如 mermaid 的 render())完成。这是让异步渲染内容参与 VT 动画的关键——
+ *   mermaid.render 是异步的,必须在 VT 拍 NEW 快照前完成,否则快照里仍是旧图。
  */
-function notifyThemeChange(isDark: boolean): void {
+const themeChangeCallbacks = new Set<(isDark: boolean) => Promise<void> | void>();
+
+/** 注册主题切换回调,返回取消注册函数。回调可返回 Promise,调用方会等待它。 */
+export function onThemeChange(cb: (isDark: boolean) => Promise<void> | void): () => void {
+  themeChangeCallbacks.add(cb);
+  return () => themeChangeCallbacks.delete(cb);
+}
+
+/**
+ * 通知命令式换肤的组件(CodeMirror / xterm / mermaid)切换主题。
+ *
+ * 双通道:
+ * 1. 同步 dispatch THEME_CHANGE_EVENT(给 CodeMirror / xterm,它们在 listener 内
+ *    同步 setTheme,被同一 reflow 捕获进 NEW 快照)。
+ * 2. 遍历 registry 调每个 cb,收集返回的 Promise,返回聚合 Promise(VT callback
+ *    await 它以等 mermaid 等异步换肤完成)。同步组件不返回值,聚合自动忽略。
+ *
+ * 返回聚合 Promise,调用方可选 await(走 VT 的路径必须 await,瞬切路径可不 await)。
+ */
+function notifyThemeChange(isDark: boolean): Promise<void> {
   window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: { isDark } }));
+  const promises: Promise<void>[] = [];
+  themeChangeCallbacks.forEach((cb) => {
+    try {
+      const ret = cb(isDark);
+      if (ret) promises.push(ret.catch(() => {})); // 单个失败不中断聚合
+    } catch {
+      // 同步抛错的 cb 忽略,不中断其他回调
+    }
+  });
+  return Promise.all(promises).then(() => {});
 }
 
 /**
@@ -90,8 +121,8 @@ export function startThemeTransition(x: number, y: number): void {
 
   if (!hasVT || reduced) {
     // 降级路径:无 VT 动画,同步换肤 + 翻 class(瞬切)。
-    // 同样 dispatch 事件,保持与主路径对称(编辑器不依赖动画存在与否)。
-    notifyThemeChange(isDark);
+    // 同样通知换肤(不 await,保持瞬切语义;mermaid 等异步组件后台重渲染)。
+    void notifyThemeChange(isDark);
     applyDarkClass(isDark);
     return;
   }
@@ -106,16 +137,19 @@ export function startThemeTransition(x: number, y: number): void {
   // 禁用所有 CSS transition,确保 VT 截图是最终颜色
   html.classList.add('is-theme-transitioning');
 
-  const vt = document.startViewTransition(() => {
-    // ★ 关键:先 dispatch 事件让编辑器同步换肤,再翻 .dark class。
-    // 顺序不能反——编辑器换肤 + class 翻转必须被同一个 getComputedStyle
-    // reflow 捕获进 NEW 快照。若先翻 class 后换肤,reflow 可能漏掉编辑器。
-    notifyThemeChange(isDark);
+  const vt = document.startViewTransition(async () => {
+    // ★ 关键:先通知换肤(同步 dispatch 事件让编辑器同步换肤 + 收集 registry 的
+    // 异步 Promise),再翻 .dark class。顺序不能反——编辑器换肤 + class 翻转必须被
+    // 同一个 getComputedStyle reflow 捕获进 NEW 快照。
+    const asyncWork = notifyThemeChange(isDark);
     applyDarkClass(isDark);
     // 强制同步样式重算:确保 body 的 background-color 解析为目标值,
     // 同时 flush 编辑器的同步换肤(CodeMirror <style> / xterm inline bg)。
     // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     getComputedStyle(document.body).backgroundColor;
+    // ★ 等 registry 里异步换肤组件(mermaid.render)完成。callback 返回 Promise 时,
+    // 浏览器等它 resolve 才拍 NEW 快照、播圆形扩散——这样快照里已是新主题流程图。
+    await asyncWork;
   });
 
   vt.ready.catch(() => {});

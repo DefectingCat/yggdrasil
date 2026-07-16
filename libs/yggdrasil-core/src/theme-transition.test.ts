@@ -11,7 +11,7 @@
  * 且事件在 applyDarkClass 之前触发(编辑器换肤先于 class 翻转,同一 reflow 捕获)。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { THEME_CHANGE_EVENT } from './theme-transition';
+import { onThemeChange, THEME_CHANGE_EVENT } from './theme-transition';
 import './index';
 
 describe('startThemeTransition', () => {
@@ -44,10 +44,10 @@ describe('startThemeTransition', () => {
   });
 
   it('主路径:有 startViewTransition 时调用它,注入变量,callback 切换 dark class', async () => {
-    const cbRef: { cb: (() => void) | null } = { cb: null };
+    const cbRef: { cb: (() => Promise<void>) | null } = { cb: null };
     const readyP = Promise.resolve();
     const finishedP = Promise.resolve();
-    const startVT = vi.fn((cb: () => void) => {
+    const startVT = vi.fn((cb: () => Promise<void>) => {
       cbRef.cb = cb;
       return { ready: readyP, finished: finishedP, skipTransition: () => {} };
     });
@@ -69,8 +69,8 @@ describe('startThemeTransition', () => {
     // is-theme-transitioning 应在 VT 之前添加
     expect(document.documentElement.classList.contains('is-theme-transitioning')).toBe(true);
 
-    // callback 里根据 DOM 现状(无 dark)切到 dark
-    cbRef.cb?.();
+    // callback 里根据 DOM 现状(无 dark)切到 dark(callback 现为 async,需 await)
+    await cbRef.cb?.();
     expect(document.documentElement.classList.contains('dark')).toBe(true);
 
     // finished 后移除 is-theme-transitioning 和 CSS 变量
@@ -117,10 +117,10 @@ describe('startThemeTransition', () => {
     delete (document as unknown as { startViewTransition?: unknown }).startViewTransition;
   });
 
-  it('主路径:VT callback 内 dispatch 主题变更事件,且先于 dark class 翻转', () => {
-    const cbRef: { cb: (() => void) | null } = { cb: null };
+  it('主路径:VT callback 内 dispatch 主题变更事件,且先于 dark class 翻转', async () => {
+    const cbRef: { cb: (() => Promise<void>) | null } = { cb: null };
     Object.defineProperty(document, 'startViewTransition', {
-      value: (cb: () => void) => {
+      value: (cb: () => Promise<void>) => {
         cbRef.cb = cb;
         return { ready: Promise.resolve(), finished: Promise.resolve(), skipTransition: () => {} };
       },
@@ -141,7 +141,7 @@ describe('startThemeTransition', () => {
 
     // 亮→暗:无 dark class,isDark=true
     window.__startThemeTransition(0, 0);
-    cbRef.cb?.();
+    await cbRef.cb?.();
 
     expect(eventSnapshots).toHaveLength(1);
     expect(eventSnapshots[0].isDark).toBe(true);
@@ -197,5 +197,63 @@ describe('startThemeTransition', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(false);
 
     window.removeEventListener(THEME_CHANGE_EVENT, listener);
+  });
+
+  it('onThemeChange:VT callback 等待 registry 注册的异步回调 Promise', async () => {
+    const cbRef: { cb: (() => Promise<void>) | null } = { cb: null };
+    Object.defineProperty(document, 'startViewTransition', {
+      value: (cb: () => Promise<void>) => {
+        cbRef.cb = cb;
+        return { ready: Promise.resolve(), finished: Promise.resolve(), skipTransition: () => {} };
+      },
+      configurable: true,
+      writable: true,
+    });
+
+    // registry 回调返回一个可控的 Promise,记录它是否在 callback resolve 前完成
+    let resolveAsync: (() => void) | null = null;
+    const asyncDone = { value: false };
+    const off = onThemeChange((isDark) => {
+      void isDark;
+      return new Promise<void>((resolve) => {
+        resolveAsync = () => {
+          asyncDone.value = true;
+          resolve();
+        };
+      });
+    });
+
+    window.__startThemeTransition(0, 0);
+
+    // callback 尚未 resolve(async 任务未完成)——VT callback 的 Promise 仍 pending
+    const callbackPromise = cbRef.cb?.();
+    expect(asyncDone.value).toBe(false);
+
+    // 触发异步任务完成
+    resolveAsync?.();
+    await callbackPromise;
+    expect(asyncDone.value).toBe(true);
+
+    off();
+    delete (document as unknown as { startViewTransition?: unknown }).startViewTransition;
+  });
+
+  it('onThemeChange:降级路径(无 VT)不等 registry 异步回调', async () => {
+    // 降级路径不 await notifyThemeChange,applyDarkClass 同步完成,registry 后台跑
+    let registryCalled = false;
+    const off = onThemeChange(() => {
+      registryCalled = true;
+      return new Promise<void>(() => {}); // 永不 resolve
+    });
+
+    // 无 startViewTransition → 降级路径
+    window.__startThemeTransition(0, 0);
+
+    // dark class 应已同步翻转(不等 registry)
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    // registry 回调被调用(同步触发),但 Promise 未被 await
+    expect(registryCalled).toBe(true);
+
+    off();
   });
 });

@@ -20,6 +20,10 @@
  */
 
 import type { ThemeName } from '@yggdrasil/shared';
+import { onThemeChange } from './theme-transition';
+
+/** 文章正文容器选择器（与 post_content.rs 的 __initMermaid 调用一致）。 */
+const POST_CONTENT_SELECTOR = '.post-content';
 
 type MermaidApi = {
   initialize: (config: Record<string, unknown>) => void;
@@ -146,7 +150,7 @@ function observeBlock(pre: HTMLPreElement, render: () => Promise<void>): void {
  * @param selector 文章正文容器选择器（如 '.post-content'）
  * @param theme 当前生效主题，传给 mermaid 适配暗色
  */
-export function initMermaid(selector: string, theme: ThemeName): void {
+export function initMermaid(selector: string, theme: ThemeName): Promise<void> {
   const root = document.querySelector(selector);
   if (!root) return;
 
@@ -172,8 +176,9 @@ export function initMermaid(selector: string, theme: ThemeName): void {
   });
 
   // 路径 2：已渲染的块（<code> 已被 SVG 替换，按 dataset 回找）。无条件执行，
-  // 覆盖「页面上未渲染块与已渲染块并存」的场景。
-  rerenderExistingBlocks(root, theme);
+  // 覆盖「页面上未渲染块与已渲染块并存」的场景。主题切换时由 onThemeChange 订阅
+  // 返回其 Promise，供 VT callback await（让新主题流程图进入 NEW 快照）。
+  return rerenderExistingBlocks(root, theme);
 }
 
 /**
@@ -181,16 +186,40 @@ export function initMermaid(selector: string, theme: ThemeName): void {
  *
  * 主题切换重跑 initMermaid 时，已渲染的 pre 里 <code> 已被 SVG 替换，
  * `pre > code.language-mermaid` 选择器不再命中。这里用 dataset 标记回找。
+ *
+ * 返回聚合 Promise：所有需要重渲染的块完成后 resolve。onThemeChange 订阅返回它，
+ * VT callback await 它以等 mermaid.render 异步完成后再拍 NEW 快照。单块失败不中断
+ * 聚合（catch 吞错 + 加 mermaid-error class）。
  */
-function rerenderExistingBlocks(root: Element, theme: ThemeName): void {
+function rerenderExistingBlocks(root: Element, theme: ThemeName): Promise<void> {
   const rendered = root.querySelectorAll<HTMLPreElement>('pre[data-mermaid-rendered]');
+  const tasks: Promise<void>[] = [];
   rendered.forEach((pre) => {
     if (pre.dataset.mermaidTheme === theme) return;
     const source = pre.dataset.mermaidSource;
     if (!source) return; // 无缓存源码无法重渲染，保守跳过
-    void renderBlock(pre, source, theme).catch((err) => {
-      console.error('mermaid re-render failed:', err);
-      pre.classList.add('mermaid-error');
-    });
+    tasks.push(
+      renderBlock(pre, source, theme).catch((err) => {
+        console.error('mermaid re-render failed:', err);
+        pre.classList.add('mermaid-error');
+      }),
+    );
   });
+  return Promise.all(tasks).then(() => {});
 }
+
+/**
+ * 订阅主题切换:主题变化时重渲染已渲染的 mermaid 块,返回重渲染 Promise。
+ *
+ * VT 协调的关键:本 listener 返回 Promise → notifyThemeChange 收集它 → VT callback
+ * await 它 → 浏览器等 mermaid.render 完成、拍含新主题流程图的 NEW 快照、再播圆形扩散。
+ * 无 VT(降级 / 跟随系统瞬切)时调用方不等,mermaid 后台重渲染。
+ *
+ * 顶层注册(IIFE 加载时),确保任何时刻主题切换都能命中。首次渲染前无已渲染块,
+ * rerenderExistingBlocks 自然 no-op。
+ */
+onThemeChange((isDark) => {
+  const root = document.querySelector(POST_CONTENT_SELECTOR);
+  if (!root) return;
+  return rerenderExistingBlocks(root, isDark ? 'dark' : 'light');
+});
