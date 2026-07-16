@@ -77,17 +77,39 @@ RUN mkdir -p /usr/local/cargo \
 RUN rustup target add wasm32-unknown-unknown \
         x86_64-unknown-linux-musl aarch64-unknown-linux-musl
 
-# Install the Dioxus CLI (must match the dioxus crate version).
-RUN cargo install dioxus-cli --version 0.7.9 --locked
+# China GitHub-release CDN: GitHub's release CDN is slow/unreliable from inside
+# the container, and the host proxy (host.docker.internal:10808) throttles large
+# files to ~16 KB/s. gh-proxy.com served release assets at ~430 KB/s in testing.
+# Set empty to fall back to the direct GitHub URL. Shared by dx + Tailwind below.
+ARG GH_PROXY=https://gh-proxy.com
+
+# Install the Dioxus CLI from the official prebuilt binary (GitHub Releases),
+# NOT `cargo install` (which compiles dx-cli's huge dep tree from source — the
+# slowest single Docker step). The release tag v0.7.9 matches the crate version
+# we previously pinned. dx runs only in this builder stage (to emit the WASM
+# client bundle); it never enters the static-musl runtime image, so the glibc
+# (linux-gnu) linking of the prebuilt binary is fine here. Each buildx platform
+# leg downloads only its native arch; the sha256 pins the exact artifact
+# (supply-chain integrity, verified against the release's .sha256 sidecar).
+ARG DX_VERSION=0.7.9
+RUN ARCH="$(dpkg --print-architecture)" \
+    && case "$ARCH" in \
+        amd64) DX_TRIPLET=x86_64-unknown-linux-gnu
+               DX_SHA256=3b132551b480bc96f938f9f0d37936ee1190f994977539dcc347eaf38540d005 ;;
+        arm64) DX_TRIPLET=aarch64-unknown-linux-gnu
+               DX_SHA256=8cf14db0b11b43b31dd6d39e71b00e567f2fccfde85ae3a8f7ef0f8745e5ccfb ;;
+        *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
+    esac \
+    && DX_URL="https://github.com/DioxusLabs/dioxus/releases/download/v${DX_VERSION}/dx-${DX_TRIPLET}.tar.gz" \
+    && curl -fsSL "${GH_PROXY:+${GH_PROXY}/}${DX_URL}" -o /tmp/dx.tar.gz \
+    && echo "${DX_SHA256}  /tmp/dx.tar.gz" | sha256sum -c - \
+    && tar -xzf /tmp/dx.tar.gz -C /usr/local/bin \
+    && rm /tmp/dx.tar.gz \
+    && dx --version
 
 # --- Tailwind CSS v4: the standalone binary is distributed via GitHub
-# Releases (~106 MB). GitHub's release CDN is slow/unreliable from inside the
-# container, and the host proxy (host.docker.internal:10808) throttles large
-# files to ~16 KB/s. Route the download through a China GitHub proxy CDN
-# instead — gh-proxy.com served the full file at ~430 KB/s in testing.
-# Falls back to the direct GitHub URL if GH_PROXY is set empty. ---
+# Releases (~106 MB); routed through the same GH_PROXY as dx above. ---
 ARG TAILWIND_VERSION=4.3.1
-ARG GH_PROXY=https://gh-proxy.com
 RUN ARCH="$(dpkg --print-architecture)" \
     && case "$ARCH" in \
         amd64)  TW_ARCH=x64   ;; \

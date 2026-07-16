@@ -125,7 +125,7 @@ Dioxus 0.7 fullstack project with **two independent gates** — the most common 
 
 **Server-only helpers**: `src/auth/password.rs`, `src/auth/session.rs`, `src/api/auth.rs`, `src/api/comments/helpers.rs`, and several model helper methods are gated with `#[cfg(feature = "server")]` because they are only called from server function bodies, which are stripped in WASM builds.
 
-**Server-only dependencies**: Crates that are only used behind `#[cfg(feature = "server")]` (e.g., `argon2`, `uuid`, `regex`, `pulldown-cmark`, `rand`, `http`, `sha2`, `hex`, `sysinfo`, `sqlparser`, `dashmap`, plus the rest of the server stack) are declared as `optional = true` in `Cargo.toml` and enabled only through the `server` feature. They are not compiled into the WASM frontend. The `generate_highlight_css` binary is `required-features = ["server"]` (uses `syntect`).
+**Server-only dependencies**: Crates that are only used behind `#[cfg(feature = "server")]` (e.g., `argon2`, `uuid`, `regex`, `pulldown-cmark`, `katex-rs`, `rand`, `http`, `sha2`, `hex`, `sysinfo`, `sqlparser`, `dashmap`, plus the rest of the server stack) are declared as `optional = true` in `Cargo.toml` and enabled only through the `server` feature. They are not compiled into the WASM frontend. The `generate_highlight_css` binary is `required-features = ["server"]` (uses `syntect`).
 
 **Shared types that compile on both targets**: bridges like `src/tiptap_bridge.rs` and `src/codemirror_bridge.rs` keep shared structs (e.g. `UploadsInFlight`, `SqlSchema`/`SqlTable`) outside cfg gates, while wasm-bindgen externs + `EditorHandle` live in inner `#[cfg(target_arch = "wasm32")] mod wasm`. Similarly `src/sysinfo_sampler.rs` exposes `SystemSnapshot` on both targets but gates the actual sampler + `RwLock` behind `server`.
 
@@ -148,7 +148,7 @@ src/api/          — server functions + Axum handlers
   auth.rs         — login, register, session validation
   comments/       — comment CRUD + approval/spam/trash server functions
   database/       — /admin/system backend (status/system_status/sql_console/schema/export/backup/tasks)
-  markdown.rs     — Markdown→HTML rendering (pulldown-cmark + ammonia sanitization)
+  markdown.rs     — Markdown→HTML rendering (pulldown-cmark + ammonia sanitization + KaTeX math)
   image.rs        — image serving with processing pipeline + disk+memory cache
   upload.rs       — image upload, auto-converts to WebP
   rate_limit.rs   — governor-based rate limiting (6 tiers: strict/upload/image/comment/unknown/code_exec)
@@ -192,15 +192,16 @@ Readers can execute fenced code blocks in isolated Docker containers; authors ge
 
 ## Frontend Lib Subprojects
 
-Five Vite-built IIFE libraries under `libs/` (plus `libs/shared/`, an internal source-shared package with no `public/` artifact — see below), managed as a **pnpm workspace** (single `libs/pnpm-lock.yaml`, shared `libs/tsconfig.base.json` + `libs/biome.json`, hoisted devDeps). Built artifacts go to `public/<name>/` — **do not edit `public/<name>/` files; they are build artifacts**. Each `build` script is `tsc --noEmit && vite build` (type-check before bundle). Output is IIFE because Dioxus `[web.resource] script` injects bare `<script src>` without `type="module"` support. Registered globally in `Dioxus.toml` `script`/`style` arrays.
+Six Vite-built IIFE libraries under `libs/` (plus `libs/shared/`, an internal source-shared package with no `public/` artifact — see below), managed as a **pnpm workspace** (single `libs/pnpm-lock.yaml`, shared `libs/tsconfig.base.json` + `libs/biome.json`, hoisted devDeps). Built artifacts go to `public/<name>/` — **do not edit `public/<name>/` files; they are build artifacts**. Each `build` script is `tsc --noEmit && vite build` (type-check before bundle). Output is IIFE because Dioxus `[web.resource] script` injects bare `<script src>` without `type="module"` support. Registered globally in `Dioxus.toml` `script`/`style` arrays (except `mermaid-renderer`, which is dynamically imported — not in `Dioxus.toml`).
 
 | Lib                       | Output dir                                                   | Exposes                                                                                                       | Wiring                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `libs/tiptap-editor/`     | `public/tiptap/` (`editor.js`/`.css`/`.map`)                 | `window.TiptapEditor`                                                                                         | wasm-bindgen via `src/tiptap_bridge.rs` — injects `Closure` callbacks (`onUpdate`/`onReady`/`onUploadEvent`/`onImageUpload`) into `TiptapEditor.create`, holds instance + closures in `EditorHandle` (Drop → `destroy()`). No `js_sys::eval`, no `window` globals, no polling.                                                                                                |
 | `libs/codemirror-editor/` | `public/codemirror/` (`editor.js`/`.map`, **no CSS**)        | `window.CodeMirrorEditor` (object literal `{ create }`) + `window.EditorOptions` (class, survives TS erasure) | `src/codemirror_bridge.rs` mirrors tiptap — `get_module()` uses `Reflect::get` + `unchecked_into` (object literal, NOT a constructor extern). Themes are JS `Extension`s from `@catppuccin/codemirror` (Latte/Mocha), hot-swapped via `Compartment.reconfigure`.                                                                                                              |
 | `libs/lightbox/`          | `public/lightbox/` (`lightbox.js`/`.css`/`.map`)             | self-initializing IIFE                                                                                        | **Not** wasm-bindgen. `src/components/post/post_content.rs` sets `window.__lightboxSelectors` before load; IIFE tail reads it and self-initializes. Direct fallback call if already loaded.                                                                                                                                                                                   |
-| `libs/yggdrasil-core/`    | `public/yggdrasil-core/` (`yggdrasil-core.js`/`.css`/`.map`) | `window.__initPostContent`, `window.__startThemeTransition`                                                   | Designated home for all new core JS — add here, not to `public/js/`. Rust calls entry points via `js_sys::Reflect::get` + `Function::apply` (no `js_sys::eval`), silently no-oping if undefined. Theme reveal uses View Transitions API (`startViewTransition` + `@keyframes tt-expand` `clip-path` expand); falls back to instant switch when VT / `prefers-reduced-motion`. |
+| `libs/yggdrasil-core/`    | `public/yggdrasil-core/` (`yggdrasil-core.js`/`.css`/`.map`) | `window.__initPostContent`, `window.__initMermaid`, `window.__startThemeTransition`                           | Designated home for all new core JS — add here, not to `public/js/`. Rust calls entry points via `js_sys::Reflect::get` + `Function::apply` (no `js_sys::eval`), silently no-oping if undefined. Theme reveal uses View Transitions API (`startViewTransition` + `@keyframes tt-expand` `clip-path` expand); falls back to instant switch when VT / `prefers-reduced-motion`. `mermaid.ts` scans `language-mermaid` blocks, dynamic-imports the mermaid bundle on viewport intersection. |
 | `libs/xterm-terminal/`    | `public/xterm/` (`terminal.js`/`.css`/`.map`)                | `window.XtermTerminal` (object literal `{ create }`)                                                          | `src/xterm_bridge.rs` mirrors codemirror — `get_module()` uses `Reflect::get` + `unchecked_into` (object literal, NOT a constructor extern). `TerminalHandle` holds instance + `onReady` closure, Drop → `destroy()`. **Output-only** (no stdin); `write_stdout`/`write_stderr`/`write_all` stream the Code Runner's stdout/stderr into the terminal. `@xterm/xterm` ^6 + `@xterm/addon-fit`; theme hot-swap via `THEME_CHANGE_EVENT`. |
+| `libs/mermaid-renderer/`  | `public/mermaid/` (`mermaid.js`/`.map`, ~3.4MB / gzip ~900KB) | default export (mermaid 11 API)                                                                               | **Not** registered in `Dioxus.toml` (not globally injected). Dynamically imported by `yggdrasil-core/mermaid.ts` via `import('/mermaid/mermaid.js')` only when a `language-mermaid` block enters the viewport. IIFE wraps `mermaid ^11.16`; `securityLevel: 'strict'`; theme passed at init. No CSS (mermaid ships inline SVG styles). |
 
 Run a single lib's tests: `cd libs && pnpm --filter @yggdrasil/<name> test` (Vitest + happy-dom). Watch mode: append `-- test:watch`.
 
@@ -219,6 +220,25 @@ Admin area at `/admin/system` (menu "系统") with 5 tabs: 数据库状态 / 服
 - `src/bin/generate_highlight_css.rs` generates `public/highlight.css` with class-based rules scoped under `.md-content pre code`, with `.dark` prefix for dark mode
 - `src/highlight.rs` uses syntect at runtime for code block highlighting
 - All gated behind `#[cfg(feature = "server")]`
+
+## Math & Diagrams (数学公式与流程图)
+
+两种富内容,两条不同的渲染路径:
+
+**数学公式(KaTeX 服务端渲染)**:
+- `src/api/katex.rs`(server-only)用纯 Rust 的 `katex-rs = "0.2"` crate 把 TeX 渲染成 HTML span。库名是 `katex`(crate 名 `katex-rs`),核心 API `katex::render_to_string(&ctx, expr, &settings)`。`KatexContext`/`Settings` 内含 `RefCell<HashMap>` 宏表非 `Sync`,故用 `thread_local!` 缓存而非全局 static。
+- `OutputFormat::Html`:只产出视觉层 `<span class="katex">…</span>`,不含 MathML 语义层(`<math>` 等)。这样 sanitizer 无需为 MathML 标签开白名单,XSS 面最小。`throw_on_error=false`:坏公式渲染成红色错误 span 而非中断全文。
+- pulldown-cmark 的 `Options::all()`(含 `ENABLE_MATH`)解析 `$...$`→`InlineMath`、`$$...$$`→`DisplayMath` 事件(0.11+ 支持)。`src/api/markdown.rs` 事件循环有 `InlineMath`/`DisplayMath` 分支调 katex;评论路径 `comments/markdown.rs` 同样开了 `ENABLE_MATH`。
+- sanitizer:文章正文 `span` 已允许 `class`+`style`;评论路径 `span` 白名单也加了 `style`(KaTeX 内联定位 style 需保留)。**MathML 标签不放行**(OutputFormat::Html 不输出)。
+- **配套 CSS/字体**:`katex-rs` 不打包 CSS。`make katex-css` 从 npm 包 `katex`(libs/ workspace 根 devDependency)的 dist/ 拷 `katex.min.css` + woff2 字体到 `public/katex/`(fonts/ 须与 CSS 同级,因 CSS 用相对 `url(fonts/...)`)。Dioxus.toml 两段 style 列表注册 `/katex/katex.min.css`。无 CSS 则只见裸 span、无数学字体排版。
+
+**流程图(mermaid 客户端懒加载)**:
+- mermaid 无官方 SSR 支持(社区方案靠 Puppeteer,太重)。采用客户端 IntersectionObserver 懒加载。
+- 服务端:mermaid 代码块就是普通 `<pre><code class="language-mermaid">`,`markdown.rs` 无特殊处理(syntect 对 mermaid 无语法定义,回退纯文本)。`pre` 的 `class` 在 sanitizer 通用白名单。
+- 前端:`libs/mermaid-renderer/` 是独立 IIFE bundle(mermaid 11.16,~1MB,gzip ~900KB),输出 `public/mermaid/mermaid.js`。`libs/yggdrasil-core/src/mermaid.ts` 扫描 `pre > code.language-mermaid`,IntersectionObserver 视口可见(rootMargin 200px)时动态 `import('/mermaid/mermaid.js')`(单例缓存),`mermaid.render` 产 SVG 注入父 `pre`。主题经 `__initMermaid(selector, theme)` 传入(light/dark),`securityLevel: 'strict'`。渲染失败加 `.mermaid-error` class 保留源码。幂等守卫 `dataset.mermaidRendered`。
+- 动态 import 的绝对路径 `/mermaid/mermaid.js` 无类型声明,tsc 会报 TS2307,故用变量间接构造 import 字面量 + `@vite-ignore`。
+- `post_content.rs` 的 use_effect 调 `__initMermaid('.post-content', theme)`,读 `use_resolved_theme()` 传主题。`initCopyButtons`(`post-content.ts`)跳过 `language-mermaid` 块(图无需 copy 按钮)。mermaid 渲染的 SVG 是客户端 `innerHTML` 注入,不经过服务端 sanitizer(与 CodeRunner 模式一致)。
+- Dioxus.toml 的 script 列表**不加** mermaid(它是动态 import 的独立 bundle,非全局注入);public/mermaid 由 dx build 作静态资源拷贝。
 
 ## Auth & Session
 
@@ -270,6 +290,8 @@ Most Rust tests use `#[cfg(all(test, feature = "server"))]` — they only run wh
 - `public/style.css` — Tailwind output
 - `public/highlight.css` — generated by `generate_highlight_css` binary
 - `public/{tiptap,codemirror,lightbox,yggdrasil-core}/` — Vite build outputs
+- `public/mermaid/` — mermaid IIFE bundle (from `libs/mermaid-renderer/`)
+- `public/katex/` — KaTeX CSS + woff2 fonts (from npm `katex` dist via `make katex-css`)
 - `public/doc/` — cargo doc output (copied by `make doc`)
 - `/dist`, `/.dioxus`, `/target`, `/static`
 - `libs/node_modules/` + `libs/*/node_modules/` — pnpm workspace store + symlinks
