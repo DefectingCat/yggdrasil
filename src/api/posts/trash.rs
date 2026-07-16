@@ -82,7 +82,10 @@ pub async fn restore_post(post_id: i32) -> Result<CreatePostResponse, ServerFnEr
         crate::cache::invalidate_post_by_slug(&new_slug).await;
         crate::cache::invalidate_tag_posts_for(&tags).await;
 
-        // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
+        // SSR：回收站操作影响详情页与所有列表页（含归档）。
+        crate::ssr_cache::invalidate_ssr_route(&format!("/post/{current_slug}"));
+        crate::ssr_cache::invalidate_ssr_route(&format!("/post/{new_slug}"));
+        crate::ssr_cache::invalidate_ssr_all_public();
         crate::ssr_cache::bump_global_generation();
 
         Ok(CreatePostResponse::ok(
@@ -153,7 +156,9 @@ pub async fn purge_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErro
         crate::cache::invalidate_post_by_slug(&slug).await;
         crate::cache::invalidate_tag_posts_for(&tags).await;
 
-        // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
+        // SSR：彻底删除影响详情页与所有列表页。
+        crate::ssr_cache::invalidate_ssr_route(&format!("/post/{slug}"));
+        crate::ssr_cache::invalidate_ssr_all_public();
         crate::ssr_cache::bump_global_generation();
 
         Ok(CreatePostResponse::ok(
@@ -245,13 +250,14 @@ pub async fn batch_restore_posts(post_ids: Vec<i32>) -> Result<CreatePostRespons
             crate::cache::invalidate_tag_posts_for(&affected_tags.into_iter().collect::<Vec<_>>())
                 .await;
 
-            // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
+            // SSR：批量恢复影响多篇文章的列表项，全量失效。
+            crate::ssr_cache::invalidate_ssr_all_public();
             crate::ssr_cache::bump_global_generation();
         } else {
             // 影响集过大时回退到全量失效，避免大量串行缓存操作。
             crate::cache::invalidate_all_post_caches();
             crate::cache::invalidate_search_results();
-            // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
+            crate::ssr_cache::invalidate_ssr_all_public();
             crate::ssr_cache::bump_global_generation();
         }
 

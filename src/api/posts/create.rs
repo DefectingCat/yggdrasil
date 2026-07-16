@@ -138,7 +138,8 @@ pub async fn create_post(
         // 失效该文章涉及的所有标签下文章列表缓存。
         crate::cache::invalidate_tag_posts_for(&tags_cleaned).await;
 
-        // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
+        // SSR：新文章会出现在首页/分页/归档/标签等所有列表页，全量失效。
+        crate::ssr_cache::invalidate_ssr_all_public();
         crate::ssr_cache::bump_global_generation();
 
         Ok(CreatePostResponse::ok(

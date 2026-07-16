@@ -166,7 +166,7 @@ src/hooks/        — shared Dioxus hooks
 src/models/       — Post, User, Tag data models
 src/pages/        — route page components (frontend + admin)
 src/router.rs     — Dioxus Router route definitions
-src/ssr_cache.rs  — SSR generation invalidation state (server feature only)
+src/ssr_cache.rs  — SSR disk-cache invalidation: physically deletes `static/<route>/` on post writes (Dioxus 0.7 has no route-level invalidation API)
 src/sysinfo_sampler.rs — host metrics snapshot; SystemSnapshot on both targets, sampler+RwLock server-only
 src/tasks/        — background tokio tasks (session cleanup)
 src/theme.rs      — light/dark theme with SSR cookie + WASM localStorage
@@ -251,7 +251,7 @@ Admin area at `/admin/system` (menu "系统") with 5 tabs: 数据库状态 / 服
 
 - **Post/tag caches** (`src/cache.rs`): moka future-based, TTL varies by data type (60s–600s). Invalidated on writes.
 - **Image processing cache** (`src/api/image.rs`): two-tier — in-memory moka cache + disk cache in `uploads/.cache/`. Keyed by path + query params.
-- **SSR cache** (`IncrementalRendererConfig` in `src/main.rs`): default TTL `SSR_CACHE_SECS` (3600s prod, 0 in `make dev`); invalidation generation tracked in `src/ssr_cache.rs`.
+- **SSR cache** (`IncrementalRendererConfig` in `src/main.rs`): Dioxus 0.7 增量渲染器把每路由结果落盘到 `static/<route>/index/<hash>.html`，以 `path_and_query()` 作 key，只暴露 `invalidate_after(ttl)` 一个失效手段。`src/ssr_cache.rs` 的 `invalidate_ssr_route(route)` / `invalidate_ssr_all_public()` 通过**物理删除缓存目录**绕过这个限制——所有写路径（create/update/rebuild/delete/trash）在事务提交后调用，删除对应路由（或全量公开页）的缓存目录，下次请求触发重渲染。全局世代号保留作 `X-SSR-Generation` 可观测性，但实际失效靠删文件。TTL `SSR_CACHE_SECS`（默认 3600s prod，0 in `make dev`）仍作兜底。
 
 ## Testing
 

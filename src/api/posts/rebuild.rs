@@ -130,7 +130,8 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
         if rebuilt > 0 {
             crate::cache::invalidate_all_post_caches();
             crate::cache::invalidate_search_results();
-            // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
+            // 批量重建影响所有公开页（列表/标签/归档/各文章），全量失效 SSR 磁盘缓存。
+            crate::ssr_cache::invalidate_ssr_all_public();
             crate::ssr_cache::bump_global_generation();
         }
 
@@ -219,7 +220,9 @@ pub async fn rebuild_post_content_html(post_id: i32) -> Result<CreatePostRespons
         crate::cache::invalidate_post_lists();
         crate::cache::invalidate_search_results();
         crate::cache::invalidate_post_by_slug(&slug).await;
-        // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
+        // SSR：单篇详情页 + 列表页（首页/分页/归档/标签都含列表项摘要）。
+        crate::ssr_cache::invalidate_ssr_route(&format!("/post/{slug}"));
+        crate::ssr_cache::invalidate_ssr_all_public();
         crate::ssr_cache::bump_global_generation();
 
         Ok(CreatePostResponse::ok(

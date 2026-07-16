@@ -19,20 +19,22 @@ use katex::{KatexContext, OutputFormat, Settings};
 
 /// 内联公式（`$...$`）渲染配置工厂：`display_mode = false`。
 fn inline_settings() -> Settings {
-    let mut s = Settings::default();
-    s.output = OutputFormat::Html;
-    s.display_mode = false;
-    s.throw_on_error = false;
-    s
+    Settings {
+        output: OutputFormat::Html,
+        display_mode: false,
+        throw_on_error: false,
+        ..Settings::default()
+    }
 }
 
 /// 块级公式（`$$...$$`）渲染配置工厂：`display_mode = true`（居中独占一行）。
 fn display_settings() -> Settings {
-    let mut s = Settings::default();
-    s.output = OutputFormat::Html;
-    s.display_mode = true;
-    s.throw_on_error = false;
-    s
+    Settings {
+        output: OutputFormat::Html,
+        display_mode: true,
+        throw_on_error: false,
+        ..Settings::default()
+    }
 }
 
 thread_local! {

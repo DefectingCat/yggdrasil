@@ -202,10 +202,13 @@ pub async fn update_post(
         if let Some(ref old) = old_slug {
             if old != &final_slug {
                 crate::cache::invalidate_post_by_slug(old).await;
+                crate::ssr_cache::invalidate_ssr_route(&format!("/post/{old}"));
             }
         }
 
-        // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
+        // SSR：内容/标签/摘要变化影响详情页与所有列表页。
+        crate::ssr_cache::invalidate_ssr_route(&format!("/post/{final_slug}"));
+        crate::ssr_cache::invalidate_ssr_all_public();
         crate::ssr_cache::bump_global_generation();
 
         Ok(CreatePostResponse::ok(
