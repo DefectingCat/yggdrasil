@@ -210,13 +210,15 @@ describe('startThemeTransition', () => {
       writable: true,
     });
 
-    // registry 回调返回一个可控的 Promise,记录它是否在 callback resolve 前完成
-    let resolveAsync: (() => void) | null = null;
+    // registry 回调返回一个可控的 Promise,记录它是否在 callback resolve 前完成。
+    // resolveAsync 用 mutable 容器包裹,绕过 TS 跨闭包的控制流收窄(否则在 ?.() 处
+    // 被判定为 null → never)。
+    const resolveAsync: { fn: (() => void) | null } = { fn: null };
     const asyncDone = { value: false };
     const off = onThemeChange((isDark) => {
       void isDark;
       return new Promise<void>((resolve) => {
-        resolveAsync = () => {
+        resolveAsync.fn = () => {
           asyncDone.value = true;
           resolve();
         };
@@ -230,7 +232,7 @@ describe('startThemeTransition', () => {
     expect(asyncDone.value).toBe(false);
 
     // 触发异步任务完成
-    resolveAsync?.();
+    resolveAsync.fn?.();
     await callbackPromise;
     expect(asyncDone.value).toBe(true);
 

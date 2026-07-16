@@ -152,7 +152,7 @@ function observeBlock(pre: HTMLPreElement, render: () => Promise<void>): void {
  */
 export function initMermaid(selector: string, theme: ThemeName): Promise<void> {
   const root = document.querySelector(selector);
-  if (!root) return;
+  if (!root) return Promise.resolve();
 
   // 路径 1：未渲染的块（<code> 还在）。
   const blocks = root.querySelectorAll<HTMLPreElement>('pre > code.language-mermaid');
