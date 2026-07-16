@@ -346,3 +346,91 @@ pub async fn get_exec_result(task_id: String) -> Result<ExecTask, ServerFnError>
         Err(ServerFnError::new("找不到指定的任务".to_string()))
     }
 }
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+
+    fn req(language: &str, source: &str) -> ExecRequest {
+        ExecRequest {
+            language: language.to_string(),
+            source: source.to_string(),
+            overrides: None,
+        }
+    }
+
+    #[test]
+    fn validate_accepts_registered_language() {
+        // python/node/go/rust 默认注册，应放行。
+        for lang in ["python", "node", "go", "rust"] {
+            assert!(
+                validate_exec_request(&req(lang, "x")).is_ok(),
+                "{lang} 应被支持"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_language_is_case_and_whitespace_insensitive() {
+        // is_supported_lang 内部 trim+lowercase，校验链应透传该容忍。
+        assert!(validate_exec_request(&req("Python", "x")).is_ok());
+        assert!(validate_exec_request(&req("  RUST  ", "x")).is_ok());
+        assert!(validate_exec_request(&req("Go", "x")).is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_unregistered_language() {
+        // 未注册语言 / 命令注入尝试都应在白名单阶段被拒。
+        assert!(validate_exec_request(&req("c", "x")).is_err());
+        assert!(validate_exec_request(&req("bash", "x")).is_err());
+        assert!(validate_exec_request(&req("python2", "x")).is_err());
+        assert!(validate_exec_request(&req("", "x")).is_err());
+    }
+
+    #[test]
+    fn validate_rejects_multi_token_language() {
+        // 语言字段不会到达容器层：只有命中 LANGUAGES 的 key 才放行，
+        // 否则被拒。任何多 token / 含 shell 元字符的值都因找不到注册项而拒绝。
+        assert!(validate_exec_request(&req("python; rm -rf /", "x")).is_err());
+        assert!(validate_exec_request(&req("python node", "x")).is_err());
+        assert!(validate_exec_request(&req("python$(whoami)", "x")).is_err());
+    }
+
+    #[test]
+    fn validate_language_tolerates_surrounding_whitespace() {
+        // is_supported_lang 内部 trim+lowercase：首尾空白（含换行）被吃掉后等于 "python"。
+        // 锁定该契约——语言字段只用于 HashMap 查 key，空白无害。
+        assert!(validate_exec_request(&req("python\n", "x")).is_ok());
+        assert!(validate_exec_request(&req("\tpython\t", "x")).is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_source_exceeding_max_bytes() {
+        let max = RUNNER_CONFIG.max_source_bytes as usize;
+        // 恰好 max 放行，max+1 拒绝——边界精确，防止 off-by-one 让攻击者多塞 1 字节。
+        let exactly = "a".repeat(max);
+        assert!(
+            validate_exec_request(&req("python", &exactly)).is_ok(),
+            "源码恰好等于上限应放行"
+        );
+        let over = "a".repeat(max + 1);
+        let err =
+            validate_exec_request(&req("python", &over)).expect_err("超出上限应拒绝");
+        assert!(err.to_string().contains("过大"), "错误信息应提及大小: {err}");
+    }
+
+    #[test]
+    fn validate_empty_source_accepted_for_supported_lang() {
+        // 空源码不是校验层的职责（容器层处理），这里只验语言/大小。
+        // 锁定该契约：空源码 + 合法语言 → Ok，避免未来误把空当拒绝。
+        assert!(validate_exec_request(&req("python", "")).is_ok());
+    }
+
+    #[test]
+    fn validate_checks_language_before_size() {
+        // 不支持语言 + 巨大源码：应先因语言被拒（而非先报大小）。
+        let huge = "a".repeat((RUNNER_CONFIG.max_source_bytes as usize) + 100);
+        let err = validate_exec_request(&req("brainfuck", &huge)).unwrap_err();
+        assert!(err.to_string().contains("语言"), "应先报语言错误: {err}");
+    }
+}

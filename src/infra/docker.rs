@@ -611,6 +611,89 @@ mod tests {
         assert_eq!(host_config.memory, Some(256 * 1024 * 1024));
         assert_eq!(host_config.readonly_rootfs, Some(true));
         assert_eq!(host_config.network_mode.as_deref(), Some("none"));
+
+        // 隔离不变量：这些配置若被误删，容器隔离会悄悄失效。
+        // 单独断言而非隐含在端到端测试里，确保回归可见。
+        assert_eq!(host_config.cap_drop.as_deref(), Some(&["ALL".to_string()][..]));
+        assert_eq!(
+            host_config.security_opt.as_deref(),
+            Some(&["no-new-privileges".to_string()][..])
+        );
+        assert_eq!(host_config.pids_limit, Some(64));
+        // memory_swap == memory 才是真正禁用 swap；二者不等价于可换出到磁盘
+        assert_eq!(host_config.memory_swap, host_config.memory);
+        assert_eq!(host_config.memory_swap, Some(256 * 1024 * 1024));
+    }
+
+    #[test]
+    fn host_config_ulimits_drops_only_nofile() {
+        // nproc 在容器内对 non-root 用户有害（初始 exec /bin/sh 直接 EAGAIN），
+        // 只保留 nofile=64。若有人加回 nproc，这里会失败。
+        let limits = ResourceLimits {
+            cpu_cores: 1.0,
+            memory_mb: 128,
+            timeout_secs: 5,
+            output_bytes: 1024,
+            allow_network: false,
+        };
+        let host_config = build_host_config(&limits);
+        let ulimits = host_config.ulimits.expect("ulimits must be set");
+        assert_eq!(ulimits.len(), 1, "only nofile, no nproc");
+        let nf = &ulimits[0];
+        assert_eq!(nf.name.as_deref(), Some("nofile"));
+        assert_eq!(nf.soft, Some(64));
+        assert_eq!(nf.hard, Some(64));
+    }
+
+    #[test]
+    fn host_config_tmpfs_has_exec_on_tmp_only() {
+        // /tmp 必须 exec（编译型语言把产物落在 /tmp 后再 exec）；
+        // /code、/run 不带 exec（默认 noexec）。若误给 /code 也加 exec，测试失败。
+        let limits = ResourceLimits {
+            cpu_cores: 1.0,
+            memory_mb: 128,
+            timeout_secs: 5,
+            output_bytes: 1024,
+            allow_network: false,
+        };
+        let host_config = build_host_config(&limits);
+        let tmpfs = host_config.tmpfs.expect("tmpfs must be set");
+        assert_eq!(tmpfs.len(), 3);
+        assert!(tmpfs["/tmp"].contains("exec"));
+        assert!(!tmpfs["/code"].contains("exec"));
+        assert!(!tmpfs["/run"].contains("exec"));
+    }
+
+    #[test]
+    fn host_config_network_mode_follows_allow_network() {
+        let base = ResourceLimits {
+            cpu_cores: 1.0,
+            memory_mb: 128,
+            timeout_secs: 5,
+            output_bytes: 1024,
+            allow_network: false,
+        };
+        assert_eq!(build_host_config(&base).network_mode.as_deref(), Some("none"));
+        let mut net = base;
+        net.allow_network = true;
+        assert_eq!(build_host_config(&net).network_mode.as_deref(), Some("bridge"));
+    }
+
+    #[test]
+    fn host_config_cpu_and_memory_scale_with_limits() {
+        // 资源钳制是安全边界，断言换算公式不漂移（cpu_cores * 100_000，memory_mb * 1MiB）。
+        let limits = ResourceLimits {
+            cpu_cores: 2.0,
+            memory_mb: 512,
+            timeout_secs: 5,
+            output_bytes: 1024,
+            allow_network: false,
+        };
+        let host_config = build_host_config(&limits);
+        assert_eq!(host_config.cpu_quota, Some(200_000));
+        assert_eq!(host_config.cpu_period, Some(100_000));
+        assert_eq!(host_config.memory, Some(512 * 1024 * 1024));
+        assert_eq!(host_config.memory_swap, Some(512 * 1024 * 1024));
     }
 
     #[tokio::test]

@@ -713,4 +713,149 @@ mod tests {
             "未知 data-* 应被剥离, got: {result}"
         );
     }
+
+    // ---- XSS 攻击向量回归：属性白名单是这里的核心防线 ----
+    // 这些测试锁定"非白名单属性被剥离"这一不变量——若有人放宽属性过滤，
+    // 经典 XSS 向量就会重新可用，测试会在那一步失败。
+
+    #[test]
+    fn clean_html_strips_event_handler_attributes() {
+        // onerror/onload/onclick 等事件处理器属性全不在白名单，必须被移除。
+        // 即便 <img> 本身合法，onerror 也不能留下。
+        let cases = [
+            r#"<img src="x" onerror="alert(1)">"#,
+            r#"<img src=x onerror=alert(1)>"#,
+            r#"<body onload="alert(1)">"#,
+            r#"<div onclick="alert(1)">x</div>"#,
+            r#"<a href="/x" onmouseover="alert(1)">x</a>"#,
+            r#"<svg onload="alert(1)"></svg>"#,
+        ];
+        for input in cases {
+            let result = clean_html(input);
+            assert!(
+                !result.contains("onerror")
+                    && !result.contains("onload")
+                    && !result.contains("onclick")
+                    && !result.contains("onmouseover"),
+                "事件处理器属性应被剥离, input: {input}, got: {result}"
+            );
+        }
+    }
+
+    #[test]
+    fn clean_html_strips_event_handler_attribute_with_mixed_case() {
+        // 大小写混淆绕过尝试：EvEr、大写、混合都应被拦（属性名匹配应大小写不敏感地拒绝）。
+        for attr in ["OnErRoR", "ONERROR", "On_Error".replace('_', "or").as_str()] {
+            let input = format!(r#"<img src="x" {attr}="alert(1)">"#);
+            let result = clean_html(&input);
+            assert!(
+                !result.to_lowercase().contains("onerror"),
+                "大小写混淆的事件处理器应被剥离: {input} -> {result}"
+            );
+        }
+    }
+
+    #[test]
+    fn clean_html_removes_script_tag_and_content() {
+        // script 在 CLEAN_CONTENT_TAGS：标签连同内容一起移除（而非转义后保留）。
+        let result = clean_html("<p>hi</p><script>alert(1)</script><p>bye</p>");
+        assert!(!result.contains("script"), "script 标签应被完全移除: {result}");
+        assert!(!result.contains("alert"), "script 内容应被清除: {result}");
+        assert!(result.contains("hi") && result.contains("bye"), "周围内容应保留: {result}");
+    }
+
+    #[test]
+    fn clean_html_removes_style_tag_and_content() {
+        // style 也走 CLEAN_CONTENT_TAGS：CSS 注入（expression()、@import）随内容一起移除。
+        let result = clean_html("<style>body{background:url(javascript:alert(1))}</style><p>x</p>");
+        assert!(!result.contains("style"), "style 标签应被移除: {result}");
+        assert!(!result.contains("javascript"), "style 内危险内容应被清除: {result}");
+    }
+
+    #[test]
+    fn clean_html_drops_dangerous_tags_entirely() {
+        // 这些标签不在白名单：整体移除（含子树），无法用于 XSS / 数据外泄。
+        for tag in ["iframe", "object", "embed", "form", "svg", "math", "base", "meta"] {
+            let input = format!("<{tag} src=\"javascript:alert(1)\"></{tag}>");
+            let result = clean_html(&input);
+            assert!(
+                !result.to_lowercase().contains(&format!("<{tag}")),
+                "<{tag}> 不在白名单应被移除: {result}"
+            );
+        }
+    }
+
+    #[test]
+    fn clean_html_drops_javascript_scheme_in_href_and_src() {
+        // 即便标签合法，javascript:/vbscript: scheme 必须被拒（is_safe_url 防线）。
+        let cases = [
+            r#"<a href="javascript:alert(1)">x</a>"#,
+            r#"<a href="vbscript:msgbox(1)">x</a>"#,
+            r#"<img src="javascript:alert(1)">"#,
+            // 编码绕过尝试：HTML 实体编码的 javascript:
+            r#"<a href="&#106;avascript:alert(1)">x</a>"#,
+            r#"<a href="java&#115;cript:alert(1)">x</a>"#,
+        ];
+        for input in cases {
+            let result = clean_html(input);
+            // href/src 值里不应残留可执行的 javascript scheme（属性可能被整段移除或值被清空）。
+            // 至少裸的 "javascript:" 字面量不应在 href/src 属性值中出现。
+            let lower = result.to_lowercase();
+            assert!(
+                !lower.contains("javascript:") && !lower.contains("vbscript:"),
+                "危险 scheme 应被移除, input: {input}, got: {result}"
+            );
+        }
+    }
+
+    #[test]
+    fn clean_html_data_uri_blocked_in_article_body() {
+        // clean_html 配置 allow_data_uri: false——所有 data URI（含 image/png）都应被拒。
+        // 这是文章正文路径的契约；评论路径同样。
+        let result = clean_html(r#"<img src="data:image/png;base64,iVBORw0KGgo=처리">"#);
+        assert!(
+            !result.contains("data:image/png"),
+            "文章正文应禁用 data URI: {result}"
+        );
+    }
+
+    #[test]
+    fn clean_html_data_uri_text_html_blocked_even_if_flag_true() {
+        // 即便 allow_data_uri=true，is_safe_data_uri 也只放行图片类型；
+        // data:text/html（可执行脚本）永远拒绝。直接测内部函数锁定该不变量。
+        let schemes = DEFAULT_ALLOWED_SCHEMES.clone();
+        assert!(!is_safe_url("data:text/html,<script>alert(1)</script>", &schemes, true));
+        assert!(!is_safe_url(
+            "data:application/javascript,alert(1)",
+            &schemes,
+            true
+        ));
+        // 安全图片类型在 flag=true 时放行
+        assert!(is_safe_url("data:image/png;base64,iVBOR=", &schemes, true));
+    }
+
+    #[test]
+    fn clean_html_svg_data_uri_carries_risk_even_when_allowed() {
+        // is_safe_data_uri 允许 image/svg+xml——SVG 内可嵌 <script>。
+        // 这里锁定当前行为：flag=true 时 svg data URI 被放行（调用方需自行评估风险），
+        // 并用注释标记这是一个潜在风险点（文章正文 allow_data_uri=false 已堵住）。
+        let schemes = DEFAULT_ALLOWED_SCHEMES.clone();
+        assert!(
+            is_safe_url("data:image/svg+xml,<svg></svg>", &schemes, true),
+            "svg data URI 在 flag=true 时当前被放行（已知风险点）"
+        );
+        // 但文章正文路径 flag=false，svg data URI 同样被拒
+        assert!(!is_safe_url(
+            "data:image/svg+xml,<svg><script>alert(1)</script></svg>",
+            &schemes,
+            false
+        ));
+    }
+
+    #[test]
+    fn clean_comment_html_strips_event_handlers() {
+        // 评论路径（更严格）同样不能漏掉事件处理器。
+        let result = clean_comment_html(r#"<p onclick="alert(1)">x</p>"#);
+        assert!(!result.contains("onclick"), "评论 XSS 向量: {result}");
+    }
 }

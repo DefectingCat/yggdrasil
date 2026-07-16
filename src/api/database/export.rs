@@ -231,3 +231,148 @@ fn sql_quote_cell(row: &tokio_postgres::Row, idx: usize) -> String {
         }
     }
 }
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+
+    // ---- is_simple_ident：表名白名单（防 SQL 注入与路径穿越）----
+
+    #[test]
+    fn simple_ident_accepts_legal_names() {
+        assert!(is_simple_ident("posts"));
+        assert!(is_simple_ident("user_posts"));
+        assert!(is_simple_ident("table1"));
+        assert!(is_simple_ident("a"));
+        assert!(is_simple_ident("_private"));
+        assert!(is_simple_ident("ABC123xyz"));
+    }
+
+    #[test]
+    fn simple_ident_rejects_empty_and_whitespace() {
+        assert!(!is_simple_ident(""));
+        assert!(!is_simple_ident("   "));
+    }
+
+    #[test]
+    fn simple_ident_rejects_injection_vectors() {
+        // SQL 注入：引号、分号、注释、空格分隔
+        assert!(!is_simple_ident("posts; DROP TABLE users"));
+        assert!(!is_simple_ident("posts' OR '1'='1"));
+        assert!(!is_simple_ident("posts--"));
+        assert!(!is_simple_ident("public.posts"));
+        assert!(!is_simple_ident("posts where 1=1"));
+        // 路径穿越
+        assert!(!is_simple_ident("../etc/passwd"));
+        assert!(!is_simple_ident("..\\windows"));
+        assert!(!is_simple_ident("/etc/passwd"));
+        // 反引号 / 双引号标识符语法
+        assert!(!is_simple_ident("`posts`"));
+        assert!(!is_simple_ident("\"posts\""));
+        // 连字符（常见合法表名片段，但本白名单禁止，防 `a-b` 被 SQL 解析为减法）
+        assert!(!is_simple_ident("my-posts"));
+    }
+
+    #[test]
+    fn simple_ident_rejects_unicode_and_non_ascii() {
+        assert!(!is_simple_ident("文章"));
+        assert!(!is_simple_ident("posts²"));
+        assert!(!is_simple_ident("café"));
+    }
+
+    // ---- parse_source：来源解析 + 只读校验（安全入口）----
+
+    #[test]
+    fn parse_table_source_builds_select_star() {
+        let (sql, name) = parse_source("table:posts").unwrap();
+        assert_eq!(sql, "SELECT * FROM \"posts\"");
+        assert_eq!(name, "posts");
+    }
+
+    #[test]
+    fn parse_table_source_trims_whitespace() {
+        let (sql, name) = parse_source("table:  posts  ").unwrap();
+        assert_eq!(sql, "SELECT * FROM \"posts\"");
+        assert_eq!(name, "posts");
+    }
+
+    #[test]
+    fn parse_table_source_rejects_bad_name() {
+        // 非法表名（注入/穿越/空）必须在拼进 SQL 前被拒，防 SQL 注入。
+        for bad in [
+            "table:",
+            "table:   ",
+            "table:posts; DROP TABLE users",
+            "table:../secret",
+            "table:a b",
+            "table:\"x\"",
+        ] {
+            let (code, msg) = parse_source(bad).expect_err(bad);
+            assert_eq!(code, StatusCode::BAD_REQUEST);
+            assert!(msg.contains("表名"), "{bad}: {msg}");
+        }
+    }
+
+    #[test]
+    fn parse_query_source_accepts_select_and_explain() {
+        assert!(parse_source("query:SELECT * FROM posts").is_ok());
+        assert!(parse_source("query:SELECT id, title FROM posts WHERE id > 0").is_ok());
+        assert!(parse_source("query:EXPLAIN SELECT * FROM posts").is_ok());
+        assert!(parse_source("query:SELECT 1").is_ok());
+        // 复杂但只读的查询
+        assert!(parse_source("query:WITH t AS (SELECT 1) SELECT * FROM t").is_ok());
+    }
+
+    #[test]
+    fn parse_query_source_rejects_all_write_operations() {
+        // 每一种写/破坏操作都必须被 AST 校验拦截——这是数据导出的核心安全不变量。
+        for evil in [
+            "query:INSERT INTO posts VALUES (1)",
+            "query:UPDATE posts SET title='x'",
+            "query:DELETE FROM posts",
+            "query:DROP TABLE posts",
+            "query:TRUNCATE posts",
+            "query:CREATE TABLE evil (id int)",
+            "query:ALTER TABLE posts ADD COLUMN x int",
+            "query:GRANT SELECT ON posts TO public",
+            // 即便嵌在 SELECT 里，子查询的写操作也要拒
+            "query:INSERT INTO logs VALUES (1) RETURNING 1",
+        ] {
+            let (code, msg) = parse_source(evil).expect_err(evil);
+            assert_eq!(code, StatusCode::BAD_REQUEST, "{evil}");
+            // 写操作要么被 AST 校验拒（"只读"），要么 sqlparser 解析阶段就失败
+            assert!(
+                msg.contains("只读") || msg.contains("解析失败"),
+                "{evil}: {msg}"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_query_source_rejects_unparseable_sql() {
+        for bad in ["query:这不是SQL", "query:SELECT FROM", "query:@#$%", "query:1+1"] {
+            assert!(
+                parse_source(bad).is_err(),
+                "{bad} 应解析失败或被拒"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_query_source_allows_empty_result_set() {
+        // sqlparser 容忍纯分号（解析为零语句），`any()` 在空集上为 false → 放行。
+        // 锁定该契约：这只产生空导出，无数据泄露，属可接受行为；
+        // 若未来想收紧为"空查询拒绝"，此测试会提醒你更新。
+        assert!(parse_source("query:;;;").is_ok());
+    }
+
+    #[test]
+    fn parse_source_rejects_unknown_prefix() {
+        let (code, msg) = parse_source("unknown:posts").expect_err("未知前缀");
+        assert_eq!(code, StatusCode::BAD_REQUEST);
+        assert!(msg.contains("source"));
+        // 完全无前缀的裸字符串也应被拒
+        assert!(parse_source("posts").is_err());
+        assert!(parse_source("").is_err());
+    }
+}
