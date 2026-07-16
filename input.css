@@ -405,12 +405,36 @@
   }
 
   .md-content li > input[type="checkbox"] {
+    /* appearance:none 全自定义：告别浏览器原生方框形状/边框差异。
+       对勾用内联 SVG background（<input> 是替换元素，吃不到 ::after），
+       颜色按主题烘焙——亮色中绿底配白对勾，暗色浅绿底配深对勾，对比最强。
+       文章内 checkbox 是 disabled 的纯展示态，故不加 focus/cursor 交互。 */
+    appearance: none;
+    -webkit-appearance: none;
     flex-shrink: 0;
-    width: 1rem;
-    height: 1rem;
+    width: 1.15rem;
+    height: 1.15rem;
     margin: 0;
-    accent-color: var(--color-paper-accent);
+    border: 1.5px solid var(--color-paper-border);
+    border-radius: 4px;
+    background-color: transparent;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 0.75rem;
     cursor: default;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .md-content li > input[type="checkbox"]:checked {
+    background-color: var(--color-paper-accent);
+    border-color: var(--color-paper-accent);
+    /* 亮色：中绿 #40a02b 底 + 白对勾（对比 ≥ 4.5:1） */
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%20fill='none'%20stroke='%23ffffff'%20stroke-width='2.2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M3.5%208.5l3%203%206-6.5'/%3E%3C/svg%3E");
+  }
+
+  /* 暗色：浅绿 #a6e3a1 底上白对勾对比不足，改深色对勾（主题底色 #1e1e2e） */
+  .dark .md-content li > input[type="checkbox"]:checked {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%20fill='none'%20stroke='%231e1e2e'%20stroke-width='2.2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M3.5%208.5l3%203%206-6.5'/%3E%3C/svg%3E");
   }
 
   .md-content hr {
