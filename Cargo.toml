@@ -54,6 +54,10 @@ bollard = { version = "0.21", optional = true }
 # 把 mpsc::Receiver 包成 Stream,供 axum SSE handler 使用。
 # axum::response::sse::{Sse,KeepAlive,Event} 随 axum 0.8 自带,无需额外 dep。
 tokio-stream = { version = "0.1", features = ["sync"], optional = true }
+# 全局分配器：用 mimalloc 替换系统 malloc。多线程高频小对象分配吞吐显著提升，
+# 且对全静态 musl 链接友好（生产 Docker 镜像即 musl 目标）。
+# server-only：经 server feature 启用；WASM 前端构建不编译（见 main.rs cfg 门控）。
+mimalloc = { version = "0.1", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = ["Document", "Window", "Storage", "Element", "HtmlElement", "DomTokenList", "MediaQueryList", "HtmlImageElement", "MouseEvent", "KeyboardEvent", "Node", "EventTarget", "Navigator", "File", "FileList", "FormData", "Request", "RequestInit", "Response", "Headers", "ClipboardEvent", "DataTransfer", "HtmlInputElement", "EventSource", "MessageEvent"] }
@@ -114,4 +118,5 @@ server = [
     "dep:bytes",
     "dep:bollard",
     "dep:tokio-stream",
+    "dep:mimalloc",
 ]

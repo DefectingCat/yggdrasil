@@ -129,6 +129,8 @@ Dioxus 0.7 fullstack project with **two independent gates** — the most common 
 
 **Shared types that compile on both targets**: bridges like `src/tiptap_bridge.rs` and `src/codemirror_bridge.rs` keep shared structs (e.g. `UploadsInFlight`, `SqlSchema`/`SqlTable`) outside cfg gates, while wasm-bindgen externs + `EditorHandle` live in inner `#[cfg(target_arch = "wasm32")] mod wasm`. Similarly `src/sysinfo_sampler.rs` exposes `SystemSnapshot` on both targets but gates the actual sampler + `RwLock` behind `server`.
 
+**Global allocator (mimalloc)**: `src/main.rs` registers `#[global_allocator] static GLOBAL: mimalloc::MiMalloc` gated with `#[cfg(all(feature = "server", not(target_arch = "wasm32")))]`. Both gates are load-bearing: `mimalloc` is `optional = true` enabled via the `server` feature, and the `mimalloc_rust` crate does not compile on `wasm32` (Issue #76), so the WASM frontend must fall back to the default allocator. Do not delete either cfg — removing the `not(wasm32)` gate breaks the frontend bundle, removing the `server` gate pulls mimalloc into the WASM target. Chosen over jemalloc because the production server is a fully-static musl binary (Dockerfile), and jemalloc has known musl build pitfalls (`pthread_getname_np` for musl <1.2.3, `unprefixed-malloc` symbol conflicts); mimalloc links cleanly into musl/glibc/FreeBSD.
+
 ## Dual API Architecture
 
 The server exposes two distinct API patterns:
