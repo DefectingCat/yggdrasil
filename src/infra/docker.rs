@@ -696,9 +696,27 @@ mod tests {
         assert_eq!(host_config.memory_swap, Some(512 * 1024 * 1024));
     }
 
+    /// 探测 Docker daemon 是否可用：socket 缺失（`DOCKER_CLIENT == None`）或
+    /// daemon 无响应时返回 `None`。集成测试用它做动态守卫——daemon 在则跑，
+    /// 不在则显式跳过（eprintln + 提前 return），而非 panic 失败。
+    ///
+    /// 这比 `#[ignore]` 更合适：`#[ignore]` 会在所有环境（含有 Docker 的开发机）
+    /// 一律跳过、且需 `cargo test --ignored` 显式触发；探测守卫让这些测试在
+    /// 有 Docker 时自动运行、在无 Docker 的 CI 上静默放行。
+    async fn require_docker() -> Option<&'static Docker> {
+        let docker = DOCKER_CLIENT.as_ref()?;
+        // socket 在但 daemon 挂了的情况靠这一步轻量只读调用兜住。
+        docker.version().await.ok()?;
+        Some(docker)
+    }
+
     #[tokio::test]
     #[serial_test::serial]
     async fn test_run_in_container_success() {
+        if require_docker().await.is_none() {
+            eprintln!("skip: Docker daemon 不可用（未安装或未运行）");
+            return;
+        }
         let limits = ResourceLimits {
             cpu_cores: 1.0,
             memory_mb: 128,
@@ -725,6 +743,10 @@ mod tests {
     #[tokio::test]
     #[serial_test::serial]
     async fn test_run_in_container_output_truncation() {
+        if require_docker().await.is_none() {
+            eprintln!("skip: Docker daemon 不可用（未安装或未运行）");
+            return;
+        }
         let limits = ResourceLimits {
             cpu_cores: 1.0,
             memory_mb: 128,
@@ -751,6 +773,10 @@ mod tests {
     #[tokio::test]
     #[serial_test::serial]
     async fn test_run_in_container_timeout() {
+        if require_docker().await.is_none() {
+            eprintln!("skip: Docker daemon 不可用（未安装或未运行）");
+            return;
+        }
         let limits = ResourceLimits {
             cpu_cores: 1.0,
             memory_mb: 128,
@@ -774,7 +800,13 @@ mod tests {
     #[serial_test::serial]
     async fn test_run_in_container_cancellation() {
         use bollard::query_parameters::ListContainersOptions;
-        let docker = get_docker().expect("test requires a running Docker daemon");
+        let docker = match require_docker().await {
+            Some(d) => d,
+            None => {
+                eprintln!("skip: Docker daemon 不可用（未安装或未运行）");
+                return;
+            }
+        };
 
         let before = docker
             .list_containers(Some(ListContainersOptions {
