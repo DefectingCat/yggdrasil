@@ -87,10 +87,8 @@ RUN rustup target add wasm32-unknown-unknown \
 ARG DX_VERSION=0.7.9
 RUN ARCH="$(dpkg --print-architecture)" \
     && case "$ARCH" in \
-        amd64) DX_TRIPLET=x86_64-unknown-linux-gnu
-               DX_SHA256=3b132551b480bc96f938f9f0d37936ee1190f994977539dcc347eaf38540d005 ;;
-        arm64) DX_TRIPLET=aarch64-unknown-linux-gnu
-               DX_SHA256=8cf14db0b11b43b31dd6d39e71b00e567f2fccfde85ae3a8f7ef0f8745e5ccfb ;;
+        amd64) DX_TRIPLET=x86_64-unknown-linux-gnu  DX_SHA256=3b132551b480bc96f938f9f0d37936ee1190f994977539dcc347eaf38540d005 ;; \
+        arm64) DX_TRIPLET=aarch64-unknown-linux-gnu DX_SHA256=8cf14db0b11b43b31dd6d39e71b00e567f2fccfde85ae3a8f7ef0f8745e5ccfb ;; \
         *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
     esac \
     && DX_URL="https://github.com/DioxusLabs/dioxus/releases/download/v${DX_VERSION}/dx-${DX_TRIPLET}.tar.gz" \
