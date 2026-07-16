@@ -19,6 +19,12 @@ ARG DEBIAN_SECURITY_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/debian-security
 ARG NODE_MIRROR=https://registry.npmmirror.com/-/binary/node
 ARG NPM_REGISTRY=https://registry.npmmirror.com
 ARG RS_PROXY=https://rsproxy.cn
+# GitHub Releases proxy — the dx tarball and tailwindcss binary live on
+# github.com releases and download at ~300 KB/s with frequent connection
+# resets from China. Prefixing the raw github.com URL routes the download
+# through the proxy. Set to "" (empty) to bypass the proxy (e.g. building
+# outside China where github.com is fast/reliable).
+ARG GH_PROXY=https://gh-proxy.com
 
 # --- Debian apt: rewrite the DEB822 sources to the TUNA mirror. ---
 RUN sed -i \
@@ -103,7 +109,7 @@ RUN ARCH="$(dpkg --print-architecture)" \
         arm64) DX_TRIPLET=aarch64-unknown-linux-gnu DX_SHA256=8cf14db0b11b43b31dd6d39e71b00e567f2fccfde85ae3a8f7ef0f8745e5ccfb ;; \
         *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
     esac \
-    && DX_URL="https://github.com/DioxusLabs/dioxus/releases/download/v${DX_VERSION}/dx-${DX_TRIPLET}.tar.gz" \
+    && DX_URL="${GH_PROXY:+${GH_PROXY}/}https://github.com/DioxusLabs/dioxus/releases/download/v${DX_VERSION}/dx-${DX_TRIPLET}.tar.gz" \
     && curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors --retry-connrefused --continue-at - "${DX_URL}" -o /tmp/dx.tar.gz \
     && echo "${DX_SHA256}  /tmp/dx.tar.gz" | sha256sum -c - \
     && tar -xzf /tmp/dx.tar.gz -C /usr/local/bin \
@@ -119,7 +125,7 @@ RUN ARCH="$(dpkg --print-architecture)" \
         arm64)  TW_ARCH=arm64 ;; \
         *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
     esac \
-    && GH_URL="https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-${TW_ARCH}" \
+    && GH_URL="${GH_PROXY:+${GH_PROXY}/}https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-${TW_ARCH}" \
     && curl -fsSL -o /usr/local/bin/tailwindcss "${GH_URL}" \
     && chmod +x /usr/local/bin/tailwindcss
 
