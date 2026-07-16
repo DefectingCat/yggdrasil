@@ -295,9 +295,10 @@ fn RebuildCacheBar() -> Element {
     };
 
     rsx! {
-        // 竖向布局：按钮行 + 结果消息行（右对齐，消息行不撑高按钮行）。
+        // 消息绝对定位到按钮行下方，脱离文档流：出现/消失都不撑高祖先容器，
+        // 避免 header 的 md:items-end 把固定底边转化为按钮上移（"按钮被顶上去" bug）。
         // 自持 rebuilding / rebuild_result state，与父组件零耦合。
-        div { class: "flex flex-col items-end gap-1",
+        div { class: "relative flex items-center gap-3",
             div { class: "flex items-center gap-3",
                 Tooltip {
                     tip: "重建 content_html 为空的文章渲染缓存".to_string(),
@@ -332,9 +333,9 @@ fn RebuildCacheBar() -> Element {
                     }
                 }
             }
-            // 重建结果消息：独立成行，右对齐，与按钮行同属本组件。
+            // 重建结果消息：绝对定位到按钮行正下方，脱离文档流，不影响布局高度。
             if let Some(msg) = rebuild_result() {
-                div { class: "text-xs text-paper-secondary whitespace-pre-line", "{msg}" }
+                div { class: "absolute top-full right-0 mt-1 text-xs text-paper-secondary whitespace-pre-line", "{msg}" }
             }
         }
     }
