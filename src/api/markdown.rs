@@ -211,6 +211,26 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
                 html.push_str("</code></pre>");
                 in_codeblock = false;
             }
+            Event::InlineMath(tex) => {
+                // 先刷出累积的普通事件，再注入 KaTeX 渲染结果。
+                if !non_heading_events.is_empty() {
+                    pulldown_cmark::html::push_html(&mut html, non_heading_events.into_iter());
+                    non_heading_events = Vec::new();
+                }
+                // 标题内的公式按内联渲染（标题不应用块级公式）。
+                html.push_str(&crate::api::katex::render_inline(&tex));
+            }
+            Event::DisplayMath(tex) => {
+                if !non_heading_events.is_empty() {
+                    pulldown_cmark::html::push_html(&mut html, non_heading_events.into_iter());
+                    non_heading_events = Vec::new();
+                }
+                // 块级公式独占一行：用 <p class="math-display"> 包裹 KaTeX 输出。
+                // KaTeX 自身已产出 .katex-display，外层 <p> 负责段间距与居中容器。
+                html.push_str("<p class=\"math-display\">");
+                html.push_str(&crate::api::katex::render_display(&tex));
+                html.push_str("</p>");
+            }
             _ => {
                 if in_heading {
                     // 标题内部只保留文本与行内代码，避免嵌套块级元素。
@@ -822,5 +842,69 @@ console.log(1)
         // 文本内容保留
         assert!(result.html.contains("未完成"));
         assert!(result.html.contains("已完成"));
+    }
+
+    #[test]
+    fn render_markdown_inline_math() {
+        // $...$ 内联公式：pulldown-cmark (ENABLE_MATH) 解析 → katex 渲染成 span。
+        // sanitizer 放行 span 的 class/style，KaTeX 输出应原样保留。
+        let result = render_markdown_enhanced("公式 $E = mc^2$ 很重要");
+        assert!(
+            result.html.contains("katex"),
+            "内联公式应渲染为 katex span, got: {}",
+            result.html
+        );
+        // 前后文本保留
+        assert!(result.html.contains("公式"));
+        assert!(result.html.contains("很重要"));
+    }
+
+    #[test]
+    fn render_markdown_display_math() {
+        // $$...$$ 块级公式：应产出 <p class="math-display"> + katex-display。
+        let result = render_markdown_enhanced("$$\\frac{a}{b}$$");
+        assert!(
+            result.html.contains("math-display"),
+            "块级公式应用 math-display 段落包裹, got: {}",
+            result.html
+        );
+        assert!(
+            result.html.contains("katex-display"),
+            "KaTeX 块级输出应含 katex-display, got: {}",
+            result.html
+        );
+    }
+
+    #[test]
+    fn render_markdown_inline_math_in_heading() {
+        // 标题内的 $...$ 按内联公式渲染（不应崩，也不应产生块级 <p>）。
+        let result = render_markdown_enhanced("## 勾股 $a^2 + b^2 = c^2$ 定理");
+        assert!(
+            result.html.contains("katex"),
+            "标题内联公式应渲染, got: {}",
+            result.html
+        );
+        // 标题里不应出现块级公式的 <p class="math-display">
+        assert!(
+            !result.html.contains("math-display"),
+            "标题内不应有块级公式包裹, got: {}",
+            result.html
+        );
+    }
+
+    #[test]
+    fn render_markdown_bad_math_does_not_break() {
+        // 坏 TeX 不应中断整篇渲染：throw_on_error=false 回退到错误 span。
+        let result = render_markdown_enhanced("正常文本 $\\undefinedmacro{$ 后续文本");
+        assert!(
+            result.html.contains("正常文本"),
+            "坏公式不应破坏前文, got: {}",
+            result.html
+        );
+        assert!(
+            result.html.contains("后续文本"),
+            "坏公式不应破坏后文, got: {}",
+            result.html
+        );
     }
 }
