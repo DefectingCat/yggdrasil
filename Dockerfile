@@ -11,7 +11,6 @@ FROM rust:1.96-bookworm AS builder
 #   - Debian apt          -> TUNA (Tsinghua)
 #   - Rust + crates.io    -> rsproxy (ByteDance)
 #   - Node.js + npm/pnpm  -> npmmirror (Alibaba)
-#   - Tailwind standalone -> gh-proxy.com (China GitHub-release CDN)
 ARG DEBIAN_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/debian
 ARG DEBIAN_SECURITY_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/debian-security
 ARG NODE_MIRROR=https://registry.npmmirror.com/-/binary/node
@@ -77,12 +76,6 @@ RUN mkdir -p /usr/local/cargo \
 RUN rustup target add wasm32-unknown-unknown \
         x86_64-unknown-linux-musl aarch64-unknown-linux-musl
 
-# China GitHub-release CDN: GitHub's release CDN is slow/unreliable from inside
-# the container, and the host proxy (host.docker.internal:10808) throttles large
-# files to ~16 KB/s. gh-proxy.com served release assets at ~430 KB/s in testing.
-# Set empty to fall back to the direct GitHub URL. Shared by dx + Tailwind below.
-ARG GH_PROXY=https://gh-proxy.com
-
 # Install the Dioxus CLI from the official prebuilt binary (GitHub Releases),
 # NOT `cargo install` (which compiles dx-cli's huge dep tree from source — the
 # slowest single Docker step). The release tag v0.7.9 matches the crate version
@@ -101,14 +94,14 @@ RUN ARCH="$(dpkg --print-architecture)" \
         *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
     esac \
     && DX_URL="https://github.com/DioxusLabs/dioxus/releases/download/v${DX_VERSION}/dx-${DX_TRIPLET}.tar.gz" \
-    && curl -fsSL "${GH_PROXY:+${GH_PROXY}/}${DX_URL}" -o /tmp/dx.tar.gz \
+    && curl -fsSL "${DX_URL}" -o /tmp/dx.tar.gz \
     && echo "${DX_SHA256}  /tmp/dx.tar.gz" | sha256sum -c - \
     && tar -xzf /tmp/dx.tar.gz -C /usr/local/bin \
     && rm /tmp/dx.tar.gz \
     && dx --version
 
 # --- Tailwind CSS v4: the standalone binary is distributed via GitHub
-# Releases (~106 MB); routed through the same GH_PROXY as dx above. ---
+# Releases (~106 MB). ---
 ARG TAILWIND_VERSION=4.3.1
 RUN ARCH="$(dpkg --print-architecture)" \
     && case "$ARCH" in \
@@ -117,7 +110,7 @@ RUN ARCH="$(dpkg --print-architecture)" \
         *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
     esac \
     && GH_URL="https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-${TW_ARCH}" \
-    && curl -fsSL -o /usr/local/bin/tailwindcss "${GH_PROXY:+${GH_PROXY}/}${GH_URL}" \
+    && curl -fsSL -o /usr/local/bin/tailwindcss "${GH_URL}" \
     && chmod +x /usr/local/bin/tailwindcss
 
 WORKDIR /build
