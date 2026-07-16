@@ -107,6 +107,7 @@ build-codemirror: ; @cd libs && pnpm --filter @yggdrasil/codemirror-editor run b
 build-lightbox:   ; @cd libs && pnpm --filter @yggdrasil/lightbox run build
 build-core:       ; @cd libs && pnpm --filter @yggdrasil/core run build
 build-xterm:      ; @cd libs && pnpm --filter @yggdrasil/xterm-terminal run build
+build-mermaid:    ; @cd libs && pnpm --filter @yggdrasil/mermaid-renderer run build
 
 dev: build-libs highlight-css katex-css
 	@echo "Cleaning static/..."
@@ -202,6 +203,7 @@ clean:
 	@cargo clean
 	@rm -f public/style.css public/highlight.css
 	@rm -rf public/katex
+	@rm -rf public/mermaid
 	@rm -rf public/doc
 	@rm -rf uploads/.cache
 	@rm -rf libs/node_modules libs/*/node_modules

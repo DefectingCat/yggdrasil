@@ -136,6 +136,13 @@ pub fn PostContent(content_html: String) -> Element {
     // 每次渲染重新解析开销可控。
     let fragments = split_content_fragments(&content_html);
 
+    // mermaid 流程图主题需随当前生效主题（light/dark）切换。读 use_resolved_theme()
+    // 建立订阅：主题变化时下方 use_effect 重跑，重新调用 __initMermaid（幂等，
+    // 已渲染的块由 dataset.mermaidRendered 守卫跳过；主题切换暂不强制重渲染图，
+    // 后续如需可在 mermaid.ts 监听 THEME_CHANGE_EVENT）。
+    #[cfg(target_arch = "wasm32")]
+    let resolved_theme = crate::theme::use_resolved_theme();
+
     #[cfg(target_arch = "wasm32")]
     use_effect(move || {
         let window = web_sys::window().unwrap();
@@ -143,6 +150,16 @@ pub fn PostContent(content_html: String) -> Element {
         // 调用 window.__initPostContent('.post-content')：函数不存在时静默跳过
         // (与旧 eval 中的 if 守卫语义一致)。
         invoke_optional_global(&window, "__initPostContent", &[".post-content".into()]);
+
+        // mermaid 流程图懒加载渲染：扫描 .post-content 下的 language-mermaid 代码块,
+        // IntersectionObserver 视口可见时动态 import /mermaid/mermaid.js 渲染成 SVG。
+        // 读取 resolved_theme() 既是为了传主题,也建立订阅让主题切换重跑此 effect。
+        let theme_str: String = if resolved_theme() == crate::theme::ResolvedTheme::Dark {
+            "dark".into()
+        } else {
+            "light".into()
+        };
+        invoke_optional_global(&window, "__initMermaid", &[".post-content".into(), theme_str.into()]);
 
         // lightbox 改由 Dioxus.toml 全局 <script src> 加载（不再 include_str!）。
         // 双保险契约：先设配置,若 lightbox.js 已加载则立即调用;

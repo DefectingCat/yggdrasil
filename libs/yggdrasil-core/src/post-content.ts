@@ -11,6 +11,8 @@ function initCopyButtons(root: Element): void {
     const pre = code.parentElement;
     if (!pre) return;
     if (pre.querySelector('.copy-code')) return;
+    // mermaid 代码块由 mermaid.ts 渲染成 SVG，不注入 copy 按钮（图无需复制源码）。
+    if (code.classList.contains('language-mermaid')) return;
 
     const btn = document.createElement('button');
     btn.className = 'copy-code';
