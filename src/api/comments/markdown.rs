@@ -22,7 +22,7 @@ pub fn clean_comment_html(input: &str) -> String {
 pub fn render_comment_markdown(md: &str) -> String {
     use pulldown_cmark::{CodeBlockKind, Event, Options, Tag, TagEnd};
 
-    let opts = Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH;
+    let opts = Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_MATH;
     let parser = pulldown_cmark::Parser::new_ext(md, opts);
 
     let mut events: Vec<Event> = Vec::new();
@@ -33,6 +33,17 @@ pub fn render_comment_markdown(md: &str) -> String {
     // 逐事件处理 Markdown AST，转换标题并收集代码块内容。
     for event in parser {
         match event {
+            Event::InlineMath(tex) => {
+                // 内联公式直接渲染成 HTML 注入事件流（评论不使用块级段落包裹）。
+                let html = crate::api::katex::render_inline(&tex);
+                events.push(Event::Html(html.into()));
+            }
+            Event::DisplayMath(tex) => {
+                // 评论里的块级公式：KaTeX 输出本身已含 .katex-display 居中样式，
+                // 无需额外 <p>（评论渲染较紧凑，避免引入多余段间距）。
+                let html = crate::api::katex::render_display(&tex);
+                events.push(Event::Html(html.into()));
+            }
             Event::Start(Tag::Heading { .. }) => {
                 // 评论中不保留标题层级，统一加粗。
                 events.push(Event::Start(Tag::Strong));
@@ -232,5 +243,41 @@ mod tests {
         assert!(result.contains("<strong>"));
         assert!(result.contains("<code>foo()</code>"));
         assert!(!result.contains("<h2>"));
+    }
+
+    #[test]
+    fn render_comment_inline_math() {
+        // 评论里的 $...$ 内联公式：ENABLE_MATH 解析 → katex 渲染 → sanitizer 放行 span。
+        let result = render_comment_markdown("方程 $a^2 + b^2 = c^2$ 是勾股定理");
+        assert!(
+            result.contains("katex"),
+            "评论内联公式应渲染为 katex span, got: {}",
+            result
+        );
+        assert!(result.contains("方程"));
+        assert!(result.contains("勾股定理"));
+    }
+
+    #[test]
+    fn render_comment_display_math() {
+        // 评论里的 $$...$$ 块级公式。
+        let result = render_comment_markdown("$$\\int_0^1 x\\,dx$$");
+        assert!(
+            result.contains("katex-display"),
+            "评论块级公式应含 katex-display, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn render_comment_math_span_style_preserved() {
+        // KaTeX 内联 style（垂直对齐）必须经 clean_comment_html 保留,
+        // 否则公式在评论里排版错位。验证 span 的 style 属性未被剥离。
+        let result = render_comment_markdown("$x^2$");
+        assert!(
+            result.contains("style=\""),
+            "评论 katex span 的 style 应保留, got: {}",
+            result
+        );
     }
 }

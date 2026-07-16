@@ -410,7 +410,9 @@ pub fn clean_comment_html(input: &str) -> String {
         ],
         extra_tag_attrs: vec![
             ("a", vec!["class", "aria-hidden", "aria-label"]),
-            ("span", vec!["class"]),
+            // span 的 style：KaTeX 服务端渲染产出的内联 style（元素垂直对齐/定位）
+            // 需保留，否则公式排版错位。与文章正文路径（sanitizer.rs:382）对齐。
+            ("span", vec!["class", "style"]),
         ],
         allowed_schemes: &DEFAULT_ALLOWED_SCHEMES,
         allow_data_uri: false,
