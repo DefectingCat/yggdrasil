@@ -8,6 +8,7 @@
 others/
 public/style.css
 public/highlight.css
+public/katex
 public/tiptap
 public/codemirror
 public/lightbox

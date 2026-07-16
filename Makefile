@@ -1,9 +1,10 @@
-.PHONY: dev build build-linux build-freebsd freebsd-sysroot docker docker-amd64 docker-apple docker-multiarch css css-watch clean build-libs build-editor build-codemirror build-lightbox build-core build-xterm highlight-css test doc doc-open start lint fix restore-webp
+.PHONY: dev build build-linux build-freebsd freebsd-sysroot docker docker-amd64 docker-apple docker-multiarch css css-watch clean build-libs build-editor build-codemirror build-lightbox build-core build-xterm highlight-css katex-css test doc doc-open start lint fix restore-webp
 
 build:
 	@cd libs && pnpm install --frozen-lockfile
 	@$(MAKE) build-libs
 	@$(MAKE) highlight-css
+	@$(MAKE) katex-css
 	@tailwindcss -i input.css -o public/style.css --minify
 	@$(MAKE) doc
 	@dx build --release --debug-symbols=false
@@ -13,6 +14,7 @@ build-linux:
 	@cd libs && pnpm install --frozen-lockfile
 	@$(MAKE) build-libs
 	@$(MAKE) highlight-css
+	@$(MAKE) katex-css
 	@tailwindcss -i input.css -o public/style.css --minify
 	@dx build @client --release --debug-symbols=false --wasm-js-cfg false
 	@dx build @server --release --debug-symbols=false --target x86_64-unknown-linux-musl --wasm-js-cfg false --features server
@@ -82,6 +84,17 @@ restore-webp:
 highlight-css:
 	@cargo run --bin generate_highlight_css
 
+# 把 npm 包 katex 的 dist/ 拷贝到 public/katex/（服务端 katex-rs 不打包 CSS）。
+# KaTeX 的 katex.min.css 用相对 URL 引 fonts/，故 fonts/ 必须与 CSS 同级。
+# 只拷 woff2（现代浏览器全支持，省去 woff/ttf ~70% 字体体积）。
+# katex 作为 libs/ workspace 根 devDependency，pnpm install 后在 libs/node_modules/katex/。
+katex-css:
+	@echo "Copying KaTeX CSS + woff2 fonts to public/katex/..."
+	@mkdir -p public/katex/fonts
+	@cp libs/node_modules/katex/dist/katex.min.css public/katex/katex.min.css
+	@cp libs/node_modules/katex/dist/fonts/*.woff2 public/katex/fonts/
+	@echo "KaTeX CSS ready at public/katex/"
+
 # 并行构建全部 libs/ 子项目（pnpm -r 拓扑顺序，无相互依赖则并发）。
 # 依赖安装由调用方负责（build/build-linux 用 pnpm install --frozen-lockfile，
 # dev 假设 node_modules 已存在）。
@@ -95,7 +108,7 @@ build-lightbox:   ; @cd libs && pnpm --filter @yggdrasil/lightbox run build
 build-core:       ; @cd libs && pnpm --filter @yggdrasil/core run build
 build-xterm:      ; @cd libs && pnpm --filter @yggdrasil/xterm-terminal run build
 
-dev: build-libs highlight-css
+dev: build-libs highlight-css katex-css
 	@echo "Cleaning static/..."
 	@rm -rf static/
 	@echo "Building CSS..."
@@ -188,6 +201,7 @@ docker-multiarch:
 clean:
 	@cargo clean
 	@rm -f public/style.css public/highlight.css
+	@rm -rf public/katex
 	@rm -rf public/doc
 	@rm -rf uploads/.cache
 	@rm -rf libs/node_modules libs/*/node_modules
