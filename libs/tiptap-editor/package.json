@@ -22,6 +22,7 @@
     "@tiptap/pm": "^3.27.3",
     "@tiptap/starter-kit": "^3.27.3",
     "@tiptap/suggestion": "^3.27.3",
+    "katex": "^0.16.22",
     "lowlight": "^3.3.0"
   }
 }

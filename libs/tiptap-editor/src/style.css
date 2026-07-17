@@ -1068,3 +1068,99 @@
   /* Mocha text */
   color: #cdd6f4;
 }
+
+/* ========== Math Node (KaTeX preview) ========== */
+
+.tiptap-editor .math-node {
+  /* inline 公式随文,block 公式独占行;KaTeX 字体由全局 katex.min.css 提供。 */
+  cursor: pointer;
+  border-radius: 4px;
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.tiptap-editor .math-node:hover {
+  /* Latte surface0:轻底色提示「可交互」。 */
+  background-color: rgba(204, 208, 218, 0.4);
+}
+
+.tiptap-editor .math-node-block {
+  display: block;
+  margin: 0.75em 0;
+  padding: 0.5em 0.75em;
+  text-align: center;
+}
+
+.tiptap-editor .math-node-inline {
+  display: inline;
+  padding: 0 0.15em;
+}
+
+.tiptap-editor .math-node-render-hidden {
+  display: none;
+}
+
+.tiptap-editor .math-node-error .math-node-render {
+  /* 坏 TeX:红色提示,对齐服务端 katex-error 的 #cc0000。 */
+  color: #d20f2f;
+}
+
+.tiptap-editor .math-node-edit {
+  width: 100%;
+  min-width: 200px;
+  font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+  line-height: 1.5;
+  padding: 0.5em 0.75em;
+  border: 1px solid #ccd0da;
+  border-radius: 6px;
+  /* Latte base */
+  background: #eff1f5;
+  /* Latte text */
+  color: #4c4f69;
+  resize: vertical;
+  outline: none;
+}
+
+.tiptap-editor .math-node-edit:focus {
+  /* Latte blue */
+  border-color: #1e66f5;
+  box-shadow: 0 0 0 2px rgba(30, 102, 245, 0.2);
+}
+
+/* ProseMirror 选中态:公式被选中时高亮。 */
+.tiptap-editor .ProseMirror-selectednode .math-node {
+  /* Latte blue 透明底。 */
+  background-color: rgba(30, 102, 245, 0.12);
+  box-shadow: 0 0 0 1px rgba(30, 102, 245, 0.4);
+}
+
+/* Dark theme (Mocha) */
+.dark .tiptap-editor .math-node:hover {
+  background-color: rgba(49, 50, 68, 0.5);
+}
+
+.dark .tiptap-editor .math-node-error .math-node-render {
+  /* Mocha red */
+  color: #f38ba8;
+}
+
+.dark .tiptap-editor .math-node-edit {
+  /* Mocha surface0 */
+  border-color: #313244;
+  background: #181825;
+  /* Mocha text */
+  color: #cdd6f4;
+}
+
+.dark .tiptap-editor .math-node-edit:focus {
+  /* Mocha blue */
+  border-color: #89b4fa;
+  box-shadow: 0 0 0 2px rgba(137, 180, 250, 0.25);
+}
+
+.dark .tiptap-editor .ProseMirror-selectednode .math-node {
+  background-color: rgba(137, 180, 250, 0.15);
+  box-shadow: 0 0 0 1px rgba(137, 180, 250, 0.5);
+}

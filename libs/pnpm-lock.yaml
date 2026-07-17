@@ -121,6 +121,9 @@ importers:
       '@tiptap/suggestion':
         specifier: ^3.27.3
         version: 3.27.3(@floating-ui/dom@1.7.6)(@tiptap/core@3.27.3(@tiptap/pm@3.27.3))(@tiptap/pm@3.27.3)
+      katex:
+        specifier: ^0.16.22
+        version: 0.16.47
       lowlight:
         specifier: ^3.3.0
         version: 3.3.0

@@ -8,6 +8,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { CodeBlockBackspaceFix } from './code-block-backspace-fix';
 import { CodeBlockNodeView, ON_RUN_CODE_STORAGE_KEY } from './code-block-view';
 import { lowlight } from './highlight';
+import { DisplayMath, InlineMath } from './math';
 import { SlashCommand } from './slash-command';
 import { TaskInputRule } from './task-input-rule';
 import {
@@ -112,6 +113,12 @@ class TiptapEditorInstance {
           codeBlock: false,
         }),
         Markdown,
+        // 数学公式节点必须在 Markdown 之后注册:MarkdownManager 在 onBeforeCreate
+        // 遍历 baseExtensions 收集 markdown spec(tokenizer/parse/render),此时
+        // InlineMath/DisplayMath 需已在扩展列表里,才能让 getMarkdown() 走自定义
+        // renderMarkdown 路径,绕过 encodeTextForMarkdown 对 LaTeX 的双重转义。
+        InlineMath,
+        DisplayMath,
         CodeBlockLowlight.configure({ lowlight }).extend({
           addNodeView() {
             return ({ node, editor, getPos }) => new CodeBlockNodeView({ node, editor, getPos });
