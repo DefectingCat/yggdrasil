@@ -66,4 +66,12 @@ describe('lowlight wrapper', () => {
     // CodeBlockLowlight 源码用 try/catch 兜底，这里只验 wrapper 不改变此行为。
     expect(() => lowlight.highlight('totally-unknown-lang', 'code')).toThrow();
   });
+
+  it('vue 作为 xml 别名高亮（不抛 Unknown language）', () => {
+    // lowlight 依赖的 highlight.js 11 已移除 vue grammar，
+    // highlight.ts 把 vue 注册为 xml 别名兜底。
+    // 验证：vue 代码能高亮（走 xml grammar，输出含 hljs class）且不抛错。
+    const result = lowlight.highlight('vue', '<template><div>hi</div></template>');
+    expect(JSON.stringify(result)).toContain('hljs-');
+  });
 });

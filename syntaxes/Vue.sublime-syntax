@@ -1,0 +1,174 @@
+%YAML 1.2
+---
+# Vue Single-File Component (.vue) 语法高亮。
+#
+# 自包含实现:不依赖 `extends: Packages/HTML/...`(syntect 不认 ST 包路径),
+# 改用 embed: scope: 引用本项目已有的 HTML/JS/TS/TSX/CSS scope。
+#
+# 关键约束(syntect 5.3 实测):
+# - embed 规则必须用纯净写法 `match + embed + escape`,不能附加 pop/embed_scope,
+#   否则 embed 失效并静默回退纯文本。
+# - escape 用 lookahead `(?=...)` 不消费闭合标签,交给外层 context 处理。
+#
+# 分段策略:SFC 的 <template>/<script>/<style> 三段各自有独立的 tag 入口,
+# 在 main 中按标签名直接 push 对应入口(syntect context 切换后无法回看标签名,
+# 故必须一开始就分流)。script 按 lang 属性分发 ts/tsx/js;
+# style 的 scss/less/pug 等本项目无对应 scope,但因 CSS 是其超集,
+# 统一走 source.css(关键字/选择器高亮基本适用)。
+
+name: Vue Component
+scope: text.html.vue
+
+file_extensions:
+  - vue
+
+variables:
+  # Vue 指令/特殊属性名:v-if / @click / :prop / #slot / v-model.trim
+  vue_directive: '(?:\bv-[\w.-]+|@[\w.-]+|:[\w.-]+|#[\w-]+)'
+
+contexts:
+
+  main:
+    # <template ...>:进入 template 段(HTML + 插值 + 指令)
+    - match: '(<)(template)(?=[\s/>])'
+      captures:
+        1: punctuation.definition.tag.begin.html
+        2: entity.name.tag.structure.template.html
+      push: template-tag-open
+    # <script ... lang="ts|tsx|typescript">:TS 分支(前瞻区分,syntect 无变量比较)
+    - match: '(<)(script)(?=[\s/>][^>]*\blang(?:uage)?\s*=\s*[''"](ts|tsx|typescript)[''"])'
+      captures:
+        1: punctuation.definition.tag.begin.html
+        2: entity.name.tag.structure.script.html
+      push: script-tag-open-ts
+    # <script ...>:JS 分支(无 lang 或 lang="js")
+    - match: '(<)(script)(?=[\s/>])'
+      captures:
+        1: punctuation.definition.tag.begin.html
+        2: entity.name.tag.structure.script.html
+      push: script-tag-open
+    # <style ...>:进入 style 段(CSS)
+    - match: '(<)(style)(?=[\s/>])'
+      captures:
+        1: punctuation.definition.tag.begin.html
+        2: entity.name.tag.structure.style.html
+      push: style-tag-open
+    # 其余内容(裸 HTML 标签、文本、注释、DOCTYPE):复用 syntect 内置 HTML 语法
+    - include: scope:text.html.basic
+
+  script-tag-open-ts:
+    - meta_scope: meta.tag.structure.script.begin.html
+    - include: tag-attributes
+    - match: '/>'
+      scope: punctuation.definition.tag.end.html
+      pop: 1
+    - match: '>'
+      scope: punctuation.definition.tag.end.html
+      embed: scope:source.ts
+      escape: '(?=</script[\s>])'
+
+  ###[ TEMPLATE ]#############################################################
+
+  template-tag-open:
+    - meta_scope: meta.tag.structure.template.begin.html
+    - include: tag-attributes
+    - match: '/>'
+      scope: punctuation.definition.tag.end.html
+      pop: 1
+    - match: '>'
+      scope: punctuation.definition.tag.end.html
+      push: template-content
+
+  template-content:
+    - meta_include_prototype: false
+    - meta_content_scope: meta.template.vue
+    # 闭合 </template>:结束段
+    - match: '(?=</template[\s>])'
+      pop: 1
+    # Vue 插值 {{ ... }}:embed JS 表达式
+    - match: '\{\{'
+      scope: punctuation.section.interpolation.begin.html
+      embed: scope:source.js
+      escape: '\}\}'
+      escape_captures:
+        0: punctuation.section.interpolation.end.html
+    # 其余:按 HTML 处理(标签、文本、属性),同时识别 Vue 指令
+    - include: scope:text.html.basic
+
+  ###[ SCRIPT ]###############################################################
+  # 分流在 main 完成:含 lang="ts|tsx|typescript" 的 <script> → script-tag-open-ts;
+  # 其余(无 lang 或 lang="js")→ script-tag-open(embed JS)。
+  # syntect 无变量比较,无法在单 context 内按 lang 值动态选 embed 目标,
+  # 故用两条前瞻 match 在入口处分流。
+
+  script-tag-open:
+    - meta_scope: meta.tag.structure.script.begin.html
+    - include: tag-attributes
+    - match: '/>'
+      scope: punctuation.definition.tag.end.html
+      pop: 1
+    - match: '>'
+      scope: punctuation.definition.tag.end.html
+      embed: scope:source.js
+      escape: '(?=</script[\s>])'
+
+  ###[ STYLE ]################################################################
+
+  style-tag-open:
+    - meta_scope: meta.tag.structure.style.begin.html
+    - include: tag-attributes
+    - match: '/>'
+      scope: punctuation.definition.tag.end.html
+      pop: 1
+    - match: '>'
+      scope: punctuation.definition.tag.end.html
+      embed: scope:source.css
+      escape: '(?=</style[\s>])'
+
+  ###[ SHARED ]###############################################################
+
+  # 标签属性扫描:Vue 指令 + 普通属性 + 值。供 template/script/style 的 open context 复用。
+  tag-attributes:
+    # Vue 指令(v-if / @click / :prop / #slot)优先,标为属性名
+    - match: '{{vue_directive}}\s*(=)?'
+      scope: entity.other.attribute-name.html
+    # 普通属性名 = 值
+    - match: '\b[A-Za-z-][\w:-]*\s*(=)'
+      scope: entity.other.attribute-name.html
+      push: maybe-attr-value
+    # 布尔属性
+    - match: '\b[A-Za-z-][\w:-]*'
+      scope: entity.other.attribute-name.html
+    - include: whitespace
+
+  maybe-attr-value:
+    - include: whitespace
+    - match: '"'
+      scope: punctuation.definition.string.begin.html
+      set: double-quoted-attr-value
+    - match: "'"
+      scope: punctuation.definition.string.begin.html
+      set: single-quoted-attr-value
+    - match: '(?=\S)'
+      pop: 1
+
+  double-quoted-attr-value:
+    - meta_scope: string.quoted.double.html
+    - match: '"'
+      scope: punctuation.definition.string.end.html
+      pop: 1
+    - include: attr-value-escapes
+
+  single-quoted-attr-value:
+    - meta_scope: string.quoted.single.html
+    - match: "'"
+      scope: punctuation.definition.string.end.html
+      pop: 1
+    - include: attr-value-escapes
+
+  attr-value-escapes:
+    - match: '&[a-zA-Z]+;|&#\d+;|&#x[0-9A-Fa-f]+;'
+      scope: constant.character.entity.html
+
+  whitespace:
+    - match: '\s+'

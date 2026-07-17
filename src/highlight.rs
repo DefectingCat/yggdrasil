@@ -80,6 +80,8 @@ pub mod server {
                     ("kotlin", "kt"),
                     ("swift", "swift"),
                     ("golang", "go"),
+                    // Vue SFC:file_extensions 已含 vue,此条兜底大写 ```Vue 等边界。
+                    ("vue", "vue"),
                 ];
                 for &(from, to) in aliases {
                     // 别名比较同样不区分大小写，保证 "RUST" 与 "rust" 等价。
@@ -362,5 +364,72 @@ mod tests {
         );
         assert!(result.contains("string"), "Zig 字符串未被识别: {}", result);
         assert!(result.contains("numeric"), "Zig 数字未被识别: {}", result);
+    }
+
+    #[test]
+    fn highlight_code_vue_sfc() {
+        // Vue SFC 三段(template HTML + script JS + style CSS)都应被识别,
+        // 不回退到纯文本(text plain)。
+        let code = "\
+<template>
+  <div class=\"hello\" @click=\"onClick\">{{ message }}</div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+const message = ref('Hello Vue!')
+</script>
+
+<style scoped>
+.hello { color: #42b983; }
+</style>";
+        let result = highlight_code(code, Some("vue"));
+        assert!(
+            !result.contains(r#"<span class="text plain">"#),
+            "Vue 不应回退到纯文本: {}",
+            result
+        );
+        assert!(
+            result.contains("entity name tag"),
+            "Vue template 标签未被识别: {}",
+            result
+        );
+        assert!(
+            result.contains("source js"),
+            "Vue script 段未嵌入 JS 高亮: {}",
+            result
+        );
+        assert!(
+            result.contains("source css"),
+            "Vue style 段未嵌入 CSS 高亮: {}",
+            result
+        );
+        assert!(
+            result.contains("entity other attribute-name"),
+            "Vue 指令/属性未被识别: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn highlight_code_vue_script_lang_ts() {
+        // <script lang="ts"> 应嵌入 TypeScript(scope source ts),而非 JS。
+        let code = "<script lang=\"ts\">\nconst x: number = 42\n</script>";
+        let result = highlight_code(code, Some("vue"));
+        assert!(
+            result.contains("source ts"),
+            "Vue lang=ts 应嵌入 TS: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn highlight_code_vue_resolves_vue_alias() {
+        // 别名表 "vue" 与扩展名 "vue" 输出应一致。
+        let code = "<template><p>{{ msg }}</p></template>";
+        let by_alias = highlight_code(code, Some("vue"));
+        let by_upper = highlight_code(code, Some("Vue"));
+        // 大写标识经别名表 eq_ignore_ascii_case 回退,输出须与小写一致。
+        assert_eq!(by_alias, by_upper);
     }
 }
