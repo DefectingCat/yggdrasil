@@ -36,6 +36,12 @@ RUN sed -i \
 # Install system build tooling. Native dependencies are needed for:
 #   - musl-tools: linker for x86_64-unknown-linux-musl
 #   - cmake/clang/nasm/libssl-dev: libwebp (zenwebp), ring, syntect
+#   - binaryen: provides `wasm-opt` on PATH so dx's release client build
+#     uses the local binary instead of fetching one from GitHub Releases.
+#     dx's internal wasm-opt download ignores GH_PROXY (only the explicit
+#     curl calls for dx/tailwindcss honor it), so without this the build
+#     hangs ~80 min then fails with "stream error received: unspecific
+#     protocol error detected" trying to fetch wasm-opt mid-build.
 #   - curl/gnupg/ca-certificates: download tooling
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -46,6 +52,7 @@ RUN apt-get update \
         pkg-config \
         libssl-dev \
         musl-tools \
+        binaryen \
         ca-certificates \
         curl \
         gnupg \
