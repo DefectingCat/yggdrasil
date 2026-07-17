@@ -6,7 +6,7 @@
 use dioxus::prelude::*;
 
 use crate::components::footer::Footer;
-use crate::components::header::Header;
+use crate::components::header::{Header, SearchIconLink};
 use crate::components::nav::use_nav_items;
 use crate::components::skeletons::archive_skeleton::ArchiveSkeleton;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
@@ -56,6 +56,7 @@ pub fn FrontendLayout() -> Element {
                 max_width: "max-w-4xl",
                 nav_items,
                 right_content: rsx! {
+                    SearchIconLink {}
                     ThemeToggle {}
                 },
             }

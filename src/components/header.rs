@@ -170,3 +170,30 @@ fn MobileNavItem(
         }
     }
 }
+
+/// 搜索图标链接：置于 Header 右侧（主题切换左边），点击跳转搜索页。
+///
+/// 样式与 `ThemeToggle` 对齐（圆形 padding + currentColor 图标），保持右侧
+/// 图标组视觉一致。SVG 来自 `public/icons/search_24dp_E3E3E3_FILL0_wght400_GRAD0_opsz24.svg`，
+/// 改用 `fill: "currentColor"` 以适配明暗主题。
+#[component]
+pub fn SearchIconLink() -> Element {
+    rsx! {
+        Link {
+            class: "p-2 rounded-full text-paper-secondary hover:text-paper-accent transition-colors duration-200",
+            to: Route::Search {},
+            aria_label: "搜索",
+            title: "搜索",
+            svg {
+                xmlns: "http://www.w3.org/2000/svg",
+                height: "24px",
+                view_box: "0 -960 960 960",
+                width: "24px",
+                fill: "currentColor",
+                path {
+                    d: "M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z",
+                }
+            }
+        }
+    }
+}

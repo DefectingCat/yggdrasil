@@ -10,7 +10,8 @@ use crate::router::Route;
 /// 参数：
 /// - `route`：当前路由
 ///
-/// 返回：包含首页、归档、标签、搜索、关于的导航配置数组。
+/// 返回：包含首页、归档、标签、关于的导航配置数组。
+/// 搜索以图标形式置于 Header 右侧（主题切换左边），不在此文本导航中。
 pub fn use_nav_items(route: Route) -> Vec<NavItemConfig> {
     vec![
         NavItemConfig {
@@ -27,11 +28,6 @@ pub fn use_nav_items(route: Route) -> Vec<NavItemConfig> {
             route: Route::Tags {},
             label: "标签",
             is_active: matches!(route, Route::Tags {}) || matches!(route, Route::TagDetail { .. }),
-        },
-        NavItemConfig {
-            route: Route::Search {},
-            label: "搜索",
-            is_active: matches!(route, Route::Search {}),
         },
         NavItemConfig {
             route: Route::About {},
