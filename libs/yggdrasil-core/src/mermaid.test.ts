@@ -67,8 +67,44 @@ describe('initMermaid', () => {
     window.__initMermaid('.post-content', 'dark');
 
     await vi.waitFor(() => {
-      expect(mockInitialize).toHaveBeenCalledWith(expect.objectContaining({ theme: 'dark' }));
+      // base 主题 + darkMode 标志：让 themeVariables 完全控制 Catppuccin 调色板
+      expect(mockInitialize).toHaveBeenCalledWith(
+        expect.objectContaining({ theme: 'base', darkMode: true }),
+      );
     });
+  });
+
+  it('亮/暗主题传入对应的 Catppuccin themeVariables', async () => {
+    // 暗色：Mocha 调色板（背景 #313244、文字 #cdd6f4）
+    const darkRoot = document.createElement('div');
+    darkRoot.className = 'post-content';
+    darkRoot.innerHTML = '<pre><code class="language-mermaid">graph TD; A--&gt;B</code></pre>';
+    document.body.appendChild(darkRoot);
+    window.__initMermaid('.post-content', 'dark');
+    await vi.waitFor(() => {
+      expect(mockInitialize).toHaveBeenCalled();
+    });
+    const darkCall = mockInitialize.mock.calls.slice(-1)[0]?.[0] as Record<string, unknown>;
+    const darkVars = darkCall.themeVariables as Record<string, string>;
+    expect(darkVars.background).toBe('#313244');
+    expect(darkVars.primaryTextColor).toBe('#cdd6f4');
+    expect(darkVars.lineColor).toBe('#a6adc8');
+
+    // 亮色：Latte 调色板（背景 #dce0e8、文字 #4c4f69）
+    document.body.innerHTML = '';
+    const lightRoot = document.createElement('div');
+    lightRoot.className = 'post-content';
+    lightRoot.innerHTML = '<pre><code class="language-mermaid">graph TD; A--&gt;B</code></pre>';
+    document.body.appendChild(lightRoot);
+    window.__initMermaid('.post-content', 'light');
+    await vi.waitFor(() => {
+      expect(mockInitialize).toHaveBeenCalled();
+    });
+    const lightCall = mockInitialize.mock.calls.slice(-1)[0]?.[0] as Record<string, unknown>;
+    const lightVars = lightCall.themeVariables as Record<string, string>;
+    expect(lightVars.background).toBe('#dce0e8');
+    expect(lightVars.primaryTextColor).toBe('#4c4f69');
+    expect(lightVars.lineColor).toBe('#5c5f77');
   });
 
   it('幂等：重复调用不重复渲染已处理的块', async () => {
@@ -137,7 +173,9 @@ describe('initMermaid', () => {
     await vi.waitFor(() => {
       expect(mockRender.mock.calls.length).toBeGreaterThan(firstRenderCalls);
     });
-    expect(mockInitialize).toHaveBeenLastCalledWith(expect.objectContaining({ theme: 'dark' }));
+    expect(mockInitialize).toHaveBeenLastCalledWith(
+      expect.objectContaining({ theme: 'base', darkMode: true }),
+    );
     expect(root.querySelector('pre')?.dataset.mermaidTheme).toBe('dark');
   });
 

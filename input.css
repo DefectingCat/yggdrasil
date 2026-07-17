@@ -663,6 +663,29 @@
     display: block;
   }
 
+  /* ── mermaid 图表容器 ──
+     data-mermaid-rendered 由 yggdrasil-core/mermaid.ts 渲染成功后标记在 <pre> 上。
+     渲染后 pre 唯一子元素是 <svg>（mermaid 块不注入 copy-code 按钮），flex 安全。
+     居中 + 缩放适配宽度，消除常规图的横向滚动；超宽图 overflow-x:auto 兜底。 */
+  .md-content pre[data-mermaid-rendered] {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 24px 16px;
+    overflow-x: auto;
+  }
+
+  .md-content pre[data-mermaid-rendered] > svg {
+    max-width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  /* 渲染失败：保留原始源码，加 accent 色左边条提示（站点 accent 为绿，沿用配色体系） */
+  .md-content pre.mermaid-error {
+    border-left: 3px solid var(--color-paper-accent);
+  }
+
   .anchor {
     display: none;
     text-decoration: none;
