@@ -40,7 +40,17 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
 
     // 两遍遍历使用相同的 Options 与同一份解析结果，避免 TOC 收集与正文渲染对
     // Markdown 扩展语法（表格、删除线、脚注等）的处理不一致。
-    let opts = Options::all();
+    //
+    // 脚注模式：pulldown-cmark 的 ENABLE_OLD_FOOTNOTES = (1<<9)|(1<<2)，它把
+    // ENABLE_FOOTNOTES 的 bit 也打进了 OLD 的位掩码里。Options::all() 同时置两者，
+    // 使 has_gfm_footnotes()（=ENABLE_FOOTNOTES && !ENABLE_OLD_FOOTNOTES）返回 false，
+    // 走 OLD 模式（续行宽松、label 可含换行）。我们想要 GFM 模式（与 GitHub 一致、
+    // 解析可控），所以不能简单地 remove(OLD)——那会连 ENABLE_FOOTNOTES 一起清掉。
+    // 正确做法：先 remove(OLD)（清掉 bit 9 + bit 2），再 insert(ENABLE_FOOTNOTES)
+    // 单独把 bit 2 加回，使 has_gfm_footnotes() = true。
+    let mut opts = Options::all();
+    opts.remove(Options::ENABLE_OLD_FOOTNOTES);
+    opts.insert(Options::ENABLE_FOOTNOTES);
 
     // pulldown-cmark 只解析一次，collect 成 Vec<Event> 后两遍遍历复用。
     // 旧实现对同一份 md 调用两次 Parser::new_ext，等于两倍的 tokenize + 解析 CPU。
@@ -51,6 +61,15 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
     // (level, text, id)
     let mut headings: Vec<(u8, String, String)> = Vec::new();
     let mut current_heading: Option<(u8, String)> = None;
+
+    // 脚注引用统计：label → (引用次数, 首次出现序号)。
+    // pulldown-cmark 不保证定义移到文末、也不保证 ref 先于 def，唯一可靠不变量是
+    // 每个唯一 label 的 FootnoteDefinition 只出现一次、FootnoteReference 每次引用触发一次。
+    // 所以 back-link 必须按 label 关联，display_num 按 label 首次出现顺序分配。
+    // fn_order 记录 label 首次出现顺序，用于分配稳定的显示编号（1, 2, 3…）。
+    use std::collections::HashMap;
+    let mut fn_refs: HashMap<String, usize> = HashMap::new();
+    let mut fn_order: Vec<String> = Vec::new();
 
     for event in &events {
         match event {
@@ -81,9 +100,27 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
                     headings.push((lvl, text, id));
                 }
             }
+            // 统计脚注引用：仅对 FootnoteReference 计数（含未被定义的悬空引用）。
+            // 悬空引用（[^missing] 无定义）也会产生此事件，但第二遍不会有对应 def，
+            // fn_refs 里的条目无害（查不到对应 def 时第二遍不会输出 back-link）。
+            Event::FootnoteReference(name) => {
+                let label = name.to_string();
+                let count = fn_refs.entry(label.clone()).or_insert(0);
+                *count += 1;
+                if *count == 1 {
+                    fn_order.push(label);
+                }
+            }
             _ => {}
         }
     }
+
+    // 按 label 首次出现顺序分配显示编号（1-based）。脚注定义内查此表取 display_num。
+    let fn_num: HashMap<&String, usize> = fn_order
+        .iter()
+        .enumerate()
+        .map(|(i, label)| (label, i + 1))
+        .collect();
 
     // 2. Generate TOC HTML
     let toc_html = generate_toc_html(&headings);
@@ -101,6 +138,12 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
     let mut code_runnable: Option<(String, String)> = None;
     let mut code_buffer = String::new();
     let mut non_heading_events: Vec<Event> = Vec::new();
+    // 第二遍维护的脚注引用计数：label → 已渲染的引用序号（从 1 起）。
+    // 用于给每个 ref 分配 id 后缀 fnref:{label}-{n}，并让 def 末尾的 back-link 对应到每个 ref。
+    let mut fn_ref_seen: HashMap<String, usize> = HashMap::new();
+    // 脚注定义栈：Start(FootnoteDefinition) 压入 label，End 弹出。
+    // 脚注定义可嵌套（def 内引用另一个脚注），用栈保证 End 配对到正确的 label。
+    let mut fn_def_stack: Vec<String> = Vec::new();
 
     for event in events {
         match event {
@@ -245,6 +288,79 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
                 html.push_str("<p class=\"math-display\">");
                 html.push_str(&crate::api::katex::render_display(&tex));
                 html.push_str("</p>");
+            }
+            Event::FootnoteReference(name) => {
+                // 先刷出累积的普通事件，再注入脚注引用标记。
+                if !non_heading_events.is_empty() {
+                    pulldown_cmark::html::push_html(&mut html, non_heading_events.into_iter());
+                    non_heading_events = Vec::new();
+                }
+                let label = name.to_string();
+                // 本 label 的第 n 次引用（1-based），用于 id 后缀。
+                let n = {
+                    let entry = fn_ref_seen.entry(label.clone()).or_insert(0);
+                    *entry += 1;
+                    *entry
+                };
+                let id = footnote_id(&label);
+                // display_num：label 首次出现顺序编号；悬空引用（无 def）查不到时回退到引用序号 n。
+                let num = fn_num.get(&label).copied().unwrap_or(n);
+                // 上标引用：id 供 back-link 回跳，href 跳到定义，role=doc-noteref 语义化。
+                let _ = write!(
+                    html,
+                    r##"<sup class="fn-ref" id="fnref:{id}-{n}"><a href="#fn:{id}" class="fn-ref-link" role="doc-noteref" aria-label="脚注 {num}">{num}</a></sup>"##
+                );
+            }
+            Event::Start(Tag::FootnoteDefinition(name)) => {
+                // 脚注定义开始：先刷出累积的普通事件，再用 <aside> 开启语义化容器。
+                if !non_heading_events.is_empty() {
+                    pulldown_cmark::html::push_html(&mut html, non_heading_events.into_iter());
+                    non_heading_events = Vec::new();
+                }
+                let label = name.to_string();
+                let id = footnote_id(&label);
+                let num = fn_num.get(&label).copied().unwrap_or_else(|| {
+                    // 定义未被任何引用提及（悬空定义）：用 fn_order 长度+1 兜底编号。
+                    fn_order.len() + 1
+                });
+                // <aside role="doc-footnote">：取 pulldown-cmark 默认 <div> 的语义升级。
+                // aria-labelledby 指向 label 的 sup，让屏幕阅读器朗读「脚注 N」。
+                let _ = write!(
+                    html,
+                    r##"<aside class="footnote-definition" id="fn:{id}" role="doc-footnote" aria-labelledby="fn:{id}-label"><sup class="footnote-definition-label" id="fn:{id}-label">{num}</sup> "##
+                );
+                fn_def_stack.push(label);
+            }
+            Event::End(TagEnd::FootnoteDefinition) => {
+                // 脚注定义结束：先刷出累积的脚注正文事件（定义内部的段落/列表等），
+                // 再按引用次数输出 N 个 back-link（↩、↩²、↩³…），最后闭合 <aside>。
+                if !non_heading_events.is_empty() {
+                    pulldown_cmark::html::push_html(&mut html, non_heading_events.into_iter());
+                    non_heading_events = Vec::new();
+                }
+                // 弹栈取当前定义的 label，配对 Start。
+                if let Some(label) = fn_def_stack.pop() {
+                    let id = footnote_id(&label);
+                    let ref_count = fn_refs.get(&label).copied().unwrap_or(0);
+                    // back-link 上标符号序列：1 个引用用 ↩；N 个引用用 ↩¹ ↩²…（首个不加数字）。
+                    // 每个链接指向对应引用位置 fnref:{id}-{n}，role=doc-backlink 语义化。
+                    // ref_count=0（悬空定义）时不输出 back-link（无引用可回跳）。
+                    if ref_count > 0 {
+                        // 首个 back-link：裸 ↩。
+                        let _ = write!(
+                            html,
+                            r##"<a href="#fnref:{id}-1" class="fn-backref" role="doc-backlink" aria-label="返回正文">↩</a>"##
+                        );
+                        // 从第 2 个引用起加数字上标。
+                        for n in 2..=ref_count {
+                            let _ = write!(
+                                html,
+                                r##" <a href="#fnref:{id}-{n}" class="fn-backref" role="doc-backlink" aria-label="返回正文 {n}">↩<sup class="fn-backref-num">{n}</sup></a>"##
+                            );
+                        }
+                    }
+                }
+                html.push_str("</aside>");
             }
             _ => {
                 if in_heading {
@@ -441,6 +557,48 @@ fn slugify_heading(text: &str) -> String {
     }
 
     slug
+}
+
+#[cfg(feature = "server")]
+/// 将脚注 label 转换为可用于 HTML id / href 锚点的安全标识符。
+///
+/// 与 `slugify_heading` 不同：脚注 label 是用户自定义的稳定引用键（`[^key]`），
+/// **不应**转拼音或回退通用词——需保留 label 原文形态以保证 ref↔def 双向一致、可读。
+/// 策略：ASCII 字母数字与 `-`/`_` 保留；其余 ASCII 字符（空格、标点、引号）转 `-`；
+/// 非 ASCII（中文、emoji 等）保留原样。合并连续 `-`、去首尾 `-`。
+///
+/// GFM 模式下 label 单行不含换行，但仍可能含空格/标点，此函数确保产出的 id：
+/// (1) 不含 `"`/`<`/`>`/`&`/空格等破坏 HTML 属性或 URL 的字符；(2) 同一 label 必产出同一 id。
+fn footnote_id(label: &str) -> String {
+    let mut out = String::with_capacity(label.len());
+    let mut prev_dash = true; // true = 当前不应再输出 `-`（开头或上一字符已是 `-`）
+
+    for c in label.chars() {
+        if c.is_ascii_alphanumeric() || c == '_' {
+            out.push(c);
+            prev_dash = false;
+        } else if !c.is_ascii() {
+            // 非 ASCII（中文等）直接保留——id 允许任意非空白字符。
+            out.push(c);
+            prev_dash = false;
+        } else if !prev_dash {
+            // 其余 ASCII 字符（空格、标点、引号）转 `-`。
+            out.push('-');
+            prev_dash = true;
+        }
+    }
+
+    // 去除尾部可能的 `-`（prev_dash 合并已保证首部无 `-`）。
+    while out.ends_with('-') {
+        out.pop();
+    }
+
+    if out.is_empty() {
+        // label 全为特殊字符的极端情况，给一个确定性回退。
+        out.push_str("fn");
+    }
+
+    out
 }
 
 #[cfg(all(test, feature = "server"))]
@@ -857,6 +1015,239 @@ console.log(1)
         // 文本内容保留
         assert!(result.html.contains("未完成"));
         assert!(result.html.contains("已完成"));
+    }
+
+    #[test]
+    fn render_markdown_footnote_basic() {
+        // 端到端：单个脚注引用 + 定义，验证自定义渲染器的完整输出。
+        // pulldown-cmark (GFM 模式) 解析 → 自定义事件拦截渲染 → sanitizer 放行。
+        let result = render_markdown_enhanced("正文[^a]\n\n[^a]: 脚注内容\n");
+        // 脚注引用：上标 + 锚点跳转 + role 语义
+        assert!(
+            result.html.contains(r#"<sup class="fn-ref" id="fnref:a-1">"#),
+            "脚注引用上标应含正确 id, got: {}",
+            result.html
+        );
+        assert!(
+            result.html.contains(r##"href="#fn:a""##) && result.html.contains(r#"role="doc-noteref""#),
+            "引用链接应指向定义并带 noteref 角色, got: {}",
+            result.html
+        );
+        // 脚注定义：<aside> + role + aria-labelledby
+        assert!(
+            result.html.contains(r#"<aside class="footnote-definition" id="fn:a""#)
+                && result.html.contains(r#"role="doc-footnote""#),
+            "定义应为 aside + doc-footnote 角色, got: {}",
+            result.html
+        );
+        // back-link：单个引用显示 ↩
+        assert!(
+            result.html.contains("↩") && result.html.contains(r#"role="doc-backlink""#),
+            "单个引用应有 ↩ back-link, got: {}",
+            result.html
+        );
+        // back-link 指向引用位置
+        assert!(
+            result.html.contains(r##"href="#fnref:a-1""##),
+            "back-link 应指向引用位置, got: {}",
+            result.html
+        );
+        // 脚注正文保留
+        assert!(result.html.contains("脚注内容"));
+        // 不应残留 pulldown-cmark 默认的 <div class="footnote-definition">
+        assert!(
+            !result.html.contains(r#"<div class="footnote-definition""#),
+            "不应使用默认 div, got: {}",
+            result.html
+        );
+    }
+
+    #[test]
+    fn render_markdown_footnote_multiple_refs() {
+        // 同一脚注被多次引用：每个引用独立 id，定义末尾输出 N 个 back-link（↩、↩²、↩³）。
+        let result = render_markdown_enhanced("第一处[^x]，第二处[^x]，第三处[^x]\n\n[^x]: 注\n");
+        // 3 个引用，各有独立 id 后缀
+        assert!(
+            result.html.contains(r#"id="fnref:x-1""#)
+                && result.html.contains(r#"id="fnref:x-2""#)
+                && result.html.contains(r#"id="fnref:x-3""#),
+            "3 次引用应有 3 个独立 id, got: {}",
+            result.html
+        );
+        // back-link 数量 = 引用次数（3 个）
+        let backref_count = result.html.matches(r#"class="fn-backref""#).count();
+        assert_eq!(
+            backref_count, 3,
+            "3 次引用应产出 3 个 back-link, got: {}",
+            result.html
+        );
+        // 首个 back-link 无数字上标（↩），后续带数字（↩²、↩³）
+        assert!(
+            result.html.contains(r#">↩</a>"#),
+            "首个 back-link 应为裸 ↩, got: {}",
+            result.html
+        );
+        assert!(
+            result.html.contains("↩<sup class=\"fn-backref-num\">2</sup>")
+                && result.html.contains("↩<sup class=\"fn-backref-num\">3</sup>"),
+            "第 2、3 个 back-link 应带数字上标, got: {}",
+            result.html
+        );
+        // 每个 back-link 指向不同引用位置
+        assert!(
+            result.html.contains(r##"href="#fnref:x-1""##)
+                && result.html.contains(r##"href="#fnref:x-2""##)
+                && result.html.contains(r##"href="#fnref:x-3""##),
+            "3 个 back-link 应分别指向 3 个引用位置, got: {}",
+            result.html
+        );
+    }
+
+    #[test]
+    fn render_markdown_footnote_numbering_order() {
+        // 多个不同脚注：编号按 label 首次出现顺序分配（1、2、3…），与定义位置无关。
+        let result = render_markdown_enhanced(
+            "先引用第二个[^b]，再第一个[^a]\n\n[^b]: B注\n\n[^a]: A注\n",
+        );
+        // b 先在正文被引用 → 编号 1；a 后被引用 → 编号 2。
+        // 分别断言各自的引用链接块（由 id 唯一定位）。
+        // b 的引用：id=fnref:b-1，aria-label=脚注 1
+        assert!(
+            result.html.contains(r#"id="fnref:b-1""#)
+                && result.html.contains(r#"aria-label="脚注 1""#),
+            "b(先出现)引用编号应为 1, got: {}",
+            result.html
+        );
+        // a 的引用：id=fnref:a-1，aria-label=脚注 2
+        assert!(
+            result.html.contains(r#"id="fnref:a-1""#)
+                && result.html.contains(r#"aria-label="脚注 2""#),
+            "a(后出现)引用编号应为 2, got: {}",
+            result.html
+        );
+        // 两个定义都应存在
+        assert!(
+            result.html.contains(r#"id="fn:b""#) && result.html.contains(r#"id="fn:a""#),
+            "两个脚注定义都应存在, got: {}",
+            result.html
+        );
+    }
+
+    #[test]
+    fn render_markdown_footnote_id_safety() {
+        // label 含空格/标点：id 应被清洗，ref↔def 双向匹配，不含破坏属性的字符。
+        let result = render_markdown_enhanced("引文[^my note]\n\n[^my note]: 内容\n");
+        // 空格应被转成 -，ref 与 def 用同一个清洗后 id
+        assert!(
+            result.html.contains(r##"href="#fn:my-note""##),
+            "ref href 应用清洗后 id, got: {}",
+            result.html
+        );
+        assert!(
+            result.html.contains(r#"id="fn:my-note""#),
+            "def id 应用清洗后 id, got: {}",
+            result.html
+        );
+        // 不应含未转义的空格在 id/href 属性值中（会破坏属性或 URL）
+        assert!(
+            !result.html.contains("fn:my note"),
+            "id 不应含空格, got: {}",
+            result.html
+        );
+    }
+
+    #[test]
+    fn render_markdown_footnote_dangling_ref() {
+        // GFM 模式下，未定义的悬空引用 [^missing] 被当作字面文本（不发 FootnoteReference 事件）。
+        // 这是 GFM 与 OLD 模式的关键差异：OLD 把它渲染成 dangling link，GFM 保持字面。
+        // 参见 pulldown-cmark lib.rs:712-713 注释。
+        let result = render_markdown_enhanced("这个[^missing]没有定义\n");
+        // 字面保留 [^missing]，不渲染成上标
+        assert!(
+            result.html.contains("[^missing]"),
+            "GFM 模式下悬空引用应字面保留, got: {}",
+            result.html
+        );
+        assert!(
+            !result.html.contains("fn-ref"),
+            "悬空引用不应渲染成脚注上标, got: {}",
+            result.html
+        );
+        assert!(
+            !result.html.contains("footnote-definition"),
+            "悬空引用不应有定义块, got: {}",
+            result.html
+        );
+    }
+
+    #[test]
+    fn render_markdown_footnote_gfm_mode() {
+        // GFM 模式验证：定义续行需缩进。未缩进的续行不会被纳入脚注定义。
+        // 这是 GFM 与 OLD 模式的关键差异——确认我们走的是 GFM。
+        // 用一个 GFM 下会严格解析的输入：定义后紧跟的未缩进段落应独立于脚注。
+        let result = render_markdown_enhanced("正文[^g]\n\n[^g]: 脚注第一行\n独立段落\n");
+        // 脚注定义存在
+        assert!(
+            result.html.contains(r#"id="fn:g""#),
+            "脚注定义应存在, got: {}",
+            result.html
+        );
+        // GFM 模式下「独立段落」是独立的 <p>，不在脚注定义内
+        assert!(
+            result.html.contains("独立段落"),
+            "独立段落内容应保留, got: {}",
+            result.html
+        );
+    }
+
+    // ---- footnote_id 单元测试 ----
+
+    #[test]
+    fn footnote_id_preserves_alphanumeric() {
+        assert_eq!(footnote_id("abc123"), "abc123");
+        assert_eq!(footnote_id("a_b-c"), "a_b-c");
+    }
+
+    #[test]
+    fn footnote_id_preserves_non_ascii() {
+        // 中文、emoji 等非 ASCII 字符原样保留（HTML id 允许任意非空白字符）。
+        assert_eq!(footnote_id("参考文献1"), "参考文献1");
+    }
+
+    #[test]
+    fn footnote_id_replaces_spaces_and_punctuation() {
+        // 空格、标点转 -，连续合并。
+        assert_eq!(footnote_id("my note"), "my-note");
+        assert_eq!(footnote_id("a b!c?d"), "a-b-c-d");
+    }
+
+    #[test]
+    fn footnote_id_deterministic() {
+        // 同一 label 多次调用必产生同一 id（ref↔def 双向一致的前提）。
+        for label in ["a", "my note", "参考文献", "a!b@c#"] {
+            assert_eq!(footnote_id(label), footnote_id(label), "label {:?} 不确定", label);
+        }
+    }
+
+    #[test]
+    fn footnote_id_no_attribute_breaking_chars() {
+        // 产出的 id 不得含破坏 HTML 属性或 URL 的字符：" ' < > & 空格。
+        for label in ["a\"b", "x'y", "a<b>", "c&d", "e f", "a!@#$%^&*()b"] {
+            let id = footnote_id(label);
+            assert!(!id.contains('"'), "id {:?} 含双引号 (label {:?})", id, label);
+            assert!(!id.contains('\''), "id {:?} 含单引号 (label {:?})", id, label);
+            assert!(!id.contains('<'), "id {:?} 含 < (label {:?})", id, label);
+            assert!(!id.contains('>'), "id {:?} 含 > (label {:?})", id, label);
+            assert!(!id.contains('&'), "id {:?} 含 & (label {:?})", id, label);
+            assert!(!id.contains(' '), "id {:?} 含空格 (label {:?})", id, label);
+        }
+    }
+
+    #[test]
+    fn footnote_id_empty_fallback() {
+        // 全特殊字符的极端情况回退为 "fn"。
+        assert_eq!(footnote_id("!@#$"), "fn");
+        assert_eq!(footnote_id("!!!"), "fn");
     }
 
     #[test]

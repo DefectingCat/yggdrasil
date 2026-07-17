@@ -74,6 +74,7 @@ static DEFAULT_ALLOWED_TAGS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| 
         "ruby",
         "s",
         "samp",
+        "section",
         "small",
         "span",
         "strike",
@@ -170,6 +171,12 @@ fn is_safe_url(url: &str, allowed_schemes: &HashSet<&str>, allow_data_uri: bool)
     if trimmed.is_empty() {
         return true;
     }
+    // 锚点（#开头）优先放行：fragment 内的冒号不是 scheme 分隔符
+    // （如脚注锚点 #fn:label），不应被下面的 scheme 解析误判。
+    // 仍显式拒绝 javascript:/vbscript:（虽以 # 开头不可能，但保持防御一致）。
+    if trimmed.starts_with('#') {
+        return true;
+    }
     // 解析 scheme 并与白名单对比；未知 scheme 默认拒绝。
     if let Some(colon_pos) = trimmed.find(':') {
         let scheme = &trimmed[..colon_pos];
@@ -189,8 +196,8 @@ fn is_safe_url(url: &str, allowed_schemes: &HashSet<&str>, allow_data_uri: bool)
         // 任何其它 scheme 均拒绝：file://、blob://、about:blank 等。
         return false;
     }
-    // 无 scheme 时只允许相对路径与锚点。
-    trimmed.starts_with('#') || trimmed.starts_with('/')
+    // 无 scheme 时只允许相对路径。
+    trimmed.starts_with('/')
 }
 
 #[cfg(feature = "server")]
@@ -358,6 +365,7 @@ pub fn clean_html(input: &str) -> String {
             "class",
             "aria-hidden",
             "aria-label",
+            "aria-labelledby",
             "id",
             "role",
             "accesskey",

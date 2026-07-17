@@ -445,6 +445,69 @@
     margin-bottom: 0;
   }
 
+  /* 脚注引用上标：[^id] 渲染成的 <sup class="fn-ref">。
+   * line-height: 0 防止上标撑高所在行行高；font-size 缩小为 0.75em。 */
+  .md-content .fn-ref {
+    font-size: 0.75em;
+    line-height: 0;
+    vertical-align: super;
+    margin-inline-start: 0.1em;
+  }
+
+  /* 引用数字链接：不加下划线（上标下划线极难看），用 accent 色区分。 */
+  .md-content .fn-ref-link {
+    text-decoration: none;
+    color: var(--color-paper-accent);
+  }
+
+  .md-content .fn-ref-link:hover {
+    color: var(--color-paper-accent-2);
+  }
+
+  /* 脚注定义块：仿 blockquote 的左侧边框视觉语言，但更轻（0.2rem + 稍小字号）。 */
+  .md-content .footnote-definition {
+    margin: 1rem 0;
+    padding-inline-start: 1rem;
+    border-inline-start: 0.2rem solid var(--color-paper-content);
+    font-size: 0.875em;
+    color: var(--color-paper-secondary);
+  }
+
+  .md-content .footnote-definition:last-child {
+    margin-bottom: 0;
+  }
+
+  /* 定义内末段去底距，避免与 back-link 间距过大。 */
+  .md-content .footnote-definition > p:last-child {
+    margin-bottom: 0;
+  }
+
+  /* 定义编号上标：与正文引用数字呼应。 */
+  .md-content .footnote-definition-label {
+    font-size: 0.75em;
+    line-height: 0;
+    vertical-align: super;
+    margin-inline-end: 0.25em;
+    color: var(--color-paper-tertiary);
+  }
+
+  /* 返回正文链接：↩ 符号，弱色，hover 转 accent。 */
+  .md-content .fn-backref {
+    margin-inline-start: 0.25em;
+    text-decoration: none;
+    color: var(--color-paper-tertiary);
+  }
+
+  .md-content .fn-backref:hover {
+    color: var(--color-paper-accent);
+  }
+
+  /* 多引用时的数字上标（↩² 中的 ²）。 */
+  .md-content .fn-backref-num {
+    font-size: 0.75em;
+    vertical-align: super;
+  }
+
   .md-content ol,
   .md-content ul {
     padding-inline-start: 1.25rem;
