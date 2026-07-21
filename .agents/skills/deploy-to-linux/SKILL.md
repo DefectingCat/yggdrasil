@@ -117,7 +117,7 @@ docker buildx build --platform linux/amd64 --load -t localhost/yggdrasil:latest 
 - 首次约 15-30 分钟（Rosetta 下 cargo 全量编译），有 buildkit 缓存后分钟级
 - 产物 `localhost/yggdrasil:latest`，scratch 运行时层约 16MB
 
-### 5 个 Code Runner 沙箱镜像
+### 6 个 Code Runner 沙箱镜像
 
 runner Dockerfile `FROM yggdrasil-runner-base:latest`（无 `localhost/` 前缀），必须**先建 base 再建子镜像**：
 
@@ -127,8 +127,8 @@ docker buildx build --platform linux/amd64 --load \
   -t localhost/yggdrasil-runner-base:latest docker/runner-base
 # 2. 再 tag 无前缀名,让子镜像 FROM 能解析
 docker tag localhost/yggdrasil-runner-base:latest yggdrasil-runner-base:latest
-# 3. 4 个子镜像(它们 FROM yggdrasil-runner-base:latest)
-for img in python node go rust; do
+# 3. 5 个子镜像(它们 FROM yggdrasil-runner-base:latest)
+for img in python node go rust bun; do
   docker buildx build --platform linux/amd64 --load \
     -t localhost/yggdrasil-runner-$img:latest docker/runner-$img
   docker tag localhost/yggdrasil-runner-$img:latest yggdrasil-runner-$img:latest
@@ -140,7 +140,7 @@ done
 ### 构建验证
 
 ```bash
-for img in yggdrasil yggdrasil-runner-base yggdrasil-runner-python yggdrasil-runner-node yggdrasil-runner-go yggdrasil-runner-rust; do
+for img in yggdrasil yggdrasil-runner-base yggdrasil-runner-python yggdrasil-runner-node yggdrasil-runner-go yggdrasil-runner-rust yggdrasil-runner-bun; do
   docker image inspect localhost/$img:latest --format "$img: {{.Architecture}} manifests={{.Manifests}}"
 done
 # 期望: 每行 amd64 且 manifests=[](单平台,非 manifest list)
@@ -157,6 +157,7 @@ docker save \
   localhost/yggdrasil-runner-node:latest \
   localhost/yggdrasil-runner-go:latest \
   localhost/yggdrasil-runner-rust:latest \
+  localhost/yggdrasil-runner-bun:latest \
   -o /tmp/yggdrasil-runners.tar
 gzip -f /tmp/yggdrasil-app.tar /tmp/yggdrasil-runners.tar
 
@@ -184,6 +185,7 @@ ssh <host> 'docker tag localhost/yggdrasil-runner-python:latest yggdrasil-runner
 ssh <host> 'docker tag localhost/yggdrasil-runner-node:latest yggdrasil-runner-node:latest'
 ssh <host> 'docker tag localhost/yggdrasil-runner-go:latest yggdrasil-runner-go:latest'
 ssh <host> 'docker tag localhost/yggdrasil-runner-rust:latest yggdrasil-runner-rust:latest'
+ssh <host> 'docker tag localhost/yggdrasil-runner-bun:latest yggdrasil-runner-bun:latest'
 ```
 
 验证短名可解析：
