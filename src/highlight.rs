@@ -85,6 +85,8 @@ pub mod server {
                     ("js", "js"),
                     ("javascript", "js"),
                     ("typescript", "ts"),
+                    // bun 运行器跑的是 TypeScript，归一化后用 ts 语法高亮。
+                    ("bun", "ts"),
                     ("py", "py"),
                     ("python", "py"),
                     ("rb", "rb"),
@@ -485,5 +487,22 @@ const message = ref('Hello Vue!')
         let by_upper = highlight_code(code, Some("Vue"));
         // 大写标识经别名表 eq_ignore_ascii_case 回退,输出须与小写一致。
         assert_eq!(by_alias, by_upper);
+    }
+
+    #[test]
+    fn highlight_code_resolves_bun_alias_to_typescript() {
+        // bun 运行器跑 TypeScript；别名表把 "bun" 归一为 "ts" 扩展名。
+        // 用类型注解（TS 特有语法）验证命中的是 TypeScript 语法而非纯 JS。
+        let code = "const x: number = 1;";
+        let result = highlight_code(code, Some("bun"));
+        // 不应回退纯文本（纯文本无 <span> 高亮 span）。
+        assert!(
+            result.contains("<span"),
+            "bun 别名应触发语法高亮, got: {}",
+            result
+        );
+        // 与直接传 ts 的输出一致——别名表正确归一。
+        let by_ts = highlight_code(code, Some("ts"));
+        assert_eq!(result, by_ts);
     }
 }

@@ -107,8 +107,13 @@ export class EditorOptions {
 /**
  * 把语言标识映射成 CodeMirror 语言 Extension。
  * - `python` → @codemirror/lang-python
- * - `node` / `javascript` / `js` → @codemirror/lang-javascript
+ * - `node` / `javascript` / `js` → @codemirror/lang-javascript（JS 模式）
+ * - `bun` / `typescript` / `ts` → @codemirror/lang-javascript（TypeScript 模式）
  * - `sql` / 缺省 → @codemirror/lang-sql（PostgreSQL 方言 + schema 补全）
+ *
+ * 归一化后（src/api/code_runner/languages.rs::normalize_lang）CodeRunner 只会
+ * 传来 canonical key（node/bun/python/go/rust），但这里仍保留别名分支作防御——
+ * CodeMirror 也用在 SQL 控制台等场景，调用方可能直接传别名。
  *
  * SQL 分支使用 schema 补全；非 SQL 语言忽略 schema（补全仅对 SQL 有意义）。
  */
@@ -119,6 +124,10 @@ function buildLanguageExtension(lang: string, schema: SqlSchema): Extension {
   }
   if (normalized === 'node' || normalized === 'javascript' || normalized === 'js') {
     return javascript();
+  }
+  if (normalized === 'bun' || normalized === 'typescript' || normalized === 'ts') {
+    // bun 跑 TypeScript，编辑器用 TS 模式获得类型感知高亮（接口/类型注解等）。
+    return javascript({ typescript: true });
   }
   // sql / 缺省：保留原有 PostgreSQL + schema 补全行为
   return sql({
