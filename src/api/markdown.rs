@@ -951,6 +951,47 @@ console.log(1)
     }
 
     #[test]
+    fn render_markdown_runnable_block_alias_normalized_to_canonical() {
+        // 关键契约：parse_fence_info 在 markdown 渲染期就把别名归一为 canonical key，
+        // 故 `js runnable` 渲染出的 data-lang 是 "node"（而非 "js"）。
+        // 这保证阅读器 CodeRunner 拿到的 language 是 canonical，StartExec 的
+        // LANGUAGES.get 能直接命中，无需前端再做别名映射。
+        let cases = [
+            ("js", "node"),
+            ("javascript", "node"),
+            ("rs", "rust"),
+            ("ts", "bun"),
+            ("typescript", "bun"),
+            // 大小写不敏感。
+            ("JavaScript", "node"),
+            ("TypeScript", "bun"),
+        ];
+        for (alias, canonical) in cases {
+            let src = format!("```{alias} runnable\nconsole.log(1)\n```");
+            let result = render_markdown_enhanced(&src);
+            assert!(
+                result.html.contains(&format!(r#"data-lang="{canonical}""#)),
+                "别名 {alias} 应归一为 data-lang={canonical}, got: {}",
+                result.html
+            );
+            // 不应残留原始别名作为 data-lang。
+            let bad = format!(r#"data-lang="{alias}""#);
+            assert!(
+                !result.html.contains(&bad),
+                "data-lang 不应保留别名 {alias}, got: {}",
+                result.html
+            );
+        }
+    }
+
+    #[test]
+    fn render_markdown_runnable_block_bun_canonical() {
+        // bun 自身是 canonical（不是别名），runnable 块以 bun 执行。
+        let result = render_markdown_enhanced("```bun runnable\nconsole.log('hi')\n```");
+        assert!(result.html.contains(r#"data-lang="bun""#), "got: {}", result.html);
+    }
+
+    #[test]
     fn render_markdown_runnable_marker_on_unsupported_lang_ignored() {
         // 语言不在白名单(rust 已在白名单,改用 ruby)：runnable 标记被忽略,输出普通代码块。
         let result = render_markdown_enhanced("```ruby runnable\nputs 'hi'\n```");

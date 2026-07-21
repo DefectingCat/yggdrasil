@@ -26,7 +26,7 @@ use crate::api::code_runner::{ExecResult, ExecStatus};
 #[cfg(feature = "server")]
 use crate::api::auth::get_current_admin_user;
 #[cfg(feature = "server")]
-use crate::api::code_runner::languages::{is_supported_lang, LANGUAGES};
+use crate::api::code_runner::languages::{is_supported_lang, normalize_lang, LANGUAGES};
 #[cfg(feature = "server")]
 use crate::api::code_runner::progress::{
     gc_old_tasks, insert_task, update_task_result, update_task_stage, StreamEntry, EXEC_STREAMS,
@@ -115,7 +115,9 @@ pub async fn start_exec(req: ExecRequest) -> Result<String, ServerFnError> {
 
     // 后台执行：信号量限并发 → clamp_limits → run_in_container
     let task_id_clone = task_id.clone();
-    let lang_key = req.language.clone();
+    // 归一化为 canonical key（js→node / ts→bun / rs→rust），确保 LANGUAGES.get 命中、
+    // ExecResult.language 回显 canonical（与 markdown 渲染期的 data-lang 一致）。
+    let lang_key = normalize_lang(&req.language);
     tokio::spawn(async move {
         let sem = &*RUNNER_SEMAPHORE;
 
@@ -243,7 +245,8 @@ pub async fn start_exec_stream(req: ExecRequest) -> Result<String, ServerFnError
     gc_old_tasks();
 
     let task_id_clone = task_id.clone();
-    let lang_key = req.language.clone();
+    // 同 start_exec：归一化别名，LANGUAGES.get 用 canonical key。
+    let lang_key = normalize_lang(&req.language);
     tokio::spawn(async move {
         let sem = &*RUNNER_SEMAPHORE;
 
@@ -361,11 +364,24 @@ mod tests {
 
     #[test]
     fn validate_accepts_registered_language() {
-        // python/node/go/rust 默认注册，应放行。
-        for lang in ["python", "node", "go", "rust"] {
+        // python/node/go/rust/bun 默认注册，应放行。
+        for lang in ["python", "node", "go", "rust", "bun"] {
             assert!(
                 validate_exec_request(&req(lang, "x")).is_ok(),
                 "{lang} 应被支持"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_accepts_aliases() {
+        // 别名经 is_supported_lang 内的 normalize_lang 归一后命中注册表，应放行。
+        // 锁定该契约：前端 CodeRunner 可能带着别名（如历史渲染的 data-lang="js"）
+        // 调 StartExec，校验链不能因别名拒绝。
+        for lang in ["js", "javascript", "rs", "ts", "typescript"] {
+            assert!(
+                validate_exec_request(&req(lang, "x")).is_ok(),
+                "别名 {lang} 应被支持"
             );
         }
     }

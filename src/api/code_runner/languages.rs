@@ -6,6 +6,12 @@
 //!
 //! 实际可用语言默认即注册表里的全部；若设置了 `CODE_RUNNER_LANGUAGES`
 //! 环境变量，则进一步收窄到该白名单内（[`is_supported_lang`]）。
+//!
+//! **别名归一化**：[`normalize_lang`] 把 `js`/`javascript` 归一为 `node`、
+//! `rs` 归一为 `rust`、`ts`/`typescript` 归一为 `bun`。归一化在 [`parse_fence_info`]
+//! 与 [`is_supported_lang`] 内完成，markdown 渲染期就把别名换成 canonical key，
+//! 下游 `data-lang` / `ExecRequest.language` / `LANGUAGES.get` 只见到 canonical
+//! 名（`python`/`node`/`go`/`rust`/`bun`），不再出现别名，避免查表落空。
 
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -107,32 +113,86 @@ pub static LANGUAGES: LazyLock<HashMap<String, LanguageDef>> = LazyLock::new(|| 
         },
     );
 
+    // bun：原生 TypeScript 运行器（无需 tsc 预编译）。`ts`/`typescript` 别名
+    // 归一到 `bun`（见 LANG_ALIASES）。bun 镜像用官方安装脚本装在 alpine 上，
+    // 单步 `bun run /code/main.ts` 直接执行，无需 wrapper。
+    // 默认资源与 node 对齐：JS 运行时开销相近，256MB/5s 足够。
+    m.insert(
+        "bun".to_string(),
+        LanguageDef {
+            image: "yggdrasil-runner-bun:latest".to_string(),
+            run_cmd: "bun run /code/main.ts".to_string(),
+            extension: "ts".to_string(),
+            default_limits: ResourceLimits {
+                cpu_cores: 1.0,
+                memory_mb: 256,
+                timeout_secs: 5,
+                output_bytes: 1_048_576,
+                allow_network: false,
+            },
+            allow_network: false,
+        },
+    );
+
     m
 });
 
-/// 是否支持该语言：必须在 LANGUAGES 注册表中存在。
-/// 若设置了 `CODE_RUNNER_LANGUAGES`，还需同时在该白名单内（用于收窄可用语言）；
-/// 未设置则注册表里的语言全部放行。
-pub fn is_supported_lang(lang: &str) -> bool {
+/// 语言别名 → canonical key 映射。
+///
+/// canonical key（`python`/`node`/`go`/`rust`/`bun`）本身不在表里——它们原样
+/// 通过。仅收录读者/作者习惯的简写：`js`/`javascript`→`node`、`rs`→`rust`、
+/// `ts`/`typescript`→`bun`。比较大小写不敏感（见 [`normalize_lang`]）。
+const LANG_ALIASES: &[(&str, &str)] = &[
+    ("js", "node"),
+    ("javascript", "node"),
+    ("rs", "rust"),
+    ("ts", "bun"),
+    ("typescript", "bun"),
+];
+
+/// 把语言标识归一化为 `LANGUAGES` 注册表里的 canonical key。
+///
+/// 步骤：trim → lowercase → 查 [`LANG_ALIASES`]，命中返回映射值，未命中返回
+/// trim+lowercase 后的原值（保证 canonical 名与未注册字符串都能被调用方处理）。
+///
+/// 归一化是 [`is_supported_lang`] / [`parse_fence_info`] 的前置步骤，也是
+/// `execute.rs` 在 `LANGUAGES.get` 前必须调用的——否则用别名查表会落空。
+pub fn normalize_lang(lang: &str) -> String {
     let clean = lang.trim().to_lowercase();
-    LANGUAGES.contains_key(&clean)
+    for &(from, to) in LANG_ALIASES {
+        if clean == from {
+            return to.to_string();
+        }
+    }
+    clean
+}
+
+/// 是否支持该语言：先 [`normalize_lang`] 归一化，再查 `LANGUAGES` 注册表。
+/// 若设置了 `CODE_RUNNER_LANGUAGES`，还需同时在该白名单内（用于收窄可用语言，
+/// 白名单用 canonical key 比较——运维写 `node` 而非 `js`）；未设置则全部放行。
+pub fn is_supported_lang(lang: &str) -> bool {
+    let canonical = normalize_lang(lang);
+    LANGUAGES.contains_key(&canonical)
         && RUNNER_CONFIG
             .languages
             .as_ref()
-            .is_none_or(|list| list.iter().any(|l| l == &clean))
+            .is_none_or(|list| list.iter().any(|l| l == &canonical))
 }
 
 /// 解析围栏代码块的 info string。
 ///
 /// 格式：`<lang> [runnable|run] [ {<ResourceLimits JSON>} ]`
 ///
-/// 返回 `(lang, runnable, overrides)`。未知 token 静默忽略；JSON 解析失败时 overrides 为 None。
+/// 返回 `(lang, runnable, overrides)`。`lang` 已经过 [`normalize_lang`] 归一化
+/// （`js`→`node`、`ts`→`bun` 等），下游 markdown 渲染 / ExecRequest.language /
+/// `LANGUAGES.get` 都拿到 canonical key。未知 token 静默忽略；JSON 解析失败时
+/// overrides 为 None。
 pub fn parse_fence_info(info: &str) -> (String, bool, Option<ResourceLimits>) {
     let tokens: Vec<&str> = info.split_whitespace().collect();
     if tokens.is_empty() {
         return ("".to_string(), false, None);
     }
-    let lang = tokens[0].trim().to_lowercase();
+    let lang = normalize_lang(tokens[0]);
     let mut runnable = false;
     let mut overrides = None;
 
@@ -228,5 +288,88 @@ mod tests {
     fn is_supported_lang_case_and_whitespace_insensitive() {
         assert!(is_supported_lang(" Python "));
         assert!(is_supported_lang("NODE"));
+    }
+
+    // ---- 别名归一化（normalize_lang / parse_fence_info / is_supported_lang 三处协同）----
+
+    #[test]
+    fn normalize_lang_canonical_passthrough() {
+        // canonical key 原样通过（仅 trim+lowercase）。
+        assert_eq!(normalize_lang("python"), "python");
+        assert_eq!(normalize_lang("node"), "node");
+        assert_eq!(normalize_lang("go"), "go");
+        assert_eq!(normalize_lang("rust"), "rust");
+        assert_eq!(normalize_lang("bun"), "bun");
+    }
+
+    #[test]
+    fn normalize_lang_aliases() {
+        // 别名 → canonical。
+        assert_eq!(normalize_lang("js"), "node");
+        assert_eq!(normalize_lang("javascript"), "node");
+        assert_eq!(normalize_lang("rs"), "rust");
+        assert_eq!(normalize_lang("ts"), "bun");
+        assert_eq!(normalize_lang("typescript"), "bun");
+    }
+
+    #[test]
+    fn normalize_lang_case_and_whitespace_insensitive() {
+        // 输入容忍：大小写、首尾空白。匹配 is_supported_lang 的既有契约。
+        assert_eq!(normalize_lang("  JS  "), "node");
+        assert_eq!(normalize_lang("JavaScript"), "node");
+        assert_eq!(normalize_lang("\tRS\t"), "rust");
+        assert_eq!(normalize_lang("TypeScript"), "bun");
+    }
+
+    #[test]
+    fn normalize_lang_unregistered_passthrough() {
+        // 未在别名表、未在注册表的语言原样返回（trim+lowercase 后），
+        // 由调用方决定是否拒绝。normalize_lang 不做存在性判断。
+        assert_eq!(normalize_lang("ruby"), "ruby");
+        assert_eq!(normalize_lang("Brainfuck"), "brainfuck");
+        assert_eq!(normalize_lang(""), "");
+    }
+
+    #[test]
+    fn is_supported_lang_accepts_aliases() {
+        // 别名经 normalize_lang 归一后命中注册表，应放行。
+        assert!(is_supported_lang("js"));
+        assert!(is_supported_lang("javascript"));
+        assert!(is_supported_lang("rs"));
+        assert!(is_supported_lang("ts"));
+        assert!(is_supported_lang("typescript"));
+    }
+
+    #[test]
+    fn is_supported_lang_accepts_bun_canonical() {
+        // bun 作为新增 canonical key，默认放行。
+        assert!(is_supported_lang("bun"));
+    }
+
+    #[test]
+    fn parse_fence_info_normalizes_alias_to_canonical() {
+        // 关键契约：parse_fence_info 返回的 lang 是 canonical key，
+        // 下游 markdown.rs 的 data-lang / class="language-{lang}" 直接用此值。
+        let (lang, runnable, _) = parse_fence_info("js runnable");
+        assert_eq!(lang, "node");
+        assert!(runnable);
+
+        let (lang, _, _) = parse_fence_info("typescript runnable");
+        assert_eq!(lang, "bun");
+
+        let (lang, _, _) = parse_fence_info("rs runnable");
+        assert_eq!(lang, "rust");
+
+        // 大小写不敏感。
+        let (lang, _, _) = parse_fence_info("JavaScript runnable");
+        assert_eq!(lang, "node");
+    }
+
+    #[test]
+    fn parse_fence_info_bun_canonical_runs_as_ts() {
+        // bun 自身是 canonical，runnable 块以 bun 执行。
+        let (lang, runnable, _) = parse_fence_info("bun runnable");
+        assert_eq!(lang, "bun");
+        assert!(runnable);
     }
 }
