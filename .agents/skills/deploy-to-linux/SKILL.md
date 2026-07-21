@@ -36,23 +36,30 @@ ssh <host> 'echo "OS:"; uname -sm; echo "容器运行时:"; docker --version 2>&
 | `docker --version` | `Docker version ...` | 真 Docker，socket 在 `/var/run/docker.sock` |
 | | `podman version ...` | **Podman**（`docker` 是别名），socket 在 `/run/podman/podman.sock` |
 | | `NO_DOCKER` | 需先装 Docker 或 Podman（本文不覆盖） |
-| `$SHELL` | `/bin/bash` 或 `/bin/sh` | 可在 ssh 命令里写 bash 逻辑 |
-| | `/usr/bin/fish` | **fish 陷阱**，见下，避免在 ssh 里写 shell 逻辑 |
+| `$SHELL` | `/bin/bash` 或 `/bin/sh` | 任意 bash 语法都可在 ssh 里用 |
+| | `/usr/bin/fish` 或 `.../fish` | fish,见下"fish shell 兼容性",本文命令已兼容 |
 | 端口 80/443 占用 | 已被占用 | **复用现有反代**（探测它是不是 nginx-proxy） |
 | | 空闲 | **自建反代**（nginx 容器或复用 nginx-proxy） |
 
-## fish shell 陷阱（若服务器是 fish）
+## fish shell 兼容性
 
-fish 不是 bash，ssh 进去的命令在 fish 里解析会撞上：
+服务器若是 fish（`$SHELL` 为 `/usr/bin/fish` 或 `.../fish`），ssh 进去的命令在 fish 里解析。本文档所有 `ssh <host> '...'` 命令**都已避开 fish 不兼容的写法**，可以直接执行。
 
-| bash 语法 | fish 报错 | 解决 |
-|---|---|---|
-| `VAR=$(cmd)` | `Unsupported use of '='` | 避免服务器端赋值，或用 `set VAR (cmd)` |
-| `for x in a b; do ...; done` | `Missing end to balance this for loop` | 用 `for x in a b; ...; end` |
-| `echo $?` | `$? is not the exit status` | 用 `$status` |
-| `&&` 链带赋值 | 中途失败静默 | **拆成多条独立 ssh，每条一条命令** |
+fish 兼容 vs 不兼容的语法（写新命令时对照）：
 
-**最稳的做法（适用于任何 shell）：避免在 ssh 命令里写 shell 逻辑。** 每条 `ssh <host> 'cmd'` 只跑一条命令，需要循环时在本地 bash 里循环、循环体内逐条 ssh。
+| 语法 | bash | fish | 备注 |
+|---|---|---|---|
+| 命令分隔 | `;` | `;` | ✓ 本文已用 |
+| 短路链 | `&&` / `||` | `&&` / `||` | ✓ 本文已用(fish 3.0+ 原生支持) |
+| 管道 | `\|` | `\|` | ✓ |
+| fd 重定向 | `2>&1` / `2>/dev/null` | `2>&1` / `2>/dev/null` | ✓ fish 原生支持 |
+| docker `--format "{{.X}}"` | 字符串透传 | 字符串透传 | ✓ 大括号是 docker 模板,非 fish 语法 |
+| **命令替换** | `$(cmd)` / `` `cmd` `` | `(cmd)` | ✗ 本文已避免服务器端用 `$()` |
+| **变量赋值** | `VAR=...` | `set VAR ...` | ✗ 本文已避免服务器端赋值 |
+| **for 循环** | `for x in a b; do ...; done` | `for x in a b; ...; end` | ✗ 本文已展开成独立命令(见 runner tag 步骤) |
+| **退出码** | `$?` | `$status` | ✗ 本文未用 |
+
+**原则**：所有需要 `$(...)` / `VAR=...` / `for...do...done` 的逻辑放到**本地 zsh/bash** 里(如生成 `.env`、循环构建 runner、循环 tag),ssh 命令保持单条命令或纯 `&&` / `;` / `|` 链。本文命令清单已按此原则编写。
 
 ## Docker vs Podman 关键差异
 
@@ -61,7 +68,7 @@ fish 不是 bash，ssh 进去的命令在 fish 里解析会撞上：
 | socket | `/var/run/docker.sock` | `/run/podman/podman.sock` |
 | 运行模式 | 通常 rootful daemon | rootful 或 rootless（探测 `podman info` 的 `rootless`） |
 | 镜像短名 | `yggdrasil-runner-python` 直接可用 | 短名回退解析，但 `podman images` 显示规范化完整名 |
-| tmpfs `uid=`/`gid=` 选项 | 支持 | **不支持**（报 `unknown mount option`）→ 影响 Code Runner，见末尾 |
+| tmpfs `uid=`/`gid=` 选项 | 支持 | **不支持**（报 `unknown mount option`），需用其它权限策略绕开 |
 | `docker-compose.yml` | 完全兼容 | 完全兼容（podman-compose 或 docker-compose v2 provider） |
 
 **compose 里挂 socket 时按实际路径映射**：
@@ -378,14 +385,6 @@ ssh <host> 'curl -s ifconfig.me'  # 服务器公网 IP,两者要对上
 ```
 
 注意 IPv4（A 记录）和 IPv6（AAAA 记录）可能不一致，acme HTTP-01 默认走 IPv4。若 AAAA 指向错误子网，仅 IPv6 客户端受影响。
-
-## Code Runner 限制（已知）
-
-Code Runner 的 5 个沙箱镜像和 API 已部署就绪，但 **`src/infra/docker.rs` 的 tmpfs 选项 `uid=1000,gid=1000` 是 docker 扩展，podman 报 `unknown mount option "uid=1000"`**，实际执行代码会失败。
-
-- Docker 服务器：不受影响，正常工作
-- Podman 服务器：Code Runner 执行会失败。镜像本身可跑（验证）：`echo 'print("hi")' | ssh <host> 'docker run --rm -i --user 1000:1000 --workdir /code yggdrasil-runner-python:latest sh -c "cat > /code/main.py && python -u /code/main.py"'`
-- 修复方向：改 `docker.rs` 的 tmpfs 策略（镜像内预设 `/code` 权限，或用 podman 兼容挂载），修后需重新构建主应用镜像
 
 ## 清理
 
