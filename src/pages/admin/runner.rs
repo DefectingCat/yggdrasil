@@ -13,7 +13,9 @@ use crate::components::ui::{ADMIN_CARD_CLASS, BTN_PRIMARY_SM};
 use crate::infra::runner_config::ResourceLimits;
 
 /// 受支持的语言集合（与 LANGUAGES 注册表 / CODE_RUNNER_LANGUAGES 对齐）。
-const SUPPORTED_LANGS: &[&str] = &["python", "node", "go", "rust"];
+/// 仅列 canonical key；别名（js/ts/rs 等）经 normalize_lang 归一到此处某项，
+/// 按钮不重复展示别名，避免选择拥挤。
+const SUPPORTED_LANGS: &[&str] = &["python", "node", "go", "rust", "bun"];
 
 /// 默认示例源码（按语言）。
 fn default_source(lang: &str) -> String {
@@ -22,6 +24,8 @@ fn default_source(lang: &str) -> String {
         "node" => "console.log('Hello from author sandbox');\n[0,1,2].forEach(i => console.log(`line ${i}`));\n".to_string(),
         "go" => "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"Hello from author sandbox\")\n\tfor i := 0; i < 3; i++ {\n\t\tfmt.Printf(\"line %d\\n\", i)\n\t}\n}\n".to_string(),
         "rust" => "fn main() {\n    println!(\"Hello from author sandbox\");\n    for i in 0..3 {\n        println!(\"line {}\", i);\n    }\n}\n".to_string(),
+        // bun 跑 TypeScript：示例用 TS 类型注解体现语言特性。
+        "bun" => "const greeting: string = 'Hello from author sandbox';\nconsole.log(greeting);\n[0, 1, 2].forEach((i: number) => console.log(`line ${i}`));\n".to_string(),
         _ => String::new(),
     }
 }
