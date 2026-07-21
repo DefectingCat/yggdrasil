@@ -8,18 +8,36 @@ pub mod server {
     use std::sync::LazyLock;
 
     use syntect::html::{ClassStyle, ClassedHTMLGenerator};
-    use syntect::parsing::SyntaxSet;
+    use syntect::parsing::{SyntaxDefinition, SyntaxSet};
     use syntect::util::LinesWithEndings;
 
-    /// 全局语法集合，懒加载时合并内置语法与 `syntaxes/` 目录下的自定义语法。
-    static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(|| {
+    /// 编译期内嵌的自定义语法定义（文件名 stem → .sublime-syntax 内容）。
+    ///
+    /// 生产镜像是 `FROM scratch` 的静态 musl 二进制，容器内不存在 `syntaxes/`
+    /// 目录；而 `CARGO_MANIFEST_DIR` 烘焙的是构建机路径（Docker 里是 /build），
+    /// 运行时 `add_from_folder` 注定失败、这些语言静默回退为纯文本。
+    /// 因此改为 `include_str!` 编译期嵌入，彻底消除运行时文件依赖。
+    /// 列表与 `syntaxes/` 目录的一致性由测试 `custom_syntax_list_matches_directory` 保证。
+    pub(crate) const CUSTOM_SYNTAXES: &[(&str, &str)] = &[
+        ("JSX", include_str!("../syntaxes/JSX.sublime-syntax")),
+        ("Kotlin", include_str!("../syntaxes/Kotlin.sublime-syntax")),
+        ("Swift", include_str!("../syntaxes/Swift.sublime-syntax")),
+        ("TSX", include_str!("../syntaxes/TSX.sublime-syntax")),
+        ("TypeScript", include_str!("../syntaxes/TypeScript.sublime-syntax")),
+        ("Vue", include_str!("../syntaxes/Vue.sublime-syntax")),
+        ("Zig", include_str!("../syntaxes/Zig.sublime-syntax")),
+    ];
+
+    /// 全局语法集合，懒加载时合并内置语法与内嵌的自定义语法。
+    pub(crate) static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(|| {
         let mut builder = SyntaxSet::load_defaults_newlines().into_builder();
-        // 使用 CARGO_MANIFEST_DIR 派生的绝对路径，避免运行时工作目录不确定导致加载失败
-        let syntaxes_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/syntaxes");
-        tracing::info!("Loading custom syntaxes from: {}", syntaxes_dir);
-        match builder.add_from_folder(syntaxes_dir, true) {
-            Ok(()) => tracing::info!("Custom syntaxes loaded successfully"),
-            Err(e) => tracing::warn!("Failed to load custom syntaxes: {:?}", e),
+        for (name, src) in CUSTOM_SYNTAXES {
+            match SyntaxDefinition::load_from_str(src, true, Some(name)) {
+                Ok(def) => {
+                    builder.add(def);
+                }
+                Err(e) => tracing::warn!("Failed to load embedded syntax {}: {:?}", name, e),
+            }
         }
         let built = builder.build();
         tracing::info!(
@@ -122,6 +140,42 @@ pub mod server {
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use super::server::*;
+
+    #[test]
+    fn custom_syntax_list_matches_directory() {
+        // CUSTOM_SYNTAXES 必须与 syntaxes/ 目录下的 .sublime-syntax 文件一一对应，
+        // 防止新增/删除语法文件后忘记同步内嵌列表（仿 migrations 数组的编译期校验）。
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/syntaxes");
+        let mut on_disk: Vec<String> = std::fs::read_dir(dir)
+            .expect("syntaxes/ 目录应存在")
+            .filter_map(|e| {
+                let p = e.ok()?.path();
+                if p.extension()? == "sublime-syntax" {
+                    Some(p.file_stem()?.to_string_lossy().into_owned())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        on_disk.sort();
+        let mut embedded: Vec<&str> = CUSTOM_SYNTAXES.iter().map(|(name, _)| *name).collect();
+        embedded.sort();
+        assert_eq!(embedded, on_disk, "CUSTOM_SYNTAXES 与 syntaxes/ 目录不一致");
+    }
+
+    #[test]
+    fn custom_syntaxes_are_loaded() {
+        // 内嵌语法必须真正进入 SyntaxSet（守护生产环境回退纯文本的回归）。
+        for (name, _) in CUSTOM_SYNTAXES {
+            let lower = name.to_lowercase();
+            assert!(
+                SYNTAX_SET.find_syntax_by_name(name).is_some()
+                    || SYNTAX_SET.find_syntax_by_extension(&lower).is_some(),
+                "自定义语法 {} 未加载",
+                name
+            );
+        }
+    }
 
     #[test]
     fn highlight_code_rust() {
