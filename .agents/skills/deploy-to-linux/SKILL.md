@@ -3,7 +3,9 @@ name: deploy-to-linux
 description: |
   将 yggdrasil 部署/更新到任意 Linux 服务器时使用。本地 arm64 用 Docker Rosetta 构建
   x86 镜像，导出传输到目标服务器（Docker 或 Podman）后用 docker compose 运行，
-  前置反代自动签发 HTTPS。触发关键词："部署"、"deploy"、"发布到服务器"、"上线"、"docker compose"。
+  前置反代自动签发 HTTPS。支持自动部署（agent 直接执行）与手动部署（agent 探测后输出
+  完整命令清单，用户自行执行）两种模式。
+  触发关键词："部署"、"deploy"、"发布到服务器"、"上线"、"docker compose"、"手动部署"。
 allowed-tools:
   - Bash
   - Read
@@ -18,6 +20,23 @@ metadata:
 # Deploy to Linux: 部署/更新 yggdrasil 到任意 Linux 服务器
 
 从本地 arm64 构建器构建 `linux/amd64` 镜像，传输到目标 Linux 服务器并以 docker compose 运行。前置反代负责 HTTPS。
+
+## 部署模式（先确认用哪种）
+
+| 模式 | 触发 | 行为 |
+|---|---|---|
+| **自动部署**（默认） | "部署到 X"、"更新线上" | agent 逐步执行下文全部 ssh/本地命令，直接完成部署 |
+| **手动部署** | "手动部署"、"给我部署命令"、"我自己来执行" | agent 只做**第 0 步探测**（ssh 只读信息采集），然后根据探测结果把**完整部署命令清单**输出给用户，用户自己复制执行 |
+
+### 手动部署模式的输出要求
+
+探测完成后，输出一份**可直接复制执行**的命令清单，必须满足：
+
+1. **分块标注执行位置**：`# 本地执行`（构建、导出、scp）与 `# 服务器执行`（导入、tag、compose up）分开成独立代码块，用户在不同终端跑。
+2. **占位符全部填实**：`<host>`、socket 路径（`/var/run/docker.sock` vs `/run/podman/podman.sock`）、反代方案（A/B/C）、部署目录（root vs 非 root）按探测结果定死，不留待定项。只有域名/邮箱这类用户秘密可以留 `<你的域名>` 占位，并单独列在清单开头的「需要你替换的值」里。
+3. **按本文顺序串联**：本地构建 → 构建验证 → 导出传输 → 服务器导入 → runner 去前缀 → compose 编排（含生成好的 `.env` 和按探测结果裁剪过的 `docker-compose.yml` 完整内容）→ 启动 → 验证清单 → 清理。更新场景只给"更新流程"那一节。
+4. **命令原样可用**：服务器端命令去掉 `ssh <host> '...'` 包装（用户已登录服务器直接跑），保留单引号内的原始命令；fish 兼容性约束不变。
+5. **不替用户执行任何写操作**：agent 只跑第 0 步探测命令（只读），构建/传输/启动都由用户手动执行。
 
 **这是项目专属 skill**：镜像名、`LANGUAGES` 注册表硬编码、runner 沙箱、nginx-proxy 约定都绑定到 yggdrasil 本身，但服务器探测、构建、传输、compose 编排是通用流程。
 
