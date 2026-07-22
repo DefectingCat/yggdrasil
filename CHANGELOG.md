@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-22
+
+### Added
+
+- **文章数学公式 SSR 渲染(KaTeX)**：引入 `katex-rs` 在服务端把 `$...$`/`$$...$$` TeX 渲染成视觉层 HTML span(`OutputFormat::Html`,不含 MathML,XSS 面最小;`throw_on_error=false` 坏公式渲染成红色错误而非中断);自托管 KaTeX CSS + woff2 字体到 `public/katex/`(`make katex-css` 从 npm `katex` dist 拷贝)。
+- **评论数学公式渲染**：评论路径同步开启 `ENABLE_MATH`,span 白名单加 `style` 保留 KaTeX 内联定位样式。
+- **编辑器数学公式节点**：Tiptap 数学公式节点带 KaTeX 预览,根治编辑器序列化破坏 LaTeX 的问题。
+- **mermaid 流程图懒加载渲染**：文章页 `language-mermaid` 代码块经 IntersectionObserver 视口可见时动态 `import('/mermaid/mermaid.js')`(独立 IIFE bundle,~3.4MB / gzip ~900KB,非全局注入),`mermaid.render` 产 SVG 注入;主题经 `__initMermaid` 传入,`securityLevel: 'strict'`,幂等守卫防重复渲染;渲染失败保留源码并加 `.mermaid-error` class。
+- **流程图配色对齐 Catppuccin**：mermaid 配色对齐 Catppuccin 主题,容器美化。
+- **流程图主题切换动画**：流程图主题切换跟随 View Transitions 圆形扩散动画,主题切换时重渲染已渲染的流程图。
+- **bun 代码运行器**：新增 `yggdrasil-runner-bun` 沙箱镜像(官方 `bun.sh/install` 脚本 + musl 变体 + `libstdc++`/`libgcc` C++ 运行时);admin 代码试运行沙箱加 bun 语言按钮;CodeMirror 加 TypeScript 模式;语言别名归一化(`ts`/`typescript`→`bun`,在 `parse_fence_info` 统一,`LANGUAGES.get` 只见规范化 key)。
+- **文章页脚注完整支持**：语义化 + back-link + 样式。
+- **Vue SFC 语法高亮**：文章页代码块支持 Vue SFC 语法高亮。
+- **搜索入口改为图标按钮**：header 搜索入口从文字改为图标按钮。
+- **正文折叠块卡片化**：`<details>` 折叠块卡片化,自绘 chevron + hover/focus 态。
+- **task-list checkbox 自绘**：文章页 task-list checkbox 改用 `appearance:none` 自绘圆角方框。
+- **代码块字号调整**：文章页代码块字号从 13.6px 调整为 16px。
+- **响应头暴露版本信息**：server 通过 `Server`/`X-Yggdrasil-Version`/`X-Yggdrasil-Git` 响应头主动暴露版本与 git 描述信息(`EXPOSE_VERSION_HEADERS` 可关)。
+- **Docker multi-arch 构建目标**：`make docker-amd64` 与 `make docker-apple` 构建 x86_64 镜像。
+- **服务器端口占用优雅退出**：端口被占用时优雅退出而非 panic。
+- **压缩算法默认 off**：`COMPRESSION_ALGORITHMS` 中间件默认值改为 off。
+
+### Changed
+
+- **mimalloc 全局分配器**：用 mimalloc 替换系统全局分配器(`#[global_allocator]`,双 cfg 门控:server feature + 非 wasm32;musl 静态链接友好)。
+- **性能优化系列**：`escape_html` 链式 5 次 replace 改单遍扫描;`slugify` 单遍状态机重写(分配 4→1);Markdown 渲染消除双解析 + `format!` 改 `write!` 直写;upload 消除 `data.to_vec()` 多次全文件深拷贝;`cache_key` 单次拼接 + `detect_format` 零分配后缀匹配;posts list/search 零 capacity Vec 改 collect 预分配 + helpers retain。
+- **重构系列**：admin `/admin/posts` 与 `/admin/posts/trash` 合并为单路由 + tab 切换;`Pagination` 支持可选 `on_prev`/`on_next` 回调;抽取 `@yggdrasil/shared` 内部源共享包消除跨 IIFE 库的类型/常量重复;抽 `main.rs` 中间件到 `src/middleware.rs`;为 `Response` 类型添加构造器消除 51 处样板;抽 `invalidate_post_metadata()`/`upload_error()` 等消除样板;统一 WASM sleep 到 `utils::time::sleep_ms`;删除死代码(`delayed_loading.rs`/`ui.rs EmptyState`/`CommentActions`/未用 re-export);拆分 `system.rs` 为 `system/` 目录(按 tab 分文件);图片处理合并维度读取函数共享 `image_reader_limits`。
+- **依赖升级**：TypeScript 升级至 7.0.2(Go 原生编译器)。
+
+### Fixed
+
+- **SSR 缓存失效根治**：文章写入后物理删除 SSR 磁盘缓存目录,根治「重建后内容不更新」(Dioxus 0.7 增量渲染器只暴露 TTL 失效手段,通过删文件绕过限制);build 前清除 `static/` SSR 缓存目录。
+- **Docker 构建/部署**：Docker 构建透传 git 信息修复 `x-yggdrasil-git` 恒为 unknown;预装 binaryen 避免 dx 运行时下载 wasm-opt 失败;补齐 Dockerfile 缺失的 katex-css 与 restore-webp 步骤;升级 builder 至 trixie 满足 dx 对 GLIBC_2.39 的需求;用 tmpfs `mode=1777` 替换 uid/gid 选项兼容 Podman;GitHub Releases 下载最终改用直连(移除 gh-proxy)。
+- **线上代码高亮缺失**：编译期内嵌自定义语法,修复线上 Docker 镜像代码高亮缺失(原先运行时加载语法文件在打包镜像中找不到)。
+- **mermaid 渲染**：改用 script 标签加载 IIFE bundle 修正全局变量取值;修复 tsc 类型错误;主题切换时重渲染已渲染的流程图。
+- **文章锚点导航**：`scrollToHash` 增加一次性守卫,切主题不再跳回 URL hash;增加 ResizeObserver 布局稳定期,修正 mermaid 异步渲染导致的锚点落点偏移。
+- **WASM 双端编译**：hooks 模块移出 server gate 双端可见(原先 WASM 编译失败)。
+- **评论代码块转义**：统一 `escape_html`,修复代码块单引号未转义。
+- **Docker daemon 容错**：Docker daemon 不可用/断连时不再 panic(集成测试在无 daemon 环境优雅跳过)。
+- **后台布局**：重建结果消息改绝对定位,避免撑高容器顶起按钮。
+- **图片 cfg 门控**：为 `ImageFmt` 别名补上 `#[cfg(feature = "server")]` 门控。
+- **clippy/lint**：修复 rust-1.97 clippy `useless_borrows_in_formatting` 告警、Biome 告警。
+- **安全测试**：补齐安全关键路径的单元测试盲区。
+
+### Internal
+
+- **skills 体系**：新增 `optimizing-rust-performance` 与 `rust-advanced-performance` 性能优化技能;清理已卸载的第三方 skills 及 lock 注册;`deploy-to-linux` 添加手动部署模式。
+- **部署脚本**：新增 xun 服务器全量部署脚本。
+- **文档**：AGENTS.md 补充别名归一化与 bun 镜像说明、数学公式与流程图架构说明、xterm-terminal/shared 库说明;补全 `.env.example` 缺失的 5 个环境变量。
+
 ## [0.4.0] - 2026-07-13
 
 ### Added
