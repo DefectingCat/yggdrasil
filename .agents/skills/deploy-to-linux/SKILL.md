@@ -110,12 +110,17 @@ grep UseVirtualizationFrameworkRosetta ~/Library/Group\ Containers/group.com.doc
 ### 主应用镜像
 
 ```bash
-docker buildx build --platform linux/amd64 --load -t localhost/yggdrasil:latest .
+docker buildx build --platform linux/amd64 --load \
+  --build-arg YGG_BUILD_GIT_DESCRIBE="$(git describe --tags --always --dirty)" \
+  --build-arg YGG_BUILD_GIT_HASH="$(git rev-parse HEAD)" \
+  --build-arg YGG_BUILD_GIT_COMMIT_DATE="$(git log -1 --format=%cd --date=iso-strict)" \
+  -t localhost/yggdrasil:latest .
 ```
 
 - Dockerfile 用 `dpkg --print-architecture` 检测架构，amd64 腿原生构建 `x86_64-unknown-linux-musl` 静态二进制
 - 首次约 15-30 分钟（Rosetta 下 cargo 全量编译），有 buildkit 缓存后分钟级
 - 产物 `localhost/yggdrasil:latest`，scratch 运行时层约 16MB
+- **`--build-arg` 透传 git 信息**：`.dockerignore` 排除 `.git/`，容器内 `build.rs` 跑不了 git，必须在宿主采集后注入，否则镜像的 `x-yggdrasil-git` 响应头恒为 `unknown`。三个 `$(...)` 命令替换在本机 zsh/bash 下执行（非服务器）。`make docker-amd64` 等价（Makefile 已内置同样的采集+透传）
 
 ### 6 个 Code Runner 沙箱镜像
 
@@ -418,7 +423,11 @@ rm -f /tmp/yggdrasil-*.tar* /tmp/.env
 
 ```bash
 # 1. 本地重新构建主应用(有缓存,快)
-docker buildx build --platform linux/amd64 --load -t localhost/yggdrasil:latest .
+docker buildx build --platform linux/amd64 --load \
+  --build-arg YGG_BUILD_GIT_DESCRIBE="$(git describe --tags --always --dirty)" \
+  --build-arg YGG_BUILD_GIT_HASH="$(git rev-parse HEAD)" \
+  --build-arg YGG_BUILD_GIT_COMMIT_DATE="$(git log -1 --format=%cd --date=iso-strict)" \
+  -t localhost/yggdrasil:latest .
 # 2. 导出传输
 docker save localhost/yggdrasil:latest | gzip > /tmp/yggdrasil-app.tar.gz
 scp /tmp/yggdrasil-app.tar.gz <host>:/root/docker/yggdrasil/

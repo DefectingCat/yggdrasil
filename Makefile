@@ -186,19 +186,32 @@ doc-open:
 # Push examples:
 #   make docker-multiarch IMAGE=ghcr.io/owner/yggdrasil:latest
 #   make docker-multiarch IMAGE=user/yggdrasil:v1 PLATFORMS=linux/amd64
+#
+# git 信息透传:.dockerignore 排除 .git/,容器内 build.rs 跑不了 git 命令,
+# 所以在宿主(本 Makefile 里)采集后用 --build-arg 注入。Dockerfile 把 ARG
+# 再 export 成 ENV,build.rs 的 std::env::var 优先读它。三个值在 Make 变量
+# 里采集一次,所有 docker target 复用;git 不可用时退化为空串,Dockerfile
+# 默认值也是空,build.rs 最终降级为 "unknown",不阻断构建。
 IMAGE ?= yggdrasil
 PLATFORMS ?= linux/amd64,linux/arm64
+GIT_DESCRIBE := $(shell git describe --tags --always --dirty 2>/dev/null)
+GIT_HASH := $(shell git rev-parse HEAD 2>/dev/null)
+GIT_DATE := $(shell git log -1 --format=%cd --date=iso-strict 2>/dev/null)
+# build-arg 复用块:每个 docker target 展开一次。空值也传(让 Dockerfile 默认接管)。
+GIT_BUILD_ARGS = --build-arg YGG_BUILD_GIT_DESCRIBE="$(GIT_DESCRIBE)" \
+                 --build-arg YGG_BUILD_GIT_HASH="$(GIT_HASH)" \
+                 --build-arg YGG_BUILD_GIT_COMMIT_DATE="$(GIT_DATE)"
 docker:
-	@docker buildx build --load -t yggdrasil .
+	@docker buildx build --load $(GIT_BUILD_ARGS) -t yggdrasil .
 
 # Cross-build x86_64 into the local daemon. buildx 仿真非原生架构,无需修改 Dockerfile
 # (它本就按 dpkg --print-architecture 自适应选 musl target)。Apple Silicon 上走 QEMU,
 # 比 native 慢;产物可直接 docker run / docker save 导出。
 docker-amd64:
-	@docker buildx build --platform linux/amd64 --load -t yggdrasil:amd64 .
+	@docker buildx build --platform linux/amd64 --load $(GIT_BUILD_ARGS) -t yggdrasil:amd64 .
 
 docker-multiarch:
-	@docker buildx build --platform $(PLATFORMS) -t $(IMAGE) --push .
+	@docker buildx build --platform $(PLATFORMS) $(GIT_BUILD_ARGS) -t $(IMAGE) --push .
 
 clean:
 	@cargo clean

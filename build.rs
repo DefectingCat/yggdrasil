@@ -7,6 +7,9 @@
 //! - git 不可用(非仓库 / tarball 构建)时降级为 "unknown",不 fail the build。
 //! - 声明 rerun-if-changed=.git/HEAD,否则 cargo 默认仅在 build.rs 自身变化时
 //!   重跑,会导致打印的还是旧 hash。
+//! - 三级取值:编译期环境变量(`YGG_BUILD_*`,CI / docker --build-arg 注入)
+//!   → 本地 `git` 命令 → `"unknown"`。Docker 构建时 `.git/` 不进构建上下文
+//!   (`.dockerignore` 排除),靠 Makefile 在宿主采集后用 `--build-arg` 透传。
 
 use std::process::Command;
 
@@ -16,9 +19,9 @@ fn main() {
     // 工作区脏状态变化时 describe 的 --dirty 后缀也会变,重跑一次。
     println!("cargo:rerun-if-changed=.git/index");
 
-    set_env("YGG_BUILD_GIT_DESCRIBE", git_describe());
-    set_env("YGG_BUILD_GIT_HASH", git_hash());
-    set_env("YGG_BUILD_GIT_COMMIT_DATE", git_commit_date());
+    set_env("YGG_BUILD_GIT_DESCRIBE", env_or_git("YGG_BUILD_GIT_DESCRIBE", &["describe", "--tags", "--always", "--dirty"]));
+    set_env("YGG_BUILD_GIT_HASH", env_or_git("YGG_BUILD_GIT_HASH", &["rev-parse", "HEAD"]));
+    set_env("YGG_BUILD_GIT_COMMIT_DATE", env_or_git("YGG_BUILD_GIT_COMMIT_DATE", &["log", "-1", "--format=%cd", "--date=iso-strict"]));
     set_env("YGG_BUILD_RUSTC_VERSION", rustc_version());
     // 编译时刻(Unix 秒)。std 无 ISO 8601 格式化,存秒数由运行时 chrono 解析。
     set_env("YGG_BUILD_TIME", build_time_unix());
@@ -29,20 +32,21 @@ fn set_env(key: &str, value: String) {
     println!("cargo:rustc-env={key}={value}");
 }
 
-/// `git describe --tags --always --dirty`:最紧凑的"版本 + 提交数 + hash + 脏标记"。
-fn git_describe() -> String {
-    git_output(&["describe", "--tags", "--always", "--dirty"]).unwrap_or_else(|| "unknown".into())
-}
-
-/// 完整 40 位 commit hash。
-fn git_hash() -> String {
-    git_output(&["rev-parse", "HEAD"]).unwrap_or_else(|| "unknown".into())
-}
-
-/// 提交时间(ISO 8601 strict,带时区偏移,可直接被 chrono 解析)。
-fn git_commit_date() -> String {
-    git_output(&["log", "-1", "--format=%cd", "--date=iso-strict"])
-        .unwrap_or_else(|| "unknown".into())
+/// 三级取值:`YGG_BUILD_<KEY>` 环境变量 → 本地 git 命令 → `"unknown"`。
+///
+/// - 第一级优先 `std::env::var`(Docker 构建时由 `--build-arg` → `ARG` → `ENV`
+///   注入到 build.rs 进程环境),非空即采用——这是 Docker 构建唯一能拿到 git
+///   信息的通道(`.git/` 被 `.dockerignore` 排除,容器内没有仓库可查)。
+/// - 第二级落回本地 `git` 命令(本地 `cargo build` / 非 Docker CI 走这条)。
+/// - 兜底 `"unknown"`(tarball 构建、git 未安装等)。
+fn env_or_git(env_key: &str, git_args: &[&str]) -> String {
+    if let Ok(v) = std::env::var(env_key) {
+        let v = v.trim();
+        if !v.is_empty() {
+            return v.to_string();
+        }
+    }
+    git_output(git_args).unwrap_or_else(|| "unknown".into())
 }
 
 /// 执行一条 git 命令,返回 trim 后的 stdout。失败返回 None(降级路径)。

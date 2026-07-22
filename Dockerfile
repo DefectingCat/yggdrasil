@@ -148,6 +148,24 @@ COPY libs/lightbox/package.json           libs/lightbox/
 COPY libs/yggdrasil-core/package.json     libs/yggdrasil-core/
 RUN cd libs && pnpm install --frozen-lockfile
 
+# Build-time git info, injected by the caller via --build-arg. `.dockerignore`
+# excludes `.git/`, so build.rs can't run `git` inside the container — these
+# ARGs are the only channel for git metadata to reach build.rs (it reads them
+# via std::env::var, its first-precedence source). Defaults are empty so a
+# bare `docker build` without args degrades to "unknown" gracefully (build.rs
+# falls back to the git command, then "unknown").
+#
+# Each ARG → ENV pair is needed: ARG is only visible in Dockerfile RUN
+# commands (and build.rs is invoked by cargo, not a RUN), so we export it as
+# ENV for the cargo build step to inherit. Both default to empty; Makefile's
+# docker/docker-amd64/docker-multiarch targets override them on the host.
+ARG YGG_BUILD_GIT_DESCRIBE=""
+ARG YGG_BUILD_GIT_HASH=""
+ARG YGG_BUILD_GIT_COMMIT_DATE=""
+ENV YGG_BUILD_GIT_DESCRIBE=${YGG_BUILD_GIT_DESCRIBE}
+ENV YGG_BUILD_GIT_HASH=${YGG_BUILD_GIT_HASH}
+ENV YGG_BUILD_GIT_COMMIT_DATE=${YGG_BUILD_GIT_COMMIT_DATE}
+
 # Copy the rest of the source tree and build everything.
 COPY . .
 
