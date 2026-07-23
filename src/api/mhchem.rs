@@ -412,7 +412,7 @@ fn match_pattern(name: &str, input: &str) -> Option<MMatch> {
         ", " => re_match(re!("^[,;]\\s*")),
         "," => re_match(re!("^[,;]")),
         "." => re_match(re!("^[.]")),
-        ". __* " => re_match(re!("^([.\u{22C5}\u{00B7}\u{2022}|[*])\\s*")),
+        ". __* " => re_match(re!("^([.\u{22C5}\u{00B7}\u{2022}]|[*])\\s*")),
         "..." => re_match(re!("^\\.\\.\\.(?=$|[^.])")),
         "^a" => re_match(re!("^\\^([0-9]+|[^\\\\_])")),
         "^\\x" => re_match(re!("^\\^(\\\\[a-zA-Z]+)\\s*")),
@@ -1197,17 +1197,24 @@ fn get_operator(a: &str) -> String {
 // 公开 API
 // =========================================================================
 
-/// 把 `\ce{...}` 内容转译为 LaTeX。任何内部异常回退为原样输出。
+/// 把 `\ce{...}` 内容转译为 LaTeX。
+///
+/// 注意：`to_tex` 内的 `catch_unwind` 在 `panic = "abort"`（本项目 release
+/// profile）下**无法**捕获 panic——它只是开发构建的护栏。生产环境的真正保障
+/// 是 `all_match_patterns_compile` 测试（编译期确保所有 `re!` 正则合法）+
+/// 状态机的 watchdog 防死循环。坏公式仍可能产出退化输出，但不应 panic。
 pub fn ce(input: &str) -> String {
     to_tex(input, "ce")
 }
 
-/// 把 `\pu{...}` 内容转译为 LaTeX。任何内部异常回退为原样输出。
+/// 把 `\pu{...}` 内容转译为 LaTeX（容错同 [`ce`]）。
 pub fn pu(input: &str) -> String {
     to_tex(input, "pu")
 }
 
 fn to_tex(input: &str, kind: &str) -> String {
+    // 仅在 panic=unwind（dev/test）时有效；release 的 panic=abort 下此处的
+    // catch_unwind 无法阻止进程终止。保留它是为了本地开发时坏公式不炸测试。
     let result = std::panic::catch_unwind(|| {
         let parsed = go(input, kind);
         texify_go(&parsed, kind != "tex")
@@ -1274,5 +1281,39 @@ mod tests {
         let tex = ce("SO4^2-");
         // 应含上标（^...）且无 panic。
         assert!(!tex.is_empty(), "离子应产出非空: {tex}");
+    }
+
+    /// 回归测试：`". __* "` 模式的 regex 曾因转录错误把 `|` 放进了字符类
+    /// 内部（`[.\u{22C5}\u{00B7}\u{2022}|[*]`），fancy-regex 报
+    /// `ParseError(20, InvalidClass)`，`re!` 宏的 `.unwrap()` 触发 panic。
+    /// 上游 mhchemParser 是 `[...]|[*]`（alternation 在类外）。
+    /// 这些输入会强制该 LazyLock 正则编译，必须产出非空且不 panic。
+    #[test]
+    fn ce_dot_bullet_bond_inputs_dont_panic() {
+        for s in [".", "·", "•", "⋅", "*", ". ", "••", "·  ", "H·OH", "CaCO3 · H2O"] {
+            let tex = ce(s);
+            assert!(!tex.is_empty(), "ce({s:?}) 不应为空");
+        }
+    }
+
+    /// 保护性：强制 `match_pattern` 的每个分支至少运行一次，让每个 `re!`
+    /// 定义的 regex 都被编译。任一转录错误都会在此暴露，而非等到生产环境
+    /// 被特定输入触发后 panic=abort 整个进程。
+    #[test]
+    fn all_match_patterns_compile() {
+        for name in [
+            "empty", "else", "else2", "space", "space A", "space$", "a-z", "x", "x$", "i$",
+            "letters", "\\greek", "one lowercase latin letter $",
+            "$one lowercase latin letter$ $", "one lowercase greek letter $", "digits",
+            "-9.,9", "-9.,9 no missing 0", "(-)(9)^(-9)", "_{(state of aggregation)}$",
+            "{[(", ")]}", ", ", ",", ".", ". __* ", "...", "^a", "^\\x", "^(-1)", "'", "_9",
+            "_\\x", "^_", "{}^", "{}", "=<>", "#", "+", "-$", "-9", "- orbital overlap", "-",
+            "pm-operator", "operator", "arrowUpDown", "->", "CMT", "1st-level escape", "\\,",
+            "\\ca", "\\x", "orbital", "others", "oxidation$", "d-oxidation$", "1/2$",
+            "(KV letters),", "uprightEntities", "/", "//", "*",
+        ] {
+            // 返回值不重要，只要不 panic（regex 编译成功）即可。
+            let _ = match_pattern(name, "");
+        }
     }
 }
