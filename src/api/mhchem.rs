@@ -8,14 +8,14 @@
 //! `ce("H2O")` → `\mathrm{H}\sb{2}\mathrm{O}` 之类，无需嵌入 katex 内部解析树。
 //!
 //! 移植要点（TS→Rust）：
-//! - 动态 `buffer` 对象 → [`Buffer`] 结构体（`Option` 字段 + `clear`）。
-//! - 动态 `Parsed = string | object` → [`Parsed`] 枚举；节点字段用 [`Field`]（字符串或节点向量）。
+//! - 动态 `buffer` 对象 → `Buffer` 结构体（`Option` 字段 + `clear`）。
+//! - 动态 `Parsed = string | object` → `Parsed` 枚举；节点字段用 `Field`（字符串或节点向量）。
 //! - 正则模式（含 lookahead `(?=)`/`(?!)`，Rust `regex` 不支持）→ `fancy-regex`（已被
 //!   syntect 间接引入，此处显式声明）。
-//! - `findObserveGroups` 花括号配对扫描 → [`find_observe_groups`]。
-//! - 状态机转移表 → [`build_transitions`] 展开（对应 `_mhchemCreateTransitions`）。
+//! - `findObserveGroups` 花括号配对扫描 → `find_observe_groups`。
+//! - 状态机转移表 → `build_transitions` 展开（对应 `_mhchemCreateTransitions`）。
 //!
-//! 公开 API：[`ce`] / [`pu`]。任意内部异常都回退为原样输出（绝不 panic，与
+//! 公开 API：[`ce`](crate::api::mhchem::ce) / [`pu`](crate::api::mhchem::pu)。任意内部异常都回退为原样输出（绝不 panic，与
 //! katex.rs 的容错哲学一致）。
 //!
 //! -----------------------------------------------------------------------
