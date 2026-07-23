@@ -5,27 +5,34 @@
 use std::sync::LazyLock;
 
 /// 匹配 fenced code block（```...```）的正则。
-static CODE_BLOCK_RE: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"```[\s\S]*?```").unwrap());
+static CODE_BLOCK_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"```[\s\S]*?```").expect("CODE_BLOCK_RE 正则模式应在编译期通过校验")
+});
 
 /// 匹配行内代码（`...`）的正则。
-static INLINE_CODE_RE: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"`[^`]*`").unwrap());
+static INLINE_CODE_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"`[^`]*`").expect("INLINE_CODE_RE 正则模式应在编译期通过校验")
+});
 
 /// 匹配 Markdown 链接 `[text](url)` 的正则。
-static LINK_RE: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"\[([^\]]*)\]\([^)]*\)").unwrap());
+static LINK_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"\[([^\]]*)\]\([^)]*\)").expect("LINK_RE 正则模式应在编译期通过校验")
+});
 
 /// 匹配 Markdown 标题（# 到 ######）的正则。
-static HEADING_RE: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"^#{1,6}\s*").unwrap());
+static HEADING_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"^#{1,6}\s*").expect("HEADING_RE 正则模式应在编译期通过校验")
+});
 
 /// 匹配 Markdown 图片 `![alt](url)` 的正则。
-static IMAGE_RE: LazyLock<regex::Regex> =
-    LazyLock::new(|| regex::Regex::new(r"!\[([^\]]*)\]\([^)]*\)").unwrap());
+static IMAGE_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"!\[([^\]]*)\]\([^)]*\)").expect("IMAGE_RE 正则模式应在编译期通过校验")
+});
 
 /// 匹配任意空白字符的正则，用于把多个空白合并为单个空格。
-static WHITESPACE_RE: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"\s+").unwrap());
+static WHITESPACE_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"\s+").expect("WHITESPACE_RE 正则模式应在编译期通过校验")
+});
 
 /// 去除 Markdown 标记，返回近似纯文本。
 ///

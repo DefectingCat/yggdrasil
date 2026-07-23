@@ -252,6 +252,10 @@ fn image_response(
     headers: &HeaderMap,
 ) -> Response {
     let etag = etag_for(&data);
+    // etag 形如 `"deadbeef..."`（引号 + hex），都是合法 token-char，from_str 不可能失败。
+    // 用 expect 说明恒成立的不变量，避免裸 unwrap 触发 lint。
+    let etag_value = HeaderValue::from_str(&etag)
+        .expect("etag 仅含 ASCII hex 与双引号，必然是合法的 HeaderValue");
 
     if let Some(if_none_match) = headers
         .get(header::IF_NONE_MATCH)
@@ -261,7 +265,7 @@ fn image_response(
             return (
                 StatusCode::NOT_MODIFIED,
                 [
-                    (header::ETAG, HeaderValue::from_str(&etag).unwrap()),
+                    (header::ETAG, etag_value.clone()),
                     (
                         header::CACHE_CONTROL,
                         HeaderValue::from_static(cache_control),
@@ -286,7 +290,7 @@ fn image_response(
                 header::CACHE_CONTROL,
                 HeaderValue::from_static(cache_control),
             ),
-            (header::ETAG, HeaderValue::from_str(&etag).unwrap()),
+            (header::ETAG, etag_value),
             (
                 header::X_CONTENT_TYPE_OPTIONS,
                 HeaderValue::from_static("nosniff"),

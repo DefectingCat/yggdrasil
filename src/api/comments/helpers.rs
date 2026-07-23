@@ -93,7 +93,8 @@ pub fn validate_comment_name(name: &str) -> Result<(), String> {
 
 #[cfg(feature = "server")]
 static EMAIL_REGEX: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-    regex::Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap()
+    regex::Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+        .expect("EMAIL_REGEX 正则模式应在编译期通过校验")
 });
 
 /// 校验评论作者邮箱格式。

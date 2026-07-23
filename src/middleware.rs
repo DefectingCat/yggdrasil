@@ -222,7 +222,7 @@ pub(crate) async fn admin_guard(
             .status(StatusCode::FOUND)
             .header(header::LOCATION, "/login")
             .body(Body::empty())
-            .unwrap()
+            .expect("静态 302 重定向响应（合法 status + 固定 header + 空 body）必然构造成功")
     }
 }
 

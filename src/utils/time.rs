@@ -13,18 +13,23 @@ use chrono::DateTime;
 ///
 /// WASM 端用 `js_sys::Promise` + `web_sys::Window::set_timeout_*` 构造，
 /// 避免 `js_sys::eval` 字符串求值。全项目统一的 sleep 入口。
+///
+/// `setTimeout` 的 delay 参数是 i32，超过 `i32::MAX` 会被浏览器立即触发；这里 clamp
+/// 到安全上限，既避免 `u32 -> i32` 转换溢出 panic，也贴合 setTimeout 的合法范围。
 #[cfg(target_arch = "wasm32")]
 pub async fn sleep_ms(ms: u32) {
     use wasm_bindgen::JsCast;
     use wasm_bindgen_futures::JsFuture;
     let promise = js_sys::Promise::new(&mut |resolve, _| {
-        web_sys::window()
-            .expect("no window")
+        // ms 是 u32，setTimeout 接受 i32；clamp 到 i32::MAX（约 24.8 天）避免溢出。
+        let delay = ms.min(i32::MAX as u32) as i32;
+        let window = web_sys::window().expect("sleep_ms 必须在浏览器上下文中调用：无 window");
+        window
             .set_timeout_with_callback_and_timeout_and_arguments_0(
                 &resolve.unchecked_into(),
-                ms.try_into().unwrap(),
+                delay,
             )
-            .expect("set_timeout failed");
+            .expect("setTimeout with a number delay cannot fail per WebIDL");
     });
     let _ = JsFuture::from(promise).await;
 }

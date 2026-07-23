@@ -152,7 +152,8 @@ pub fn PostContent(content_html: String) -> Element {
 
     #[cfg(target_arch = "wasm32")]
     use_effect(move || {
-        let window = web_sys::window().unwrap();
+        let window =
+            web_sys::window().expect("post_content use_effect 仅在 WASM 浏览器上下文执行：无 window");
 
         // 调用 window.__initPostContent('.post-content')：函数不存在时静默跳过
         // (与旧 eval 中的 if 守卫语义一致)。

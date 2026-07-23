@@ -368,7 +368,8 @@ pub fn ThemeToggle() -> Element {
                         let coords = evt.client_coordinates();
                         let x = coords.x;
                         let y = coords.y;
-                        let window = web_sys::window().unwrap();
+                        let window = web_sys::window()
+                            .expect("主题切换回调仅在 WASM 浏览器上下文执行：无 window");
                         let key = "__startThemeTransition".into();
                         if let Ok(fn_val) = js_sys::Reflect::get(&window, &key) {
                             if !fn_val.is_undefined() && !fn_val.is_null() {

@@ -28,7 +28,8 @@ fn env_or(key: &str, default: u32) -> NonZeroU32 {
         .ok()
         .and_then(|s| s.parse::<u32>().ok())
         .unwrap_or(default);
-    NonZeroU32::new(val.max(1)).unwrap()
+    // val.max(1) 保证 ≥ 1，NonZeroU32::new 必然 Some；expect 说明该不变量。
+    NonZeroU32::new(val.max(1)).expect("val.max(1) 保证非零，NonZeroU32::new 不可能失败")
 }
 
 #[cfg(feature = "server")]
@@ -82,7 +83,7 @@ static CODE_EXEC_LIMITER: LazyLock<DefaultKeyedRateLimiter<String>> = LazyLock::
 static CODE_EXEC_DAILY_LIMITER: LazyLock<DefaultKeyedRateLimiter<String>> = LazyLock::new(|| {
     RateLimiter::keyed(
         Quota::with_period(Duration::from_secs(86_400))
-            .unwrap()
+            .expect("with_period 仅在 Duration 为 0 时返回 None；86_400s 必然 Some")
             .allow_burst(env_or("RATE_LIMIT_CODE_EXEC_DAILY", 50)),
     )
 });

@@ -423,7 +423,8 @@ where
     // 匹配 pulldown-cmark 产出的 <img src="..." alt="..." /> 或 <img src="..." alt="...">
     // pulldown-cmark 格式可控：src 在前，alt 在后，属性用双引号
     static IMG_RE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r#"<img\s+src="(/uploads/[^"]+)"(?:\s+alt="([^"]*)")?\s*/?>"#).unwrap()
+        Regex::new(r#"<img\s+src="(/uploads/[^"]+)"(?:\s+alt="([^"]*)")?\s*/?>"#)
+            .expect("IMG_RE 正则模式应在编译期通过校验")
     });
 
     IMG_RE
@@ -476,8 +477,10 @@ fn wrap_tables(html: &str) -> String {
     use regex::Regex;
     use std::sync::LazyLock;
 
-    static TABLE_RE: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"(?s)<table(\s[^>]*)?>.*?</table>").unwrap());
+    static TABLE_RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?s)<table(\s[^>]*)?>.*?</table>")
+            .expect("TABLE_RE 正则模式应在编译期通过校验")
+    });
 
     TABLE_RE
         .replace_all(html, |caps: &regex::Captures| {
