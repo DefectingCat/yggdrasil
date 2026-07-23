@@ -1168,3 +1168,165 @@
   background-color: rgba(137, 180, 250, 0.15);
   box-shadow: 0 0 0 1px rgba(137, 180, 250, 0.5);
 }
+
+/* ---- 脚注引用(inline 上标) ----
+ * 视觉与文章页 input.css 的 .fn-ref 对齐:上标、accent 色、无下划线。
+ * 编号文本由 FootnoteNumbering plugin 直接写入 .fn-ref-link。 */
+.tiptap-editor .fn-ref-node {
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tiptap-editor .fn-ref-link {
+  font-size: 0.75em;
+  line-height: 0;
+  vertical-align: super;
+  /* Latte blue */
+  color: #1e66f5;
+  text-decoration: none;
+  cursor: pointer;
+  padding: 0 0.05em;
+}
+
+.tiptap-editor .fn-ref-link:hover {
+  text-decoration: underline;
+}
+
+.tiptap-editor .ProseMirror-selectednode .fn-ref-node {
+  background-color: rgba(30, 102, 245, 0.12);
+  border-radius: 3px;
+}
+
+/* 双击预览浮层 */
+.tiptap-editor .fn-ref-preview {
+  position: absolute;
+  z-index: 10;
+  /* Latte base / text */
+  background: #eff1f5;
+  color: #4c4f69;
+  border: 1px solid #ccd0da;
+  border-radius: 6px;
+  padding: 0.4em 0.6em;
+  font-size: 0.85em;
+  line-height: 1.4;
+  max-width: 280px;
+  white-space: normal;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin-top: 0.5em;
+}
+
+/* ---- 脚注定义(block 卡片) ----
+ * 视觉与文章页 .footnote-definition 对齐:左边框、0.875em、可双击编辑。 */
+.tiptap-editor .footnote-definition {
+  display: flex;
+  gap: 0.5em;
+  align-items: flex-start;
+  margin: 0.75em 0;
+  padding: 0.5em 0.75em;
+  /* Latte surface0 透明底 */
+  background-color: rgba(204, 208, 218, 0.25);
+  border-left: 0.2rem solid #1e66f5;
+  border-radius: 0 4px 4px 0;
+  font-size: 0.875em;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.tiptap-editor .footnote-definition:hover {
+  background-color: rgba(204, 208, 218, 0.45);
+}
+
+.tiptap-editor .footnote-definition-label {
+  flex-shrink: 0;
+  font-size: 0.75em;
+  line-height: 1.6;
+  vertical-align: super;
+  /* Latte blue */
+  color: #1e66f5;
+  font-weight: 600;
+}
+
+.tiptap-editor .footnote-definition-content {
+  flex: 1;
+  /* Latte text */
+  color: #4c4f69;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tiptap-editor .footnote-definition-content-hidden {
+  display: none;
+}
+
+.tiptap-editor .footnote-definition-edit {
+  flex: 1;
+  font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+  line-height: 1.5;
+  padding: 0.4em 0.6em;
+  border: 1px solid #ccd0da;
+  border-radius: 6px;
+  background: #eff1f5;
+  color: #4c4f69;
+  resize: vertical;
+  outline: none;
+}
+
+.tiptap-editor .footnote-definition-edit:focus {
+  border-color: #1e66f5;
+  box-shadow: 0 0 0 2px rgba(30, 102, 245, 0.2);
+}
+
+.tiptap-editor .ProseMirror-selectednode .footnote-definition {
+  background-color: rgba(30, 102, 245, 0.12);
+  box-shadow: 0 0 0 1px rgba(30, 102, 245, 0.4);
+}
+
+/* Dark theme (Mocha) */
+.dark .tiptap-editor .fn-ref-link {
+  /* Mocha blue */
+  color: #89b4fa;
+}
+
+.dark .tiptap-editor .ProseMirror-selectednode .fn-ref-node {
+  background-color: rgba(137, 180, 250, 0.15);
+}
+
+.dark .tiptap-editor .fn-ref-preview {
+  background: #181825;
+  color: #cdd6f4;
+  border-color: #313244;
+}
+
+.dark .tiptap-editor .footnote-definition {
+  background-color: rgba(49, 50, 68, 0.3);
+  border-left-color: #89b4fa;
+}
+
+.dark .tiptap-editor .footnote-definition:hover {
+  background-color: rgba(49, 50, 68, 0.5);
+}
+
+.dark .tiptap-editor .footnote-definition-label {
+  color: #89b4fa;
+}
+
+.dark .tiptap-editor .footnote-definition-content {
+  color: #cdd6f4;
+}
+
+.dark .tiptap-editor .footnote-definition-edit {
+  border-color: #313244;
+  background: #181825;
+  color: #cdd6f4;
+}
+
+.dark .tiptap-editor .footnote-definition-edit:focus {
+  border-color: #89b4fa;
+  box-shadow: 0 0 0 2px rgba(137, 180, 250, 0.25);
+}
+
+.dark .tiptap-editor .ProseMirror-selectednode .footnote-definition {
+  background-color: rgba(137, 180, 250, 0.15);
+  box-shadow: 0 0 0 1px rgba(137, 180, 250, 0.5);
+}

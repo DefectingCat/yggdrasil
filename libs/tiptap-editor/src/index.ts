@@ -7,6 +7,7 @@ import { Markdown } from '@tiptap/markdown';
 import StarterKit from '@tiptap/starter-kit';
 import { CodeBlockBackspaceFix } from './code-block-backspace-fix';
 import { CodeBlockNodeView, ON_RUN_CODE_STORAGE_KEY } from './code-block-view';
+import { FootnoteDef, FootnoteNumbering, FootnoteRef } from './footnote';
 import { lowlight } from './highlight';
 import { DisplayMath, InlineMath } from './math';
 import { SlashCommand } from './slash-command';
@@ -119,6 +120,12 @@ class TiptapEditorInstance {
         // renderMarkdown 路径,绕过 encodeTextForMarkdown 对 LaTeX 的双重转义。
         InlineMath,
         DisplayMath,
+        // 脚注节点(引用/定义)与编号扩展:同样依赖 markdown spec 收集时机,
+        // 必须在 Markdown 之后注册(见 math.ts 注释)。FootnoteNumbering 通过
+        // ProseMirror plugin 在文档变化后重算编号表并直接刷 DOM,不进文档模型。
+        FootnoteRef,
+        FootnoteDef,
+        FootnoteNumbering,
         CodeBlockLowlight.configure({ lowlight }).extend({
           addNodeView() {
             return ({ node, editor, getPos }) => new CodeBlockNodeView({ node, editor, getPos });
@@ -162,7 +169,9 @@ class TiptapEditorInstance {
       autofocus: false,
       onUpdate: ({ editor }) => {
         if (this.options.onUpdate) {
-          this.options.onUpdate(TiptapEditorInstance.unescapeFootnoteSyntax(editor.getMarkdown()));
+          // 脚注 [^id] 现由 atom 节点(footnoteRef/footnoteDef)承载,序列化走
+          // renderMarkdown 直接拼字面量,不再经 escapeMarkdownSyntax,无需 unescape。
+          this.options.onUpdate(editor.getMarkdown());
         }
       },
       onFocus: () => {
@@ -205,22 +214,7 @@ class TiptapEditorInstance {
     if (this.isSourceMode && this.sourceTextarea) {
       return this.sourceTextarea.value;
     }
-    return TiptapEditorInstance.unescapeFootnoteSyntax(this.editor?.getMarkdown() || '');
-  }
-
-  /**
-   * 修复 @tiptap/markdown 的 escapeMarkdownSyntax 对脚注语法的破坏。
-   *
-   * escapeMarkdownSyntax（MarkdownManager.ts:1112）将 `[` → `\[`、`]` → `\]`，
-   * 导致 `[^id]` 被转义为 `\[^id\]`，pulldown-cmark 将其视为字面文本而非脚注引用/定义。
-   * 这是与数学公式节点同类的问题：LaTeX 通过 atom Node + renderMarkdown 绕过转义，
-   * 但脚注是普通文本节点，无法走相同路径。
-   *
-   * 此函数在序列化后对完整的 Markdown 做后处理：把 `\[^label\]` 还原为 `[^label]`。
-   * 仅匹配 `\[` + `^` 开头的模式（脚注专属），不会影响普通 `[text](url)` 链接语法。
-   */
-  private static unescapeFootnoteSyntax(md: string): string {
-    return md.replace(/\\\[\^([^\n\\]*?)\\\]/g, '[^$1]');
+    return this.editor?.getMarkdown() || '';
   }
 
   /**
@@ -234,9 +228,7 @@ class TiptapEditorInstance {
     const proseMirrorDom = this.editor.view.dom;
     if (!this.isSourceMode) {
       // 富文本 → 源码：导出当前 Markdown 到 textarea
-      this.sourceTextarea.value = TiptapEditorInstance.unescapeFootnoteSyntax(
-        this.editor.getMarkdown(),
-      );
+      this.sourceTextarea.value = this.editor.getMarkdown();
       // 必须在 display:'none' 之前读取滚动比例——隐藏后 scrollTop 会被浏览器归零
       const pmRatio = this.getScrollRatio(proseMirrorDom);
       proseMirrorDom.style.display = 'none';
