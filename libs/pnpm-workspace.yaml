@@ -1,2 +1,4 @@
 packages:
   - '*'
+patchedDependencies:
+  '@tiptap/markdown@3.27.3': patches/@tiptap__markdown@3.27.3.patch
