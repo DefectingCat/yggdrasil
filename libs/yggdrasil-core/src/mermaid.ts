@@ -20,6 +20,7 @@
  */
 
 import type { ThemeName } from '@yggdrasil/shared';
+import { mermaidThemeVarsFor } from '@yggdrasil/shared';
 import { onThemeChange } from './theme-transition';
 
 /** 文章正文容器选择器（与 post_content.rs 的 __initMermaid 调用一致）。 */
@@ -31,125 +32,10 @@ type MermaidApi = {
 };
 
 /**
- * Catppuccin themeVariables（与站点 --color-paper-* / .tmTheme 调色板对齐）。
- *
- * mermaid 把颜色烤进 SVG 内联 style，无法靠 CSS 原地改主题，故须在 initialize 时注入。
- * 用 `theme: 'base'`（非 'default'/'dark'）：base 主题不硬编码颜色，themeVariables 能完全
- * 控制调色板；'default' 主题硬编码 mainBkg=#ECECFF 等会阻断覆盖。
- *
- * 设计哲学：极简卡片化——节点用 surface 色阶（卡片感）、边框/连线用 subtext 色阶（克制）、
- * 文字用 primary text。不滥用强调色，绿/紫等 accent 留给作者用 classDef 手动强调。
- * hex 值取自 themes/Catppuccin Latte.tmTheme 与 Catppuccin Mocha.tmTheme。
- *
- * 覆盖的字段涵盖 flowchart / sequence / class 三类图（测试文章用到的全部类型）。
+ * Catppuccin themeVariables 已下沉到 @yggdrasil/shared（前台与后台 tiptap 编辑器
+ * 共用单一真相源，保证渲染一致）。用 `theme: 'base'` 让 themeVariables 完全控制
+ * 调色板；详见 shared/src/index.ts 的 MERMAID_LATTE_VARS / MERMAID_MOCHA_VARS。
  */
-
-/** Latte（亮）主题：节点 surface 色阶、文字 #4c4f69、连线 subtext1 #5c5f77。 */
-const LATTE_VARS = {
-  background: '#dce0e8', // = --color-paper-code-block，图背景与 pre 无缝衔接
-  // 节点填充：surface 色阶递进（主/次/三级），卡片质感
-  primaryColor: '#e6e9ef',
-  secondaryColor: '#ccd0da',
-  tertiaryColor: '#bcc0cc',
-  mainBkg: '#e6e9ef',
-  nodeBkg: '#e6e9ef',
-  secondBkg: '#ccd0da',
-  // 节点边框：surface1 偏冷灰
-  primaryBorderColor: '#bcc0cc',
-  secondaryBorderColor: '#acb0be',
-  tertiaryBorderColor: '#9ca0b0',
-  nodeBorder: '#bcc0cc',
-  clusterBorder: '#bcc0cc',
-  labelBoxBorderColor: '#bcc0cc',
-  // 文字：primary text #4c4f69
-  primaryTextColor: '#4c4f69',
-  secondaryTextColor: '#5c5f77',
-  tertiaryTextColor: '#6c6f85',
-  textColor: '#4c4f69',
-  nodeTextColor: '#4c4f69',
-  titleColor: '#4c4f69',
-  classText: '#4c4f69',
-  labelTextColor: '#4c4f69',
-  // 连线/箭头：subtext1 #5c5f77
-  lineColor: '#5c5f77',
-  defaultLinkColor: '#5c5f77',
-  arrowheadColor: '#5c5f77',
-  // 时序图
-  actorBkg: '#e6e9ef',
-  actorBorder: '#bcc0cc',
-  actorTextColor: '#4c4f69',
-  actorLineColor: '#5c5f77',
-  signalColor: '#5c5f77',
-  signalTextColor: '#4c4f69',
-  loopTextColor: '#4c4f69',
-  sequenceNumberColor: '#eff1f5',
-  activationBkgColor: '#ccd0da',
-  activationBorderColor: '#bcc0cc',
-  // 边标签 / 子图背景
-  edgeLabelBackground: '#eff1f5',
-  labelBoxBkgColor: '#eff1f5',
-  clusterBkg: 'rgba(239, 241, 245, 0.5)',
-  // 注释：低饱和黄（Latte yellow #df8e1d）
-  noteBkgColor: 'rgba(223, 142, 29, 0.15)',
-  noteBorderColor: '#df8e1d',
-  noteTextColor: '#4c4f69',
-  // 字体：与正文 sans 对齐，中文友好
-  fontFamily:
-    "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif",
-  fontSize: '16px',
-} as const;
-
-/** Mocha（暗）主题：节点 surface 色阶、文字 #cdd6f4、连线 subtext0 #a6adc8。 */
-const MOCHA_VARS = {
-  background: '#313244', // = --color-paper-code-block（暗）
-  primaryColor: '#45475a',
-  secondaryColor: '#585b70',
-  tertiaryColor: '#1e1e2e',
-  mainBkg: '#45475a',
-  nodeBkg: '#45475a',
-  secondBkg: '#585b70',
-  primaryBorderColor: '#585b70',
-  secondaryBorderColor: '#45475a',
-  tertiaryBorderColor: '#313244',
-  nodeBorder: '#585b70',
-  clusterBorder: '#585b70',
-  labelBoxBorderColor: '#585b70',
-  primaryTextColor: '#cdd6f4',
-  secondaryTextColor: '#bac2de',
-  tertiaryTextColor: '#a6adc8',
-  textColor: '#cdd6f4',
-  nodeTextColor: '#cdd6f4',
-  titleColor: '#cdd6f4',
-  classText: '#cdd6f4',
-  labelTextColor: '#cdd6f4',
-  lineColor: '#a6adc8',
-  defaultLinkColor: '#a6adc8',
-  arrowheadColor: '#a6adc8',
-  actorBkg: '#45475a',
-  actorBorder: '#585b70',
-  actorTextColor: '#cdd6f4',
-  actorLineColor: '#a6adc8',
-  signalColor: '#a6adc8',
-  signalTextColor: '#cdd6f4',
-  loopTextColor: '#cdd6f4',
-  sequenceNumberColor: '#1e1e2e',
-  activationBkgColor: '#585b70',
-  activationBorderColor: '#6c7086',
-  edgeLabelBackground: '#1e1e2e',
-  labelBoxBkgColor: '#1e1e2e',
-  clusterBkg: 'rgba(30, 30, 46, 0.5)',
-  noteBkgColor: 'rgba(249, 226, 175, 0.12)',
-  noteBorderColor: '#f9e2af',
-  noteTextColor: '#cdd6f4',
-  fontFamily:
-    "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif",
-  fontSize: '16px',
-} as const;
-
-/** 按主题返回对应 Catppuccin themeVariables。 */
-function themeVarsFor(theme: ThemeName): Record<string, unknown> {
-  return theme === 'dark' ? { ...MOCHA_VARS } : { ...LATTE_VARS };
-}
 
 declare global {
   interface Window {
@@ -234,7 +120,7 @@ async function renderBlock(pre: HTMLPreElement, source: string, theme: ThemeName
       useMaxWidth: true,
       htmlLabels: true,
     },
-    themeVariables: themeVarsFor(theme),
+    themeVariables: mermaidThemeVarsFor(theme),
   });
   const id = `mermaid-svg-${++renderCounter}`;
   const { svg } = await mermaid.render(id, source);
