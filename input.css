@@ -584,8 +584,13 @@
   }
 
   /* table-wrap：渲染器给宽表格套的滚动容器，移动端窄屏可横向滚动。
-     （见 src/api/markdown.rs::wrap_tables）。min-width 让窄表仍撑满、宽表撑开触发滚动。 */
+     （见 src/api/markdown.rs::wrap_tables）。min-width 让窄表仍撑满、宽表撑开触发滚动。
+     padding 为 table 的 1px box-shadow 描边预留空间：overflow 容器（overflow-x:auto 会
+     强制 overflow-y 也建滚动盒）会裁切向外 spread 的阴影，导致右下边框断裂。
+     负 margin 抵消 padding 的外部尺寸，使 wrap 不撑大父容器、左上仍贴齐正文边缘。 */
   .md-content .table-wrap {
+    margin: -1px;
+    padding: 1px;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
