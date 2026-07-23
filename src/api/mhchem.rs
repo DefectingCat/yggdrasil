@@ -187,9 +187,55 @@ fn build_transitions(raw: &[RawEntry]) -> HashMap<String, Vec<Transition>> {
 // 模式匹配
 // =========================================================================
 
+/// 编译正则，失败时记日志并返回 `None`（绝不 panic）。
+///
+/// `re!` 宏的 `.unwrap()` 在 `panic = "abort"` 下会直接杀进程——任何未来的
+/// 正则转录错误都会让整篇含化学公式的文章渲染崩溃。改为降级返回 `None`
+/// 后，坏正则只让该模式匹配失败（状态机退到 "else" 兜底分支产出原样字符），
+/// 不影响整体渲染。`all_match_patterns_compile` 测试仍会在测试期捕获回归。
+fn compile_or_log(pat: &str) -> Option<Regex> {
+    match Regex::new(pat) {
+        Ok(re) => Some(re),
+        Err(e) => {
+            tracing::error!(target: "yggdrasil::mhchem", pattern = pat, error = ?e, "mhchem 正则编译失败，该模式将降级为不匹配");
+            None
+        }
+    }
+}
+
+/// 编译产物：把「坏正则降级为不匹配」的语义封装在一处。
+///
+/// 调用方不再到处写 `re_ref(re!(...))?` 或手写 `None` 回退——直接调
+/// [`CompiledPat::captures_head`] / [`CompiledPat::is_match`]，编译失败时返回
+/// 不匹配（`None` / `false`）。对应原始 `Regex` 方法的子集。
+struct CompiledPat(Option<Regex>);
+
+impl CompiledPat {
+    /// 锚定头部匹配（坏正则 → `None`）。匹配失败/编译失败统一为不匹配。
+    ///
+    /// fancy-regex 的 `Captures` 同时借用 regex 与 input，故签名把两者绑到同一
+    /// 生命周期 `'s`。调用处 `self` 来自 `&*RE`（`'static`），所以实际约束是 input
+    /// 须在 captures 使用期间存活——与原始 `re.captures(input)` 一致。
+    #[inline]
+    fn captures_head<'s>(&'s self, input: &'s str) -> Option<fancy_regex::Captures<'s>> {
+        self.0.as_ref()?.captures(input).ok().flatten()
+    }
+
+    /// 是否匹配（坏正则 → `false`）。
+    #[inline]
+    fn is_match(&self, input: &str) -> bool {
+        self.0
+            .as_ref()
+            .and_then(|r| r.is_match(input).ok())
+            .unwrap_or(false)
+    }
+}
+
+/// 惰性编译字面量正则，编译失败降级为 [`CompiledPat`]（None）。
 macro_rules! re {
     ($pat:literal) => {{
-        static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new($pat).unwrap());
+        static RE: LazyLock<CompiledPat> =
+            LazyLock::new(|| CompiledPat(compile_or_log($pat)));
         &*RE
     }};
 }
@@ -197,7 +243,7 @@ macro_rules! re {
 /// 字面量或正则模式（`findObserveGroups` 的参数）。
 enum Pat {
     Lit(&'static str),
-    Re(&'static Regex),
+    Re(&'static CompiledPat),
 }
 
 /// 在 `input` 起始处匹配 `pat`，返回匹配到的文本（不含 remainder）。
@@ -210,7 +256,7 @@ fn pat_match_head(pat: &Pat, input: &str) -> Option<String> {
                 None
             }
         }
-        Pat::Re(re) => re.captures(input).ok().flatten().and_then(|c| {
+        Pat::Re(cp) => cp.captures_head(input).and_then(|c| {
             let whole = c.get(0).map(|m| m.as_str())?;
             // 模式均锚定 ^，确认从 0 开始
             if input.starts_with(whole) {
@@ -365,33 +411,32 @@ fn fancy_match(re: &Regex, input: &str) -> Option<MMatch> {
 /// 希腊字母宏集合（`letters` / `\greek` 等模式用到）。
 static GREEK_NAMES: &str = "alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|omicron|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega|Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega";
 
-static LETTERS_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(&format!(
+static LETTERS_RE: LazyLock<CompiledPat> = LazyLock::new(|| {
+    CompiledPat(compile_or_log(&format!(
         "^(?:[a-zA-Z\u{03B1}-\u{03C9}\u{0391}-\u{03A9}?@]|(?:\\\\(?:{})(?:\\s+|\\{{\\}}|(?![a-zA-Z]))))+",
         GREEK_NAMES
-    ))
-    .unwrap()
+    )))
 });
 
-static GREEK_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(&format!(
+static GREEK_RE: LazyLock<CompiledPat> = LazyLock::new(|| {
+    CompiledPat(compile_or_log(&format!(
         "^\\\\(?:{})(?:\\s+|\\{{\\}}|(?![a-zA-Z]))",
         GREEK_NAMES
-    ))
-    .unwrap()
+    )))
 });
 
-static ONE_GREEK_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
+static ONE_GREEK_RE: LazyLock<CompiledPat> = LazyLock::new(|| {
+    CompiledPat(compile_or_log(
         "^(?:\\$?[\u{03B1}-\u{03C9}]\\$?|\\$?\\\\(?:alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|omicron|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega)\\s*\\$?)(?:\\s+|\\{{\\}}|(?![a-zA-Z]))$"
-    )
-    .unwrap()
+    ))
 });
 
 /// 按名匹配模式（对应 `_mhchemParser.patterns.match_`）。
 fn match_pattern(name: &str, input: &str) -> Option<MMatch> {
     // ── 正则模式 ──
-    let re_match = |re: &Regex| fancy_match(re, input);
+    // `re!` 产物是 `&CompiledPat`：编译失败的坏正则 `.0` 为 None，
+    // 这里 `.0.as_ref()?` 降级为不匹配，状态机退到 "else" 兜底分支。
+    let re_match = |cp: &CompiledPat| cp.0.as_ref().and_then(|r| fancy_match(r, input));
     match name {
         "empty" => re_match(re!("^$")),
         "else" | "else2" => re_match(re!("^.")),
@@ -513,7 +558,7 @@ fn fg(
 /// `(-)(9.,9)(e)(99)` 模式。
 fn pat_enumber(input: &str) -> Option<MMatch> {
     let re = re!("^(\\+\\-|\\+\\/\\-|\\+|\\-|\\\\pm\\s?)?([0-9]+(?:[,.][0-9]+)?|[0-9]*(?:\\.[0-9]+))?(\\((?:[0-9]+(?:[,.][0-9]+)?|[0-9]*(?:\\.[0-9]+))\\))?(?:(?:([eE])|\\s*(\\*|x|\\\\times|\u{00D7})\\s*10\\^)([+\\-]?[0-9]+|\\{[+\\-]?[0-9]+\\}))?");
-    let caps = re.captures(input).ok()??;
+    let caps = re.captures_head(input)?;
     let whole = caps.get(0)?.as_str();
     if whole.is_empty() || !input.starts_with(whole) {
         return None;
@@ -546,14 +591,11 @@ fn pat_state_of_aggregation(input: &str) -> Option<MMatch> {
         None,
         false,
     )?;
-    if re!("^($|[\\s,;\\)\\]\\}])")
-        .is_match(a.remainder.as_str())
-        .ok()?
-    {
+    if re!("^($|[\\s,;\\)\\]\\}])").is_match(a.remainder.as_str()) {
         return Some(a);
     }
     let re2 = re!("^(?:\\((?:\\\\ca\\s?)?\\$[amothc]\\$\\))");
-    let caps = re2.captures(input).ok()??;
+    let caps = re2.captures_head(input)?;
     let whole = caps.get(0)?.as_str().to_string();
     Some(MMatch {
         m: MVal::S(whole.clone()),
@@ -564,7 +606,7 @@ fn pat_state_of_aggregation(input: &str) -> Option<MMatch> {
 /// `amount` 模式。
 fn pat_amount(input: &str) -> Option<MMatch> {
     let re = re!("^(?:(?:(?:\\([+\\-]?[0-9]+\\/[0-9]+\\)|[+\\-]?(?:[0-9]+|\\$[a-z]\\$|[a-z])\\/[0-9]+|[+\\-]?[0-9]+[.,][0-9]+|[+\\-]?\\.[0-9]+|[+\\-]?[0-9]+)(?:[a-z](?=\\s*[A-Z]))?)|[+\\-]?[a-z](?=\\s*[A-Z])|\\+(?!\\s))");
-    if let Some(caps) = re.captures(input).ok().flatten() {
+    if let Some(caps) = re.captures_head(input) {
         let whole = caps.get(0)?.as_str();
         if !whole.is_empty() {
             return Some(MMatch {
@@ -588,7 +630,7 @@ fn pat_amount(input: &str) -> Option<MMatch> {
     let re2 = re!("^\\$(?:\\(?[+\\-]?(?:[0-9]*[a-z]?[+\\-])?[0-9]*[a-z](?:[+\\-][0-9]*[a-z]?)?\\)?|\\+|-)\\$$");
     let inner = mval_str(&a.m);
     let inner_len = inner.len();
-    if re2.is_match(&inner).ok()? {
+    if re2.is_match(&inner) {
         return Some(MMatch {
             m: MVal::S(inner),
             remainder: input[inner_len..].to_string(),
@@ -599,11 +641,11 @@ fn pat_amount(input: &str) -> Option<MMatch> {
 
 /// `formula$` 模式。
 fn pat_formula(input: &str) -> Option<MMatch> {
-    if re!("^\\([a-z]+\\)$").is_match(input).ok()? {
+    if re!("^\\([a-z]+\\)$").is_match(input) {
         return None;
     }
     let re = re!("^(?:[a-z]|(?:[0-9\\ +\\-\\,\\.\\(\\)]+[a-z])+[0-9\\ +\\-\\,\\.\\(\\)]*|(?:[a-z][0-9\\ +\\-\\,\\.\\(\\)]+)+[a-z]?)$");
-    let caps = re.captures(input).ok()??;
+    let caps = re.captures_head(input)?;
     let whole = caps.get(0)?.as_str().to_string();
     Some(MMatch {
         m: MVal::S(whole.clone()),
@@ -832,11 +874,9 @@ fn generic_action(buf: &mut Buffer, m: &MVal, opt: &Option<String>, type_: &str)
                 ret.push(Parsed::S(s[..1].to_string()));
                 s = s[1..].to_string();
             }
-            if let Some(caps) = re!("^([0-9]+|\\$[a-z]\\$|[a-z])\\/([0-9]+)(\\$[a-z]\\$|[a-z])?$")
-                .captures(&s)
-                .ok()
-                .flatten()
-            {
+            // 坏正则（编译失败）时 captures_head 返回 None，直接结束 1/2 动作
+            // （产出已累积的前缀符号）。
+            if let Some(caps) = re!("^([0-9]+|\\$[a-z]\\$|[a-z])\\/([0-9]+)(\\$[a-z]\\$|[a-z])?$").captures_head(&s) {
                 let mut n1 = caps
                     .get(1)
                     .map(|x| x.as_str().to_string())
@@ -1204,10 +1244,13 @@ fn get_operator(a: &str) -> String {
 
 /// 把 `\ce{...}` 内容转译为 LaTeX。
 ///
-/// 注意：`to_tex` 内的 `catch_unwind` 在 `panic = "abort"`（本项目 release
-/// profile）下**无法**捕获 panic——它只是开发构建的护栏。生产环境的真正保障
-/// 是 `all_match_patterns_compile` 测试（编译期确保所有 `re!` 正则合法）+
-/// 状态机的 watchdog 防死循环。坏公式仍可能产出退化输出，但不应 panic。
+/// 容错设计（不依赖 `catch_unwind`，因 release 的 `panic = "abort"` 下它无效）：
+/// - 正则编译走 [`compile_or_log`]，失败降级为不匹配（状态机退到 "else" 兜底）。
+/// - 状态机有 watchdog 防死循环。
+/// - `to_tex` 仍包 `catch_unwind`，仅作 dev/test 护栏。
+///
+/// 坏公式可能产出退化输出，但不应 panic。[`all_match_patterns_compile`] 测试
+/// 在测试期捕获正则转录回归。
 pub fn ce(input: &str) -> String {
     to_tex(input, "ce")
 }
@@ -1299,6 +1342,22 @@ mod tests {
             let tex = ce(s);
             assert!(!tex.is_empty(), "ce({s:?}) 不应为空");
         }
+    }
+
+    /// 回归测试：`compile_or_log` 是 re! 宏硬化的核心——对坏正则必须降级
+    /// 返回 `None` 而非 panic。`re!` 宏原先用 `.unwrap()`，在 panic=abort 下
+    /// 任何未来的正则转录错误（如曾经的 `". __* "` InvalidClass）都会直接
+    /// 杀进程。降级后坏正则只让该模式匹配失败，状态机退到 "else" 兜底分支，
+    /// 不影响整体渲染。
+    #[test]
+    fn compile_or_log_degrades_bad_regex_without_panic() {
+        // 合法正则 → Some
+        assert!(compile_or_log("^a").is_some(), "合法正则应编译成功");
+        // 非法正则（未闭合字符类，曾触发 ParseError(20, InvalidClass)）
+        let bad = "^([abc|[*])";
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| compile_or_log(bad)));
+        assert!(r.is_ok(), "compile_or_log 对坏正则不应 panic");
+        assert!(r.unwrap().is_none(), "坏正则应返回 None");
     }
 
     /// 回归测试：`find_observe_end` 曾用逐字节 `i += 1` 步进，遇多字节

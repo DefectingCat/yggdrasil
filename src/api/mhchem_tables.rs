@@ -924,7 +924,7 @@ fn ce_action(buf: &mut Buffer, m: &MVal, opt: &Option<String>, type_: &str) -> O
             let d_is_int = buf
                 .d
                 .as_ref()
-                .map(|d| re!("^[1-9][0-9]*$").is_match(d).unwrap_or(false))
+                .map(|d| re!("^[1-9][0-9]*$").is_match(d))
                 .unwrap_or(false);
             if d_is_int {
                 let tmp = buf.d.take();
