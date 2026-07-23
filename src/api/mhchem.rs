@@ -296,11 +296,18 @@ struct Span {
 }
 
 /// 从 `rest0` 的 `start` 位置扫描，跟踪花括号深度，在深度 0 遇到 `end_chars` 时返回其区间。
+///
+/// 必须按**字符**而非字节步进：化学公式可含多字节 UTF-8 字符（如中文说明
+/// 文字「浓」占 3 字节）。逐字节 `i+=1` 会让 `&input[i..]` 落在字符内部，
+/// 触发 `byte index N is not a char boundary` panic（在 panic=abort 下直接
+/// 杀进程），且 `bytes[i] as char` 会把多字节字符的首字节误判为花括号，
+/// 导致输出损坏。`char_indices` 保证每步都在字符边界上。
 fn find_observe_end(input: &str, start: usize, end_chars: &Pat) -> Option<Span> {
-    let bytes = input.as_bytes();
-    let mut i = start;
     let mut braces = 0i32;
-    while i < input.len() {
+    // start 是上一步 beg_incl 匹配的长度；该匹配来自 Pat::Lit 或锚定正则，
+    // 落在字符边界上。校验后用于首次切片，随后只按 char_indices 的边界前进。
+    let start = input.get(start..).map(|_| start).unwrap_or(input.len());
+    for (i, a) in input.char_indices().skip_while(|(b, _)| *b < start) {
         // 结束定界符匹配（仅在花括号平衡时）
         if braces == 0 {
             if let Some(matched) = pat_match_head(end_chars, &input[i..]) {
@@ -310,7 +317,6 @@ fn find_observe_end(input: &str, start: usize, end_chars: &Pat) -> Option<Span> 
                 });
             }
         }
-        let a = bytes[i] as char;
         if a == '{' {
             braces += 1;
         } else if a == '}' {
@@ -320,7 +326,6 @@ fn find_observe_end(input: &str, start: usize, end_chars: &Pat) -> Option<Span> 
             }
             braces -= 1;
         }
-        i += 1;
     }
     None
 }
@@ -1293,6 +1298,37 @@ mod tests {
         for s in [".", "·", "•", "⋅", "*", ". ", "••", "·  ", "H·OH", "CaCO3 · H2O"] {
             let tex = ce(s);
             assert!(!tex.is_empty(), "ce({s:?}) 不应为空");
+        }
+    }
+
+    /// 回归测试：`find_observe_end` 曾用逐字节 `i += 1` 步进，遇多字节
+    /// UTF-8 字符（如中文「浓」占 3 字节）会让 `&input[i..]` 落在字符内部，
+    /// 触发 `byte index N is not a char boundary` panic。在 panic=abort 下
+    /// 直接杀进程（曾导致 rebuild_content_html 重建含中文化学式的文章时崩溃）。
+    /// 修复改为按 `char_indices` 字符边界步进。这些输入必须不 panic。
+    #[test]
+    fn ce_multibyte_char_in_braces_does_not_panic() {
+        for s in ["{浓}", "浓H2SO4", "{中文}", "H{浓}O", "\\frac{浓}{稀}", "[浓]"] {
+            // catch_unwind 仅 dev/test 护栏；release panic=abort 下由本修复保证。
+            let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| ce(s)));
+            assert!(r.is_ok(), "ce({s:?}) PANICKED (char boundary)");
+        }
+    }
+
+    /// 保护性：任意多字节字符组合（emoji/日韩文/组合字符/四字节区）都不应
+    /// panic。覆盖花括号/方括号/`\frac`/`$...$` 等所有走 find_observe_end 的路径。
+    #[test]
+    fn ce_arbitrary_multibyte_does_not_panic() {
+        let inputs = [
+            "🔥", "café", "naïve", "Σ", "αβγ", "ΔH", "你好世界", "안녕", "こんにちは",
+            "{🧪}", "H₂O", "[α]", "\\frac{β}{γ}", "${日本}$", "A·B•C⋅D",
+            "naïve H2O", "{β-Gal}", "😀😂", "\u{1F9EA}", // test tube emoji
+        ];
+        for s in inputs {
+            let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| ce(s)));
+            assert!(r.is_ok(), "ce({s:?}) PANICKED");
+            let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| pu(s)));
+            assert!(r.is_ok(), "pu({s:?}) PANICKED");
         }
     }
 
