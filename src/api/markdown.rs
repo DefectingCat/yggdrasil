@@ -738,7 +738,8 @@ mod tests {
 
     #[test]
     fn wrap_tables_wraps_bare_table() {
-        let html = "<table><thead><tr><th>A</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>";
+        let html =
+            "<table><thead><tr><th>A</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>";
         let result = wrap_tables(html);
         assert!(
             result.starts_with("<div class=\"table-wrap\"><table>")
@@ -763,7 +764,8 @@ mod tests {
 
     #[test]
     fn wrap_tables_wraps_multiple_tables() {
-        let html = "<table><tr><td>1</td></tr></table>\n<p>间隔</p>\n<table><tr><td>2</td></tr></table>";
+        let html =
+            "<table><tr><td>1</td></tr></table>\n<p>间隔</p>\n<table><tr><td>2</td></tr></table>";
         let result = wrap_tables(html);
         let wrap_count = result.matches("<div class=\"table-wrap\">").count();
         assert_eq!(wrap_count, 2, "两个 table 应各自包裹, got: {}", result);
@@ -794,7 +796,8 @@ mod tests {
     #[test]
     fn wrap_tables_then_clean_preserves_div_and_table() {
         // 端到端:wrap → clean_html,确认 sanitizer 放行 div.table-wrap 与内部 table 结构。
-        let html = "<table><thead><tr><th>H</th></tr></thead><tbody><tr><td>v</td></tr></tbody></table>";
+        let html =
+            "<table><thead><tr><th>H</th></tr></thead><tbody><tr><td>v</td></tr></tbody></table>";
         let wrapped = wrap_tables(html);
         let cleaned = clean_html(&wrapped);
         assert!(
