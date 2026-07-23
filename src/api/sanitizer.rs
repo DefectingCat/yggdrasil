@@ -82,6 +82,10 @@ static DEFAULT_ALLOWED_TAGS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| 
         "sub",
         "summary",
         "sup",
+        // svg / path 仅用于 KaTeX 服务端数学公式渲染 (根号、矩阵竖线、大括号、矢量箭头等);
+        // 属性仅放行 ViewBox / d 等绘图属性，script/style 标签由 CLEAN_CONTENT_TAGS 强行清除。
+        "svg",
+        "path",
         "table",
         "tbody",
         "td",
@@ -388,6 +392,19 @@ pub fn clean_html(input: &str) -> String {
                 ],
             ),
             ("span", vec!["class", "style"]),
+            // KaTeX 数学公式 SSR 渲染生成的 SVG 矢量图 (根号 / 矩阵竖线 / 括号 / 箭头等) 必备属性
+            (
+                "svg",
+                vec![
+                    "xmlns",
+                    "width",
+                    "height",
+                    "viewbox",
+                    "preserveaspectratio",
+                    "style",
+                ],
+            ),
+            ("path", vec!["d"]),
             ("h1", vec!["id", "class"]),
             ("h2", vec!["id", "class"]),
             ("h3", vec!["id", "class"]),
@@ -421,6 +438,19 @@ pub fn clean_comment_html(input: &str) -> String {
             // span 的 style：KaTeX 服务端渲染产出的内联 style（元素垂直对齐/定位）
             // 需保留，否则公式排版错位。与文章正文路径（sanitizer.rs:382）对齐。
             ("span", vec!["class", "style"]),
+            // KaTeX 数学公式 SSR 渲染生成的 SVG 矢量图 (根号 / 矩阵竖线 / 括号 / 箭头等) 必备属性
+            (
+                "svg",
+                vec![
+                    "xmlns",
+                    "width",
+                    "height",
+                    "viewbox",
+                    "preserveaspectratio",
+                    "style",
+                ],
+            ),
+            ("path", vec!["d"]),
         ],
         allowed_schemes: &DEFAULT_ALLOWED_SCHEMES,
         allow_data_uri: false,
@@ -502,6 +532,19 @@ mod tests {
             clean_comment_html("<img src=\"x\"><details><summary>sum</summary>body</details>"),
             "sumbody"
         );
+    }
+    #[test]
+    fn katex_svg_and_path_preserved() {
+        let katex_html = crate::api::katex::render_display("\\sqrt{\\pi}");
+        let cleaned = clean_html(&katex_html);
+        assert!(cleaned.contains("<svg"), "clean_html should preserve <svg> for KaTeX sqrt");
+        assert!(cleaned.contains("<path"), "clean_html should preserve <path> for KaTeX sqrt");
+        assert!(cleaned.contains("d="), "clean_html should preserve d attribute on <path>");
+        assert!(cleaned.contains("viewBox=") || cleaned.contains("viewbox="), "clean_html should preserve viewBox attribute on <svg>");
+
+        let comment_cleaned = clean_comment_html(&katex_html);
+        assert!(comment_cleaned.contains("<svg"), "clean_comment_html should preserve <svg>");
+        assert!(comment_cleaned.contains("<path"), "clean_comment_html should preserve <path>");
     }
 
     #[test]
@@ -785,7 +828,7 @@ mod tests {
     #[test]
     fn clean_html_drops_dangerous_tags_entirely() {
         // 这些标签不在白名单：整体移除（含子树），无法用于 XSS / 数据外泄。
-        for tag in ["iframe", "object", "embed", "form", "svg", "math", "base", "meta"] {
+        for tag in ["iframe", "object", "embed", "form", "math", "base", "meta"] {
             let input = format!("<{tag} src=\"javascript:alert(1)\"></{tag}>");
             let result = clean_html(&input);
             assert!(
@@ -793,6 +836,12 @@ mod tests {
                 "<{tag}> 不在白名单应被移除: {result}"
             );
         }
+
+        // svg 在白名单中（配合 KaTeX 渲染），但非白名单属性（如 src / onerror / onload）会被剥离
+        let svg_input = r#"<svg src="javascript:alert(1)" onload="alert(2)"></svg>"#;
+        let svg_result = clean_html(svg_input);
+        assert!(!svg_result.contains("javascript"), "svg 上的非白名单属性/javascript 应被剥离: {svg_result}");
+        assert!(!svg_result.contains("onload"), "svg 上的 onload 事件处理器应被剥离: {svg_result}");
     }
 
     #[test]

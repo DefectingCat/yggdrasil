@@ -1321,6 +1321,22 @@ console.log(1)
             result.html
         );
     }
+    #[test]
+    fn render_markdown_sqrt_and_matrix_preserves_svg() {
+        // \sqrt 与 \begin{pmatrix} 等 LaTeX 渲染需依赖 KaTeX 产生的 SVG 根号线与矩阵括号/竖线，
+        // 验证经过 sanitizer clean_html 后 <svg> 与 <path> 不会被误丢。
+        let result = render_markdown_enhanced("$$\\sqrt{\\pi} + \\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}$$");
+        assert!(
+            result.html.contains("<svg"),
+            "KaTeX 根号/矩阵渲染的 <svg> 应保留, got: {}",
+            result.html
+        );
+        assert!(
+            result.html.contains("<path"),
+            "KaTeX 根号/矩阵渲染的 <path> 应保留, got: {}",
+            result.html
+        );
+    }
 
     #[test]
     fn render_markdown_inline_math_in_heading() {
