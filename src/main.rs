@@ -238,64 +238,6 @@ fn main() {
                 "版本响应头开关(Server / X-Yggdrasil-Version / X-Yggdrasil-Git)"
             );
 
-            // SSR 世代号中间件：把当前全局世代号注入请求扩展，并对 GET 请求的
-            // 响应附加 `X-SSR-Generation` 头。这是为未来 Dioxus 支持自定义 SSR 缓存键
-            // 预留的钩子；目前主要提供可观测性，不会实际失效 SSR 缓存。
-            async fn ssr_generation_middleware(
-                req: axum::http::Request<axum::body::Body>,
-                next: axum::middleware::Next,
-            ) -> axum::response::Response {
-                let generation = crate::ssr_cache::current_global_generation();
-                let is_get = req.method() == axum::http::Method::GET;
-                let (mut parts, body) = req.into_parts();
-                parts
-                    .extensions
-                    .insert(crate::ssr_cache::SsrGeneration(generation));
-                let mut response = next.run(axum::http::Request::from_parts(parts, body)).await;
-                if is_get {
-                    response.headers_mut().insert(
-                        axum::http::header::HeaderName::from_static("x-ssr-generation"),
-                        axum::http::HeaderValue::from_str(&generation.to_string())
-                            .unwrap_or_else(|_| axum::http::HeaderValue::from_static("0")),
-                    );
-                }
-                response
-            }
-
-            // 版本头中间件：为所有响应附加 Server / X-Yggdrasil-Version / X-Yggdrasil-Git，
-            // 数据源与启动日志 log_build_info() 同源（crate::build_info::BUILD_INFO）。
-            // 挂在最终合并 router 的最外层（见下方 Ok(router) 前），因此连 /healthz、
-            // /uploads/*、被 CSRF 拒(403)/超时/admin_guard 重定向的响应都会带头，
-            // 探测价值最大。受 EXPOSE_VERSION_HEADERS 控制（默认 true）。
-            async fn version_headers_middleware(
-                req: axum::http::Request<axum::body::Body>,
-                next: axum::middleware::Next,
-            ) -> axum::response::Response {
-                let mut response = next.run(req).await;
-                let h = response.headers_mut();
-                // Server 头：产品名/版本，遵循 "Server: product/version" 习惯。
-                h.insert(
-                    axum::http::header::SERVER,
-                    axum::http::HeaderValue::from_str(&format!(
-                        "yggdrasil/{}",
-                        crate::build_info::BUILD_INFO.version
-                    ))
-                    .unwrap_or_else(|_| axum::http::HeaderValue::from_static("yggdrasil")),
-                );
-                // X-Yggdrasil-Version：Cargo.toml 版本号。
-                h.insert(
-                    axum::http::header::HeaderName::from_static("x-yggdrasil-version"),
-                    axum::http::HeaderValue::from_static(crate::build_info::BUILD_INFO.version),
-                );
-                // X-Yggdrasil-Git：git describe（版本+提交数+短hash+脏标记）。
-                h.insert(
-                    axum::http::header::HeaderName::from_static("x-yggdrasil-git"),
-                    axum::http::HeaderValue::from_str(crate::build_info::BUILD_INFO.git_describe)
-                        .unwrap_or_else(|_| axum::http::HeaderValue::from_static("unknown")),
-                );
-                response
-            }
-
             // 自定义 API 路由：图片上传（大文件，需要更长超时）
             // CSRF 校验置于最外层，先拦截非法来源再做超时/限体。
             let upload_route = axum::Router::new()
@@ -348,7 +290,9 @@ fn main() {
             // 合并 Dioxus + CSRF/世代号/缓存头/可选压缩/30s 超时中间件
             // layer 顺序：后加的最外层先执行。CSRF 最外层先拦截非法来源。
             let mut app_routes = dioxus_app
-                .layer(axum::middleware::from_fn(ssr_generation_middleware))
+                .layer(axum::middleware::from_fn(
+                    crate::middleware::ssr_generation_middleware,
+                ))
                 .layer(axum::middleware::from_fn(
                     crate::middleware::add_cache_control,
                 ))
@@ -394,7 +338,9 @@ fn main() {
             // 版本头中间件置于最终合并 router 的最外层：所有端点（含 /healthz、/uploads/*、
             // 被 CSRF 拒/超时/admin_guard 重定向的响应）都会带上版本头。受 EXPOSE_VERSION_HEADERS 控制。
             let router = if expose_version_headers {
-                router.layer(axum::middleware::from_fn(version_headers_middleware))
+                router.layer(axum::middleware::from_fn(
+                    crate::middleware::version_headers_middleware,
+                ))
             } else {
                 router
             };

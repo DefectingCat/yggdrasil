@@ -226,6 +226,59 @@ pub(crate) async fn admin_guard(
     }
 }
 
+/// Axum 中间件：把当前 SSR 全局世代号注入请求扩展，并对 GET 请求的响应附加
+/// `X-SSR-Generation` 头。这是为未来 Dioxus 支持自定义 SSR 缓存键预留的钩子；
+/// 目前主要提供可观测性，不会实际失效 SSR 缓存。
+pub(crate) async fn ssr_generation_middleware(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let generation = crate::ssr_cache::current_global_generation();
+    let is_get = req.method() == axum::http::Method::GET;
+    let (mut parts, body) = req.into_parts();
+    parts
+        .extensions
+        .insert(crate::ssr_cache::SsrGeneration(generation));
+    let mut response = next.run(axum::http::Request::from_parts(parts, body)).await;
+    if is_get {
+        response.headers_mut().insert(
+            axum::http::header::HeaderName::from_static("x-ssr-generation"),
+            axum::http::HeaderValue::from_str(&generation.to_string())
+                .unwrap_or_else(|_| axum::http::HeaderValue::from_static("0")),
+        );
+    }
+    response
+}
+
+/// Axum 中间件：为所有响应附加 Server / X-Yggdrasil-Version / X-Yggdrasil-Git 头。
+/// 数据源与启动日志 `log_build_info()` 同源（`crate::build_info::BUILD_INFO`）。
+/// 受 `EXPOSE_VERSION_HEADERS` 控制——该开关在 `main.rs` 决定是否挂载本层。
+pub(crate) async fn version_headers_middleware(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let mut response = next.run(req).await;
+    let h = response.headers_mut();
+    h.insert(
+        axum::http::header::SERVER,
+        axum::http::HeaderValue::from_str(&format!(
+            "yggdrasil/{}",
+            crate::build_info::BUILD_INFO.version
+        ))
+        .unwrap_or_else(|_| axum::http::HeaderValue::from_static("yggdrasil")),
+    );
+    h.insert(
+        axum::http::header::HeaderName::from_static("x-yggdrasil-version"),
+        axum::http::HeaderValue::from_static(crate::build_info::BUILD_INFO.version),
+    );
+    h.insert(
+        axum::http::header::HeaderName::from_static("x-yggdrasil-git"),
+        axum::http::HeaderValue::from_str(crate::build_info::BUILD_INFO.git_describe)
+            .unwrap_or_else(|_| axum::http::HeaderValue::from_static("unknown")),
+    );
+    response
+}
+
 #[cfg(test)]
 mod tests {
     use super::{cache_control_for_path, parse_compression_algorithms, CompressionAlgorithms};
