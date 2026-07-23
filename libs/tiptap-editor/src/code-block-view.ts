@@ -1,7 +1,9 @@
 import type { Editor } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import type { ViewMutationRecord } from '@tiptap/pm/view';
+import { THEME_CHANGE_EVENT } from '@yggdrasil/shared';
 import { extractLang, extractOverridesJson } from './highlight';
+import { getCurrentTheme, renderMermaid } from './mermaid';
 import { openRunnableModal } from './slash-command';
 
 /** editor.storage 的 key，宿主（index.ts）在此注入 onRunCode 回调。 */
@@ -46,6 +48,17 @@ export class CodeBlockNodeView {
   private pre: HTMLPreElement;
   private code: HTMLElement;
   private resultArea: HTMLDivElement | null = null;
+
+  // ---- mermaid 预览相关(仅 mermaid 代码块启用) ----
+  private mermaidPreview: HTMLDivElement | null = null;
+  /** 源码变化后 debounce 重渲染的 timer id。 */
+  private mermaidDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 自增 token,渲染回调比较它丢弃过期结果(防快速改动的竞态覆盖)。 */
+  private mermaidRenderToken = 0;
+  /** 主题切换监听器引用(destroy 时 removeEventListener)。 */
+  private themeHandler: (() => void) | null = null;
+  /** 上次渲染的源码快照,用于 update() 判断源码是否变化。 */
+  private lastRenderedSource: string | null = null;
 
   private getPos: (() => number | undefined) | undefined;
 
@@ -96,6 +109,11 @@ export class CodeBlockNodeView {
 
     // 校验并设置工具栏显隐（无语言且非 runnable 时隐藏）
     this.updateToolbarVisibility();
+
+    // mermaid 代码块:创建预览区并触发首次渲染 + 订阅主题切换。
+    if (this.isMermaid()) {
+      this.setupMermaidPreview();
+    }
   }
 
   get dom(): HTMLElement {
@@ -114,8 +132,12 @@ export class CodeBlockNodeView {
     if (node.type !== this.node.type) return false;
     const oldLang = (this.node.attrs.language as string) ?? '';
     const newLang = (node.attrs.language as string) ?? '';
+    const langChanged = oldLang !== newLang;
+    const oldSource = this.node.textContent;
     this.node = node;
-    if (oldLang !== newLang) {
+    const newSource = node.textContent;
+
+    if (langChanged) {
       this.langBadge.textContent = extractLang(newLang);
       const runnable = isRunnable(node);
       this.langBadge.classList.toggle('tiptap-codeblock-lang-editable', runnable);
@@ -133,6 +155,18 @@ export class CodeBlockNodeView {
       this.refreshRunButton();
       // 刷新工具栏显隐状态（无语言且非 runnable 时隐藏）
       this.updateToolbarVisibility();
+
+      // language 切入/切出 mermaid:相应创建/移除预览区。
+      if (this.isMermaid() && !this.mermaidPreview) {
+        this.setupMermaidPreview();
+      } else if (!this.isMermaid() && this.mermaidPreview) {
+        this.teardownMermaidPreview();
+      }
+    }
+
+    // mermaid 块源码变化:debounce 重渲染(language 变化后也重渲一次)。
+    if (this.isMermaid() && this.mermaidPreview && (langChanged || oldSource !== newSource)) {
+      this.scheduleMermaidRender();
     }
     return true;
   }
@@ -160,6 +194,92 @@ export class CodeBlockNodeView {
 
     this.toolbar.style.display = show ? '' : 'none';
     this.container.classList.toggle('has-toolbar', show);
+  }
+
+  /** 当前节点是否为 mermaid 代码块。 */
+  private isMermaid(): boolean {
+    return extractLang((this.node.attrs.language as string) ?? '') === 'mermaid';
+  }
+
+  /**
+   * 创建 mermaid 预览区(挂到 container,pre 之后),触发首次渲染 + 订阅主题切换。
+   * 幂等:已存在则不重复创建。
+   */
+  private setupMermaidPreview(): void {
+    if (this.mermaidPreview) return;
+    const preview = document.createElement('div');
+    preview.classList.add('tiptap-codeblock-mermaid-preview');
+    preview.classList.add('mermaid-loading');
+    preview.setAttribute('contenteditable', 'false');
+    preview.textContent = '渲染中…';
+    // 插到 pre 之后(运行结果区 resultArea 之前,若存在)。
+    this.pre.after(preview);
+    this.mermaidPreview = preview;
+
+    // 订阅主题切换:用新主题重渲染当前块。
+    this.themeHandler = () => {
+      // 主题变了,强制重渲(忽略 lastRenderedSource 的去重)。
+      this.lastRenderedSource = null;
+      this.scheduleMermaidRender();
+    };
+    window.addEventListener(THEME_CHANGE_EVENT, this.themeHandler);
+
+    this.scheduleMermaidRender();
+  }
+
+  /** 移除 mermaid 预览区与主题监听,清理 pending timer。 */
+  private teardownMermaidPreview(): void {
+    if (this.mermaidDebounceTimer !== null) {
+      clearTimeout(this.mermaidDebounceTimer);
+      this.mermaidDebounceTimer = null;
+    }
+    if (this.themeHandler) {
+      window.removeEventListener(THEME_CHANGE_EVENT, this.themeHandler);
+      this.themeHandler = null;
+    }
+    this.mermaidRenderToken += 1; // 使任何 in-flight 渲染失效
+    this.mermaidPreview?.remove();
+    this.mermaidPreview = null;
+    this.lastRenderedSource = null;
+  }
+
+  /** 源码未变则跳过;否则 debounce 500ms 后渲染(避免输入时频繁渲染)。 */
+  private scheduleMermaidRender(): void {
+    if (!this.mermaidPreview) return;
+    const source = this.node.textContent;
+    if (source === this.lastRenderedSource) return;
+
+    if (this.mermaidDebounceTimer !== null) {
+      clearTimeout(this.mermaidDebounceTimer);
+    }
+    this.mermaidDebounceTimer = setTimeout(() => {
+      this.mermaidDebounceTimer = null;
+      void this.renderMermaidPreview();
+    }, 500);
+  }
+
+  /**
+   * 实际渲染:调 renderMermaid,用 renderToken 防竞态(快速改动时只保留最新结果)。
+   * 成功注入 SVG,失败显示错误(源码仍可编辑修正)。
+   */
+  private async renderMermaidPreview(): Promise<void> {
+    if (!this.mermaidPreview) return;
+    const source = this.node.textContent;
+    this.mermaidRenderToken += 1;
+    const token = this.mermaidRenderToken;
+    this.lastRenderedSource = source;
+
+    const result = await renderMermaid(source, getCurrentTheme());
+    // 渲染期间预览区可能被 teardown 或发起新渲染:过期则丢弃。
+    if (!this.mermaidPreview || token !== this.mermaidRenderToken) return;
+
+    this.mermaidPreview.classList.remove('mermaid-loading', 'mermaid-error');
+    if ('svg' in result) {
+      this.mermaidPreview.innerHTML = result.svg;
+    } else {
+      this.mermaidPreview.classList.add('mermaid-error');
+      this.mermaidPreview.textContent = `渲染失败:${result.error}`;
+    }
   }
 
   /**
@@ -271,6 +391,8 @@ export class CodeBlockNodeView {
   }
 
   destroy(): void {
+    // 清理 mermaid 预览资源(timer、主题监听、in-flight token)。
+    this.teardownMermaidPreview();
     this.resultArea = null;
     this.runBtn = null;
   }

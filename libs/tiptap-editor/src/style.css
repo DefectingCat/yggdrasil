@@ -1330,3 +1330,62 @@
   background-color: rgba(137, 180, 250, 0.15);
   box-shadow: 0 0 0 1px rgba(137, 180, 250, 0.5);
 }
+
+/* ---- mermaid 代码块预览区 ----
+ * 视觉与前台 input.css 的 pre[data-mermaid-rendered] 对齐:flex 居中、
+ * 横向滚动、SVG 等比缩放。预览区挂在源码 <pre> 之后,源码仍可编辑。 */
+.tiptap-editor .tiptap-codeblock-mermaid-preview {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow-x: auto;
+  padding: 24px 16px;
+  /* Latte base 边框/底 */
+  border-top: 1px solid #ccd0da;
+  background: #eff1f5;
+  border-radius: 0 0 6px 6px;
+  min-height: 48px;
+}
+
+.tiptap-editor .tiptap-codeblock-mermaid-preview > svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* 加载中:弱色文字 */
+.tiptap-editor .tiptap-codeblock-mermaid-preview.mermaid-loading {
+  /* Latte subtext0 */
+  color: #6c6f85;
+  font-size: 0.875em;
+  font-style: italic;
+}
+
+/* 渲染失败:accent 色左边框(与前台 .mermaid-error 一致)+ 错误文字 */
+.tiptap-editor .tiptap-codeblock-mermaid-preview.mermaid-error {
+  justify-content: flex-start;
+  /* Latte red */
+  color: #d20f2f;
+  border-left: 0.2rem solid #d20f2f;
+  font-size: 0.85em;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-align: left;
+}
+
+/* Dark theme (Mocha) */
+.dark .tiptap-editor .tiptap-codeblock-mermaid-preview {
+  border-top-color: #313244;
+  background: #181825;
+}
+
+.dark .tiptap-editor .tiptap-codeblock-mermaid-preview.mermaid-loading {
+  /* Mocha subtext0 */
+  color: #a6adc8;
+}
+
+.dark .tiptap-editor .tiptap-codeblock-mermaid-preview.mermaid-error {
+  /* Mocha red */
+  color: #f38ba8;
+  border-left-color: #f38ba8;
+}
