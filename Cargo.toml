@@ -13,13 +13,13 @@ required-features = ["server"]
 [dependencies]
 dioxus = { version = "0.7.9", features = ["fullstack", "router"] }
 serde = { version = "1.0", features = ["derive"] }
-tokio = { version = "1.52", features = ["rt-multi-thread", "macros", "fs", "time", "sync"], optional = true }
+tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "fs", "time", "sync"], optional = true }
 tokio-postgres = { version = "0.7", features = ["with-chrono-0_4"], optional = true }
 deadpool-postgres = { version = "0.14", optional = true }
 argon2 = { version = "0.5", optional = true }
 uuid = { version = "1", features = ["v4"], optional = true }
 chrono = { version = "0.4", features = ["serde"] }
-regex = { version = "1.12", optional = true }
+regex = { version = "1.13", optional = true }
 # mhchem 化学公式转译器（src/api/mhchem.rs）需要 lookahead 正则，
 # Rust `regex` crate 不支持 `(?=...)`/`(?!...)`，故用 `fancy-regex`。
 # 该 crate 已被 syntect 间接引入（0.16.2，见 Cargo.lock），此处显式声明为直接依赖。
@@ -77,7 +77,7 @@ js-sys = "0.3"
 serde-wasm-bindgen = "0.6"
 
 [dev-dependencies]
-tokio = { version = "1.52", features = ["rt-multi-thread", "macros", "fs", "time", "sync"] }
+tokio = { version = "1.53", features = ["rt-multi-thread", "macros", "fs", "time", "sync"] }
 serial_test = "3"
 
 [profile.release]
