@@ -583,9 +583,17 @@
     border: 0;
   }
 
+  /* table-wrap：渲染器给宽表格套的滚动容器，移动端窄屏可横向滚动。
+     （见 src/api/markdown.rs::wrap_tables）。min-width 让窄表仍撑满、宽表撑开触发滚动。 */
+  .md-content .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .md-content table {
     margin-bottom: var(--content-gap-paper);
     width: 100%;
+    min-width: 100%;
     border-collapse: separate;
     border-spacing: 0;
     border-radius: var(--radius-paper);
@@ -1030,6 +1038,16 @@
 
   details.toc .inner {
     margin: 0 1rem;
+  }
+
+  /* 旧文章兜底：未重建的文章是裸 table（无 .table-wrap 包裹），移动端需 block 化才能滚动。
+     选择器 .md-content > div > table 精确命中「片段容器直接子代的裸 table」，
+     不会误伤新文章 .table-wrap 内的 table（后者多一层 div，圆角视觉完整）。
+     block 化会损 thead/tbody 圆角，但仅移动端 + 仅旧文章，可接受。 */
+  .md-content > div > table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }
 

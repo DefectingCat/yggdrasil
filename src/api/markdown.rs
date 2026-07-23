@@ -387,6 +387,9 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
     }
 
     let html = wrap_images_with_blur(&html);
+    // 表格外层套可滚动容器，移动端窄屏可横向滚动而不被外层 overflow-hidden 裁切。
+    // sanitizer 不放行 table 的 class/style，但 div 在白名单、class 属全局属性，故包裹 div。
+    let html = wrap_tables(&html);
     RenderedContent {
         html: clean_html(&html),
         toc_html,
@@ -455,6 +458,30 @@ where
                 src = src,
                 alt_attr = alt_attr,
             )
+        })
+        .to_string()
+}
+
+#[cfg(feature = "server")]
+/// 把每个 `<table>...</table>` 包进可横向滚动的 `<div class="table-wrap">`。
+///
+/// 移动端窄屏下宽表格无法横向滚动：pulldown-cmark 产出裸 table，外层 `<main>` 又是
+/// `overflow-hidden` 会把超宽内容直接裁掉。这里给 table 套一层 `table-wrap`（CSS 配
+/// `overflow-x: auto`），让表格在容器内滚动而非撑破页面。
+///
+/// 正则匹配 pulldown-cmark 输出的 `<table ...>...</table>`（非贪婪、跨行），包裹整个
+/// table 标签。对已包裹的 HTML 幂等（不会二次嵌套）——`table-wrap` div 内的 table
+/// 仍会被正则命中并再次包裹，故调用方仅在渲染管线调用一次。
+fn wrap_tables(html: &str) -> String {
+    use regex::Regex;
+    use std::sync::LazyLock;
+
+    static TABLE_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?s)<table(\s[^>]*)?>.*?</table>").unwrap());
+
+    TABLE_RE
+        .replace_all(html, |caps: &regex::Captures| {
+            format!("<div class=\"table-wrap\">{}</div>", &caps[0])
         })
         .to_string()
 }
@@ -705,6 +732,93 @@ mod tests {
             "clean_html must preserve slash in --ar, got: {}",
             cleaned
         );
+    }
+
+    // ---- wrap_tables 单元测试 ----
+
+    #[test]
+    fn wrap_tables_wraps_bare_table() {
+        let html = "<table><thead><tr><th>A</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>";
+        let result = wrap_tables(html);
+        assert!(
+            result.starts_with("<div class=\"table-wrap\"><table>")
+                && result.ends_with("</table></div>"),
+            "应整体包裹一层 table-wrap, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn wrap_tables_wraps_table_with_attributes() {
+        // pulldown-cmark 不会给 table 加属性,但正则需兼容带属性/自闭合起始的 table。
+        let html = r#"<table class="x"><tr><td>1</td></tr></table>"#;
+        let result = wrap_tables(html);
+        assert!(
+            result.contains("<div class=\"table-wrap\"><table"),
+            "应从 table 起始标签整体包裹, got: {}",
+            result
+        );
+        assert!(result.ends_with("</table></div>"));
+    }
+
+    #[test]
+    fn wrap_tables_wraps_multiple_tables() {
+        let html = "<table><tr><td>1</td></tr></table>\n<p>间隔</p>\n<table><tr><td>2</td></tr></table>";
+        let result = wrap_tables(html);
+        let wrap_count = result.matches("<div class=\"table-wrap\">").count();
+        assert_eq!(wrap_count, 2, "两个 table 应各自包裹, got: {}", result);
+        // 中间段落不被误包
+        assert!(result.contains("\n<p>间隔</p>\n"));
+    }
+
+    #[test]
+    fn wrap_tables_handles_multiline_table() {
+        // pulldown-cmark 产出的 table HTML 是单行无换行的,但正则用 (?s) 跨行兼容手写 HTML。
+        let html = "<table>\n  <tr>\n    <td>1</td>\n  </tr>\n</table>";
+        let result = wrap_tables(html);
+        assert!(
+            result.starts_with("<div class=\"table-wrap\"><table>")
+                && result.ends_with("</table></div>"),
+            "跨行 table 应整体包裹, got: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn wrap_tables_does_not_touch_non_table_html() {
+        let html = "<p>段落</p><ul><li>项</li></ul>";
+        let result = wrap_tables(html);
+        assert_eq!(result, html, "无 table 时应原样返回");
+    }
+
+    #[test]
+    fn wrap_tables_then_clean_preserves_div_and_table() {
+        // 端到端:wrap → clean_html,确认 sanitizer 放行 div.table-wrap 与内部 table 结构。
+        let html = "<table><thead><tr><th>H</th></tr></thead><tbody><tr><td>v</td></tr></tbody></table>";
+        let wrapped = wrap_tables(html);
+        let cleaned = clean_html(&wrapped);
+        assert!(
+            cleaned.contains(r#"<div class="table-wrap">"#),
+            "clean_html 应保留 table-wrap div, got: {}",
+            cleaned
+        );
+        assert!(
+            cleaned.contains("<table>") && cleaned.contains("</table>"),
+            "clean_html 应保留 table 标签, got: {}",
+            cleaned
+        );
+    }
+
+    #[test]
+    fn render_markdown_table_wrapped_in_scroll_container() {
+        // 端到端:markdown table 经渲染管线后应被 table-wrap div 包裹。
+        let result = render_markdown_enhanced("| A | B |\n|---|---|\n| 1 | 2 |\n");
+        assert!(
+            result.html.contains(r#"<div class="table-wrap">"#),
+            "markdown table 应被 table-wrap 包裹, got: {}",
+            result.html
+        );
+        assert!(result.html.contains("<table>"));
     }
 
     #[test]

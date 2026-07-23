@@ -60,7 +60,7 @@ pub fn FrontendLayout() -> Element {
                     ThemeToggle {}
                 },
             }
-            main { class: "flex-1 w-full max-w-4xl mx-auto px-6 py-6 md:py-12 overflow-hidden",
+            main { class: "flex-1 w-full max-w-4xl mx-auto px-6 py-6 md:py-12 overflow-x-clip",
                 SuspenseBoundary { fallback: move |_| route_skeleton(&route), Outlet::<Route> {} }
             }
             Footer {}
