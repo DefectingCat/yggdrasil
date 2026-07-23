@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-23
+
+### Added
+
+- **编辑器 mermaid 实时预览**：Tiptap 代码块在编辑器内实时渲染 mermaid 流程图，所见即所得。
+- **编辑器脚注所见即所得**：Tiptap 富文本编辑器内脚注直接可见，不再依赖 Markdown 源码。
+- **mhchem 化学公式**：移植 mhchem 转译器，支持 `\ce`/`\pu` 化学方程式语法转 LaTeX 渲染。
+- **KaTeX 物理学宏表**：注册 16 个物理学宏（如 `\d`、`\od`、`\textsubscript` 等），适配物理学公式写作习惯。
+- **新建文章默认直接发布**：`/admin/write` 新建文章的默认发布状态改为直接发布。
+
+### Changed
+
+- **mermaid 主题变量下沉**：将 Catppuccin 主题变量从 tiptap-editor 下沉到 `@yggdrasil/shared` 共享包，统一管理。
+- **中间件抽取**：将 `ssr_generation`/`version_headers` 中间件从 `main.rs` 抽出至 `src/middleware.rs`。
+
+### Fixed
+
+- **窄表格边框裁切**：修复窄表格在 `table-wrap` 容器内边框被裁切的问题。
+- **移动端表格滚动**：修复移动端表格无法横向滚动的问题。
+- **空工具栏顶栏**：隐藏无语言标识代码块的空工具栏顶栏。
+- **KaTeX sanitizer 拦截**：允许 KaTeX 渲染所需的 `svg`、`path` 标签及绘图属性通过 sanitizer。
+- **tiptap-markdown 过度转义**：修复 tiptap-markdown 过度转义导致内容显示损坏。
+- **脚注序列化转义失效**：修复 tiptap 序列化转义脚注语法 `[^id]` → `\[^id\]` 导致脚注失效。
+- **SQL 控制台写后缓存失效**：SQL 控制台执行写操作后全量失效相关缓存。
+
 ## [0.5.0] - 2026-07-22
 
 ### Added
