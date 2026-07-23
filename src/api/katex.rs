@@ -119,14 +119,89 @@ thread_local! {
     static DISPLAY_SETTINGS: Settings = display_settings();
 }
 
+/// 把公式中的 `\ce{...}` / `\pu{...}` 预转译为标准 LaTeX（mhchem）。
+///
+/// `katex-rs` 无 mhchem 解析器，化学公式渲染为红字。这里在渲染前扫描 `\ce`/`\pu`
+/// 调用，用嵌套花括号配对读取参数（支持 `\ce{[Cu(NH3)4]^2+}` 这类含 `{}` 的内容），
+/// 转译后替换原 `\ce{...}`，其余文本原样拼接。未闭合 `\ce{` 保留原样（让 katex
+/// 报红，符合容错设计）。无 `\ce`/`\pu` 时零成本原样返回。
+fn expand_chem(tex: &str) -> String {
+    // 快速路径：绝大多数公式不含化学公式，避免分配。
+    if !tex.contains(r"\ce") && !tex.contains(r"\pu") {
+        return tex.to_string();
+    }
+    let bytes = tex.as_bytes();
+    let mut out = String::with_capacity(tex.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        // 匹配 `\ce{` 或 `\pu{`
+        if bytes[i] == b'\\' && i + 3 < bytes.len() {
+            let (is_ce, is_pu) = (bytes[i + 1] == b'c' && bytes[i + 2] == b'e', bytes[i + 1] == b'p' && bytes[i + 2] == b'u');
+            let brace_at = if is_ce {
+                Some(i + 3)
+            } else if is_pu {
+                Some(i + 4)
+            } else {
+                None
+            };
+            if let Some(bi) = brace_at {
+                // 精确匹配命令边界：\ce/\pu 后须紧跟 `{`（否则可能是 \cellbox 之类）
+                if bi < bytes.len() && bytes[bi] == b'{' {
+                    // 读配对花括号内容（处理嵌套）
+                    if let Some((content, close_end)) = read_braced(tex, bi) {
+                        let translated = if is_ce {
+                            crate::api::mhchem::ce(content)
+                        } else {
+                            crate::api::mhchem::pu(content)
+                        };
+                        out.push_str(&translated);
+                        i = close_end;
+                        continue;
+                    }
+                    // 未闭合 `{`：原样输出剩余，交由 katex 报红
+                    out.push_str(&tex[i..]);
+                    return out;
+                }
+            }
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out
+}
+
+/// 从 `open`（指向 `{`）读取配对花括号内容，返回 `(内容, 闭括号后位置)`。
+/// 不闭合返回 `None`。嵌套 `{}` 正确计数。
+fn read_braced(s: &str, open: usize) -> Option<(&str, usize)> {
+    let bytes = s.as_bytes();
+    debug_assert_eq!(bytes[open], b'{');
+    let mut depth = 0i32;
+    let mut i = open;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some((&s[open + 1..i], i + 1));
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    None
+}
+
 /// 渲染内联公式 `$...$`（定界符由 pulldown-cmark 剥除）→ HTML 字符串。
 ///
 /// 渲染失败（坏 TeX）时回退到 HTML 转义后的原文，保证文章不因一个坏公式全篇崩。
 pub fn render_inline(tex: &str) -> String {
+    let tex = expand_chem(tex);
     KATEX_CTX.with(|ctx| {
         INLINE_SETTINGS.with(|settings| {
-            katex::render_to_string(ctx, tex, settings)
-                .unwrap_or_else(|_| crate::utils::html::escape_html(tex))
+            katex::render_to_string(ctx, &tex, settings)
+                .unwrap_or_else(|_| crate::utils::html::escape_html(&tex))
         })
     })
 }
@@ -136,10 +211,11 @@ pub fn render_inline(tex: &str) -> String {
 /// 与 [`render_inline`] 同样在失败时回退到转义原文。调用方负责块级包裹
 /// （如 `<p class="math-display">`），这里只产出 KaTeX 的 span 串。
 pub fn render_display(tex: &str) -> String {
+    let tex = expand_chem(tex);
     KATEX_CTX.with(|ctx| {
         DISPLAY_SETTINGS.with(|settings| {
-            katex::render_to_string(ctx, tex, settings)
-                .unwrap_or_else(|_| crate::utils::html::escape_html(tex))
+            katex::render_to_string(ctx, &tex, settings)
+                .unwrap_or_else(|_| crate::utils::html::escape_html(&tex))
         })
     })
 }
@@ -263,5 +339,56 @@ mod tests {
                 "{tex} 应正确渲染而非红字, got: {html}"
             );
         }
+    }
+
+    // ── mhchem 化学公式（Fix 3b） ──────────────────────────────────────
+    // \ce/\pu 预转译后渲染，不应出现 katex-error 红字。
+
+    #[test]
+    fn mhchem_water_renders() {
+        let html = render_inline(r"\ce{H2O}");
+        assert!(
+            html.contains("katex") && !html.contains("katex-error"),
+            "\\ce{{H2O}} 应正确渲染而非红字, got: {html}"
+        );
+    }
+
+    #[test]
+    fn mhchem_reaction_with_arrow_renders() {
+        let html = render_display(r"\ce{2H2 + O2 -> 2H2O}");
+        assert!(
+            !html.contains("katex-error"),
+            "反应方程式应正确渲染而非红字, got: {html}"
+        );
+    }
+
+    #[test]
+    fn mhchem_gas_arrow_superscript_renders() {
+        // 气体符号 ^ —— 转译后变成 \uparrow，消解原 mhchem 行尾 ^ 解析错误
+        // （文档 8.20 这正是当前唯一 1 个 katex-error 的根因）。
+        let html = render_display(r"\ce{CaCO3 ->[\Delta] CaO + CO2 ^}");
+        assert!(
+            !html.contains("katex-error"),
+            "气体箭头公式应正确渲染而非红字, got: {html}"
+        );
+    }
+
+    #[test]
+    fn mhchem_pu_units_renders() {
+        let html = render_inline(r"\pu{9.8 m/s^2}");
+        assert!(
+            !html.contains("katex-error"),
+            "\\pu 单位应正确渲染而非红字, got: {html}"
+        );
+    }
+
+    #[test]
+    fn mhchem_ion_with_nested_braces_renders() {
+        // 嵌套花括号 / 络离子：扫描器必须正确配对 {}。
+        let html = render_inline(r"\ce{[Cu(NH3)4]^2+}");
+        assert!(
+            !html.contains("katex-error"),
+            "络离子公式应正确渲染而非红字, got: {html}"
+        );
     }
 }

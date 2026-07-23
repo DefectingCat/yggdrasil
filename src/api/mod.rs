@@ -23,6 +23,9 @@ pub mod image;
 /// KaTeX 服务端数学公式渲染（server-only）。
 #[cfg(feature = "server")]
 pub mod katex;
+/// mhchem 化学公式转译器（\ce/\pu → LaTeX，server-only）。
+#[cfg(feature = "server")]
+pub mod mhchem;
 /// Markdown 渲染与 HTML 清理。
 pub mod markdown;
 /// 文章 CRUD 相关接口。

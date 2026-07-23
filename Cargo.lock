@@ -5602,6 +5602,7 @@ dependencies = [
  "deadpool-postgres",
  "dioxus",
  "dotenvy",
+ "fancy-regex",
  "futures",
  "governor",
  "hex",
