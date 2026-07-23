@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-07-23
+
+### Changed
+
+- **消除非测试代码中的裸 `unwrap()`**：在 `panic = "abort"` 全局下，任何裸 `unwrap()` 都会直接崩溃整个进程且无法恢复。将所有非测试代码中的 `unwrap()` 改写为带不变量说明的 `expect()`（消息需解释*为何*不可能失败），并在 AGENTS.md 规范 #16 中固化该约束。
+
+### Fixed
+
+- **mhchem 转译器三处 panic 修复**：修复 `panic = "abort"` 下化学公式转译器的三处崩溃：`". __* "` 正则转录错误、`find_observe_end` 逐字节扫描多字节字符越界、以及 `re!` 宏编译失败时未降级为不匹配导致直接 panic。前两处为输入触发的运行时 panic，第三处补上缺失的防御性边界。
+- **Docker 构建缺 `patches/` 目录**：构建镜像时未复制 `patches/` 目录导致 `pnpm install` 报 ENOENT，补充复制修复。
+
 ## [0.6.0] - 2026-07-23
 
 ### Added
