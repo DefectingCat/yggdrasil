@@ -15,26 +15,96 @@
 
 #![cfg(feature = "server")]
 
+use katex::macros::MacroDefinition;
 use katex::{KatexContext, OutputFormat, Settings};
 
-/// 内联公式（`$...$`）渲染配置工厂：`display_mode = false`。
+/// 物理学常用宏表（对齐 LaTeX `physics` 宏包 + 项目文档 8.13 节「项目物理宏表」）。
+///
+/// `katex-rs` 默认 `Settings` 无物理宏表，导致 `\vu \dv \dd \pdv \divg \curl \grad`
+/// `\qty \RR \ZZ \NN \QQ \CC \bra \ket \braket \expval \abs \norm` 等渲染为红字
+/// （实测正确页面 648 的 137 个公式中 48 处物理宏坏掉）。这里把它们注册为简单
+/// 字符串宏（[`MacroDefinition::StaticStr`]），crate 的 `string_to_expansion` 会自动
+/// 从 `#1`/`#2` 推导参数个数。
+///
+/// 刻意差异：`\divg`（散度）**不**覆写内置 `\div`（除号 ÷）——文档 8.13 明确两者并存。
+/// `\bra`/`\ket`/`\braket` 虽是 katex 内置宏，但内置 `\braket` 只吃 1 个参数
+/// （`\langle{#1}\rangle`），物理语义需 2 个参数（`\langle #1 | #2 \rangle`），
+/// 故覆写为物理版本。
+///
+/// `\qty(...)` 的圆括号定界符匹配无法用纯字符串宏表达（TeX 无参定界符宏需
+/// `MacroExpansion.delimiters`），由 [`render_inline`]/[`render_display` 渲染前的
+/// 预处理兜底；这里注册的是花括号形式 `\qty{...}`。
+fn physics_macros() -> &'static [(&'static str, MacroDefinition)] {
+    &[
+        // 数集
+        (r"\RR", MacroDefinition::StaticStr(r"\mathbb{R}")),
+        (r"\ZZ", MacroDefinition::StaticStr(r"\mathbb{Z}")),
+        (r"\NN", MacroDefinition::StaticStr(r"\mathbb{N}")),
+        (r"\QQ", MacroDefinition::StaticStr(r"\mathbb{Q}")),
+        (r"\CC", MacroDefinition::StaticStr(r"\mathbb{C}")),
+        // 微积分：微分与偏导
+        (r"\dd", MacroDefinition::StaticStr(r"\mathrm{d}#1")),
+        (
+            r"\dv",
+            MacroDefinition::StaticStr(r"\frac{\mathrm{d}#1}{\mathrm{d}#2}"),
+        ),
+        (
+            r"\pdv",
+            MacroDefinition::StaticStr(r"\frac{\partial #1}{\partial #2}"),
+        ),
+        // 场算子：grad/divg/curl（divg 刻意不复用 \div）
+        (r"\grad", MacroDefinition::StaticStr(r"\nabla")),
+        (r"\divg", MacroDefinition::StaticStr(r"\nabla \cdot")),
+        (r"\curl", MacroDefinition::StaticStr(r"\nabla \times")),
+        // 量子力学 Dirac 记号
+        (r"\bra", MacroDefinition::StaticStr(r"\langle #1 |")),
+        (r"\ket", MacroDefinition::StaticStr(r"| #1 \rangle")),
+        (
+            r"\braket",
+            MacroDefinition::StaticStr(r"\langle #1 | #2 \rangle"),
+        ),
+        (r"\expval", MacroDefinition::StaticStr(r"\langle #1 \rangle")),
+        // 向量 / 范数 / 绝对值（自动缩放定界符）
+        (r"\abs", MacroDefinition::StaticStr(r"\left| #1 \right|")),
+        (r"\norm", MacroDefinition::StaticStr(r"\left\| #1 \right\|")),
+        // 单位向量：带帽子
+        (r"\vu", MacroDefinition::StaticStr(r"\hat{\vec{#1}}")),
+        // 自动缩放圆括号（花括号形式；`\qty(...)` 由预处理兜底）
+        (r"\qty", MacroDefinition::StaticStr(r"\left( #1 \right)")),
+    ]
+}
+
+/// 把物理宏表注入到给定 `Settings` 的宏表（覆盖同名内置宏）。
+fn inject_physics_macros(settings: &mut Settings) {
+    let mut map = settings.macros.borrow_mut();
+    for (name, def) in physics_macros() {
+        map.insert((*name).to_string(), def.clone());
+    }
+}
+
+/// 内联公式（`$...$`）渲染配置工厂：`display_mode = false`，含物理宏表。
 fn inline_settings() -> Settings {
-    Settings {
+    let mut s = Settings {
         output: OutputFormat::Html,
         display_mode: false,
         throw_on_error: false,
         ..Settings::default()
-    }
+    };
+    inject_physics_macros(&mut s);
+    s
 }
 
-/// 块级公式（`$$...$$`）渲染配置工厂：`display_mode = true`（居中独占一行）。
+/// 块级公式（`$$...$$`）渲染配置工厂：`display_mode = true`（居中独占一行），含物理宏表。
 fn display_settings() -> Settings {
-    Settings {
+    let mut s = Settings {
         output: OutputFormat::Html,
         display_mode: true,
         throw_on_error: false,
         ..Settings::default()
-    }
+    };
+    inject_physics_macros(&mut s);
+    s
+
 }
 
 thread_local! {
@@ -113,5 +183,85 @@ mod tests {
             !html.contains("<math"),
             "Html 输出不应含 <math> 标签, got: {html}"
         );
+    }
+
+    // ── 物理宏表（Fix 3a） ─────────────────────────────────────────
+    // katex-rs 默认无物理宏，未注册时 \vu \dd \RR 等渲染为 katex-error 红字。
+
+    #[test]
+    fn physics_macro_unit_vector_renders() {
+        // \vu{i} → \hat{\vec{i}}：带帽子单位向量。
+        let html = render_inline(r"\vu{i}");
+        assert!(
+            html.contains("katex") && !html.contains("katex-error"),
+            "\\vu 应正确渲染而非红字, got: {html}"
+        );
+    }
+
+    #[test]
+    fn physics_macro_divergence_does_not_override_division() {
+        // 刻意差异：\divg（散度）与 \div（除号 ÷）并存。
+        let divg = render_inline(r"\divg \vec{F}");
+        let div = render_inline(r"a \div b");
+        assert!(
+            !divg.contains("katex-error"),
+            "\\divg 应正确渲染而非红字, got: {divg}"
+        );
+        assert!(
+            !div.contains("katex-error"),
+            "\\div 应仍是除号而非红字, got: {div}"
+        );
+        // 两者输出不同（\divg 展开为 \nabla \cdot，\div 是除号符号）。
+        assert_ne!(divg, div, "\\divg 与 \\div 输出应不同");
+    }
+
+    #[test]
+    fn physics_macro_number_sets_renders() {
+        for m in [r"\RR", r"\ZZ", r"\NN", r"\QQ", r"\CC"] {
+            let html = render_inline(m);
+            assert!(
+                !html.contains("katex-error"),
+                "{m} 应正确渲染而非红字, got: {html}"
+            );
+        }
+    }
+
+    #[test]
+    fn physics_macro_calculus_renders() {
+        // \dv{f}{x} → d f / d x；\pdv{f}{x} → ∂ f / ∂ x；\dd{x} → dx。
+        for tex in [r"\dv{f}{x}", r"\pdv{f}{x}", r"\dd{x}"] {
+            let html = render_inline(tex);
+            assert!(
+                !html.contains("katex-error"),
+                "{tex} 应正确渲染而非红字, got: {html}"
+            );
+        }
+    }
+
+    #[test]
+    fn physics_macro_dirac_notation_renders() {
+        for tex in [
+            r"\bra{\psi}",
+            r"\ket{\phi}",
+            r"\braket{\psi}{\phi}",
+            r"\expval{A}",
+        ] {
+            let html = render_inline(tex);
+            assert!(
+                !html.contains("katex-error"),
+                "{tex} 应正确渲染而非红字, got: {html}"
+            );
+        }
+    }
+
+    #[test]
+    fn physics_macro_abs_norm_qty_renders() {
+        for tex in [r"\abs{x}", r"\norm{v}", r"\qty{a + b}"] {
+            let html = render_inline(tex);
+            assert!(
+                !html.contains("katex-error"),
+                "{tex} 应正确渲染而非红字, got: {html}"
+            );
+        }
     }
 }
