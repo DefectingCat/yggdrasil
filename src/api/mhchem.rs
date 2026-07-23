@@ -287,7 +287,7 @@ fn find_observe_groups(
 }
 
 fn is_empty_pat(p: &Pat) -> bool {
-    matches!(p, Pat::Lit("") )
+    matches!(p, Pat::Lit(""))
 }
 
 struct Span {
@@ -336,12 +336,19 @@ fn fancy_match(re: &Regex, input: &str) -> Option<MMatch> {
     let mval = if n_groups >= 2 {
         let mut v = Vec::with_capacity(n_groups);
         for gi in 1..=n_groups {
-            v.push(caps.get(gi).map(|m| m.as_str().to_string()).unwrap_or_default());
+            v.push(
+                caps.get(gi)
+                    .map(|m| m.as_str().to_string())
+                    .unwrap_or_default(),
+            );
         }
         MVal::V(v)
     } else {
         // n_groups == 1 或 0：match[1] || match[0]（空串视作未匹配）
-        let g1 = caps.get(1).map(|m| m.as_str().to_string()).filter(|s| !s.is_empty());
+        let g1 = caps
+            .get(1)
+            .map(|m| m.as_str().to_string())
+            .filter(|s| !s.is_empty());
         MVal::S(g1.unwrap_or(whole.clone()))
     };
     Some(MMatch {
@@ -508,7 +515,11 @@ fn pat_enumber(input: &str) -> Option<MMatch> {
     }
     let mut v = Vec::with_capacity(6);
     for gi in 1..=6 {
-        v.push(caps.get(gi).map(|m| m.as_str().to_string()).unwrap_or_default());
+        v.push(
+            caps.get(gi)
+                .map(|m| m.as_str().to_string())
+                .unwrap_or_default(),
+        );
     }
     Some(MMatch {
         m: MVal::V(v),
@@ -524,9 +535,16 @@ fn pat_state_of_aggregation(input: &str) -> Option<MMatch> {
         Pat::Re(re!("^\\([a-z]{1,3}(?=[\\),])")),
         Pat::Lit(""),
         Pat::Lit(")"),
-        None, None, None, None, false,
+        None,
+        None,
+        None,
+        None,
+        false,
     )?;
-    if re!("^($|[\\s,;\\)\\]\\}])").is_match(a.remainder.as_str()).ok()? {
+    if re!("^($|[\\s,;\\)\\]\\}])")
+        .is_match(a.remainder.as_str())
+        .ok()?
+    {
         return Some(a);
     }
     let re2 = re!("^(?:\\((?:\\\\ca\\s?)?\\$[amothc]\\$\\))");
@@ -550,7 +568,18 @@ fn pat_amount(input: &str) -> Option<MMatch> {
             });
         }
     }
-    let a = fg(input, Pat::Lit(""), Pat::Lit("$"), Pat::Lit("$"), Pat::Lit(""), None, None, None, None, false)?;
+    let a = fg(
+        input,
+        Pat::Lit(""),
+        Pat::Lit("$"),
+        Pat::Lit("$"),
+        Pat::Lit(""),
+        None,
+        None,
+        None,
+        None,
+        false,
+    )?;
     let re2 = re!("^\\$(?:\\(?[+\\-]?(?:[0-9]*[a-z]?[+\\-])?[0-9]*[a-z](?:[+\\-][0-9]*[a-z]?)?\\)?|\\+|-)\\$$");
     let inner = mval_str(&a.m);
     let inner_len = inner.len();
@@ -803,9 +832,15 @@ fn generic_action(buf: &mut Buffer, m: &MVal, opt: &Option<String>, type_: &str)
                 .ok()
                 .flatten()
             {
-                let mut n1 = caps.get(1).map(|x| x.as_str().to_string()).unwrap_or_default();
+                let mut n1 = caps
+                    .get(1)
+                    .map(|x| x.as_str().to_string())
+                    .unwrap_or_default();
                 n1 = n1.replace('$', "");
-                let n2 = caps.get(2).map(|x| x.as_str().to_string()).unwrap_or_default();
+                let n2 = caps
+                    .get(2)
+                    .map(|x| x.as_str().to_string())
+                    .unwrap_or_default();
                 ret.push(Parsed::N(NodeData {
                     type_: "frac".into(),
                     p1: Some(Field::Str(n1)),
@@ -916,8 +951,14 @@ fn texify_go2(buf: &NodeData) -> String {
                 res.push_str(&format!("^{{\\hphantom{{{}}}}}_{{\\hphantom{{{}}}}}", b, p));
                 res.push_str("\\mkern-1.5mu");
                 res.push_str("{\\vphantom{A}}");
-                res.push_str(&format!("^{{\\smash[t]{{\\vphantom{{2}}}}\\llap{{{}}}}}", b));
-                res.push_str(&format!("_{{\\vphantom{{2}}\\llap{{\\smash[t]{{{}}}}}}}", p));
+                res.push_str(&format!(
+                    "^{{\\smash[t]{{\\vphantom{{2}}}}\\llap{{{}}}}}",
+                    b
+                ));
+                res.push_str(&format!(
+                    "_{{\\vphantom{{2}}\\llap{{\\smash[t]{{{}}}}}}}",
+                    p
+                ));
             }
             // o
             if !o.is_empty() {
@@ -964,7 +1005,10 @@ fn texify_go2(buf: &NodeData) -> String {
             }
             res
         }
-        "rm" => format!("\\mathrm{{{}}}", buf.p1.as_ref().map(field_str).unwrap_or_default()),
+        "rm" => format!(
+            "\\mathrm{{{}}}",
+            buf.p1.as_ref().map(field_str).unwrap_or_default()
+        ),
         "text" => {
             let mut p1 = buf.p1.as_ref().map(field_str).unwrap_or_default();
             if p1.contains('^') || p1.contains('_') {
@@ -974,9 +1018,18 @@ fn texify_go2(buf: &NodeData) -> String {
                 format!("\\text{{{}}}", p1)
             }
         }
-        "roman numeral" => format!("\\mathrm{{{}}}", buf.p1.as_ref().map(field_str).unwrap_or_default()),
-        "state of aggregation" => format!("\\mskip2mu {}", buf.p1.as_ref().map(go_inner).unwrap_or_default()),
-        "state of aggregation subscript" => format!("\\mskip1mu {}", buf.p1.as_ref().map(go_inner).unwrap_or_default()),
+        "roman numeral" => format!(
+            "\\mathrm{{{}}}",
+            buf.p1.as_ref().map(field_str).unwrap_or_default()
+        ),
+        "state of aggregation" => format!(
+            "\\mskip2mu {}",
+            buf.p1.as_ref().map(go_inner).unwrap_or_default()
+        ),
+        "state of aggregation subscript" => format!(
+            "\\mskip1mu {}",
+            buf.p1.as_ref().map(go_inner).unwrap_or_default()
+        ),
         "bond" => get_bond(buf.kind_.as_deref().unwrap_or("")),
         "frac" => {
             let c = format!(
@@ -1061,9 +1114,18 @@ fn texify_go2(buf: &NodeData) -> String {
         "pu-space-2" => "\\mkern3mu ".to_string(),
         "1000 separator" => "\\mkern2mu ".to_string(),
         "commaDecimal" => "{,}".to_string(),
-        "comma enumeration L" => format!("{{{}}}\\mkern6mu ", buf.p1.as_ref().map(field_str).unwrap_or_default()),
-        "comma enumeration M" => format!("{{{}}}\\mkern3mu ", buf.p1.as_ref().map(field_str).unwrap_or_default()),
-        "comma enumeration S" => format!("{{{}}}\\mkern1mu ", buf.p1.as_ref().map(field_str).unwrap_or_default()),
+        "comma enumeration L" => format!(
+            "{{{}}}\\mkern6mu ",
+            buf.p1.as_ref().map(field_str).unwrap_or_default()
+        ),
+        "comma enumeration M" => format!(
+            "{{{}}}\\mkern3mu ",
+            buf.p1.as_ref().map(field_str).unwrap_or_default()
+        ),
+        "comma enumeration S" => format!(
+            "{{{}}}\\mkern1mu ",
+            buf.p1.as_ref().map(field_str).unwrap_or_default()
+        ),
         "hyphen" => "\\text{-}".to_string(),
         "addition compound" => "\\,{\\cdot}\\,".to_string(),
         "electron dot" => "\\mkern1mu \\bullet\\mkern1mu ".to_string(),
@@ -1190,7 +1252,10 @@ mod tests {
     fn ce_gas_arrow_becomes_uparrow() {
         // 行尾 ^ 气体符号转译后应含 uparrow（消解原行尾 ^ 解析错误）。
         let tex = ce("CaCO3 ->[\\Delta] CaO + CO2 ^");
-        assert!(tex.contains("uparrow") || tex.contains("rightarrow"), "气体/反应符号: {tex}");
+        assert!(
+            tex.contains("uparrow") || tex.contains("rightarrow"),
+            "气体/反应符号: {tex}"
+        );
     }
 
     #[test]

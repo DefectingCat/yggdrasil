@@ -350,11 +350,13 @@ mod tests {
 
     #[test]
     fn parse_query_source_rejects_unparseable_sql() {
-        for bad in ["query:这不是SQL", "query:SELECT FROM", "query:@#$%", "query:1+1"] {
-            assert!(
-                parse_source(bad).is_err(),
-                "{bad} 应解析失败或被拒"
-            );
+        for bad in [
+            "query:这不是SQL",
+            "query:SELECT FROM",
+            "query:@#$%",
+            "query:1+1",
+        ] {
+            assert!(parse_source(bad).is_err(), "{bad} 应解析失败或被拒");
         }
     }
 

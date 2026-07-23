@@ -63,7 +63,10 @@ fn physics_macros() -> &'static [(&'static str, MacroDefinition)] {
             r"\braket",
             MacroDefinition::StaticStr(r"\langle #1 | #2 \rangle"),
         ),
-        (r"\expval", MacroDefinition::StaticStr(r"\langle #1 \rangle")),
+        (
+            r"\expval",
+            MacroDefinition::StaticStr(r"\langle #1 \rangle"),
+        ),
         // 向量 / 范数 / 绝对值（自动缩放定界符）
         (r"\abs", MacroDefinition::StaticStr(r"\left| #1 \right|")),
         (r"\norm", MacroDefinition::StaticStr(r"\left\| #1 \right\|")),
@@ -104,7 +107,6 @@ fn display_settings() -> Settings {
     };
     inject_physics_macros(&mut s);
     s
-
 }
 
 thread_local! {
@@ -136,7 +138,10 @@ fn expand_chem(tex: &str) -> String {
     while i < bytes.len() {
         // 匹配 `\ce{` 或 `\pu{`
         if bytes[i] == b'\\' && i + 3 < bytes.len() {
-            let (is_ce, is_pu) = (bytes[i + 1] == b'c' && bytes[i + 2] == b'e', bytes[i + 1] == b'p' && bytes[i + 2] == b'u');
+            let (is_ce, is_pu) = (
+                bytes[i + 1] == b'c' && bytes[i + 2] == b'e',
+                bytes[i + 1] == b'p' && bytes[i + 2] == b'u',
+            );
             let brace_at = if is_ce {
                 Some(i + 3)
             } else if is_pu {

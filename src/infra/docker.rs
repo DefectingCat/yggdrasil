@@ -614,7 +614,10 @@ mod tests {
 
         // 隔离不变量：这些配置若被误删，容器隔离会悄悄失效。
         // 单独断言而非隐含在端到端测试里，确保回归可见。
-        assert_eq!(host_config.cap_drop.as_deref(), Some(&["ALL".to_string()][..]));
+        assert_eq!(
+            host_config.cap_drop.as_deref(),
+            Some(&["ALL".to_string()][..])
+        );
         assert_eq!(
             host_config.security_opt.as_deref(),
             Some(&["no-new-privileges".to_string()][..])
@@ -673,10 +676,16 @@ mod tests {
             output_bytes: 1024,
             allow_network: false,
         };
-        assert_eq!(build_host_config(&base).network_mode.as_deref(), Some("none"));
+        assert_eq!(
+            build_host_config(&base).network_mode.as_deref(),
+            Some("none")
+        );
         let mut net = base;
         net.allow_network = true;
-        assert_eq!(build_host_config(&net).network_mode.as_deref(), Some("bridge"));
+        assert_eq!(
+            build_host_config(&net).network_mode.as_deref(),
+            Some("bridge")
+        );
     }
 
     #[test]

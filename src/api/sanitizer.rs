@@ -537,14 +537,32 @@ mod tests {
     fn katex_svg_and_path_preserved() {
         let katex_html = crate::api::katex::render_display("\\sqrt{\\pi}");
         let cleaned = clean_html(&katex_html);
-        assert!(cleaned.contains("<svg"), "clean_html should preserve <svg> for KaTeX sqrt");
-        assert!(cleaned.contains("<path"), "clean_html should preserve <path> for KaTeX sqrt");
-        assert!(cleaned.contains("d="), "clean_html should preserve d attribute on <path>");
-        assert!(cleaned.contains("viewBox=") || cleaned.contains("viewbox="), "clean_html should preserve viewBox attribute on <svg>");
+        assert!(
+            cleaned.contains("<svg"),
+            "clean_html should preserve <svg> for KaTeX sqrt"
+        );
+        assert!(
+            cleaned.contains("<path"),
+            "clean_html should preserve <path> for KaTeX sqrt"
+        );
+        assert!(
+            cleaned.contains("d="),
+            "clean_html should preserve d attribute on <path>"
+        );
+        assert!(
+            cleaned.contains("viewBox=") || cleaned.contains("viewbox="),
+            "clean_html should preserve viewBox attribute on <svg>"
+        );
 
         let comment_cleaned = clean_comment_html(&katex_html);
-        assert!(comment_cleaned.contains("<svg"), "clean_comment_html should preserve <svg>");
-        assert!(comment_cleaned.contains("<path"), "clean_comment_html should preserve <path>");
+        assert!(
+            comment_cleaned.contains("<svg"),
+            "clean_comment_html should preserve <svg>"
+        );
+        assert!(
+            comment_cleaned.contains("<path"),
+            "clean_comment_html should preserve <path>"
+        );
     }
 
     #[test]
@@ -812,9 +830,15 @@ mod tests {
     fn clean_html_removes_script_tag_and_content() {
         // script 在 CLEAN_CONTENT_TAGS：标签连同内容一起移除（而非转义后保留）。
         let result = clean_html("<p>hi</p><script>alert(1)</script><p>bye</p>");
-        assert!(!result.contains("script"), "script 标签应被完全移除: {result}");
+        assert!(
+            !result.contains("script"),
+            "script 标签应被完全移除: {result}"
+        );
         assert!(!result.contains("alert"), "script 内容应被清除: {result}");
-        assert!(result.contains("hi") && result.contains("bye"), "周围内容应保留: {result}");
+        assert!(
+            result.contains("hi") && result.contains("bye"),
+            "周围内容应保留: {result}"
+        );
     }
 
     #[test]
@@ -822,7 +846,10 @@ mod tests {
         // style 也走 CLEAN_CONTENT_TAGS：CSS 注入（expression()、@import）随内容一起移除。
         let result = clean_html("<style>body{background:url(javascript:alert(1))}</style><p>x</p>");
         assert!(!result.contains("style"), "style 标签应被移除: {result}");
-        assert!(!result.contains("javascript"), "style 内危险内容应被清除: {result}");
+        assert!(
+            !result.contains("javascript"),
+            "style 内危险内容应被清除: {result}"
+        );
     }
 
     #[test]
@@ -840,8 +867,14 @@ mod tests {
         // svg 在白名单中（配合 KaTeX 渲染），但非白名单属性（如 src / onerror / onload）会被剥离
         let svg_input = r#"<svg src="javascript:alert(1)" onload="alert(2)"></svg>"#;
         let svg_result = clean_html(svg_input);
-        assert!(!svg_result.contains("javascript"), "svg 上的非白名单属性/javascript 应被剥离: {svg_result}");
-        assert!(!svg_result.contains("onload"), "svg 上的 onload 事件处理器应被剥离: {svg_result}");
+        assert!(
+            !svg_result.contains("javascript"),
+            "svg 上的非白名单属性/javascript 应被剥离: {svg_result}"
+        );
+        assert!(
+            !svg_result.contains("onload"),
+            "svg 上的 onload 事件处理器应被剥离: {svg_result}"
+        );
     }
 
     #[test]
@@ -883,7 +916,11 @@ mod tests {
         // 即便 allow_data_uri=true，is_safe_data_uri 也只放行图片类型；
         // data:text/html（可执行脚本）永远拒绝。直接测内部函数锁定该不变量。
         let schemes = DEFAULT_ALLOWED_SCHEMES.clone();
-        assert!(!is_safe_url("data:text/html,<script>alert(1)</script>", &schemes, true));
+        assert!(!is_safe_url(
+            "data:text/html,<script>alert(1)</script>",
+            &schemes,
+            true
+        ));
         assert!(!is_safe_url(
             "data:application/javascript,alert(1)",
             &schemes,

@@ -19,9 +19,24 @@ fn main() {
     // 工作区脏状态变化时 describe 的 --dirty 后缀也会变,重跑一次。
     println!("cargo:rerun-if-changed=.git/index");
 
-    set_env("YGG_BUILD_GIT_DESCRIBE", env_or_git("YGG_BUILD_GIT_DESCRIBE", &["describe", "--tags", "--always", "--dirty"]));
-    set_env("YGG_BUILD_GIT_HASH", env_or_git("YGG_BUILD_GIT_HASH", &["rev-parse", "HEAD"]));
-    set_env("YGG_BUILD_GIT_COMMIT_DATE", env_or_git("YGG_BUILD_GIT_COMMIT_DATE", &["log", "-1", "--format=%cd", "--date=iso-strict"]));
+    set_env(
+        "YGG_BUILD_GIT_DESCRIBE",
+        env_or_git(
+            "YGG_BUILD_GIT_DESCRIBE",
+            &["describe", "--tags", "--always", "--dirty"],
+        ),
+    );
+    set_env(
+        "YGG_BUILD_GIT_HASH",
+        env_or_git("YGG_BUILD_GIT_HASH", &["rev-parse", "HEAD"]),
+    );
+    set_env(
+        "YGG_BUILD_GIT_COMMIT_DATE",
+        env_or_git(
+            "YGG_BUILD_GIT_COMMIT_DATE",
+            &["log", "-1", "--format=%cd", "--date=iso-strict"],
+        ),
+    );
     set_env("YGG_BUILD_RUSTC_VERSION", rustc_version());
     // 编译时刻(Unix 秒)。std 无 ISO 8601 格式化,存秒数由运行时 chrono 解析。
     set_env("YGG_BUILD_TIME", build_time_unix());

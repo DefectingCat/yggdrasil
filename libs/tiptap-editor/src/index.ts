@@ -234,7 +234,9 @@ class TiptapEditorInstance {
     const proseMirrorDom = this.editor.view.dom;
     if (!this.isSourceMode) {
       // 富文本 → 源码：导出当前 Markdown 到 textarea
-      this.sourceTextarea.value = TiptapEditorInstance.unescapeFootnoteSyntax(this.editor.getMarkdown());
+      this.sourceTextarea.value = TiptapEditorInstance.unescapeFootnoteSyntax(
+        this.editor.getMarkdown(),
+      );
       // 必须在 display:'none' 之前读取滚动比例——隐藏后 scrollTop 会被浏览器归零
       const pmRatio = this.getScrollRatio(proseMirrorDom);
       proseMirrorDom.style.display = 'none';

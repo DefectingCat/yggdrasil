@@ -23,7 +23,10 @@ pub mod server {
         ("Kotlin", include_str!("../syntaxes/Kotlin.sublime-syntax")),
         ("Swift", include_str!("../syntaxes/Swift.sublime-syntax")),
         ("TSX", include_str!("../syntaxes/TSX.sublime-syntax")),
-        ("TypeScript", include_str!("../syntaxes/TypeScript.sublime-syntax")),
+        (
+            "TypeScript",
+            include_str!("../syntaxes/TypeScript.sublime-syntax"),
+        ),
         ("Vue", include_str!("../syntaxes/Vue.sublime-syntax")),
         ("Zig", include_str!("../syntaxes/Zig.sublime-syntax")),
     ];

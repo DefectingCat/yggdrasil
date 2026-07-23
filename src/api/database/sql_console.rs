@@ -733,8 +733,11 @@ mod tests {
 
     #[test]
     fn writes_affect_cache_false_for_read_only_statements() {
-        for sql in ["SELECT 1", "EXPLAIN SELECT * FROM posts", "SELECT id FROM posts WHERE id = 1"]
-        {
+        for sql in [
+            "SELECT 1",
+            "EXPLAIN SELECT * FROM posts",
+            "SELECT id FROM posts WHERE id = 1",
+        ] {
             assert!(
                 !writes_affect_cache(&parse(sql)),
                 "只读语句不应触发兜底失效：{sql:?}"

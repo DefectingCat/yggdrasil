@@ -21,10 +21,7 @@ const unescape = (md: string) => md.replace(UNESCAPE_RE, '[^$1]');
 function makeEditor() {
   return new Editor({
     element: document.body,
-    extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
-      Markdown,
-    ],
+    extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] } }), Markdown],
     content: '',
   });
 }

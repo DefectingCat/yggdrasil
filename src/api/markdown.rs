@@ -988,7 +988,11 @@ console.log(1)
     fn render_markdown_runnable_block_bun_canonical() {
         // bun 自身是 canonical（不是别名），runnable 块以 bun 执行。
         let result = render_markdown_enhanced("```bun runnable\nconsole.log('hi')\n```");
-        assert!(result.html.contains(r#"data-lang="bun""#), "got: {}", result.html);
+        assert!(
+            result.html.contains(r#"data-lang="bun""#),
+            "got: {}",
+            result.html
+        );
     }
 
     #[test]
@@ -1065,18 +1069,23 @@ console.log(1)
         let result = render_markdown_enhanced("正文[^a]\n\n[^a]: 脚注内容\n");
         // 脚注引用：上标 + 锚点跳转 + role 语义
         assert!(
-            result.html.contains(r#"<sup class="fn-ref" id="fnref:a-1">"#),
+            result
+                .html
+                .contains(r#"<sup class="fn-ref" id="fnref:a-1">"#),
             "脚注引用上标应含正确 id, got: {}",
             result.html
         );
         assert!(
-            result.html.contains(r##"href="#fn:a""##) && result.html.contains(r#"role="doc-noteref""#),
+            result.html.contains(r##"href="#fn:a""##)
+                && result.html.contains(r#"role="doc-noteref""#),
             "引用链接应指向定义并带 noteref 角色, got: {}",
             result.html
         );
         // 脚注定义：<aside> + role + aria-labelledby
         assert!(
-            result.html.contains(r#"<aside class="footnote-definition" id="fn:a""#)
+            result
+                .html
+                .contains(r#"<aside class="footnote-definition" id="fn:a""#)
                 && result.html.contains(r#"role="doc-footnote""#),
             "定义应为 aside + doc-footnote 角色, got: {}",
             result.html
@@ -1129,8 +1138,12 @@ console.log(1)
             result.html
         );
         assert!(
-            result.html.contains("↩<sup class=\"fn-backref-num\">2</sup>")
-                && result.html.contains("↩<sup class=\"fn-backref-num\">3</sup>"),
+            result
+                .html
+                .contains("↩<sup class=\"fn-backref-num\">2</sup>")
+                && result
+                    .html
+                    .contains("↩<sup class=\"fn-backref-num\">3</sup>"),
             "第 2、3 个 back-link 应带数字上标, got: {}",
             result.html
         );
@@ -1147,9 +1160,8 @@ console.log(1)
     #[test]
     fn render_markdown_footnote_numbering_order() {
         // 多个不同脚注：编号按 label 首次出现顺序分配（1、2、3…），与定义位置无关。
-        let result = render_markdown_enhanced(
-            "先引用第二个[^b]，再第一个[^a]\n\n[^b]: B注\n\n[^a]: A注\n",
-        );
+        let result =
+            render_markdown_enhanced("先引用第二个[^b]，再第一个[^a]\n\n[^b]: B注\n\n[^a]: A注\n");
         // b 先在正文被引用 → 编号 1；a 后被引用 → 编号 2。
         // 分别断言各自的引用链接块（由 id 唯一定位）。
         // b 的引用：id=fnref:b-1，aria-label=脚注 1
@@ -1266,7 +1278,12 @@ console.log(1)
     fn footnote_id_deterministic() {
         // 同一 label 多次调用必产生同一 id（ref↔def 双向一致的前提）。
         for label in ["a", "my note", "参考文献", "a!b@c#"] {
-            assert_eq!(footnote_id(label), footnote_id(label), "label {:?} 不确定", label);
+            assert_eq!(
+                footnote_id(label),
+                footnote_id(label),
+                "label {:?} 不确定",
+                label
+            );
         }
     }
 
@@ -1275,8 +1292,18 @@ console.log(1)
         // 产出的 id 不得含破坏 HTML 属性或 URL 的字符：" ' < > & 空格。
         for label in ["a\"b", "x'y", "a<b>", "c&d", "e f", "a!@#$%^&*()b"] {
             let id = footnote_id(label);
-            assert!(!id.contains('"'), "id {:?} 含双引号 (label {:?})", id, label);
-            assert!(!id.contains('\''), "id {:?} 含单引号 (label {:?})", id, label);
+            assert!(
+                !id.contains('"'),
+                "id {:?} 含双引号 (label {:?})",
+                id,
+                label
+            );
+            assert!(
+                !id.contains('\''),
+                "id {:?} 含单引号 (label {:?})",
+                id,
+                label
+            );
             assert!(!id.contains('<'), "id {:?} 含 < (label {:?})", id, label);
             assert!(!id.contains('>'), "id {:?} 含 > (label {:?})", id, label);
             assert!(!id.contains('&'), "id {:?} 含 & (label {:?})", id, label);
@@ -1325,7 +1352,9 @@ console.log(1)
     fn render_markdown_sqrt_and_matrix_preserves_svg() {
         // \sqrt 与 \begin{pmatrix} 等 LaTeX 渲染需依赖 KaTeX 产生的 SVG 根号线与矩阵括号/竖线，
         // 验证经过 sanitizer clean_html 后 <svg> 与 <path> 不会被误丢。
-        let result = render_markdown_enhanced("$$\\sqrt{\\pi} + \\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}$$");
+        let result = render_markdown_enhanced(
+            "$$\\sqrt{\\pi} + \\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}$$",
+        );
         assert!(
             result.html.contains("<svg"),
             "KaTeX 根号/矩阵渲染的 <svg> 应保留, got: {}",

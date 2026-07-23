@@ -335,7 +335,9 @@ fn RebuildCacheBar() -> Element {
             }
             // 重建结果消息：绝对定位到按钮行正下方，脱离文档流，不影响布局高度。
             if let Some(msg) = rebuild_result() {
-                div { class: "absolute top-full right-0 mt-1 text-xs text-paper-secondary whitespace-pre-line", "{msg}" }
+                div { class: "absolute top-full right-0 mt-1 text-xs text-paper-secondary whitespace-pre-line",
+                    "{msg}"
+                }
             }
         }
     }

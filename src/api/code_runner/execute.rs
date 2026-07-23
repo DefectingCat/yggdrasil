@@ -430,9 +430,11 @@ mod tests {
             "源码恰好等于上限应放行"
         );
         let over = "a".repeat(max + 1);
-        let err =
-            validate_exec_request(&req("python", &over)).expect_err("超出上限应拒绝");
-        assert!(err.to_string().contains("过大"), "错误信息应提及大小: {err}");
+        let err = validate_exec_request(&req("python", &over)).expect_err("超出上限应拒绝");
+        assert!(
+            err.to_string().contains("过大"),
+            "错误信息应提及大小: {err}"
+        );
     }
 
     #[test]

@@ -179,7 +179,11 @@ pub fn PostContent(content_html: String) -> Element {
             .map(|el| el.class_list().contains("is-theme-transitioning"))
             .unwrap_or(false);
         if !transitioning {
-            invoke_optional_global(&window, "__initMermaid", &[".post-content".into(), theme_str.into()]);
+            invoke_optional_global(
+                &window,
+                "__initMermaid",
+                &[".post-content".into(), theme_str.into()],
+            );
         }
 
         // lightbox 改由 Dioxus.toml 全局 <script src> 加载（不再 include_str!）。
