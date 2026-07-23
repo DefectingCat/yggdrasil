@@ -16,7 +16,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
  */
 
 const UNESCAPE_RE = /\\\[\^([^\n\\]*?)\\\]/g;
-const unescape = (md: string) => md.replace(UNESCAPE_RE, '[^$1]');
+const unescapeFootnote = (md: string) => md.replace(UNESCAPE_RE, '[^$1]');
 
 function makeEditor() {
   return new Editor({
@@ -41,31 +41,31 @@ describe('脚注语法 - escapeMarkdownSyntax 破坏与修复', () => {
   });
 
   it('unescape 正则还原脚注引用 \\[^1\\] → [^1]', () => {
-    expect(unescape('\\[^1\\]')).toBe('[^1]');
+    expect(unescapeFootnote('\\[^1\\]')).toBe('[^1]');
   });
 
   it('unescape 正则还原含空格的脚注 label', () => {
-    expect(unescape('\\[^my note\\]')).toBe('[^my note]');
+    expect(unescapeFootnote('\\[^my note\\]')).toBe('[^my note]');
   });
 
   it('unescape 正则还原脚注定义 \\[^1\\]: → [^1]:', () => {
-    expect(unescape('\\[^1\\]: 定义内容')).toBe('[^1]: 定义内容');
+    expect(unescapeFootnote('\\[^1\\]: 定义内容')).toBe('[^1]: 定义内容');
   });
 
   it('unescape 正则不影响普通链接 [text](url)', () => {
     const md = '\\[text\\](https://example.com)';
     // 普通链接的 \[text\] 不以 ^ 开头，不会被误改
-    expect(unescape(md)).toBe(md);
+    expect(unescapeFootnote(md)).toBe(md);
   });
 
   it('unescape 正则一次处理多个脚注引用', () => {
     const md = '引用了\\[^1\\]和\\[^pc\\]和\\[^2\\]';
-    expect(unescape(md)).toBe('引用了[^1]和[^pc]和[^2]');
+    expect(unescapeFootnote(md)).toBe('引用了[^1]和[^pc]和[^2]');
   });
 
   it('完整往返：unescape(getMarkdown()) 保留脚注引用语法', () => {
     editor.commands.setContent('正文[^1]', { contentType: 'markdown' });
-    const fixed = unescape(editor.getMarkdown());
+    const fixed = unescapeFootnote(editor.getMarkdown());
     expect(fixed).toContain('[^1]');
     expect(fixed).not.toContain('\\[^1\\]');
   });
