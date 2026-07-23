@@ -635,6 +635,16 @@ pub async fn invalidate_pending_count() {
         .await;
 }
 
+/// 全量失效评论缓存（SQL 控制台兜底用：管理员直接改 comments 表时无法定向）。
+///
+/// 正常评论写路径用 [`invalidate_comments_by_post`]（按文章定向）+ [`invalidate_pending_count`]；
+/// 这里全量清空是 SQL 控制台直改 DB 的兜底——无法从任意 SQL 精确解析受影响的 post_id。
+#[cfg(feature = "server")]
+pub fn invalidate_all_comments() {
+    COMMENT_CACHE.invalidate_all();
+    PENDING_COUNT_CACHE.invalidate_all();
+}
+
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use super::*;

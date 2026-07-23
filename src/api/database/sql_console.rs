@@ -191,6 +191,16 @@ fn is_read_only(stmt: &sqlparser::ast::Statement) -> bool {
     matches!(stmt, Statement::Query(_) | Statement::Explain { .. })
 }
 
+/// 判断一组语句中是否含有写操作（非只读语句）。
+///
+/// SQL 控制台执行写操作（INSERT/UPDATE/DELETE/TRUNCATE/ALTER/DROP 等）可能直改
+/// posts/comments/tags 等业务表，绕过 server function 的正常缓存失效路径。
+/// 抽成纯函数便于单测「哪些语句集合应触发兜底失效」。
+#[cfg(feature = "server")]
+fn writes_affect_cache(stmts: &[sqlparser::ast::Statement]) -> bool {
+    stmts.iter().any(|s| !is_read_only(s))
+}
+
 /// 把一列的值转成 JSON（按 PG 类型名分发）。
 #[cfg(feature = "server")]
 fn col_to_json(row: &tokio_postgres::Row, idx: usize) -> serde_json::Value {
@@ -304,6 +314,18 @@ pub async fn execute_sql(sql: String, opts: ExecuteSqlOpts) -> Result<SqlResult,
             // 重序列化单条语句为可执行 SQL（去掉末尾分号，避免与 execute 的隐式分号冲突）
             let stmt_sql = stmt.to_string();
             last_result = execute_one(&client, stmt, &stmt_sql, opts.with_explain, start).await?;
+        }
+        // 是否含写语句：抽成纯函数便于单测（见 writes_affect_cache）。
+        let has_write = writes_affect_cache(&asts);
+        // SQL 控制台写操作可能直改 posts/comments/tags，绕过了 server function 的
+        // 正常失效路径（delete_post/create_post 等已在内部失效）。此处全量兜底失效，
+        // 避免最长 10 分钟（TTL_SINGLE_POST=600s）内继续吐出陈旧数据（含已删除文章）。
+        if has_write {
+            crate::cache::invalidate_all_post_caches();
+            crate::cache::invalidate_search_results();
+            crate::cache::invalidate_all_comments();
+            crate::ssr_cache::invalidate_ssr_all_public();
+            crate::ssr_cache::bump_global_generation();
         }
         Ok(last_result)
     }
@@ -687,5 +709,43 @@ mod tests {
         assert!(!is_read_only(&parse("UPDATE t SET a = 1 WHERE id = 1")[0]));
         assert!(!is_read_only(&parse("DELETE FROM t WHERE id = 1")[0]));
         assert!(!is_read_only(&parse("INSERT INTO t (a) VALUES (1)")[0]));
+    }
+
+    // ── writes_affect_cache（SQL 控制台兜底失效开关） ─────────────
+    // 任何写语句（非只读）都应触发全量缓存失效，兜底绕过 server function 的直改 DB。
+
+    #[test]
+    fn writes_affect_cache_true_for_write_statements() {
+        for sql in [
+            "UPDATE posts SET deleted_at = NOW() WHERE id = 648",
+            "DELETE FROM posts WHERE id = 648",
+            "INSERT INTO posts (title) VALUES ('x')",
+            "TRUNCATE posts",
+            "ALTER TABLE posts ADD COLUMN x int",
+            "DROP TABLE posts",
+        ] {
+            assert!(
+                writes_affect_cache(&parse(sql)),
+                "写语句应触发兜底失效：{sql:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn writes_affect_cache_false_for_read_only_statements() {
+        for sql in ["SELECT 1", "EXPLAIN SELECT * FROM posts", "SELECT id FROM posts WHERE id = 1"]
+        {
+            assert!(
+                !writes_affect_cache(&parse(sql)),
+                "只读语句不应触发兜底失效：{sql:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn writes_affect_cache_mixed_statements_flagged() {
+        // 多语句中混入任一写语句即应触发（与 allow_multi 语义一致）。
+        let stmts = parse("SELECT 1; UPDATE posts SET deleted_at = NULL WHERE id = 648");
+        assert!(writes_affect_cache(&stmts));
     }
 }
