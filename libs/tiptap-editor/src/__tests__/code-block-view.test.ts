@@ -39,6 +39,10 @@ describe('CodeBlockNodeView', () => {
     } as any);
     expect(view.dom.querySelector('.tiptap-codeblock-lang')?.textContent).toBe('python');
     expect(view.dom.querySelector('.tiptap-codeblock-run')).not.toBeNull();
+    expect(view.dom.querySelector<HTMLElement>('.tiptap-codeblock-toolbar')?.style.display).toBe(
+      '',
+    );
+    expect(view.dom.classList.contains('has-toolbar')).toBe(true);
   });
 
   it('普通块(python)：显示语言标签，无运行按钮', () => {
@@ -48,16 +52,47 @@ describe('CodeBlockNodeView', () => {
     } as any);
     expect(view.dom.querySelector('.tiptap-codeblock-lang')?.textContent).toBe('python');
     expect(view.dom.querySelector('.tiptap-codeblock-run')).toBeNull();
+    expect(view.dom.querySelector<HTMLElement>('.tiptap-codeblock-toolbar')?.style.display).toBe(
+      '',
+    );
+    expect(view.dom.classList.contains('has-toolbar')).toBe(true);
   });
 
-  it('无 language 的块：标签为空或占位，无运行按钮', () => {
+  it('无 language 的块：隐藏 toolbar，无运行按钮', () => {
     const view = new CodeBlockNodeView({
       node: mockNode(''),
       editor: mockEditor(),
     } as any);
     expect(view.dom.querySelector('.tiptap-codeblock-run')).toBeNull();
+    expect(view.dom.querySelector<HTMLElement>('.tiptap-codeblock-toolbar')?.style.display).toBe(
+      'none',
+    );
+    expect(view.dom.classList.contains('has-toolbar')).toBe(false);
   });
 
+  it('node 语言由空更新为 python 时 update() 显示 toolbar', () => {
+    const view = new CodeBlockNodeView({
+      node: mockNode(''),
+      editor: mockEditor(),
+    } as any);
+    expect(view.dom.querySelector<HTMLElement>('.tiptap-codeblock-toolbar')?.style.display).toBe(
+      'none',
+    );
+    expect(view.dom.classList.contains('has-toolbar')).toBe(false);
+
+    view.update(mockNode('python'));
+    expect(view.dom.querySelector('.tiptap-codeblock-lang')?.textContent).toBe('python');
+    expect(view.dom.querySelector<HTMLElement>('.tiptap-codeblock-toolbar')?.style.display).toBe(
+      '',
+    );
+    expect(view.dom.classList.contains('has-toolbar')).toBe(true);
+
+    view.update(mockNode(''));
+    expect(view.dom.querySelector<HTMLElement>('.tiptap-codeblock-toolbar')?.style.display).toBe(
+      'none',
+    );
+    expect(view.dom.classList.contains('has-toolbar')).toBe(false);
+  });
   it('node 语言变化时 update() 刷新标签', () => {
     const view = new CodeBlockNodeView({
       node: mockNode('python'),

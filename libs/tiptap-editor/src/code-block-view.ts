@@ -66,10 +66,10 @@ export class CodeBlockNodeView {
     this.langBadge.classList.add('tiptap-codeblock-lang');
     this.langBadge.textContent = extractLang((this.node.attrs.language as string) ?? '');
     // runnable 块的语言标签可点击，触发编辑模态框（改语言/overrides）
+    this.langBadge.addEventListener('click', () => this.openEditModal());
     if (isRunnable(this.node)) {
       this.langBadge.classList.add('tiptap-codeblock-lang-editable');
       this.langBadge.title = '点击修改语言与运行配置';
-      this.langBadge.addEventListener('click', () => this.openEditModal());
     }
     this.toolbar.appendChild(this.langBadge);
 
@@ -93,6 +93,9 @@ export class CodeBlockNodeView {
     }
     this.pre.appendChild(this.code);
     this.container.appendChild(this.pre);
+
+    // 校验并设置工具栏显隐（无语言且非 runnable 时隐藏）
+    this.updateToolbarVisibility();
   }
 
   get dom(): HTMLElement {
@@ -114,12 +117,22 @@ export class CodeBlockNodeView {
     this.node = node;
     if (oldLang !== newLang) {
       this.langBadge.textContent = extractLang(newLang);
+      const runnable = isRunnable(node);
+      this.langBadge.classList.toggle('tiptap-codeblock-lang-editable', runnable);
+      if (runnable) {
+        this.langBadge.title = '点击修改语言与运行配置';
+      } else {
+        this.langBadge.removeAttribute('title');
+      }
+
       // 更新 <code> 的 language class（低亮按新语言重算）
       this.code.className = '';
       const langClass = extractLang(newLang);
       if (langClass) this.code.classList.add(`language-${langClass}`);
       // runnable 状态变化时重建按钮（简化：不细粒度增删，整体重建工具栏按钮区）
       this.refreshRunButton();
+      // 刷新工具栏显隐状态（无语言且非 runnable 时隐藏）
+      this.updateToolbarVisibility();
     }
     return true;
   }
@@ -135,6 +148,18 @@ export class CodeBlockNodeView {
       this.runBtn?.remove();
       this.runBtn = null;
     }
+  }
+
+  /**
+   * 刷新工具栏显隐与容器类名：无语言且非 runnable 时隐藏工具栏。
+   */
+  private updateToolbarVisibility(): void {
+    const lang = extractLang((this.node.attrs.language as string) ?? '');
+    const runnable = isRunnable(this.node);
+    const show = lang !== '' || runnable;
+
+    this.toolbar.style.display = show ? '' : 'none';
+    this.container.classList.toggle('has-toolbar', show);
   }
 
   /**
@@ -178,6 +203,7 @@ export class CodeBlockNodeView {
   /** 点击运行：调 editor.storage.__onRunCode，结果填入结果区。 */
   /** 点击语言标签：打开编辑模态框，修改当前 runnable 块的语言/overrides。 */
   private openEditModal(): void {
+    if (!isRunnable(this.node)) return;
     const pos = this.getPos?.();
     const currentInfo = (this.node.attrs.language as string) ?? '';
     if (pos === undefined) return;
