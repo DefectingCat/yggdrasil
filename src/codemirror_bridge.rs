@@ -11,15 +11,12 @@
 use serde::{Deserialize, Serialize};
 
 /// SQL 补全用 schema 数据，由 `get_db_schema` server function 填充。
-// 暂未被消费（Task 5 的 get_db_schema 会用到），先 allow dead_code 避免 -D warnings 阻断 clippy。
-#[allow(dead_code)]
 #[derive(Serialize, Deserialize, Clone, Default, Debug)]
 pub struct SqlSchema {
     pub tables: Vec<SqlTable>,
 }
 
 /// 单张表的补全数据：表名 + 列名列表。
-#[allow(dead_code)]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SqlTable {
     pub name: String,

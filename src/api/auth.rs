@@ -417,26 +417,6 @@ pub async fn get_user_by_token(token: &str) -> Result<Option<SessionUser>, Serve
     Ok(user)
 }
 
-#[cfg(feature = "server")]
-/// 使指定用户的所有 session 立即失效：bump `session_generation`。
-///
-/// 用于角色降级、封禁、密码修改等场景。bump 后该用户所有已签发 session 在下次
-/// `get_user_by_token` 时因世代不匹配被逐出缓存并视为未登录。内存缓存无需主动清，
-/// 惰性逐出即可。当前仓库无运行时角色变更入口，本函数是为未来「用户管理」功能
-/// 预备的基础设施，一旦引入降级/封禁的 server function，必须在 UPDATE 后调用。
-#[allow(dead_code)] // 预留给未来的用户管理功能（角色变更/封禁触发全量 session 失效）
-pub async fn invalidate_user_sessions(user_id: i32) -> Result<(), ServerFnError> {
-    let client = get_conn().await.map_err(AppError::db_conn)?;
-    client
-        .execute(
-            "UPDATE users SET session_generation = session_generation + 1 WHERE id = $1",
-            &[&user_id],
-        )
-        .await
-        .map_err(AppError::query)?;
-    Ok(())
-}
-
 /// 获取当前登录用户的公开信息。
 ///
 /// Dioxus server function，注册在 `/api` 路径下。

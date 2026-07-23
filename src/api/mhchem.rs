@@ -51,16 +51,8 @@ enum Field {
     Nodes(Vec<Parsed>),
 }
 
-impl Field {
-    fn empty(&self) -> bool {
-        match self {
-            Field::Str(s) => s.is_empty(),
-            Field::Nodes(v) => v.is_empty(),
-        }
-    }
-}
-
 /// 解析中间表示：字面字符串或节点。
+#[allow(clippy::large_enum_variant)] // 机械移植：镜像 mhchemParser 上游结构，Parsed 经 Vec 进堆，非栈热路径
 #[derive(Clone, Debug)]
 enum Parsed {
     S(String),
@@ -398,11 +390,11 @@ fn match_pattern(name: &str, input: &str) -> Option<MMatch> {
         "x" => re_match(re!("^x")),
         "x$" => re_match(re!("^x$")),
         "i$" => re_match(re!("^i$")),
-        "letters" => re_match(&*LETTERS_RE),
-        "\\greek" => re_match(&*GREEK_RE),
+        "letters" => re_match(&LETTERS_RE),
+        "\\greek" => re_match(&GREEK_RE),
         "one lowercase latin letter $" => re_match(re!("^(?:([a-z])(?:$|[^a-zA-Z]))$")),
         "$one lowercase latin letter$ $" => re_match(re!("^\\$(?:([a-z])(?:$|[^a-zA-Z]))\\$$")),
-        "one lowercase greek letter $" => re_match(&*ONE_GREEK_RE),
+        "one lowercase greek letter $" => re_match(&ONE_GREEK_RE),
         "digits" => re_match(re!("^[0-9]+")),
         "-9.,9" => re_match(re!("^[+\\-]?(?:[0-9]+(?:[,.][0-9]+)?|[0-9]*(?:\\.[0-9]+))")),
         "-9.,9 no missing 0" => re_match(re!("^[+\\-]?[0-9]+(?:[.,][0-9]+)?")),
@@ -596,6 +588,7 @@ fn mval_str(m: &MVal) -> String {
 // 状态机主循环（对应 `_mhchemParser.go`）
 // =========================================================================
 
+#[allow(clippy::large_enum_variant)] // 同上：Out 为动作返回值，瞬态使用
 enum Out {
     None,
     One(Parsed),
@@ -622,8 +615,10 @@ fn go(input: &str, machine: &str) -> Vec<Parsed> {
 
     let transitions = transitions_for(machine);
     let mut state = String::from("0");
-    let mut buffer = Buffer::default();
-    buffer.parenthesis_level = 0;
+    let mut buffer = Buffer {
+        parenthesis_level: 0,
+        ..Default::default()
+    };
     let mut output: Vec<Parsed> = Vec::new();
     let mut last_input: Option<String> = None;
     let mut watchdog = 10i32;
@@ -753,7 +748,7 @@ fn generic_action(buf: &mut Buffer, m: &MVal, opt: &Option<String>, type_: &str)
             if let (Some(a), MVal::V(v)) = (opt, m) {
                 Out::One(Parsed::N(NodeData {
                     type_: a.clone(),
-                    p1: Some(Field::Str(v.get(0).cloned().unwrap_or_default())),
+                    p1: Some(Field::Str(v.first().cloned().unwrap_or_default())),
                     p2: Some(Field::Str(v.get(1).cloned().unwrap_or_default())),
                     ..Default::default()
                 }))

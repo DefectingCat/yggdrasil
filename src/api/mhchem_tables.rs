@@ -2,10 +2,6 @@
 // 数据机械移植自 mhchemParser 4.2.2 的 `stateMachines`。
 // （被 include 进 mhchem.rs 中部，故不能用 `//!` 内部文档注释。）
 
-#[allow(clippy::needless_pass_by_value)]
-
-use super::*;
-
 // ── Task 构造器 ──────────────────────────────────────────────────────────
 
 fn task(acts: &[(&str, Option<&str>)], next: Option<&str>, revisit: bool, cont: bool) -> Task {
@@ -1220,7 +1216,7 @@ fn text_action(buf: &mut Buffer, type_: &str) -> Option<Out> {
     }
 }
 
-fn pq_action(buf: &mut Buffer, m: &MVal, type_: &str) -> Option<Out> {
+fn pq_action(_buf: &mut Buffer, m: &MVal, type_: &str) -> Option<Out> {
     match type_ {
         "state of aggregation" => Some(Out::One(Parsed::N(NodeData {
             type_: "state of aggregation subscript".into(),
@@ -1307,7 +1303,7 @@ fn pu_action(buf: &mut Buffer, m: &MVal, opt: &Option<String>, type_: &str) -> O
                 MVal::S(s) => vec![s.clone()],
             };
             let mut ret: Vec<Parsed> = Vec::new();
-            let g0 = v.get(0).map(|s| s.as_str()).unwrap_or("");
+            let g0 = v.first().map(|s| s.as_str()).unwrap_or("");
             if g0 == "+-" || g0 == "+/-" {
                 ret.push(Parsed::S("\\pm ".into()));
             } else if !g0.is_empty() {
@@ -1352,7 +1348,7 @@ fn pu_action(buf: &mut Buffer, m: &MVal, opt: &Option<String>, type_: &str) -> O
                 MVal::S(s) => vec![s.clone()],
             };
             let mut ret: Vec<Parsed> = Vec::new();
-            let g0 = v.get(0).map(|s| s.as_str()).unwrap_or("");
+            let g0 = v.first().map(|s| s.as_str()).unwrap_or("");
             if g0 == "+-" || g0 == "+/-" {
                 ret.push(Parsed::S("\\pm ".into()));
             } else if !g0.is_empty() {

@@ -50,7 +50,7 @@ fn route_cache_dir(route: &str) -> Option<PathBuf> {
         path.push(seg);
     }
     if path.as_path() == std::path::Path::new(SSR_CACHE_ROOT) {
-        None // 根路由（"/"）单独由 invalidate_ssr_home 处理
+        None // 根路由（"/"）无目录段；首页缓存由 invalidate_ssr_all_public 覆盖删除
     } else {
         Some(path)
     }
@@ -69,19 +69,6 @@ pub fn invalidate_ssr_route(route: &str) {
         Ok(()) => tracing::debug!(route = route, dir = %dir.display(), "SSR 路由缓存已删除"),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => tracing::warn!(route = route, error = %e, "删除 SSR 路由缓存失败"),
-    }
-}
-
-/// 失效首页 SSR 缓存（路由 `/`，落盘在 `static/index/`）。
-///
-/// 通常 [`invalidate_ssr_all_public`] 已覆盖首页；本函数留作只需刷新首页的细粒度场景。
-#[allow(dead_code)]
-pub fn invalidate_ssr_home() {
-    let dir = PathBuf::from(SSR_CACHE_ROOT).join("index");
-    match std::fs::remove_dir_all(&dir) {
-        Ok(()) => tracing::debug!("SSR 首页缓存已删除"),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => tracing::warn!(error = %e, "删除 SSR 首页缓存失败"),
     }
 }
 
@@ -112,7 +99,7 @@ pub fn invalidate_ssr_all_public() {
 /// 原子递增并返回新的全局世代号。
 ///
 /// 仅作可观测性用途（注入 `X-SSR-Generation` 响应头）。实际 SSR 缓存失效由
-/// [`invalidate_ssr_route`] / [`invalidate_ssr_home`] 物理删文件完成。
+/// [`invalidate_ssr_route`] 物理删文件完成（首页由 [`invalidate_ssr_all_public`] 覆盖）。
 pub fn bump_global_generation() -> u64 {
     let new = GLOBAL_GENERATION
         .fetch_add(1, Ordering::SeqCst)
@@ -164,7 +151,7 @@ mod tests {
 
     #[test]
     fn route_cache_dir_none_for_root() {
-        // 根路由 "/" 无目录段，由 invalidate_ssr_home 单独处理。
+        // 根路由 "/" 无目录段（首页缓存由 invalidate_ssr_all_public 覆盖）。
         assert!(route_cache_dir("/").is_none());
         assert!(route_cache_dir("").is_none());
     }
@@ -195,6 +182,5 @@ mod tests {
         // （若真实环境已有 static/，本测试不会误删——read_dir 对每个条目单独删，
         //  这里仅验证根缺失分支。）
         invalidate_ssr_all_public();
-        invalidate_ssr_home();
     }
 }
