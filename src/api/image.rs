@@ -321,22 +321,14 @@ fn check_image_dimensions(width: u32, height: u32) -> Result<(), StatusCode> {
 }
 
 #[cfg(feature = "server")]
-/// 仅读取 header 校验上传图片的尺寸/像素是否超限。
+/// 仅读取 header 校验上传图片的尺寸/像素是否超限，并返回 (width, height)。
 ///
-/// 与 `check_image_dimensions` 的区别:
 /// - 输入是原始字节 + MIME,内部按 MIME 分发只解析 header 拿尺寸(不解码像素)
 /// - 返回带友好中文提示的 `&'static str`(供上传接口直接回给用户)
 ///
 /// 上传入口三种格式在此统一拦截至尺寸上限;WebP 走 `zenwebp` header,
 /// JPEG/PNG/GIF 走 `image` crate 的 `into_dimensions`(均只读 header)。
-pub fn check_upload_dimensions(data: &[u8], mime_type: &str) -> Result<(), &'static str> {
-    upload_dimensions(data, mime_type).map(|_| ())
-}
-
-#[cfg(feature = "server")]
-/// 与 [`check_upload_dimensions`] 相同的校验，但返回 (width, height)。
-///
-/// 供 `upload_image` 在校验通过后直接把尺寸写入 assets 表，避免二次解析 header。
+/// 尺寸随结果返回，供 `upload_image` 校验通过后直接写入 assets 表，避免二次解析。
 pub(crate) fn upload_dimensions(data: &[u8], mime_type: &str) -> Result<(u32, u32), &'static str> {
     let dims = read_dimensions_by_mime(data, mime_type)?;
     let (width, height) = dims;
@@ -796,7 +788,7 @@ mod tests {
         assert_eq!(dims, None);
     }
 
-    // —— check_upload_dimensions:统一上传尺寸/像素上限校验 ——
+    // —— upload_dimensions：统一上传尺寸/像素上限校验 ——
 
     /// 构造指定尺寸的 PNG 字节(内存占用 = 尺寸,仅用于 header 校验测试)。
     fn make_png_bytes(w: u32, h: u32) -> Vec<u8> {
@@ -807,54 +799,54 @@ mod tests {
     }
 
     #[test]
-    fn check_upload_dimensions_accepts_small_png() {
+    fn upload_dimensions_accepts_small_png() {
         let data = make_png_bytes(100, 100);
-        assert!(check_upload_dimensions(&data, "image/png").is_ok());
+        assert!(upload_dimensions(&data, "image/png").is_ok());
     }
 
     #[test]
-    fn check_upload_dimensions_accepts_boundary_png() {
+    fn upload_dimensions_accepts_boundary_png() {
         // 用 7000×7000(≈49M 像素):单边 7000 < 默认 8192 上限,且总像素 < 默认 50M 上限,应放行。
         // 注意不能直接用 *MAX_IMAGE_DIMENSION 做正方形边——8192²≈67M 会触发像素上限拒绝。
         let data = make_png_bytes(7000, 7000);
-        assert!(check_upload_dimensions(&data, "image/png").is_ok());
+        assert!(upload_dimensions(&data, "image/png").is_ok());
     }
 
     #[test]
-    fn check_upload_dimensions_rejects_oversized_width() {
+    fn upload_dimensions_rejects_oversized_width() {
         // 单边超限:(上限+1)×1,像素远低于上限,但单边越界
         let data = make_png_bytes(*MAX_IMAGE_DIMENSION + 1, 1);
-        let err = check_upload_dimensions(&data, "image/png").unwrap_err();
+        let err = upload_dimensions(&data, "image/png").unwrap_err();
         assert!(err.contains("尺寸过大"));
     }
 
     #[test]
-    fn check_upload_dimensions_rejects_oversized_height() {
+    fn upload_dimensions_rejects_oversized_height() {
         let data = make_png_bytes(1, *MAX_IMAGE_DIMENSION + 1);
-        let err = check_upload_dimensions(&data, "image/png").unwrap_err();
+        let err = upload_dimensions(&data, "image/png").unwrap_err();
         assert!(err.contains("尺寸过大"));
     }
 
     #[test]
-    fn check_upload_dimensions_accepts_small_webp() {
+    fn upload_dimensions_accepts_small_webp() {
         let img = image::DynamicImage::new_rgb8(64, 48);
         let webp_bytes = crate::webp::encode(&img, 85.0, 2).unwrap();
-        assert!(check_upload_dimensions(&webp_bytes, "image/webp").is_ok());
+        assert!(upload_dimensions(&webp_bytes, "image/webp").is_ok());
     }
 
     #[test]
-    fn check_upload_dimensions_accepts_gif() {
+    fn upload_dimensions_accepts_gif() {
         // image crate 默认启用 gif feature,into_dimensions 可读 GIF header
         let img = image::DynamicImage::new_rgb8(32, 32);
         let mut buf = std::io::Cursor::new(Vec::new());
         img.write_to(&mut buf, image::ImageFormat::Gif).unwrap();
-        assert!(check_upload_dimensions(&buf.into_inner(), "image/gif").is_ok());
+        assert!(upload_dimensions(&buf.into_inner(), "image/gif").is_ok());
     }
 
     #[test]
-    fn check_upload_dimensions_rejects_corrupt_bytes() {
+    fn upload_dimensions_rejects_corrupt_bytes() {
         // 非 magic bytes,与现有损坏文件校验文案对齐
-        let err = check_upload_dimensions(b"not an image at all", "image/png").unwrap_err();
+        let err = upload_dimensions(b"not an image at all", "image/png").unwrap_err();
         assert_eq!(err, "图片文件损坏或格式不正确");
     }
 

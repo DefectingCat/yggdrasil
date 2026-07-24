@@ -18,11 +18,13 @@ use crate::models::asset::{AssetFilter, AssetSort};
 /// - `on_select`：选中回填，参数为 `/uploads/<path>` URL。
 /// - `cover_uploading`：modal 内上传新图时置位，供父页面拦截保存（与 CoverUploader 语义一致）。
 #[component]
+#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
 pub fn AssetPickerModal(
     mut visible: Signal<bool>,
     on_select: EventHandler<String>,
     cover_uploading: Signal<bool>,
 ) -> Element {
+    #[allow(unused_mut)]
     let mut assets: Signal<Vec<AssetDto>> = use_signal(Vec::new);
     #[allow(unused_mut)]
     let mut loading = use_signal(|| false);
@@ -34,21 +36,20 @@ pub fn AssetPickerModal(
     use_effect(move || {
         let open = visible();
         let q = query();
-        if !open {
-            return;
-        }
-        #[cfg(target_arch = "wasm32")]
-        spawn(async move {
-            loading.set(true);
-            match list_assets(AssetFilter::All, q, AssetSort::CreatedDesc, 1).await {
-                Ok(resp) => {
-                    assets.set(resp.assets);
-                    error.set(None);
+        if open {
+            #[cfg(target_arch = "wasm32")]
+            spawn(async move {
+                loading.set(true);
+                match list_assets(AssetFilter::All, q, AssetSort::CreatedDesc, 1).await {
+                    Ok(resp) => {
+                        assets.set(resp.assets);
+                        error.set(None);
+                    }
+                    Err(e) => error.set(Some(e.to_string())),
                 }
-                Err(e) => error.set(Some(e.to_string())),
-            }
-            loading.set(false);
-        });
+                loading.set(false);
+            });
+        }
     });
 
     if !visible() {

@@ -6,12 +6,17 @@
 
 use dioxus::prelude::*;
 
+// server fn 仅在 WASM 前端调用（全部包在 cfg(wasm32) 块内），server SSR 只编译类型。
+#[cfg(target_arch = "wasm32")]
 use crate::api::assets::{
     delete_asset, list_assets, purge_orphan_assets, rebuild_assets_index, update_asset_alt,
 };
-use crate::api::assets::{AssetListResponse, PurgeOrphansResponse, RebuildAssetsResponse};
+use crate::api::assets::AssetListResponse;
+#[cfg(target_arch = "wasm32")]
+use crate::api::assets::{PurgeOrphansResponse, RebuildAssetsResponse};
 use crate::components::empty_state::EmptyState;
 use crate::components::ui::{FilterTabs, Pagination};
+#[cfg(target_arch = "wasm32")]
 use crate::models::asset::{AssetFilter, AssetSort};
 
 /// 每页素材数，与服务端 list.rs 的 PER_PAGE 对齐。
@@ -35,6 +40,8 @@ fn format_bytes(bytes: i64) -> String {
 }
 
 /// 素材管理入口组件。
+// 交互逻辑全部 cfg(wasm32) 门控，server SSR 编译时一批绑定未使用，按 CoverUploader 惯例放行。
+#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
 #[component]
 pub fn Assets() -> Element {
     // 筛选/搜索/排序/分页状态：全部客户端驱动（单路由 + signal，对齐「管理文章」模式）。
@@ -43,6 +50,7 @@ pub fn Assets() -> Element {
     let mut sort = use_signal(|| "created".to_string());
     let mut page = use_signal(|| 1_i32);
 
+    #[allow(unused_mut)]
     let mut data: Signal<Option<AssetListResponse>> = use_signal(|| None);
     #[allow(unused_mut)]
     let mut loading: Signal<bool> = use_signal(|| true);
