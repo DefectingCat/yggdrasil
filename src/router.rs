@@ -129,6 +129,11 @@ fn ErrorLayout() -> Element {
     rsx! {
         ErrorBoundary {
             handle_error: move |err: ErrorContext| {
+                // 克隆一份错误边界句柄，供 fallback 内的「返回首页」按钮清除错误。
+                // ErrorContext 内部是 Rc<RefCell<...>>，clone 廉价。
+                // 不清除就导航会卡死：ErrorBoundary 持有错误时永远渲染 fallback，
+                // 不渲染 children（Outlet），导致 URL 变了但页面不变。
+                let err_ctx = err.clone();
                 // Commit the status code on the server side
                 #[cfg(feature = "server")]
                 {
@@ -202,9 +207,18 @@ fn ErrorLayout() -> Element {
                                     "抱歉，加载页面时出现了一些错误，请稍后再试。"
                                 }
 
-                                // CTA: Link back to home, styled with subtle border & background transition
-                                dioxus::router::components::Link {
-                                    to: Route::Home {},
+                                // CTA: 清除错误边界后命令式导航回首页。
+                                // 必须用按钮而非 Link —— Link 无法在导航前清除错误，
+                                // 会导致 ErrorBoundary 卡在 fallback，页面不随路由切换更新。
+                                button {
+                                    r#type: "button",
+                                    onclick: {
+                                        let err_ctx = err_ctx.clone();
+                                        move |_| {
+                                            err_ctx.clear_errors();
+                                            let _ = dioxus::router::navigator().push(Route::Home {});
+                                        }
+                                    },
                                     class: "group inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-paper-primary bg-paper-theme border border-paper-border rounded-full hover:border-paper-secondary hover:bg-paper-border transition-all duration-200 cursor-pointer shadow-sm active:scale-[0.98]",
                                     svg {
                                         xmlns: "http://www.w3.org/2000/svg",

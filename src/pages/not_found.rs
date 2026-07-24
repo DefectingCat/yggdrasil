@@ -6,13 +6,24 @@
 //! 该页面为静态展示页面，不发起任何 server function 调用。
 
 use dioxus::prelude::*;
-use dioxus::router::components::Link;
 
 use crate::router::Route;
 
 /// 404 页面组件，对应兜底路由 `/:..segments`。
 ///
 /// 展示大号的装饰性 404 数字、状态标签、错误说明以及返回首页的链接。
+///
+/// # 两种命中路径
+/// 本组件在两种完全不同的机制下被渲染：
+/// 1. **路由匹配** —— 访问任意未命中路径，Router 命中 catch-all `Route::NotFound`，
+///    此时 `ErrorBoundary` **无错误**，本组件作为 children（Outlet）正常渲染。
+/// 2. **错误冒泡** —— 如 `PostDetail` 对不存在的 slug 抛出 `ServerFnError(404)`，
+///    `ErrorLayout` 的 `ErrorBoundary` 捕获后在 fallback 里渲染本组件。
+///
+/// 「返回首页」必须在导航前清除可能存在的错误边界，否则场景 2 会卡死：
+/// ErrorBoundary 持有错误时不渲染 children（Outlet），路由虽切到 `Home`，
+/// 页面仍停留在 fallback（本组件），表现为「URL 变了但页面不变」。
+/// 场景 1 下没有错误，`clear_errors` 是 no-op。
 #[component]
 pub fn NotFound(segments: Vec<String>) -> Element {
     let _ = segments;
@@ -51,10 +62,19 @@ pub fn NotFound(segments: Vec<String>) -> Element {
                 "这个页面似乎走丢了，或者从未存在过。"
             }
 
-            // 返回首页
-            Link {
-                to: Route::Home {},
-                class: "group inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-paper-primary bg-paper-entry border border-paper-border rounded-lg hover:border-paper-secondary hover:bg-paper-border transition-all",
+            // 返回首页：用 onclick 先清除错误边界再导航。
+            // 直接用 Link 无法干预点击时机，故改为按钮 + 命令式导航。
+            // 详见组件顶部文档：场景 2（错误冒泡）下若不清除错误，
+            // ErrorBoundary 会一直渲染 fallback，路由切换后页面仍卡在本页。
+            button {
+                r#type: "button",
+                onclick: move |_| {
+                    if let Some(ctx) = try_consume_context::<ErrorContext>() {
+                        ctx.clear_errors();
+                    }
+                    let _ = dioxus::router::navigator().push(Route::Home {});
+                },
+                class: "group inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-paper-primary bg-paper-entry border border-paper-border rounded-lg hover:border-paper-secondary hover:bg-paper-border transition-all cursor-pointer",
                 svg {
                     xmlns: "http://www.w3.org/2000/svg",
                     width: "16",
