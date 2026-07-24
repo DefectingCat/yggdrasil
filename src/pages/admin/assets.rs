@@ -3,6 +3,11 @@
 //! 网格浏览 `uploads/` 已登记图片：搜索（文件名/alt）、引用状态筛选
 //! （全部/引用中/孤儿）、排序（最新/最大）、客户端分页。
 //! 缩略图直接复用 `serve_image` 的动态处理（`?thumb=300x300`），零额外成本。
+//!
+//! 缩略图采用与前台正文图一致的 `.blur-img` 双层结构（`?w=20` 占位 + `data-src`
+//! 展示层），点击由全局注入的 `lightbox.js` 接管为灯箱预览（图集模式，当前页内
+//! 左右切换，灯箱加载原图 = `data-src` 去 query）。数据异步到达/刷新后由
+//! `use_effect` 调 `__initLightbox` 绑定；TS 端有 `data-lb-bound` 守卫，重复绑定幂等。
 
 use dioxus::prelude::*;
 
@@ -16,6 +21,8 @@ use crate::api::assets::AssetListResponse;
 use crate::api::assets::{PurgeOrphansResponse, RebuildAssetsResponse};
 use crate::components::empty_state::EmptyState;
 use crate::components::ui::{FilterTabs, Pagination};
+#[cfg(target_arch = "wasm32")]
+use crate::utils::js::invoke_optional_global;
 #[cfg(target_arch = "wasm32")]
 use crate::models::asset::{AssetFilter, AssetSort};
 
@@ -101,6 +108,25 @@ pub fn Assets() -> Element {
                 loading.set(false);
             });
         }
+    });
+
+    // 灯箱初始化：lightbox.js 由 Dioxus.toml 全局注入。网格随数据异步渲染，
+    // 需在数据到达（DOM 提交后）调 __initLightbox 绑定；筛选/翻页/刷新重建节点后
+    // 重跑此 effect 重新绑定。TS 端 data-lb-bound 守卫保证重复绑定幂等。
+    #[cfg(target_arch = "wasm32")]
+    use_effect(move || {
+        // 订阅 data：取数/刷新后网格重渲染，effect 在 DOM 更新后运行。
+        if data.read().is_none() {
+            return;
+        }
+        let window =
+            web_sys::window().expect("assets use_effect 仅在 WASM 浏览器上下文执行：无 window");
+        // 双保险契约（同 PostContent）：先设全局配置，lightbox.js 若尚未加载完，
+        // 其 IIFE 尾部读到配置自启动；已加载则下方直接调用兜底。
+        let selectors = js_sys::Array::of1(&".assets-lightbox".into());
+        let selectors_val = js_sys::Object::from(selectors).into();
+        let _ = js_sys::Reflect::set(&window, &"__lightboxSelectors".into(), &selectors_val);
+        invoke_optional_global(&window, "__initLightbox", &[selectors_val]);
     });
 
     let resp = data.read();
@@ -283,12 +309,14 @@ pub fn Assets() -> Element {
                     description: "在编辑器中上传图片后会自动出现在这里".to_string(),
                 }
             } else {
-                // 网格：缩略图卡片
-                div { class: "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 mt-2",
+                // 网格：缩略图卡片（assets-lightbox 为 __initLightbox 的根选择器）
+                div { class: "assets-lightbox grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 mt-2",
                     for asset in assets.iter() {
                         {
                             let a = &asset.asset;
                             let thumb = format!("/uploads/{}?thumb=300x300", a.path);
+                            let placeholder = format!("/uploads/{}?w=20", a.path);
+                            let img_alt = a.alt.clone().unwrap_or_else(|| a.filename.clone());
                             let is_orphan = asset.ref_count == 0;
                             let badge_class = if is_orphan {
                                 "absolute top-2 left-2 text-[10px] font-mono px-2 py-0.5 rounded-full backdrop-blur-sm bg-amber-500/80 text-white"
@@ -299,12 +327,19 @@ pub fn Assets() -> Element {
                                 div {
                                     key: "{a.id}",
                                     class: "group relative rounded-3xl overflow-hidden border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] shadow-sm hover:shadow-md transition-all",
-                                    div { class: "aspect-square overflow-hidden bg-[var(--color-paper-theme)]",
+                                    // blur-img 双层结构（对齐前台正文图）：?w=20 模糊占位 +
+                                    // data-src 展示层（IO 懒加载）；点击由 lightbox.js 接管为灯箱
+                                    // （图集模式，原图 = data-src 去 query）。不加 lightbox-single。
+                                    div { class: "blur-img aspect-square m-0 cursor-pointer bg-[var(--color-paper-theme)]",
                                         img {
-                                            class: "w-full h-full object-cover",
-                                            src: "{thumb}",
-                                            alt: a.alt.clone().unwrap_or_else(|| a.filename.clone()),
-                                            loading: "lazy",
+                                            class: "blur-img-placeholder",
+                                            src: "{placeholder}",
+                                            alt: "",
+                                        }
+                                        img {
+                                            class: "blur-img-full",
+                                            "data-src": "{thumb}",
+                                            alt: "{img_alt}",
                                         }
                                     }
                                     // 引用徽标

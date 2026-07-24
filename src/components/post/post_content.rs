@@ -12,6 +12,8 @@ use dioxus::prelude::*;
 
 use crate::components::code_runner::CodeRunner;
 use crate::infra::runner_config::ResourceLimits;
+#[cfg(target_arch = "wasm32")]
+use crate::utils::js::invoke_optional_global;
 
 /// 内容片段：普通 HTML 文本，或一个可运行代码块。
 #[derive(Clone, PartialEq, Debug)]
@@ -90,27 +92,6 @@ fn decode_html_entities(s: &str) -> String {
         .replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&amp;", "&")
-}
-
-/// 读取 `window` 上的可选全局函数并调用;函数未定义/为 null 时静默跳过。
-///
-/// 替代 `js_sys::eval("if(window.__x) window.__x(...)")` 字符串拼贴模式:用
-/// `Reflect::get` 取属性 + `Function::apply` 调用,无字符串求值,与 `tiptap_bridge`
-/// 的类型化 extern 风格一致。
-#[cfg(target_arch = "wasm32")]
-fn invoke_optional_global(window: &web_sys::Window, name: &str, args: &[wasm_bindgen::JsValue]) {
-    use wasm_bindgen::JsCast;
-    if let Ok(fn_val) = js_sys::Reflect::get(window, &name.into()) {
-        if !fn_val.is_undefined() && !fn_val.is_null() {
-            let arr = js_sys::Array::new();
-            for a in args {
-                arr.push(a);
-            }
-            let _ = fn_val
-                .unchecked_into::<js_sys::Function>()
-                .apply(window, &arr);
-        }
-    }
 }
 
 /// 文章内容组件。

@@ -237,6 +237,25 @@ describe('lightbox 黑盒行为', () => {
     });
   });
 
+  describe('重复初始化幂等（SPA 数据刷新场景）', () => {
+    it('同一批节点重复 __initLightbox，点击只创建一次 overlay', () => {
+      const img = makeGalleryImage('/a.webp', 'A');
+      mountRoot([img]);
+      window.__initLightbox('.post-content');
+      // 模拟 /admin/assets 刷新后 Dioxus 复用 DOM 节点导致的重复初始化
+      window.__initLightbox('.post-content');
+
+      const appendSpy = vi.spyOn(document.body, 'appendChild');
+      clickEl(img);
+      // 无守卫时两个 click 监听先后触发 openLightbox → overlay 被 append 两次
+      const overlayAppends = appendSpy.mock.calls.filter(
+        (c) => c[0] instanceof HTMLElement && c[0].classList.contains('lightbox-overlay'),
+      );
+      expect(overlayAppends).toHaveLength(1);
+      appendSpy.mockRestore();
+    });
+  });
+
   describe('单张图不参与图集切换', () => {
     it('单张图打开后按 ←/→ 不切换（无 counter、无箭头）', () => {
       const img = makeSingleImage('/cover.webp', '封面');

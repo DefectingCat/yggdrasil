@@ -506,18 +506,28 @@ window.__initLightbox = (selectors: string | string[]): void => {
     initLazyLoad(node);
   }
 
+  // 幂等守卫：SPA 页面（如 /admin/assets）数据刷新后会重复调用 __initLightbox，
+  // 而 Dioxus keyed diff 可能复用同一批 DOM 节点——无守卫会叠加 click 监听，
+  // 点一次连续触发多次 openLightbox（飞行动画重启/闪烁）。
+  // initLazyLoad 已有 data-blur-init 守卫，这里给 click 绑定补同款。
+  const bindClick = (node: HTMLElement, handler: (e: MouseEvent) => void): void => {
+    if (node.getAttribute('data-lb-bound')) return;
+    node.setAttribute('data-lb-bound', 'true');
+    node.addEventListener('click', handler);
+  };
+
   // 正文图：带 index。for..of + const 天然捕获每次迭代的 idx，
   // 无需旧 IIFE 包装（旧 var 循环闭包必须立即执行函数固定变量）。
   const gallery = collected.gallery;
   gallery.forEach((node, idx) => {
-    node.addEventListener('click', (e: MouseEvent) => {
+    bindClick(node, (e: MouseEvent) => {
       e.preventDefault();
       openLightbox(node, gallery, idx);
     });
   });
   // 单张图（封面）：index = null，gallery 传空数组表示单张
   for (const node of collected.singles) {
-    node.addEventListener('click', (e: MouseEvent) => {
+    bindClick(node, (e: MouseEvent) => {
       e.preventDefault();
       openLightbox(node, [], null);
     });
