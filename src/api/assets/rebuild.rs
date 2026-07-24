@@ -109,10 +109,11 @@ pub async fn rebuild_assets_index() -> Result<RebuildAssetsResponse, ServerFnErr
         let mut updated: i64 = 0;
         for f in &scanned {
             // DO UPDATE 的 WHERE 不满足时不返回行（技术字段无变化），用 query_opt 区分三种结果。
+            let asset_id = uuid::Uuid::new_v4();
             let row = tx
                 .query_opt(
                     "INSERT INTO assets (id, path, filename, mime, size_bytes, width, height) \
-                     VALUES ($1::uuid, $2, $3, $4, $5, $6, $7) \
+                     VALUES ($1, $2, $3, $4, $5, $6, $7) \
                      ON CONFLICT (path) DO UPDATE SET \
                          filename = EXCLUDED.filename, \
                          mime = EXCLUDED.mime, \
@@ -127,7 +128,7 @@ pub async fn rebuild_assets_index() -> Result<RebuildAssetsResponse, ServerFnErr
                         OR assets.filename IS DISTINCT FROM EXCLUDED.filename \
                      RETURNING (xmax = 0) AS was_inserted",
                     &[
-                        &uuid::Uuid::new_v4().to_string(),
+                        &asset_id,
                         &f.rel_path,
                         &f.filename,
                         &f.mime,

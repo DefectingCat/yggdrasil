@@ -21,11 +21,17 @@ pub async fn update_asset_alt(id: String, alt: String) -> Result<AssetOpResponse
         let _admin = get_current_admin_user().await?;
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
+        // id 在边界处从 String 解析为 Uuid（非法 id 属业务错误，不走 500）。
+        let asset_uuid = match uuid::Uuid::parse_str(&id) {
+            Ok(u) => u,
+            Err(_) => return Ok(AssetOpResponse::err("素材 id 非法".to_string())),
+        };
+
         let alt = alt.trim().to_string();
         let updated = client
             .execute(
-                "UPDATE assets SET alt = NULLIF($2, ''), updated_at = NOW() WHERE id = $1::uuid",
-                &[&id, &alt],
+                "UPDATE assets SET alt = NULLIF($2, ''), updated_at = NOW() WHERE id = $1",
+                &[&asset_uuid, &alt],
             )
             .await
             .map_err(AppError::query)?;
@@ -55,10 +61,15 @@ pub async fn delete_asset(id: String) -> Result<AssetOpResponse, ServerFnError> 
         let _admin = get_current_admin_user().await?;
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
+        let asset_uuid = match uuid::Uuid::parse_str(&id) {
+            Ok(u) => u,
+            Err(_) => return Ok(AssetOpResponse::err("素材 id 非法".to_string())),
+        };
+
         let row = client
             .query_opt(
-                "SELECT id::text AS id, path, filename FROM assets WHERE id = $1::uuid",
-                &[&id],
+                "SELECT id AS id, path, filename FROM assets WHERE id = $1",
+                &[&asset_uuid],
             )
             .await
             .map_err(AppError::query)?;
@@ -71,8 +82,8 @@ pub async fn delete_asset(id: String) -> Result<AssetOpResponse, ServerFnError> 
         let ref_rows = client
             .query(
                 "SELECT p.id, p.title FROM asset_refs r JOIN posts p ON p.id = r.post_id \
-                 WHERE r.asset_id = $1::uuid ORDER BY p.id",
-                &[&id],
+                 WHERE r.asset_id = $1 ORDER BY p.id",
+                &[&asset_uuid],
             )
             .await
             .map_err(AppError::query)?;
@@ -99,7 +110,7 @@ pub async fn delete_asset(id: String) -> Result<AssetOpResponse, ServerFnError> 
             }
         }
         client
-            .execute("DELETE FROM assets WHERE id = $1::uuid", &[&id])
+            .execute("DELETE FROM assets WHERE id = $1", &[&asset_uuid])
             .await
             .map_err(AppError::query)?;
         crate::api::image::invalidate_asset_caches(&path).await;
@@ -127,7 +138,7 @@ pub async fn purge_orphan_assets() -> Result<PurgeOrphansResponse, ServerFnError
 
         let rows = client
             .query(
-                "SELECT a.id::text AS id, a.path, a.size_bytes FROM assets a \
+                "SELECT a.id AS id, a.path, a.size_bytes FROM assets a \
                  WHERE NOT EXISTS (SELECT 1 FROM asset_refs r WHERE r.asset_id = a.id) \
                    AND a.created_at < NOW() - make_interval(days => $1)",
                 &[&super::list::PURGE_GRACE_DAYS],
@@ -145,11 +156,11 @@ pub async fn purge_orphan_assets() -> Result<PurgeOrphansResponse, ServerFnError
             });
         }
 
-        let mut ids: Vec<String> = Vec::with_capacity(rows.len());
+        let mut ids: Vec<uuid::Uuid> = Vec::with_capacity(rows.len());
         let mut freed_bytes: i64 = 0;
         let mut failures: i64 = 0;
         for row in &rows {
-            let id: String = row.get("id");
+            let id: uuid::Uuid = row.get("id");
             let path: String = row.get("path");
             freed_bytes += row.get::<_, i64>("size_bytes");
             let file_path = format!("uploads/{}", path);
@@ -166,10 +177,7 @@ pub async fn purge_orphan_assets() -> Result<PurgeOrphansResponse, ServerFnError
         }
 
         let deleted = client
-            .execute(
-                "DELETE FROM assets WHERE id = ANY($1::uuid[])",
-                &[&ids],
-            )
+            .execute("DELETE FROM assets WHERE id = ANY($1)", &[&ids])
             .await
             .map_err(AppError::query)?;
 

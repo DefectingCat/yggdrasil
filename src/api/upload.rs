@@ -307,12 +307,14 @@ pub async fn upload_image(
         let client = crate::db::pool::get_conn()
             .await
             .map_err(|e| e.to_string())?;
+        // id 用 Uuid 类型直连 uuid 列（with-uuid-1 桥接），避免 String→uuid 序列化失败。
+        let asset_id = uuid::Uuid::new_v4();
         client
             .execute(
                 "INSERT INTO assets (id, path, filename, mime, size_bytes, width, height)\
-                 VALUES ($1::uuid, $2, $3, $4, $5, $6, $7)",
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)",
                 &[
-                    &uuid::Uuid::new_v4().to_string(),
+                    &asset_id,
                     &rel_path,
                     &original_filename.unwrap_or_else(|| file_name.clone()),
                     &final_mime,

@@ -87,7 +87,7 @@ pub async fn list_assets(
         let rows = client
             .query(
                 &format!(
-                    "SELECT a.id::text AS id, a.path, a.filename, a.mime, a.size_bytes, \
+                    "SELECT a.id AS id, a.path, a.filename, a.mime, a.size_bytes, \
                             a.width, a.height, a.alt, a.created_at, \
                             (SELECT COUNT(*) FROM asset_refs r WHERE r.asset_id = a.id) AS ref_count \
                      FROM assets a {where_clause} \
@@ -124,35 +124,33 @@ pub async fn list_assets(
             .map_err(AppError::query)?;
 
         // 本页素材的引用文章（第二查询，避免 JOIN  fan-out 与分页错位）。
-        let ids: Vec<String> = rows.iter().map(|r| r.get::<_, String>("id")).collect();
+        let ids: Vec<uuid::Uuid> = rows.iter().map(|r| r.get::<_, uuid::Uuid>("id")).collect();
         let mut refs_map: std::collections::HashMap<String, Vec<AssetRef>> =
             std::collections::HashMap::new();
         if !ids.is_empty() {
             let ref_rows = client
                 .query(
-                    "SELECT r.asset_id::text AS asset_id, p.id AS post_id, p.title \
+                    "SELECT r.asset_id AS asset_id, p.id AS post_id, p.title \
                      FROM asset_refs r JOIN posts p ON p.id = r.post_id \
-                     WHERE r.asset_id = ANY($1::uuid[]) \
+                     WHERE r.asset_id = ANY($1) \
                      ORDER BY p.id",
                     &[&ids],
                 )
                 .await
                 .map_err(AppError::query)?;
             for rr in ref_rows {
-                refs_map
-                    .entry(rr.get::<_, String>("asset_id"))
-                    .or_default()
-                    .push(AssetRef {
-                        post_id: rr.get("post_id"),
-                        title: rr.get("title"),
-                    });
+                let asset_key: String = rr.get::<_, uuid::Uuid>("asset_id").to_string();
+                refs_map.entry(asset_key).or_default().push(AssetRef {
+                    post_id: rr.get("post_id"),
+                    title: rr.get("title"),
+                });
             }
         }
 
         let assets = rows
             .into_iter()
             .map(|row| {
-                let id: String = row.get("id");
+                let id: String = row.get::<_, uuid::Uuid>("id").to_string();
                 let refs = refs_map.remove(&id).unwrap_or_default();
                 AssetDto {
                     asset: Asset {
