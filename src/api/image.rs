@@ -543,6 +543,22 @@ use axum::http::HeaderMap;
 const CACHE_DIR: &str = "uploads/.cache";
 
 #[cfg(feature = "server")]
+/// 素材删除时清理其派生缓存。
+///
+/// - 内存处理缓存 `IMAGE_CACHE`：key 形如 `{path}|w=..|thumb=..`，按前缀批量失效；
+/// - 尺寸缓存 `IMAGE_DIMENSIONS_CACHE`：key 即相对路径，直接失效。
+///
+/// 磁盘派生缓存（`uploads/.cache/cache_<sha256(key)>`）文件名是整 key 的哈希，
+/// 无法按路径前缀枚举；这些死条目由 `image_cache_cleanup` 后台任务
+/// 按容量/年龄回收，不在删除路径上处理。
+pub async fn invalidate_asset_caches(rel_path: &str) {
+    let prefix = format!("{}|", rel_path);
+    // moka 的 invalidate_entries_if 是同步谓词求值，返回 Result（仅谓词 panic 时 Err）。
+    let _ = IMAGE_CACHE.invalidate_entries_if(move |k, _| k.starts_with(&prefix));
+    IMAGE_DIMENSIONS_CACHE.invalidate(rel_path);
+}
+
+#[cfg(feature = "server")]
 fn disk_cache_base(cache_key: &str) -> String {
     // 使用 SHA-256 生成稳定的磁盘缓存文件名，避免进程重启后 DefaultHasher 随机 seed
     // 导致旧缓存无法命中且文件无限累积。

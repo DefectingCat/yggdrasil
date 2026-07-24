@@ -4,10 +4,13 @@
 //! 分页列表、删除保护、孤儿清理、全量重建索引。
 //! 全部为 Dioxus server function，仅 admin 可用。
 
+/// 素材删除与孤儿清理。
+pub mod delete;
 /// 素材分页列表。
 pub mod list;
 /// 请求与响应数据结构。
 pub mod types;
 
+pub use delete::{delete_asset, purge_orphan_assets, update_asset_alt};
 pub use list::list_assets;
 pub use types::{AssetListResponse, AssetOpResponse, PurgeOrphansResponse, RebuildAssetsResponse};
