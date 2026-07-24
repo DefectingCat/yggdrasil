@@ -318,10 +318,11 @@ pub fn Assets() -> Element {
                             let placeholder = format!("/uploads/{}?w=20", a.path);
                             let img_alt = a.alt.clone().unwrap_or_else(|| a.filename.clone());
                             let is_orphan = asset.ref_count == 0;
+                            // z-10：.blur-img-full 带 z-index:1，不提升会被展示层盖住（灯箱改造的回归）。
                             let badge_class = if is_orphan {
-                                "absolute top-2 left-2 text-[10px] font-mono px-2 py-0.5 rounded-full backdrop-blur-sm bg-amber-500/80 text-white"
+                                "absolute top-2 left-2 z-10 text-[10px] font-mono px-2 py-0.5 rounded-full backdrop-blur-sm bg-amber-500/80 text-white"
                             } else {
-                                "absolute top-2 left-2 text-[10px] font-mono px-2 py-0.5 rounded-full backdrop-blur-sm bg-black/50 text-white"
+                                "absolute top-2 left-2 z-10 text-[10px] font-mono px-2 py-0.5 rounded-full backdrop-blur-sm bg-black/50 text-white"
                             };
                             rsx! {
                                 div {
