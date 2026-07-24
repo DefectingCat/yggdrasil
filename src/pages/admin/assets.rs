@@ -366,7 +366,7 @@ pub fn Assets() -> Element {
                                                     oninput: move |evt| alt_input.set(evt.value()),
                                                 }
                                                 button {
-                                                    class: "text-[10px] font-medium cursor-pointer px-2 py-1 rounded-full bg-[var(--color-paper-primary)] text-[var(--color-paper-bg)] hover:opacity-80 transition-opacity",
+                                                    class: "text-[10px] font-medium cursor-pointer px-2 py-1 rounded-full bg-[var(--color-paper-primary)] text-[var(--color-paper-theme)] hover:opacity-80 transition-opacity",
                                                     onclick: {
                                                         let id = a.id.clone();
                                                         move |_| {

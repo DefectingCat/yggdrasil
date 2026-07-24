@@ -20,6 +20,7 @@ use crate::tiptap_bridge::{consume_upload_event, upload_image_file, EditorHandle
 use crate::components::ui::{LoadingButton, BTN_CLOSE_ICON, BTN_PRIMARY_SM};
 use crate::components::write_skeleton::WriteSkeleton;
 use crate::models::post::Post;
+use crate::pages::admin::asset_picker::AssetPickerModal;
 use crate::router::Route;
 use crate::tiptap_bridge::{UploadErrorEntry, UploadsInFlight};
 #[cfg(target_arch = "wasm32")]
@@ -606,6 +607,8 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
     let mut cover_drag_active = use_signal(|| false);
     // 封面 URL 输入框的临时值（确认前不直接写入 cover_image，避免半截 URL 触发预览加载）。
     let mut cover_url_input = use_signal(|| "".to_string());
+    // 素材选择 modal 显隐。
+    let mut picker_visible = use_signal(|| false);
 
     // 封面图上传：spawn 一个 async 调用 upload_image_file。
     // 三条入口（file input / drop / paste）收敛成拿到 web_sys::File 后统一调用此闭包。
@@ -777,9 +780,19 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
                     span { class: "text-sm font-medium text-[var(--color-paper-secondary)] shrink-0",
                         "拖拽 / 粘贴 / 点击上传"
                     }
-                    // URL 文字链：阻止 label 的默认 file 触发，切换到 URL 输入模式。
+                    // 从素材库选择：阻止 label 默认 file 触发，打开选择 modal。
                     span {
                         class: "text-sm font-medium text-[var(--color-paper-tertiary)] hover:text-[var(--color-paper-primary)] transition-colors ml-auto shrink-0",
+                        onclick: move |evt| {
+                            evt.prevent_default();
+                            evt.stop_propagation();
+                            picker_visible.set(true);
+                        },
+                        "素材库"
+                    }
+                    // URL 文字链：阻止 label 的默认 file 触发，切换到 URL 输入模式。
+                    span {
+                        class: "text-sm font-medium text-[var(--color-paper-tertiary)] hover:text-[var(--color-paper-primary)] transition-colors shrink-0",
                         onclick: move |evt| {
                             evt.prevent_default();
                             evt.stop_propagation();
@@ -863,6 +876,16 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
                     "×"
                 }
             }
+        }
+
+        // 素材选择 modal：选中回填封面 URL（上传新图成功同样回填）。
+        AssetPickerModal {
+            visible: picker_visible,
+            cover_uploading,
+            on_select: move |url: String| {
+                cover_image.set(url);
+                cover_error.set(None);
+            },
         }
     }
 }
