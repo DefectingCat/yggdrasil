@@ -134,6 +134,9 @@ pub async fn upload_image(
         return Err(upload_error(StatusCode::BAD_REQUEST, "不支持的文件类型"));
     }
 
+    // 原始文件名（客户端提供，仅作 assets 表展示字段）；需在 bytes() 消耗 field 前取出。
+    let original_filename = field.file_name().map(|s| s.to_string());
+
     // 5. Read file data
     let data = match field.bytes().await {
         Ok(d) => d,
@@ -158,12 +161,13 @@ pub async fn upload_image(
         return Err(upload_error(StatusCode::BAD_REQUEST, "文件类型与内容不符"));
     }
 
-    // 仅读 header 统一校验尺寸/像素上限。三种格式走同一路径:
-    // JPEG/PNG/GIF 用 image crate 的 into_dimensions,WebP 用 zenwebp header。
+    // 仅读 header 统一校验尺寸/像素上限，并拿回 (w, h) 供 assets 表登记，避免二次解析。
     // 超限直接拒绝,避免大图走 decode 后被静默降级(原 fallback 存原图)。
-    if let Err(msg) = crate::api::image::check_upload_dimensions(&data, mime_type.as_str()) {
-        return Err(upload_error(StatusCode::BAD_REQUEST, msg));
-    }
+    let (img_width, img_height) =
+        match crate::api::image::upload_dimensions(&data, mime_type.as_str()) {
+            Ok(dims) => dims,
+            Err(msg) => return Err(upload_error(StatusCode::BAD_REQUEST, msg)),
+        };
 
     let is_gif = mime_type.as_str() == "image/gif";
     let is_webp = mime_type.as_str() == "image/webp";
@@ -290,6 +294,46 @@ pub async fn upload_image(
     }
 
     tracing::info!("Image uploaded: {} ({} bytes)", file_path, final_data.len());
+
+    // 登记 assets 注册表。失败时补偿删除已落盘文件，避免产生未登记的孤儿文件。
+    let rel_path = format!("{}/{}", date, file_name);
+    let final_mime = match final_ext.as_str() {
+        "jpg" => "image/jpeg",
+        "png" => "image/png",
+        "gif" => "image/gif",
+        _ => "image/webp",
+    };
+    let registered: Result<(), String> = async {
+        let client = crate::db::pool::get_conn()
+            .await
+            .map_err(|e| e.to_string())?;
+        client
+            .execute(
+                "INSERT INTO assets (id, path, filename, mime, size_bytes, width, height)\
+                 VALUES ($1::uuid, $2, $3, $4, $5, $6, $7)",
+                &[
+                    &uuid::Uuid::new_v4().to_string(),
+                    &rel_path,
+                    &original_filename.unwrap_or_else(|| file_name.clone()),
+                    &final_mime,
+                    &(final_data.len() as i64),
+                    &(img_width as i32),
+                    &(img_height as i32),
+                ],
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    .await;
+    if let Err(e) = registered {
+        tracing::error!("Register asset failed ({}), removing uploaded file", e);
+        let _ = tokio::fs::remove_file(&file_path).await;
+        return Err(upload_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "文件保存失败",
+        ));
+    }
 
     Ok(Json(json!({
         "success": true,

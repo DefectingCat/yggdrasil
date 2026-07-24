@@ -203,9 +203,72 @@ pub(super) fn clean_tags(tags: &[String]) -> Vec<String> {
         .collect()
 }
 
+/// 匹配 HTML/Markdown 中出现的本地上传图片路径，捕获组为相对路径
+/// （如 `2026/07/24/153000.<uuid>.webp`，不含 /uploads/ 前缀与 query）。
+/// 覆盖 blur-img 双层结构的 src 与 data-src。
+#[cfg(feature = "server")]
+static ASSET_PATH_RE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(r#"/uploads/(\d{4}/\d{2}/\d{2}/[^\"'\s?#\)]+)"#)
+        .expect("ASSET_PATH_RE 正则模式应在编译期通过校验")
+});
+
+/// 从文章 HTML 与封面 URL 中提取全部引用的本地上传图片相对路径（去重）。
+///
+/// 外链图（非 /uploads/ 路径）与无法识别的路径自然被忽略。
+#[cfg(feature = "server")]
+pub(super) fn extract_asset_paths(content_html: &str, cover_image: Option<&str>) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    let mut paths: Vec<String> = ASSET_PATH_RE
+        .captures_iter(content_html)
+        .filter_map(|c| c.get(1).map(|m| m.as_str().to_string()))
+        .filter(|p| seen.insert(p.clone()))
+        .collect();
+    if let Some(cover) = cover_image {
+        if let Some(rel) = cover
+            .strip_prefix("/uploads/")
+            .map(|p| p.split('?').next().unwrap_or(p))
+        {
+            if seen.insert(rel.to_string()) {
+                paths.push(rel.to_string());
+            }
+        }
+    }
+    paths
+}
+
+/// 在事务中同步文章的素材引用关联（asset_refs）。
+///
+/// 语义镜像 [`sync_tags`]：调用方需在事务内先删除旧关联（本函数自带 DELETE），
+/// 再按 content_html + cover_image 中出现的 /uploads/ 路径重建。
+/// 未登记到 assets 表的路径（如回填前的旧图）静默跳过，由重建索引兜底。
+#[cfg(feature = "server")]
+pub(super) async fn sync_asset_refs(
+    tx: &deadpool_postgres::Transaction<'_>,
+    post_id: i32,
+    content_html: &str,
+    cover_image: Option<&str>,
+) -> Result<(), AppError> {
+    tx.execute("DELETE FROM asset_refs WHERE post_id = $1", &[&post_id])
+        .await
+        .map_err(AppError::tx)?;
+
+    let paths = extract_asset_paths(content_html, cover_image);
+    if !paths.is_empty() {
+        tx.execute(
+            "INSERT INTO asset_refs (asset_id, post_id) \
+             SELECT id, $1 FROM assets WHERE path = ANY($2) \
+             ON CONFLICT DO NOTHING",
+            &[&post_id, &paths],
+        )
+        .await
+        .map_err(AppError::tx)?;
+    }
+    Ok(())
+}
+
 #[cfg(all(test, feature = "server"))]
 mod tests {
-    use super::clean_tags;
+    use super::{clean_tags, extract_asset_paths};
 
     #[test]
     fn clean_tags_trims_whitespace() {
@@ -248,5 +311,44 @@ mod tests {
             clean_tags(&input),
             vec!["rust".to_string(), "wasm".to_string(), "dioxus".to_string()]
         );
+    }
+
+    // —— extract_asset_paths ——
+
+    #[test]
+    fn extract_asset_paths_from_blur_img_html() {
+        // blur-img 双层结构：src 带 ?w=20，data-src 带 ?w=800，同一张图只应提取一次。
+        let html = r#"<span class="blur-img"><img class="blur-img-placeholder" src="/uploads/2026/07/24/a.webp?w=20"><img class="blur-img-full" data-src="/uploads/2026/07/24/a.webp?w=800"></span>"#;
+        assert_eq!(
+            extract_asset_paths(html, None),
+            vec!["2026/07/24/a.webp".to_string()]
+        );
+    }
+
+    #[test]
+    fn extract_asset_paths_multiple_and_cover() {
+        let html = r#"<p><img src="/uploads/2026/07/24/a.webp"></p><p><img src="/uploads/2026/06/01/b.png?w=800"></p><p><img src="https://cdn.example.com/x.webp"></p>"#;
+        let paths = extract_asset_paths(html, Some("/uploads/2026/07/24/cover.jpg?w=600"));
+        assert_eq!(paths.len(), 3);
+        assert!(paths.contains(&"2026/07/24/a.webp".to_string()));
+        assert!(paths.contains(&"2026/06/01/b.png".to_string()));
+        assert!(paths.contains(&"2026/07/24/cover.jpg".to_string()));
+    }
+
+    #[test]
+    fn extract_asset_paths_cover_dedup_and_external() {
+        // 封面与正文同图时去重；外链封面不产生路径。
+        let html = r#"<img src="/uploads/2026/07/24/a.webp">"#;
+        assert_eq!(
+            extract_asset_paths(html, Some("/uploads/2026/07/24/a.webp")),
+            vec!["2026/07/24/a.webp".to_string()]
+        );
+        assert!(extract_asset_paths(html, Some("https://example.com/c.webp")).len() == 1);
+        assert!(extract_asset_paths(html, None).len() == 1);
+    }
+
+    #[test]
+    fn extract_asset_paths_empty() {
+        assert!(extract_asset_paths("<p>no image</p>", None).is_empty());
     }
 }

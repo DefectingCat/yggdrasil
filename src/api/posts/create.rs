@@ -10,7 +10,7 @@
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
-use super::helpers::{clean_tags, get_current_admin_user, sync_tags};
+use super::helpers::{clean_tags, get_current_admin_user, sync_asset_refs, sync_tags};
 use super::types::CreatePostResponse;
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
@@ -128,6 +128,9 @@ pub async fn create_post(
         // 清洗标签并在事务中同步 post_tags 关联。
         let tags_cleaned = clean_tags(&tags);
         sync_tags(&tx, post_id, &tags_cleaned).await?;
+
+        // 同步素材引用关联（asset_refs）：内部自带 DELETE 再重建。
+        sync_asset_refs(&tx, post_id, &content_html, cover_image.as_deref()).await?;
 
         tx.commit().await.map_err(AppError::tx)?;
 

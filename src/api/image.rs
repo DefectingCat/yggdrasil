@@ -330,6 +330,14 @@ fn check_image_dimensions(width: u32, height: u32) -> Result<(), StatusCode> {
 /// 上传入口三种格式在此统一拦截至尺寸上限;WebP 走 `zenwebp` header,
 /// JPEG/PNG/GIF 走 `image` crate 的 `into_dimensions`(均只读 header)。
 pub fn check_upload_dimensions(data: &[u8], mime_type: &str) -> Result<(), &'static str> {
+    upload_dimensions(data, mime_type).map(|_| ())
+}
+
+#[cfg(feature = "server")]
+/// 与 [`check_upload_dimensions`] 相同的校验，但返回 (width, height)。
+///
+/// 供 `upload_image` 在校验通过后直接把尺寸写入 assets 表，避免二次解析 header。
+pub(crate) fn upload_dimensions(data: &[u8], mime_type: &str) -> Result<(u32, u32), &'static str> {
     let dims = read_dimensions_by_mime(data, mime_type)?;
     let (width, height) = dims;
     if width == 0 || height == 0 {
@@ -350,7 +358,7 @@ pub fn check_upload_dimensions(data: &[u8], mime_type: &str) -> Result<(), &'sta
         );
         return Err("图片尺寸过大,请压缩后再上传");
     }
-    Ok(())
+    Ok(dims)
 }
 
 #[cfg(feature = "server")]

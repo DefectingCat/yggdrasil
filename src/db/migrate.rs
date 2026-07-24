@@ -60,6 +60,7 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "014",
         include_str!("../../migrations/014_drop_ineffective_trgm_index.sql"),
     ),
+    ("015", include_str!("../../migrations/015_assets.sql")),
     // 新增迁移在此追加，同时在 migrations/ 下创建对应 .sql 文件。
 ];
 
