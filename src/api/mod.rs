@@ -6,6 +6,8 @@
 
 /// 认证相关的 Dioxus server function。
 pub mod auth;
+/// 素材管理（assets/asset_refs）的 Dioxus server function。
+pub mod assets;
 /// 代码运行接口与数据结构。
 pub mod code_runner;
 /// 评论相关接口。

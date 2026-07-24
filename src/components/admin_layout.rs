@@ -44,6 +44,7 @@ pub fn AdminLayout() -> Element {
         (Route::Admin {}, "仪表盘"),
         (Route::Write {}, "写文章"),
         (Route::Posts {}, "管理文章"),
+        (Route::Assets {}, "素材"),
         (Route::Runner {}, "试运行"),
         (Route::System {}, "系统"),
     ];

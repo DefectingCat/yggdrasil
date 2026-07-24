@@ -2,6 +2,8 @@
 //!
 //! 汇总并重新导出后台管理相关的页面组件，供路由与其他模块使用。
 
+/// 素材管理页面模块。
+pub mod assets;
 /// 评论管理页面模块。
 pub mod comments;
 /// 管理后台仪表盘页面模块。
@@ -17,6 +19,8 @@ pub mod system;
 /// 文章编辑器页面模块（基于 Tiptap 富文本编辑器）。
 pub mod write;
 
+/// 素材管理页面组件。
+pub use assets::Assets;
 /// 评论管理入口组件（带默认分页）。
 pub use comments::{AdminComments, AdminCommentsPage};
 /// 管理后台仪表盘组件。

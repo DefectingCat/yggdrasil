@@ -1,0 +1,186 @@
+//! 素材分页列表接口。
+//!
+//! 按引用状态（全部/引用中/孤儿）筛选、按文件名/alt 搜索、按时间或大小排序。
+//! 同时返回各筛选维度计数与可清理孤儿统计，供 tabs 与「清理孤儿」按钮展示。
+//! Dioxus server function，注册在 `/api` 路径下，仅 admin 可用。
+
+use dioxus::prelude::*;
+
+use super::types::AssetListResponse;
+use crate::models::asset::{AssetFilter, AssetSort};
+
+/// 每页素材数（网格 6 列 x 10 行）。
+#[cfg(feature = "server")]
+const PER_PAGE: i64 = 60;
+
+/// 孤儿清理保护窗：上传不满 7 天的无引用素材不可一键清理
+/// （保护尚未首次保存的草稿引用）。
+#[cfg(feature = "server")]
+pub(crate) const PURGE_GRACE_DAYS: i32 = 7;
+
+/// 获取素材分页列表。
+#[server(ListAssets, "/api")]
+pub async fn list_assets(
+    filter: AssetFilter,
+    query: String,
+    sort: AssetSort,
+    page: i32,
+) -> Result<AssetListResponse, ServerFnError> {
+    #[cfg(feature = "server")]
+    {
+        use crate::api::auth::get_current_admin_user;
+        use crate::api::error::AppError;
+        use crate::db::pool::get_conn;
+        use crate::models::asset::{Asset, AssetDto, AssetRef};
+
+        let _admin = get_current_admin_user().await?;
+
+        let client = get_conn().await.map_err(AppError::db_conn)?;
+
+        let page = page.max(1);
+        let offset: i64 = (page as i64 - 1) * PER_PAGE;
+        let query = query.trim().to_string();
+
+        // 筛选/搜索条件统一拼进 WHERE；参数按出现顺序编号。
+        // 引用状态用 EXISTS 子查询，搜索用 ILIKE 转义通配符。
+        let mut conditions: Vec<String> = Vec::new();
+        let mut params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = Vec::new();
+        match filter {
+            AssetFilter::Used => {
+                conditions.push(
+                    "EXISTS (SELECT 1 FROM asset_refs r WHERE r.asset_id = a.id)".to_string(),
+                );
+            }
+            AssetFilter::Orphan => {
+                conditions.push(
+                    "NOT EXISTS (SELECT 1 FROM asset_refs r WHERE r.asset_id = a.id)".to_string(),
+                );
+            }
+            AssetFilter::All => {}
+        }
+        if !query.is_empty() {
+            params.push(&query);
+            conditions.push(format!(
+                "(a.filename ILIKE '%' || ${} || '%' OR a.alt ILIKE '%' || ${} || '%')",
+                params.len(),
+                params.len()
+            ));
+        }
+        let where_clause = if conditions.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", conditions.join(" AND "))
+        };
+
+        let order_clause = match sort {
+            AssetSort::CreatedDesc => "a.created_at DESC, a.id",
+            AssetSort::SizeDesc => "a.size_bytes DESC, a.id",
+        };
+
+        // 列表查询：ref_count 用相关子查询一次带出。
+        // const 不能取引用（内联后借临时值会垂悬），绑定到局部变量再进参数列表。
+        let per_page = PER_PAGE;
+        params.push(&per_page);
+        let limit_idx = params.len();
+        params.push(&offset);
+        let offset_idx = params.len();
+        let rows = client
+            .query(
+                &format!(
+                    "SELECT a.id::text AS id, a.path, a.filename, a.mime, a.size_bytes, \
+                            a.width, a.height, a.alt, a.created_at, \
+                            (SELECT COUNT(*) FROM asset_refs r WHERE r.asset_id = a.id) AS ref_count \
+                     FROM assets a {where_clause} \
+                     ORDER BY {order_clause} LIMIT ${limit_idx} OFFSET ${offset_idx}"
+                ),
+                &params,
+            )
+            .await
+            .map_err(AppError::query)?;
+
+        let total: i64 = client
+            .query_one(
+                &format!("SELECT COUNT(*) FROM assets a {where_clause}"),
+                &params[..params.len() - 2],
+            )
+            .await
+            .map_err(AppError::query)?
+            .get(0);
+
+        // 汇总计数：tabs 与「清理孤儿」按钮徽标。不受筛选/搜索影响，始终全局。
+        let summary = client
+            .query_one(
+                "SELECT \
+                    COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM asset_refs r WHERE r.asset_id = a.id)), \
+                    COUNT(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM asset_refs r WHERE r.asset_id = a.id)), \
+                    COUNT(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM asset_refs r WHERE r.asset_id = a.id) \
+                        AND a.created_at < NOW() - make_interval(days => $1)), \
+                    COALESCE(SUM(a.size_bytes) FILTER (WHERE NOT EXISTS (SELECT 1 FROM asset_refs r WHERE r.asset_id = a.id) \
+                        AND a.created_at < NOW() - make_interval(days => $1)), 0) \
+                 FROM assets a",
+                &[&PURGE_GRACE_DAYS],
+            )
+            .await
+            .map_err(AppError::query)?;
+
+        // 本页素材的引用文章（第二查询，避免 JOIN  fan-out 与分页错位）。
+        let ids: Vec<String> = rows.iter().map(|r| r.get::<_, String>("id")).collect();
+        let mut refs_map: std::collections::HashMap<String, Vec<AssetRef>> =
+            std::collections::HashMap::new();
+        if !ids.is_empty() {
+            let ref_rows = client
+                .query(
+                    "SELECT r.asset_id::text AS asset_id, p.id AS post_id, p.title \
+                     FROM asset_refs r JOIN posts p ON p.id = r.post_id \
+                     WHERE r.asset_id = ANY($1::uuid[]) \
+                     ORDER BY p.id",
+                    &[&ids],
+                )
+                .await
+                .map_err(AppError::query)?;
+            for rr in ref_rows {
+                refs_map
+                    .entry(rr.get::<_, String>("asset_id"))
+                    .or_default()
+                    .push(AssetRef {
+                        post_id: rr.get("post_id"),
+                        title: rr.get("title"),
+                    });
+            }
+        }
+
+        let assets = rows
+            .into_iter()
+            .map(|row| {
+                let id: String = row.get("id");
+                let refs = refs_map.remove(&id).unwrap_or_default();
+                AssetDto {
+                    asset: Asset {
+                        id,
+                        path: row.get("path"),
+                        filename: row.get("filename"),
+                        mime: row.get("mime"),
+                        size_bytes: row.get("size_bytes"),
+                        width: row.get("width"),
+                        height: row.get("height"),
+                        alt: row.get("alt"),
+                        created_at: row.get("created_at"),
+                    },
+                    ref_count: row.get("ref_count"),
+                    refs,
+                }
+            })
+            .collect();
+
+        Ok(AssetListResponse {
+            assets,
+            total,
+            used_count: summary.get(0),
+            orphan_count: summary.get(1),
+            purgeable_count: summary.get(2),
+            purgeable_bytes: summary.get(3),
+        })
+    }
+    #[cfg(not(feature = "server"))]
+    unreachable!()
+}
