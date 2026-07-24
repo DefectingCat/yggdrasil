@@ -7,7 +7,7 @@
 
 mod create;
 mod delete;
-mod helpers;
+pub(crate) mod helpers;
 mod list;
 mod read;
 mod rebuild;

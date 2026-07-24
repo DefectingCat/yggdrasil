@@ -215,8 +215,9 @@ static ASSET_PATH_RE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::n
 /// 从文章 HTML 与封面 URL 中提取全部引用的本地上传图片相对路径（去重）。
 ///
 /// 外链图（非 /uploads/ 路径）与无法识别的路径自然被忽略。
+/// pub(crate)：重建素材索引（api::assets::rebuild）复用同一提取逻辑。
 #[cfg(feature = "server")]
-pub(super) fn extract_asset_paths(content_html: &str, cover_image: Option<&str>) -> Vec<String> {
+pub(crate) fn extract_asset_paths(content_html: &str, cover_image: Option<&str>) -> Vec<String> {
     let mut seen = std::collections::HashSet::new();
     let mut paths: Vec<String> = ASSET_PATH_RE
         .captures_iter(content_html)

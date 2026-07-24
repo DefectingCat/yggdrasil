@@ -6,8 +6,10 @@
 
 use dioxus::prelude::*;
 
-use crate::api::assets::{delete_asset, list_assets, purge_orphan_assets, update_asset_alt};
-use crate::api::assets::{AssetListResponse, PurgeOrphansResponse};
+use crate::api::assets::{
+    delete_asset, list_assets, purge_orphan_assets, rebuild_assets_index, update_asset_alt,
+};
+use crate::api::assets::{AssetListResponse, PurgeOrphansResponse, RebuildAssetsResponse};
 use crate::components::empty_state::EmptyState;
 use crate::components::ui::{FilterTabs, Pagination};
 use crate::models::asset::{AssetFilter, AssetSort};
@@ -53,6 +55,8 @@ pub fn Assets() -> Element {
     // 待二次确认的删除目标（素材 id）与一键清理确认态。
     let mut confirm_delete: Signal<Option<String>> = use_signal(|| None);
     let mut purge_confirm = use_signal(|| false);
+    // 重建索引进行中状态。
+    let mut rebuilding = use_signal(|| false);
     // alt 内联编辑：目标素材 id + 输入框值。
     let mut editing_alt: Signal<Option<String>> = use_signal(|| None);
     let mut alt_input = use_signal(String::new);
@@ -140,6 +144,33 @@ pub fn Assets() -> Element {
                     },
                 }
                 div { class: "flex items-center gap-3 pb-1",
+                    // 重建索引：以磁盘为准全量自愈（存量回填/不一致修复）。
+                    button {
+                        class: "text-xs font-medium cursor-pointer px-3 py-2 rounded-full border border-[var(--color-paper-border)] text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] hover:border-[var(--color-paper-primary)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+                        disabled: rebuilding(),
+                        title: "扫描 uploads/ 全量文件，同步素材注册表与文章引用（幂等，可随时重跑）",
+                        onclick: move |_| {
+                            rebuilding.set(true);
+                            #[cfg(target_arch = "wasm32")]
+                            spawn(async move {
+                                match rebuild_assets_index().await {
+                                    Ok(RebuildAssetsResponse { message, .. }) => {
+                                        op_message.set(Some(message));
+                                        reload.set(reload() + 1);
+                                    }
+                                    Err(e) => {
+                                        op_message.set(Some(format!("重建失败：{e}")))
+                                    }
+                                }
+                                rebuilding.set(false);
+                            });
+                        },
+                        if rebuilding() {
+                            "重建中..."
+                        } else {
+                            "重建索引"
+                        }
+                    }
                     input {
                         class: "w-56 text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-2xl px-4 py-2 shadow-sm transition-all",
                         r#type: "search",
