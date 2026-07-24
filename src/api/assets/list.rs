@@ -116,7 +116,7 @@ pub async fn list_assets(
                     COUNT(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM asset_refs r WHERE r.asset_id = a.id) \
                         AND a.created_at < NOW() - make_interval(days => $1)), \
                     COALESCE(SUM(a.size_bytes) FILTER (WHERE NOT EXISTS (SELECT 1 FROM asset_refs r WHERE r.asset_id = a.id) \
-                        AND a.created_at < NOW() - make_interval(days => $1)), 0) \
+                        AND a.created_at < NOW() - make_interval(days => $1)), 0)::bigint \
                  FROM assets a",
                 &[&PURGE_GRACE_DAYS],
             )
