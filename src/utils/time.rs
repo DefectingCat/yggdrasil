@@ -35,9 +35,24 @@ pub async fn sleep_ms(ms: u32) {
 }
 
 /// 异步睡眠指定毫秒数（原生 tokio 版本）。
-#[cfg(not(target_arch = "wasm32"))]
+///
+/// 仅在 `server` feature 启用且非 wasm32 目标下编译。`tokio` 是 server-only 的
+/// optional 依赖（见 Cargo.toml），不可用 `#[cfg(not(target_arch = "wasm32"))]`——
+/// 那样会在「非 wasm32 主机 + 仅 web feature」组合下误激活，此时 tokio 未引入，
+/// 导致编译失败（此 bug 曾被 `[dev-dependencies] tokio` 掩盖，发布构建才暴露）。
+#[cfg(all(feature = "server", not(target_arch = "wasm32")))]
 pub async fn sleep_ms(ms: u32) {
     tokio::time::sleep(std::time::Duration::from_millis(ms as u64)).await;
+}
+
+/// `sleep_ms` 的占位 stub，仅用于「非 wasm32 且非 server」的无效构建组合。
+///
+/// 此组合（如非 wasm32 主机执行 `cargo build --features web`）不是有效部署目标——
+/// web feature 的真实构建目标就是 wasm32，会走上面的 JS setTimeout 分支。
+/// 此 stub 仅保证符号可编译，永远不会在有效运行时被调用；若被调用说明部署配置错误。
+#[cfg(all(not(feature = "server"), not(target_arch = "wasm32")))]
+pub async fn sleep_ms(_ms: u32) {
+    panic!("sleep_ms 在非 wasm32 且非 server 的无效构建组合下被调用：请检查 feature 配置");
 }
 
 /// 获取当前时间戳（毫秒）。
