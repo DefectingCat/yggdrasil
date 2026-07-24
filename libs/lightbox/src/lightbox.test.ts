@@ -63,6 +63,13 @@ function getCounter(): HTMLElement | null {
   return document.querySelector('.lightbox-counter');
 }
 
+/** stub 灯箱图的 natural 尺寸与 complete（happy-dom 不加载真实图片）。 */
+function stubNatural(img: HTMLImageElement, w: number, h: number): void {
+  Object.defineProperty(img, 'naturalWidth', { configurable: true, value: w });
+  Object.defineProperty(img, 'naturalHeight', { configurable: true, value: h });
+  Object.defineProperty(img, 'complete', { configurable: true, value: true });
+}
+
 /** 模拟元素 click（真实事件派发，触发 addEventListener('click')）。 */
 function clickEl(el: Element): void {
   el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
@@ -234,6 +241,33 @@ describe('lightbox 黑盒行为', () => {
 
       const fullB = imgs[1].querySelector('.blur-img-full');
       expect(document.activeElement).toBe(fullB);
+    });
+
+    it('切换后按新图宽高比重算几何（不沿用第一张的 target/scale）', () => {
+      const imgs = [makeGalleryImage('/a.webp', 'A'), makeGalleryImage('/b.webp', 'B')];
+      mountRoot(imgs);
+      window.__initLightbox('.post-content');
+
+      clickEl(imgs[0]);
+      const lbImg = getLightboxImg()!;
+      // happy-dom 不真实加载图片：手动 stub 第 1 张 natural 尺寸并派发 load，
+      // 让 openLightbox 的 start() 走完（state.target/baseW 按第 1 张建立）。
+      stubNatural(lbImg, 1000, 500);
+      lbImg.dispatchEvent(new Event('load'));
+      vi.advanceTimersByTime(50); // double-rAF 在 fake timers 下同步推进
+
+      // 切到第 2 张前，先把 natural stub 成新图尺寸（竖图），模拟缓存命中
+      pressKey('ArrowRight');
+      stubNatural(lbImg, 500, 1000);
+      vi.advanceTimersByTime(200); // 150ms 淡出后 swap 同步执行
+
+      // 几何必须按 500x1000 重算：布局盒 = fitCentered 目标尺寸（宽高比 0.5），
+      // transform 归位 scale(1,1)。修复前这里仍是第 1 张的 width/height/scale。
+      const w = parseFloat(lbImg.style.width);
+      const h = parseFloat(lbImg.style.height);
+      expect(w).toBeGreaterThan(0);
+      expect(w / h).toBeCloseTo(0.5, 2);
+      expect(lbImg.style.transform).toContain('scale(1,1)');
     });
   });
 

@@ -376,18 +376,39 @@ function gotoIndex(rawIndex: number): void {
   // 150ms 后换图淡入
   const swap = (): void => {
     if (!state) return; // 切换中可能已关闭
+    // 换图后必须按新图真实尺寸重算几何，否则新图沿用第一张的
+    // target/scale，宽高比不同的图会被压扁/拉伸。
+    // 布局盒直接设为 target 尺寸（宽高比 = 新图），transform 归位 scale(1,1)；
+    // baseW/H 同步为 target 尺寸，关闭/滚动关闭的飞回动画以它为 scale 基准。
+    const applyGeometry = (): void => {
+      if (!state) return;
+      const naturalW = s.img.naturalWidth || 1;
+      const naturalH = s.img.naturalHeight || 1;
+      const target = fitCentered(naturalW, naturalH, window.innerWidth, window.innerHeight);
+      s.target = target;
+      s.baseW = target.w;
+      s.baseH = target.h;
+      // 几何跳变不播动画（transition 只作用于随后的 opacity 淡入）。
+      s.img.style.transition = 'none';
+      s.img.style.width = `${target.w}px`;
+      s.img.style.height = `${target.h}px`;
+      s.img.style.transform = transformFor(target, target.w, target.h);
+    };
     const fade = (): void => {
       if (!state) return;
       s.img.style.transition = 'opacity 150ms ease-out';
       s.img.style.opacity = '1';
     };
-    if (s.img.complete && s.img.naturalWidth) {
-      // 缓存命中，直接淡入
-      s.img.src = origSrc;
+    const onReady = (): void => {
+      applyGeometry();
       fade();
+    };
+    // 先换 src 再判 complete：换之前判的是旧图（必命中），会按旧图尺寸算几何。
+    s.img.src = origSrc;
+    if (s.img.complete && s.img.naturalWidth) {
+      onReady(); // 缓存命中，新图尺寸同步可用
     } else {
-      s.img.addEventListener('load', fade, { once: true });
-      s.img.src = origSrc;
+      s.img.addEventListener('load', onReady, { once: true });
     }
     s.caption.textContent = altText;
     s.caption.style.display = altText ? '' : 'none';

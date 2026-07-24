@@ -12,8 +12,11 @@
 
 /* 灯箱图片：绝对定位，尺寸/位置由 JS 的 transform 控制。
    transform-origin 为 top left，配合 translate+scale 实现原地缩放。
-   显式 width/height 由 JS 设置为原图尺寸，确保布局尺寸确定，
-   transform 只做视觉缩放，不改变占位。 */
+   显式 width/height 由 JS 设置（打开时 = 缩略图 rect，图集切换后 = 居中目标
+   尺寸），确保布局尺寸确定，transform 只做视觉缩放，不改变占位。
+   注意不可加 object-fit: contain：transformFor 的非均匀 scale 依赖「位图填满
+   布局盒」这一前提才能恰好抵消失真（素材网格的缩略图容器恒为正方形，与原图
+   宽高比不同，contain 的 letterbox 会导致非均匀 scale 把图压扁）。 */
 .lightbox-img {
   position: absolute;
   left: 0;
@@ -21,7 +24,6 @@
   transform-origin: top left;
   max-width: none;
   max-height: none;
-  object-fit: contain;
   opacity: 1;
 }
 
