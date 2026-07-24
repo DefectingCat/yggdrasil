@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-07-24
+
+### Fixed
+
+- **web-only 构建失败**：`sleep_ms` 原用 `#[cfg(not(target_arch = "wasm32"))]` guard tokio 分支，但 tokio 是 server-only optional 依赖。该 guard 在「非 wasm32 主机 + 仅 web feature」组合下误激活导致编译失败（长期被 dev-dependencies 中的 tokio 掩盖，只有排除 dev-deps 的生产构建才暴露）。修复为 `#[cfg(all(feature = "server", not(target_arch = "wasm32")))]`，符合 dual-target gating 规范。
+- **404 页「返回首页」卡死**：文章详情页对不存在的 slug 抛出 404 错误后，Dioxus `ErrorBoundary` 捕获错误渲染 fallback，但点击「返回首页」仅更新 URL 不切换页面（`ErrorBoundary` 需显式 `clear_errors()` 才能恢复渲染 children）。修复：返回首页改用 button，onclick 内先 `clear_errors()` 再导航。
+
 ## [0.6.1] - 2026-07-23
 
 ### Changed
