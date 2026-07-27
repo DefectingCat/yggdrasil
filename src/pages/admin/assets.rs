@@ -177,7 +177,9 @@ pub fn Assets() -> Element {
                         page.set(1);
                     },
                 }
-                div { class: "flex items-center gap-3 pb-1",
+                // 右侧控件与 FilterTabs 同加 mb-6：items-end 对齐的是 margin box，
+                // 两者底边同落在 tabs 下划线处，到下方横幅/网格的距离均为 24px。
+                div { class: "flex items-center gap-3 mb-6",
                     // 重建索引：以磁盘为准全量自愈（存量回填/不一致修复）。
                     button {
                         class: "text-xs font-medium cursor-pointer px-3 py-2 rounded-full border border-[var(--color-paper-border)] text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] hover:border-[var(--color-paper-primary)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
