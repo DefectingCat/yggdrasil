@@ -381,8 +381,11 @@ pub fn Assets() -> Element {
                                                             spawn(async move {
                                                                 match delete_asset(id).await {
                                                                     Ok(resp) => {
+                                                                        // 行已不在 DB（refs 为空的业务拒绝 = 素材不存在）
+                                                                        // 说明网格是过期数据，同样触发刷新自愈。
+                                                                        let stale = !resp.success && resp.refs.is_empty();
                                                                         op_message.set(Some(resp.message));
-                                                                        if resp.success {
+                                                                        if resp.success || stale {
                                                                             reload.set(reload() + 1);
                                                                         }
                                                                     }
