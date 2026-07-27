@@ -50,6 +50,13 @@ pub fn Admin() -> Element {
         }
     });
 
+    // 待审卡片进场类:数据未就绪(骨架屏)时为空,就绪后补挂以触发一次入场动画。
+    let pending_enter_class = if pending_count().is_some() {
+        "animate-page-enter"
+    } else {
+        ""
+    };
+
     rsx! {
         div { class: "w-full max-w-7xl mx-auto space-y-8",
             // 顶部标题和全局操作栏
@@ -74,19 +81,22 @@ pub fn Admin() -> Element {
                     Some(s) => {
                         rsx! {
                             StatCard {
-                                value: s.total.to_string(),
+                                value: s.total,
                                 label: "总文章数".to_string(),
                                 trend: "+12%".to_string(),
+                                delay_ms: 0,
                             }
                             StatCard {
-                                value: s.published.to_string(),
+                                value: s.published,
                                 label: "已发布".to_string(),
                                 trend: "活跃".to_string(),
+                                delay_ms: 60,
                             }
                             StatCard {
-                                value: s.drafts.to_string(),
+                                value: s.drafts,
                                 label: "草稿".to_string(),
                                 trend: "待处理".to_string(),
+                                delay_ms: 120,
                             }
                         }
                     }
@@ -103,8 +113,11 @@ pub fn Admin() -> Element {
                 }
 
                 // 评论待办卡片 (独立色块突出)
+                // 数据就绪后补挂 animate-page-enter:类名变更触发 CSS 动画从 0% 播放,
+                // 骨架屏阶段不播(避免动画被骨架屏截断,见 yggdrasil-ui-design-taste 规范)。
                 Link {
-                    class: "block {ADMIN_CARD_CLASS} p-8 bg-[var(--color-paper-entry)] hover:bg-[var(--color-paper-border)]/20 transition-all h-36 flex flex-col justify-between group hover:-translate-y-1 hover:shadow-md duration-300",
+                    class: "block {ADMIN_CARD_CLASS} p-8 bg-[var(--color-paper-entry)] hover:bg-[var(--color-paper-border)]/20 transition-all h-36 flex flex-col justify-between group hover:-translate-y-1 hover:shadow-md duration-300 {pending_enter_class}",
+                    style: "animation-delay: 180ms",
                     to: Route::AdminComments {},
                     match pending_count() {
                         Some(count) => {
@@ -119,7 +132,10 @@ pub fn Admin() -> Element {
                             rsx! {
                                 div { class: "text-sm font-medium {color_class}", "待审评论" }
                                 div { class: "flex items-baseline justify-between mt-4",
-                                    div { class: "text-4xl font-light tracking-tight {text_class}", "{count}" }
+                                    CountUp {
+                                        target: count,
+                                        class: format!("text-4xl font-light tracking-tight {text_class}"),
+                                    }
                                     div { class: "text-xs font-medium text-[var(--color-paper-secondary)] group-hover:text-[var(--color-paper-primary)] transition-colors",
                                         "去审核 →"
                                     }
@@ -162,8 +178,12 @@ pub fn Admin() -> Element {
                         rsx! {
                             div { class: "{ADMIN_TABLE_CLASS}",
                                 div { class: "divide-y divide-paper-border",
-                                    for post in posts.iter().take(5) {
-                                        RecentPostItem { key: "{post.id}", post: post.clone() }
+                                    for (i , post) in posts.iter().take(5).enumerate() {
+                                        RecentPostItem {
+                                            key: "{post.id}",
+                                            post: post.clone(),
+                                            delay_ms: (i as i32) * 50,
+                                        }
                                     }
                                 }
                             }
@@ -191,9 +211,11 @@ pub fn Admin() -> Element {
 }
 
 #[component]
-fn StatCard(value: String, label: String, trend: String) -> Element {
+fn StatCard(value: i64, label: String, trend: String, delay_ms: i32) -> Element {
     rsx! {
-        div { class: "{ADMIN_CARD_CLASS} p-8 flex flex-col justify-between h-36 relative group hover:-translate-y-1 hover:shadow-md transition-all duration-300",
+        div {
+            class: "{ADMIN_CARD_CLASS} p-8 flex flex-col justify-between h-36 relative group hover:-translate-y-1 hover:shadow-md transition-all duration-300 animate-page-enter",
+            style: "animation-delay: {delay_ms}ms",
             div { class: "flex justify-between items-start",
                 div { class: "text-sm font-medium text-[var(--color-paper-secondary)]",
                     "{label}"
@@ -202,21 +224,69 @@ fn StatCard(value: String, label: String, trend: String) -> Element {
                     "{trend}"
                 }
             }
-            div { class: "text-4xl font-light tracking-tight text-[var(--color-paper-primary)] mt-4",
-                "{value}"
+            CountUp {
+                target: value,
+                class: "text-4xl font-light tracking-tight text-[var(--color-paper-primary)] mt-4".to_string(),
             }
         }
     }
 }
 
+/// 数字滚动组件:值从 0 以 easeOutQuint 缓动递增到 `target`(约 500ms)。
+///
+/// 命中 `prefers-reduced-motion` 时直接显示终值。动画在 `use_effect` 内驱动,
+/// 渲染体保持纯净(见 dioxus-render-purity 规范);数据仅 WASM 端加载,SSR 不挂载本组件。
 #[component]
-fn RecentPostItem(post: PostListItem) -> Element {
+fn CountUp(target: i64, class: String) -> Element {
+    let mut display = use_signal(|| 0i64);
+
+    use_effect(move || {
+        #[cfg(target_arch = "wasm32")]
+        spawn(async move {
+            let reduced = web_sys::window()
+                .and_then(|w| w.match_media("(prefers-reduced-motion: reduce)").ok().flatten())
+                .map(|m| m.matches())
+                .unwrap_or(false);
+            if reduced || target <= 0 {
+                display.set(target);
+                return;
+            }
+            const DURATION_MS: i64 = 500;
+            let start = crate::utils::time::now_millis();
+            loop {
+                crate::utils::time::sleep_ms(16).await;
+                let elapsed = crate::utils::time::now_millis() - start;
+                if elapsed >= DURATION_MS {
+                    display.set(target);
+                    break;
+                }
+                let t = elapsed as f64 / DURATION_MS as f64;
+                // easeOutQuint,与 CSS 侧 cubic-bezier(0.22, 1, 0.36, 1) 同族。
+                let eased = 1.0 - (1.0 - t).powi(5);
+                display.set((target as f64 * eased).round() as i64);
+            }
+        });
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            display.set(target);
+        }
+    });
+
+    rsx! {
+        div { class: "{class}", "{display}" }
+    }
+}
+
+#[component]
+fn RecentPostItem(post: PostListItem, delay_ms: i32) -> Element {
     let date_str = post.formatted_date();
     let status_label = post.status_label();
     let status_class = post.status_class();
 
     rsx! {
-        div { class: "flex flex-col sm:flex-row sm:justify-between sm:items-center px-8 py-5 hover:bg-[var(--color-paper-accent-soft)] transition-colors cursor-pointer group",
+        div {
+            class: "flex flex-col sm:flex-row sm:justify-between sm:items-center px-8 py-5 hover:bg-[var(--color-paper-accent-soft)] transition-colors cursor-pointer group animate-row-enter",
+            style: "animation-delay: {delay_ms}ms",
             div { class: "flex items-center gap-6",
                 span { class: "text-xs font-mono text-[var(--color-paper-tertiary)] w-12 hidden sm:block",
                     "#{post.id:04}"

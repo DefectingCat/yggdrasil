@@ -67,7 +67,7 @@ pub const BTN_TEXT_ACCENT: &str =
 
 /// 次要按钮：极简风次要操作。
 pub const BTN_SECONDARY: &str =
-    "px-6 py-2.5 rounded-full text-sm font-medium text-center text-[var(--color-paper-secondary)] bg-[var(--color-paper-entry)] hover:bg-[var(--color-paper-border)] hover:text-[var(--color-paper-primary)] transition-all cursor-pointer";
+    "px-6 py-2.5 rounded-full text-sm font-medium text-center text-[var(--color-paper-secondary)] bg-[var(--color-paper-entry)] hover:bg-[var(--color-paper-border)] hover:text-[var(--color-paper-primary)] active:scale-[0.98] transition-all cursor-pointer";
 
 // --- 主操作按钮（主题绿实心胶囊，全站统一 CTA） ---
 
