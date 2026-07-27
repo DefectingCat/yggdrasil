@@ -451,7 +451,7 @@ pub fn Assets() -> Element {
                                             div { class: "flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity",
                                                 button {
                                                     class: "text-[10px] cursor-pointer text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors",
-                                                    title: "复制图片 URL",
+                                                    title: "复制图片相对路径",
                                                     onclick: {
                                                         let url = format!("/uploads/{}", a.path);
                                                         move |_| {
@@ -465,7 +465,7 @@ pub fn Assets() -> Element {
                                                             }
                                                         }
                                                     },
-                                                    "复制"
+                                                    "复制路径"
                                                 }
                                                 button {
                                                     class: "text-[10px] cursor-pointer text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors",
