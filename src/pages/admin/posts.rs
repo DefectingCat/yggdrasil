@@ -246,6 +246,12 @@ fn AllPostsList() -> Element {
                         page.with_mut(|p| *p += 1);
                     }
                 },
+                on_jump: {
+                    let mut page = current_page;
+                    move |p: i32| {
+                        page.set(p);
+                    }
+                },
             }
         }
     }

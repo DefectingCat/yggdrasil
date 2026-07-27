@@ -122,6 +122,10 @@ pub const BTN_ICON: &str =
 ///   signal 翻页（与路由式 `prev_route`/`next_route` 互斥，回调优先）；不传则保持
 ///   原路由式 `<Link>`。后台单路由 tab（如「管理文章」列表）用回调翻页，
 ///   前台/其他分页页面仍走路由，零影响。
+/// - `on_jump`：可选跳页回调。传入且总页数 > 1 时，admin 变体的当前页码渲染为
+///   可编辑输入框——聚焦编辑、回车跳转（自动夹取到 `[1, total_pages]`，非法输入
+///   还原为当前页）、失焦回显。仅回调式翻页可用——路由式翻页无法由任意页码反推
+///   `Route`，故路由式调用方不传此 prop，页码保持纯文本。
 #[component]
 pub fn Pagination(
     variant: &'static str,
@@ -133,6 +137,7 @@ pub fn Pagination(
     unit: &'static str,
     #[props(default)] on_prev: Option<EventHandler<()>>,
     #[props(default)] on_next: Option<EventHandler<()>>,
+    #[props(default)] on_jump: Option<EventHandler<i32>>,
 ) -> Element {
     let has_prev = current_page > 1;
     let total_pages = ((total + per_page as i64 - 1) / per_page as i64).max(1) as i32;
@@ -165,6 +170,13 @@ pub fn Pagination(
         "下一页"
         span { class: "ml-1", "»" }
     };
+
+    // 跳页状态：当前页码本身渲染为可编辑输入框（仅回调式翻页且多页时）。
+    // `jump_editing` = 输入框聚焦态——聚焦期间显示草稿，失焦回显 current_page，
+    // 与父组件翻页天然同步，无需 effect 桥接；`jump_draft` = 用户输入草稿。
+    // 两者皆为独立 UI 状态（非派生镜像），合法 use_signal。
+    let mut jump_editing: Signal<bool> = use_signal(|| false);
+    let mut jump_draft: Signal<String> = use_signal(String::new);
     rsx! {
         nav { class: if is_admin { "flex mt-6 justify-between" } else { "flex mt-10 mb-6 justify-between" },
             if has_prev {
@@ -184,10 +196,42 @@ pub fn Pagination(
                 }
             }
 
-            // admin 显示页码计数。
+            // admin 显示页码计数；回调式翻页且多页时，当前页码可直接编辑跳页。
             if is_admin {
-                span { class: "text-sm text-paper-secondary self-center",
-                    "{current_page} / {total_pages} 页 (共 {total} {unit})"
+                span { class: "flex items-center gap-1.5 self-center text-sm text-paper-secondary",
+                    if total_pages > 1 && on_jump.is_some() {
+                        input {
+                            class: "w-11 px-1 py-0.5 text-sm text-center bg-transparent text-paper-primary border border-paper-border rounded-full hover:border-paper-accent/60 focus:outline-none focus:border-paper-accent transition-colors",
+                            r#type: "text",
+                            inputmode: "numeric",
+                            title: "输入页码，回车跳转",
+                            value: if jump_editing() { jump_draft() } else { current_page.to_string() },
+                            onfocus: move |_| {
+                                jump_draft.set(current_page.to_string());
+                                jump_editing.set(true);
+                            },
+                            onblur: move |_| jump_editing.set(false),
+                            oninput: move |e| jump_draft.set(e.value()),
+                            onkeydown: move |e| {
+                                if e.key() == Key::Enter {
+                                    if let Some(on_jump) = on_jump {
+                                        // 合法页码：夹取到 [1, total_pages] 后回调并回显；
+                                        // 非法输入（空串/非数字）：还原为当前页。
+                                        if let Ok(p) = jump_draft().trim().parse::<i32>() {
+                                            let p = p.clamp(1, total_pages);
+                                            on_jump.call(p);
+                                            jump_draft.set(p.to_string());
+                                        } else {
+                                            jump_draft.set(current_page.to_string());
+                                        }
+                                    }
+                                }
+                            },
+                        }
+                    } else {
+                        "{current_page}"
+                    }
+                    " / {total_pages} 页 (共 {total} {unit})"
                 }
             }
 

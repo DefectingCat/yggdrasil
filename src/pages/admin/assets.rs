@@ -523,6 +523,7 @@ pub fn Assets() -> Element {
                     unit: "张",
                     on_prev: move |_| page.set((page() - 1).max(1)),
                     on_next: move |_| page.set(page() + 1),
+                    on_jump: move |p: i32| page.set(p),
                 }
             }
         }
