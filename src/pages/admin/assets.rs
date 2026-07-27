@@ -288,7 +288,9 @@ pub fn Assets() -> Element {
 
             // 操作结果横幅
             if let Some(msg) = op_message() {
-                div { class: "mt-4 flex items-center justify-between gap-4 rounded-2xl border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] px-4 py-3 text-sm text-[var(--color-paper-primary)] shadow-sm",
+                // mt-4 会与 FilterTabs 自带的 mb-6 叠加成大空洞；改用 mb-6 后
+                // 上方 = tabs 标准间距 24px，下方与网格 mt-2 塌陷同为 24px，对称。
+                div { class: "mb-6 flex items-center justify-between gap-4 rounded-2xl border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] px-4 py-3 text-sm text-[var(--color-paper-primary)] shadow-sm",
                     span { "{msg}" }
                     button {
                         class: "text-[var(--color-paper-tertiary)] hover:text-[var(--color-paper-primary)] cursor-pointer",
