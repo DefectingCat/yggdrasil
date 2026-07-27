@@ -29,6 +29,11 @@ use crate::models::asset::{AssetFilter, AssetSort};
 /// 每页素材数，与服务端 list.rs 的 PER_PAGE 对齐。
 const ASSETS_PER_PAGE: i32 = 60;
 
+/// 搜索输入防抖窗口：停顿该时长后才提交查询，避免逐键发请求。
+/// 仅在 wasm32 的防抖任务中引用，server 编译门控掉。
+#[cfg(target_arch = "wasm32")]
+const SEARCH_DEBOUNCE_MS: u32 = 300;
+
 /// 格式化字节数为可读字符串（B/KB/MB/GB）。
 fn format_bytes(bytes: i64) -> String {
     const KB: f64 = 1024.0;
@@ -78,10 +83,27 @@ pub fn Assets() -> Element {
     // 重载触发器：操作成功后 +1 让 effect 重新请求。
     let mut reload = use_signal(|| 0_i32);
 
+    // 搜索防抖：query 是输入框原始值（受控绑定），debounced_query 才是请求参数。
+    // 停顿 300ms 无新输入才提交；每次击键重启本 effect 并新 spawn 一个延时任务，
+    // 旧任务醒来后用 peek 比对当前 query，已过期则静默丢弃。提交时连带重置页码——
+    // 若放在 oninput 里，page 变化会立刻用旧关键词抢发一次请求。
+    let mut debounced_query = use_signal(String::new);
+    use_effect(move || {
+        let q = query();
+        #[cfg(target_arch = "wasm32")]
+        spawn(async move {
+            crate::utils::time::sleep_ms(SEARCH_DEBOUNCE_MS).await;
+            if *query.peek() == q && *debounced_query.peek() != q {
+                debounced_query.set(q);
+                page.set(1);
+            }
+        });
+    });
+
     // 数据加载：任一查询条件或 reload 变化时重新请求。筛选/搜索/排序变化时重置到第 1 页。
     use_effect(move || {
         let f = filter();
-        let q = query();
+        let q = debounced_query();
         let s = sort();
         let p = page();
         let _ = reload();
@@ -214,7 +236,6 @@ pub fn Assets() -> Element {
                         value: "{query}",
                         oninput: move |evt| {
                             query.set(evt.value());
-                            page.set(1);
                         },
                     }
                     button {
