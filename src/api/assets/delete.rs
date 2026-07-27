@@ -149,7 +149,7 @@ pub async fn purge_orphan_assets() -> Result<PurgeOrphansResponse, ServerFnError
         if rows.is_empty() {
             return Ok(PurgeOrphansResponse {
                 success: true,
-                message: "没有可清理的孤儿素材".to_string(),
+                message: "没有可清理的未引用素材".to_string(),
                 deleted_count: 0,
                 freed_bytes: 0,
                 failures: 0,
@@ -183,7 +183,7 @@ pub async fn purge_orphan_assets() -> Result<PurgeOrphansResponse, ServerFnError
 
         Ok(PurgeOrphansResponse {
             success: true,
-            message: format!("已清理 {} 张孤儿素材", deleted),
+            message: format!("已清理 {} 张未引用素材", deleted),
             deleted_count: deleted as i64,
             freed_bytes,
             failures,

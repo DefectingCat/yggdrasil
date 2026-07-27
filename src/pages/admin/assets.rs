@@ -1,7 +1,7 @@
 //! 素材管理页面。
 //!
 //! 网格浏览 `uploads/` 已登记图片：搜索（文件名/alt）、引用状态筛选
-//! （全部/引用中/孤儿）、排序（最新/最大）、客户端分页。
+//! （全部/引用中/未引用）、排序（最新/最大）、客户端分页。
 //! 缩略图直接复用 `serve_image` 的动态处理（`?thumb=300x300`），零额外成本。
 //!
 //! 缩略图采用与前台正文图一致的 `.blur-img` 双层结构（`?w=20` 占位 + `data-src`
@@ -164,13 +164,13 @@ pub fn Assets() -> Element {
         div {
             h1 { class: "text-3xl font-extrabold tracking-tight mb-2", "素材管理" }
             p { class: "text-sm text-[var(--color-paper-secondary)] mb-8",
-                "管理文章编辑器上传的图片。共 {all_count} 张，引用中 {used_count} 张，孤儿 {orphan_count} 张。"
+                "管理文章编辑器上传的图片。共 {all_count} 张，引用中 {used_count} 张，未引用 {orphan_count} 张。"
             }
 
             // 顶栏：筛选 tabs + 搜索 + 排序
             div { class: "flex flex-wrap items-end justify-between gap-4",
                 FilterTabs {
-                    items: vec![("all", "全部"), ("used", "引用中"), ("orphan", "孤儿")],
+                    items: vec![("all", "全部"), ("used", "引用中"), ("orphan", "未引用")],
                     active_value: filter(),
                     on_change: move |v: String| {
                         filter.set(v);
@@ -250,7 +250,7 @@ pub fn Assets() -> Element {
                                                 ..
                                             }) => {
                                                 let mut msg = format!(
-                                                    "已清理 {} 张孤儿素材，释放 {}",
+                                                    "已清理 {} 张未引用素材，释放 {}",
                                                     deleted_count,
                                                     format_bytes(freed_bytes)
                                                 );
@@ -281,7 +281,7 @@ pub fn Assets() -> Element {
                                 class: "text-xs font-medium cursor-pointer px-3 py-2 rounded-full border border-amber-500/50 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors",
                                 title: "仅清理无引用且上传超过 7 天的素材（保护未保存的草稿）",
                                 onclick: move |_| purge_confirm.set(true),
-                                "清理孤儿（{purgeable_count} 张 · {format_bytes(purgeable_bytes)}）"
+                                "清理未引用（{purgeable_count} 张 · {format_bytes(purgeable_bytes)}）"
                             }
                         }
                     }
@@ -351,7 +351,7 @@ pub fn Assets() -> Element {
                                     span {
                                         class: "{badge_class}",
                                         if is_orphan {
-                                            "孤儿"
+                                            "未引用"
                                         } else {
                                             "被 {asset.ref_count} 篇引用"
                                         }
