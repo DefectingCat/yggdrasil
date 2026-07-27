@@ -15,7 +15,10 @@ pub mod rebuild;
 /// 请求与响应数据结构。
 pub mod types;
 
-pub use delete::{delete_asset, purge_orphan_assets, update_asset_alt};
+pub use delete::{batch_delete_assets, delete_asset, purge_orphan_assets, update_asset_alt};
 pub use list::list_assets;
 pub use rebuild::rebuild_assets_index;
-pub use types::{AssetListResponse, AssetOpResponse, PurgeOrphansResponse, RebuildAssetsResponse};
+pub use types::{
+    AssetListResponse, AssetOpResponse, BatchDeleteAssetsResponse, PurgeOrphansResponse,
+    RebuildAssetsResponse,
+};

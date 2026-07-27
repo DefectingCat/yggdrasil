@@ -7,7 +7,7 @@
 
 use dioxus::prelude::*;
 
-use super::types::{AssetOpResponse, PurgeOrphansResponse};
+use super::types::{AssetOpResponse, BatchDeleteAssetsResponse, PurgeOrphansResponse};
 
 /// 更新素材 alt（管理性备注，不回写已有文章 HTML）。
 #[server(UpdateAssetAlt, "/api")]
@@ -116,6 +116,105 @@ pub async fn delete_asset(id: String) -> Result<AssetOpResponse, ServerFnError> 
         crate::api::image::invalidate_asset_caches(&path).await;
 
         Ok(AssetOpResponse::ok("已删除".to_string()))
+    }
+    #[cfg(not(feature = "server"))]
+    unreachable!()
+}
+
+/// 批量删除素材。
+///
+/// 逐项做引用检查：被引用的跳过（保护语义与单删一致），无引用的硬删除
+/// （文件 + DB 行 + 派生缓存）。非法 id 计入失败，不存在的 id 静默忽略。
+/// 返回删除/跳过/失败统计，供批量操作条展示。
+#[server(BatchDeleteAssets, "/api")]
+pub async fn batch_delete_assets(
+    ids: Vec<String>,
+) -> Result<BatchDeleteAssetsResponse, ServerFnError> {
+    #[cfg(feature = "server")]
+    {
+        use crate::api::auth::get_current_admin_user;
+        use crate::api::error::AppError;
+        use crate::db::pool::get_conn;
+
+        let _admin = get_current_admin_user().await?;
+        let client = get_conn().await.map_err(AppError::db_conn)?;
+
+        // id 在边界处从 String 解析为 Uuid；非法 id 属业务错误，计入 failures 不走 500。
+        let mut uuids: Vec<uuid::Uuid> = Vec::with_capacity(ids.len());
+        let mut failures: i64 = 0;
+        for id in &ids {
+            match uuid::Uuid::parse_str(id) {
+                Ok(u) => uuids.push(u),
+                Err(_) => failures += 1,
+            }
+        }
+        if uuids.is_empty() {
+            return Ok(BatchDeleteAssetsResponse {
+                success: false,
+                message: "没有可删除的素材".to_string(),
+                deleted_count: 0,
+                skipped_referenced: 0,
+                freed_bytes: 0,
+                failures,
+            });
+        }
+
+        // 一次查询取路径/大小/引用存在性，避免逐 id 往返。
+        let rows = client
+            .query(
+                "SELECT a.id AS id, a.path, a.size_bytes, \
+                        EXISTS (SELECT 1 FROM asset_refs r WHERE r.asset_id = a.id) AS referenced \
+                 FROM assets a WHERE a.id = ANY($1)",
+                &[&uuids],
+            )
+            .await
+            .map_err(AppError::query)?;
+
+        let mut delete_ids: Vec<uuid::Uuid> = Vec::with_capacity(rows.len());
+        let mut freed_bytes: i64 = 0;
+        let mut skipped: i64 = 0;
+        for row in &rows {
+            let id: uuid::Uuid = row.get("id");
+            if row.get::<_, bool>("referenced") {
+                skipped += 1;
+                continue;
+            }
+            let path: String = row.get("path");
+            freed_bytes += row.get::<_, i64>("size_bytes");
+            let file_path = format!("uploads/{}", path);
+            if let Err(e) = tokio::fs::remove_file(&file_path).await {
+                // NotFound 可容忍（文件可能已被手动删）；其他错误计入 failures，
+                // DB 行照删——残留文件由重建索引的反向语义兜底。
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    tracing::warn!("Batch delete: remove file failed ({}): {}", file_path, e);
+                    failures += 1;
+                }
+            }
+            crate::api::image::invalidate_asset_caches(&path).await;
+            delete_ids.push(id);
+        }
+
+        let deleted = if delete_ids.is_empty() {
+            0
+        } else {
+            client
+                .execute("DELETE FROM assets WHERE id = ANY($1)", &[&delete_ids])
+                .await
+                .map_err(AppError::query)?
+        };
+
+        let mut message = format!("已删除 {} 张素材", deleted);
+        if skipped > 0 {
+            message.push_str(&format!("，跳过 {} 张被引用", skipped));
+        }
+        Ok(BatchDeleteAssetsResponse {
+            success: true,
+            message,
+            deleted_count: deleted as i64,
+            skipped_referenced: skipped,
+            freed_bytes,
+            failures,
+        })
     }
     #[cfg(not(feature = "server"))]
     unreachable!()

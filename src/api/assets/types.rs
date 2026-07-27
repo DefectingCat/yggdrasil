@@ -63,6 +63,19 @@ pub struct PurgeOrphansResponse {
     pub failures: i64,
 }
 
+/// 批量删除的结果。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchDeleteAssetsResponse {
+    pub success: bool,
+    pub message: String,
+    pub deleted_count: i64,
+    /// 因被文章引用而跳过的数量（保护语义与单删一致）。
+    pub skipped_referenced: i64,
+    pub freed_bytes: i64,
+    /// id 非法或删文件失败的数量（DB 行已删/未处理，属可容忍不一致）。
+    pub failures: i64,
+}
+
 /// 重建索引的结果。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RebuildAssetsResponse {

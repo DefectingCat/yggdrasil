@@ -14,17 +14,19 @@ use dioxus::prelude::*;
 // server fn 仅在 WASM 前端调用（全部包在 cfg(wasm32) 块内），server SSR 只编译类型。
 #[cfg(target_arch = "wasm32")]
 use crate::api::assets::{
-    delete_asset, list_assets, purge_orphan_assets, rebuild_assets_index, update_asset_alt,
+    batch_delete_assets, delete_asset, list_assets, purge_orphan_assets, rebuild_assets_index,
+    update_asset_alt,
 };
 use crate::api::assets::AssetListResponse;
 #[cfg(target_arch = "wasm32")]
-use crate::api::assets::{PurgeOrphansResponse, RebuildAssetsResponse};
+use crate::api::assets::{BatchDeleteAssetsResponse, PurgeOrphansResponse, RebuildAssetsResponse};
 use crate::components::empty_state::EmptyState;
 use crate::components::ui::{FilterTabs, Pagination};
 #[cfg(target_arch = "wasm32")]
 use crate::utils::js::invoke_optional_global;
 #[cfg(target_arch = "wasm32")]
 use crate::models::asset::{AssetFilter, AssetSort};
+use std::collections::HashSet;
 
 /// 每页素材数，与服务端 list.rs 的 PER_PAGE 对齐。
 const ASSETS_PER_PAGE: i32 = 60;
@@ -82,6 +84,10 @@ pub fn Assets() -> Element {
     let mut alt_input = use_signal(String::new);
     // 重载触发器：操作成功后 +1 让 effect 重新请求。
     let mut reload = use_signal(|| 0_i32);
+    // 多选：选中素材 id 集合 + 批量删除确认态。仅未引用素材可选（被引用的禁删，
+    // 与单删保护语义一致）；选择跨翻页/筛选保留，批量删除成功后整体清空。
+    let mut selected_ids: Signal<HashSet<String>> = use_signal(HashSet::new);
+    let mut batch_confirm = use_signal(|| false);
 
     // 搜索防抖：query 是输入框原始值（受控绑定），debounced_query 才是请求参数。
     // 停顿 300ms 无新输入才提交；每次击键重启本 effect 并新 spawn 一个延时任务，
@@ -181,6 +187,18 @@ pub fn Assets() -> Element {
     } else {
         format!("{sort_btn_base} {sort_idle}")
     };
+
+    // 多选派生值：本页可删（未引用）素材 id、是否已全选本页、是否有任何选择
+    // （驱动未选中卡片的勾选框常显）。全选/取消本页闭包各需一份 id 列表拷贝。
+    let page_orphan_ids: Vec<String> = assets
+        .iter()
+        .filter(|item| item.ref_count == 0)
+        .map(|item| item.asset.id.clone())
+        .collect();
+    let any_selected = !selected_ids().is_empty();
+    let all_page_selected =
+        !page_orphan_ids.is_empty() && page_orphan_ids.iter().all(|id| selected_ids().contains(id));
+    let page_orphan_ids_for_toggle = page_orphan_ids.clone();
 
     rsx! {
         div {
@@ -323,6 +341,95 @@ pub fn Assets() -> Element {
                 }
             }
 
+            // 多选批量操作条：出现即与操作横幅同槽位（顶栏与网格之间）。
+            if any_selected {
+                div { class: "mb-6 flex items-center gap-3 rounded-2xl border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] px-4 py-3 text-sm shadow-sm",
+                    span { class: "text-sm text-[var(--color-paper-secondary)]",
+                        "已选 {selected_ids().len()} 张"
+                    }
+                    button {
+                        class: "text-xs cursor-pointer text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors",
+                        onclick: move |_| {
+                            let mut s = selected_ids();
+                            if all_page_selected {
+                                for id in &page_orphan_ids_for_toggle {
+                                    s.remove(id);
+                                }
+                            } else {
+                                for id in &page_orphan_ids_for_toggle {
+                                    s.insert(id.clone());
+                                }
+                            }
+                            selected_ids.set(s);
+                        },
+                        if all_page_selected {
+                            "取消本页"
+                        } else {
+                            "全选本页"
+                        }
+                    }
+                    button {
+                        class: "text-xs cursor-pointer text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors",
+                        onclick: move |_| {
+                            selected_ids.set(HashSet::new());
+                            batch_confirm.set(false);
+                        },
+                        "清除"
+                    }
+                    div { class: "flex-1" }
+                    if batch_confirm() {
+                        button {
+                            class: "text-xs font-medium cursor-pointer px-3 py-2 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors",
+                            onclick: move |_| {
+                                batch_confirm.set(false);
+                                let ids: Vec<String> = selected_ids().iter().cloned().collect();
+                                #[cfg(target_arch = "wasm32")]
+                                spawn(async move {
+                                    match batch_delete_assets(ids).await {
+                                        Ok(resp) => {
+                                            let BatchDeleteAssetsResponse {
+                                                message,
+                                                freed_bytes,
+                                                failures,
+                                                deleted_count,
+                                                ..
+                                            } = resp;
+                                            let mut msg = message;
+                                            if freed_bytes > 0 {
+                                                msg.push_str(&format!("，释放 {}", format_bytes(freed_bytes)));
+                                            }
+                                            if failures > 0 {
+                                                msg.push_str(&format!("（{failures} 项失败）"));
+                                            }
+                                            op_message.set(Some(msg));
+                                            if deleted_count > 0 {
+                                                selected_ids.set(HashSet::new());
+                                                reload.set(reload() + 1);
+                                            }
+                                        }
+                                        Err(e) => {
+                                            op_message.set(Some(format!("批量删除失败：{e}")))
+                                        }
+                                    }
+                                });
+                            },
+                            "确认删除 {selected_ids().len()} 张"
+                        }
+                        button {
+                            class: "text-xs cursor-pointer px-3 py-2 rounded-full border border-[var(--color-paper-border)] text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors",
+                            onclick: move |_| batch_confirm.set(false),
+                            "取消"
+                        }
+                    } else {
+                        button {
+                            class: "text-xs font-medium cursor-pointer px-3 py-2 rounded-full border border-red-500/50 text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-colors",
+                            onclick: move |_| batch_confirm.set(true),
+                            "删除所选"
+                        }
+                    }
+                }
+            }
+
             // 内容区
             if let Some(err) = error() {
                 div { class: "mt-8 text-sm text-red-500", "加载失败：{err}" }
@@ -343,6 +450,22 @@ pub fn Assets() -> Element {
                             let placeholder = format!("/uploads/{}?w=20", a.path);
                             let img_alt = a.alt.clone().unwrap_or_else(|| a.filename.clone());
                             let is_orphan = asset.ref_count == 0;
+                            let is_selected = selected_ids().contains(&a.id);
+                            // 选中卡片加主题色描边（ring 与原有 border 叠加，不动布局）。
+                            let card_ring = if is_selected {
+                                "ring-2 ring-[var(--color-paper-accent)]"
+                            } else {
+                                ""
+                            };
+                            // 勾选框：未引用素材才可删可选。选中或有任何选择时常显，
+                            // 否则随卡片 hover 显现（与卡片操作按钮同一显现语言）。
+                            let checkbox_class = if is_selected {
+                                "absolute top-2 right-2 z-10 w-6 h-6 flex items-center justify-center rounded-full text-xs cursor-pointer transition-all bg-[var(--color-paper-accent)] text-white border border-[var(--color-paper-accent)]"
+                            } else if any_selected {
+                                "absolute top-2 right-2 z-10 w-6 h-6 flex items-center justify-center rounded-full text-xs cursor-pointer transition-all bg-black/40 backdrop-blur-sm text-white border border-white/60"
+                            } else {
+                                "absolute top-2 right-2 z-10 w-6 h-6 flex items-center justify-center rounded-full text-xs cursor-pointer transition-all bg-black/40 backdrop-blur-sm text-white border border-white/60 opacity-0 group-hover:opacity-100"
+                            };
                             // z-10：.blur-img-full 带 z-index:1，不提升会被展示层盖住（灯箱改造的回归）。
                             let badge_class = if is_orphan {
                                 "absolute top-2 left-2 z-10 text-[10px] font-mono px-2 py-0.5 rounded-full backdrop-blur-sm bg-amber-500/80 text-white"
@@ -352,7 +475,7 @@ pub fn Assets() -> Element {
                             rsx! {
                                 div {
                                     key: "{a.id}",
-                                    class: "group relative rounded-3xl overflow-hidden border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] shadow-sm hover:shadow-md transition-all",
+                                    class: "group relative rounded-3xl overflow-hidden border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] shadow-sm hover:shadow-md transition-all {card_ring}",
                                     // blur-img 双层结构（对齐前台正文图）：?w=20 模糊占位 +
                                     // data-src 展示层（IO 懒加载）；点击由 lightbox.js 接管为灯箱
                                     // （图集模式，原图 = data-src 去 query）。不加 lightbox-single。
@@ -375,6 +498,29 @@ pub fn Assets() -> Element {
                                             "未引用"
                                         } else {
                                             "被 {asset.ref_count} 篇引用"
+                                        }
+                                    }
+                                    // 多选勾选框（仅未引用素材；stop_propagation 防触发灯箱）
+                                    if is_orphan {
+                                        button {
+                                            class: "{checkbox_class}",
+                                            title: if is_selected { "取消选择" } else { "选择" },
+                                            onclick: {
+                                                let id = a.id.clone();
+                                                move |evt| {
+                                                    evt.stop_propagation();
+                                                    let mut s = selected_ids();
+                                                    if s.contains(&id) {
+                                                        s.remove(&id);
+                                                    } else {
+                                                        s.insert(id.clone());
+                                                    }
+                                                    selected_ids.set(s);
+                                                }
+                                            },
+                                            if is_selected {
+                                                "✓"
+                                            }
                                         }
                                     }
                                     div { class: "p-3",
