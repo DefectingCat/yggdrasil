@@ -90,13 +90,13 @@ pub fn Admin() -> Element {
                                 value: s.published,
                                 label: "已发布".to_string(),
                                 trend: "活跃".to_string(),
-                                delay_ms: 60,
+                                delay_ms: 120,
                             }
                             StatCard {
                                 value: s.drafts,
                                 label: "草稿".to_string(),
                                 trend: "待处理".to_string(),
-                                delay_ms: 120,
+                                delay_ms: 240,
                             }
                         }
                     }
@@ -117,7 +117,7 @@ pub fn Admin() -> Element {
                 // 骨架屏阶段不播(避免动画被骨架屏截断,见 yggdrasil-ui-design-taste 规范)。
                 Link {
                     class: "block {ADMIN_CARD_CLASS} p-8 bg-[var(--color-paper-entry)] hover:bg-[var(--color-paper-border)]/20 transition-all h-36 flex flex-col justify-between group hover:-translate-y-1 hover:shadow-md duration-300 {pending_enter_class}",
-                    style: "animation-delay: 180ms",
+                    style: "animation-delay: 360ms; animation-duration: 600ms",
                     to: Route::AdminComments {},
                     match pending_count() {
                         Some(count) => {
@@ -182,7 +182,7 @@ pub fn Admin() -> Element {
                                         RecentPostItem {
                                             key: "{post.id}",
                                             post: post.clone(),
-                                            delay_ms: (i as i32) * 50,
+                                            delay_ms: (i as i32) * 80,
                                         }
                                     }
                                 }
@@ -215,7 +215,7 @@ fn StatCard(value: i64, label: String, trend: String, delay_ms: i32) -> Element 
     rsx! {
         div {
             class: "{ADMIN_CARD_CLASS} p-8 flex flex-col justify-between h-36 relative group hover:-translate-y-1 hover:shadow-md transition-all duration-300 animate-page-enter",
-            style: "animation-delay: {delay_ms}ms",
+            style: "animation-delay: {delay_ms}ms; animation-duration: 600ms",
             div { class: "flex justify-between items-start",
                 div { class: "text-sm font-medium text-[var(--color-paper-secondary)]",
                     "{label}"
@@ -232,7 +232,7 @@ fn StatCard(value: i64, label: String, trend: String, delay_ms: i32) -> Element 
     }
 }
 
-/// 数字滚动组件:值从 0 以 easeOutQuint 缓动递增到 `target`(约 500ms)。
+/// 数字滚动组件:值从 0 以 easeOutQuint 缓动递增到 `target`(约 900ms)。
 ///
 /// 命中 `prefers-reduced-motion` 时直接显示终值。动画在 `use_effect` 内驱动,
 /// 渲染体保持纯净(见 dioxus-render-purity 规范);数据仅 WASM 端加载,SSR 不挂载本组件。
@@ -251,7 +251,7 @@ fn CountUp(target: i64, class: String) -> Element {
                 display.set(target);
                 return;
             }
-            const DURATION_MS: i64 = 500;
+            const DURATION_MS: i64 = 900;
             let start = crate::utils::time::now_millis();
             loop {
                 crate::utils::time::sleep_ms(16).await;

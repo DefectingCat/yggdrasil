@@ -97,7 +97,7 @@
   }
 
   .animate-row-enter {
-    animation: row-enter 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: row-enter 450ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   /* Minimalist custom scrollbars */
