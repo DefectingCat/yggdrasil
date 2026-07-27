@@ -3,6 +3,12 @@
 //! 处理 multipart 上传，校验 MIME 类型、文件大小与 admin 权限，
 //! JPEG/PNG 自动转 WebP（若体积更小则保留原格式），GIF/WebP 保持原样。
 //! 文件按日期分目录存放于 `uploads/`。
+//!
+//! 内容去重（CAS）：以原始上传字节的 SHA-256 为内容指纹（`assets.content_hash`，
+//! 唯一索引）。重复上传同一内容时复用已登记素材——同一行、同一文件，不重复
+//! 落盘，响应带 `"reused": true`；并发同内容上传由唯一索引 + ON CONFLICT 兜底。
+//! 仅精确去重：尺寸/压缩不同的视觉相似图不合并（那是感知哈希 pHash 的领域，
+//! 有意不做）。
 //! 本模块属于手动注册的 Axum 路由，仅在 `feature = "server"` 时可用。
 
 #[cfg(feature = "server")]
@@ -172,6 +178,42 @@ pub async fn upload_image(
     let is_gif = mime_type.as_str() == "image/gif";
     let is_webp = mime_type.as_str() == "image/webp";
 
+    // 内容去重（CAS）：对原始上传字节算 SHA-256，命中已登记素材直接复用，
+    // 跳过 GIF/WebP 解码验证、转码与落盘（省下整个流程最贵的 CPU）。
+    // 放在安全性校验（magic bytes / 尺寸上限）之后、转码之前。
+    // 命中时刷新 created_at/updated_at：重传代表使用意图，重启 7 天清理保护窗
+    // （PURGE_GRACE_DAYS 保护的是「刚上传还没被文章引用」的素材）。
+    let content_hash = {
+        use sha2::Digest;
+        hex::encode(sha2::Sha256::digest(&data))
+    };
+    {
+        let client = crate::db::pool::get_conn().await.map_err(|e| {
+            tracing::error!("Dedup check: get conn failed: {e}");
+            upload_error(StatusCode::INTERNAL_SERVER_ERROR, "文件保存失败")
+        })?;
+        let reused = client
+            .query_opt(
+                "UPDATE assets SET created_at = NOW(), updated_at = NOW() \
+                 WHERE content_hash = $1 RETURNING path",
+                &[&content_hash],
+            )
+            .await
+            .map_err(|e| {
+                tracing::error!("Dedup check query failed: {e}");
+                upload_error(StatusCode::INTERNAL_SERVER_ERROR, "文件保存失败")
+            })?;
+        if let Some(row) = reused {
+            let path: String = row.get("path");
+            tracing::info!("Image upload deduped: reuse {} (hash {})", path, &content_hash[..12]);
+            return Ok(Json(json!({
+                "success": true,
+                "url": format!("/uploads/{}", path),
+                "reused": true
+            })));
+        }
+    }
+
     // 对不经过重编码的格式做解码验证。GIF 走 image::load_from_memory 会完整解码，
     // 移到阻塞线程池避免拖住 async 运行时。
     // data 是引用计数的 Bytes，clone 廉价（原子 +1），避免 to_vec() 的全文件深拷贝。
@@ -296,6 +338,9 @@ pub async fn upload_image(
     tracing::info!("Image uploaded: {} ({} bytes)", file_path, final_data.len());
 
     // 登记 assets 注册表。失败时补偿删除已落盘文件，避免产生未登记的孤儿文件。
+    // ON CONFLICT (content_hash) DO NOTHING 兜底并发竞态：两个请求同时上传同一
+    // 新内容时会双双错过上面的去重检查，唯一索引保证只有一个 INSERT 成功；
+    // 落败者删自己的落盘文件、复用胜出者的路径（返回 Some(reused_path)）。
     let rel_path = format!("{}/{}", date, file_name);
     let final_mime = match final_ext.as_str() {
         "jpg" => "image/jpeg",
@@ -303,16 +348,17 @@ pub async fn upload_image(
         "gif" => "image/gif",
         _ => "image/webp",
     };
-    let registered: Result<(), String> = async {
+    let registered: Result<Option<String>, String> = async {
         let client = crate::db::pool::get_conn()
             .await
             .map_err(|e| e.to_string())?;
         // id 用 Uuid 类型直连 uuid 列（with-uuid-1 桥接），避免 String→uuid 序列化失败。
         let asset_id = uuid::Uuid::new_v4();
-        client
+        let inserted = client
             .execute(
-                "INSERT INTO assets (id, path, filename, mime, size_bytes, width, height)\
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                "INSERT INTO assets (id, path, filename, mime, size_bytes, width, height, content_hash)\
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) \
+                 ON CONFLICT (content_hash) DO NOTHING",
                 &[
                     &asset_id,
                     &rel_path,
@@ -321,20 +367,44 @@ pub async fn upload_image(
                     &(final_data.len() as i64),
                     &(img_width as i32),
                     &(img_height as i32),
+                    &content_hash,
                 ],
             )
             .await
             .map_err(|e| e.to_string())?;
-        Ok(())
+        if inserted == 0 {
+            // 竞态落败：胜出者的行必然已提交（唯一索引冲突即可见），取其路径复用。
+            let row = client
+                .query_one(
+                    "SELECT path FROM assets WHERE content_hash = $1",
+                    &[&content_hash],
+                )
+                .await
+                .map_err(|e| e.to_string())?;
+            return Ok(Some(row.get("path")));
+        }
+        Ok(None)
     }
     .await;
-    if let Err(e) = registered {
-        tracing::error!("Register asset failed ({}), removing uploaded file", e);
-        let _ = tokio::fs::remove_file(&file_path).await;
-        return Err(upload_error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "文件保存失败",
-        ));
+    match registered {
+        Ok(Some(reused_path)) => {
+            let _ = tokio::fs::remove_file(&file_path).await;
+            tracing::info!("Image upload deduped (concurrent race): reuse {}", reused_path);
+            return Ok(Json(json!({
+                "success": true,
+                "url": format!("/uploads/{}", reused_path),
+                "reused": true
+            })));
+        }
+        Ok(None) => {}
+        Err(e) => {
+            tracing::error!("Register asset failed ({}), removing uploaded file", e);
+            let _ = tokio::fs::remove_file(&file_path).await;
+            return Err(upload_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "文件保存失败",
+            ));
+        }
     }
 
     Ok(Json(json!({
