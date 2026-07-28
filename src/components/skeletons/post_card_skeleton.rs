@@ -12,18 +12,19 @@ use crate::components::skeletons::atoms::SkeletonBox;
 #[component]
 pub fn PostCardSkeleton() -> Element {
     rsx! {
-        article { class: "mb-6 p-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700",
-            // 标题占位 (模拟 h2 text-2xl font-bold)
-            SkeletonBox { class: "h-7 w-3/4 rounded mb-3" }
-            // 摘要第一行
-            SkeletonBox { class: "h-4 w-full rounded mb-2" }
-            // 摘要第二行
-            SkeletonBox { class: "h-4 w-5/6 rounded mb-3" }
-            // 元信息行 (日期 + 标签)
-            div { class: "flex items-center gap-3 mt-3",
-                SkeletonBox { class: "h-3.5 w-20 rounded" }
-                SkeletonBox { class: "h-3.5 w-1 rounded" }
-                SkeletonBox { class: "h-3.5 w-16 rounded" }
+        article { class: "mb-12 flex flex-col bg-[var(--color-paper-entry)] rounded-[2rem] border border-transparent overflow-hidden",
+            div { class: "p-8 flex flex-col gap-3",
+                // 标题占位 (模拟 h2 text-2xl/3xl font-extrabold)
+                SkeletonBox { class: "h-7 w-3/4 rounded" }
+                // 摘要两行 (模拟 text-base line-clamp-2)
+                SkeletonBox { class: "h-4 w-full rounded" }
+                SkeletonBox { class: "h-4 w-5/6 rounded" }
+                // 元信息行 (日期 + 分隔 + 标签，模拟 text-sm)
+                div { class: "flex flex-wrap items-center gap-3 mt-4",
+                    SkeletonBox { class: "h-3.5 w-20 rounded" }
+                    SkeletonBox { class: "h-3.5 w-1 rounded" }
+                    SkeletonBox { class: "h-3.5 w-16 rounded" }
+                }
             }
         }
     }

@@ -44,15 +44,9 @@ pub(super) fn DbStatusTab() -> Element {
         loading.set(true);
         #[cfg(target_arch = "wasm32")]
         {
-            let t0 = crate::utils::time::now_millis();
-            web_sys::console::log_1(&format!("[DEBUG-db] fetch start at {t0}").into());
             spawn(async move {
                 match get_db_status().await {
                     Ok(s) => {
-                        let t1 = crate::utils::time::now_millis();
-                        web_sys::console::log_1(
-                            &format!("[DEBUG-db] fetch done at {t1} (Δ={}ms)", t1 - t0).into(),
-                        );
                         status.set(Some(s));
                         error.set(None);
                     }

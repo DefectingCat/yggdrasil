@@ -146,7 +146,7 @@ pub fn AdminLayout() -> Element {
                                 div { class: "flex-1 min-h-0 flex flex-col animate-pulse",
                                     {
                                         match route {
-                                            Route::Write {} => rsx! {
+                                            Route::Write {} | Route::WriteEdit { .. } => rsx! {
                                                 WriteSkeleton {}
                                             },
                                             _ => rsx! {
