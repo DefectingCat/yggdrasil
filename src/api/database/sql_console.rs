@@ -184,11 +184,32 @@ fn statement_type_name(stmt: &sqlparser::ast::Statement) -> String {
     name.to_string()
 }
 
-/// 判断语句是否只读（SELECT/EXPLAIN/SHOW/WITH...SELECT）。
+/// 判断语句是否只读（SELECT/WITH...SELECT/EXPLAIN/SHOW 系列）。
 #[cfg(feature = "server")]
 fn is_read_only(stmt: &sqlparser::ast::Statement) -> bool {
     use sqlparser::ast::Statement;
-    matches!(stmt, Statement::Query(_) | Statement::Explain { .. })
+    matches!(
+        stmt,
+        // SELECT 与 WITH ... SELECT 均解析为 Query。
+        Statement::Query(_)
+            | Statement::Explain { .. }
+            // SHOW 系列只读取元数据/配置参数，不会写入业务表。
+            | Statement::ShowVariable { .. }
+            | Statement::ShowVariables { .. }
+            | Statement::ShowStatus { .. }
+            | Statement::ShowCreate { .. }
+            | Statement::ShowColumns { .. }
+            | Statement::ShowCatalogs { .. }
+            | Statement::ShowDatabases { .. }
+            | Statement::ShowProcessList { .. }
+            | Statement::ShowSchemas { .. }
+            | Statement::ShowCharset(_)
+            | Statement::ShowObjects(_)
+            | Statement::ShowTables { .. }
+            | Statement::ShowViews { .. }
+            | Statement::ShowFunctions { .. }
+            | Statement::ShowCollation { .. }
+    )
 }
 
 /// 判断一组语句中是否含有写操作（非只读语句）。

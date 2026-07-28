@@ -1,7 +1,8 @@
 //! 文章全文搜索接口。
 //!
-//! 基于 PostgreSQL 的 pg_trgm 扩展，通过 word_similarity 对 search_text 做模糊匹配，
-//! 按相似度与发布时间降序返回最多 50 篇已发布文章。
+//! 通过 `ILIKE` 对 search_text 做子串模糊匹配（两侧 `%`），无法利用 trgm GIN
+//! 索引（仅前缀模式命中），走全表扫描，靠 LIMIT 50 与搜索限流兜底。
+//! 结果按 pg_trgm 的 `word_similarity` 相似度与发布时间降序返回最多 50 篇已发布文章。
 //! Dioxus server function，注册在 `/api` 路径下。
 //! 仅在 `feature = "server"` 启用的服务端构建中查询数据库。
 

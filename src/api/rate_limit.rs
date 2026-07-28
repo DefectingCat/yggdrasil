@@ -65,7 +65,7 @@ static COMMENT_LIMITER: LazyLock<DefaultKeyedRateLimiter<String>> = LazyLock::ne
 });
 
 #[cfg(feature = "server")]
-/// 代码执行单 IP 每秒限流（默认 0.2 req/s，突发 3）。
+/// 代码执行单 IP 每秒限流（默认 1 req/s，突发 3）。
 /// 防止单个客户端高频提交容器任务，与下方日限额共同构成双层速率限制。
 static CODE_EXEC_LIMITER: LazyLock<DefaultKeyedRateLimiter<String>> = LazyLock::new(|| {
     RateLimiter::keyed(
