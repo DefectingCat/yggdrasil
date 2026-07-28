@@ -549,11 +549,23 @@ pub async fn run_in_container_stream(
             }
         }
         _ = log_reader => {
-            // 日志流先结束（输出超限 break，或 attach 断开）。
-            // 容器可能仍在运行——等它退出拿 exit_code（短超时，避免无限等）。
+            // 日志流先结束（输出超限 break，或 attach 断开），容器可能仍在运行。
+            // C3 修复：旧代码 wait_container().next().await 无超时无 kill，注释还谎称
+            // "短超时"。`while True: print()` 式程序会永久挂起 → RUNNER_SEMAPHORE 许可
+            // 不释放（默认 4 并发 → 4 个即 DoS 全部代码执行器）+ ContainerGuard 不 drop
+            // → 容器永久运行烧 CPU。与 wait_with_timeout 分支对称：带超时地等退出，超时则 kill。
             let mut wait_stream = docker.wait_container(&container_id, None::<WaitContainerOptions>);
-            if let Some(Ok(status)) = wait_stream.next().await {
-                exit_code = Some(status.status_code);
+            match timeout(Duration::from_secs(limits.timeout_secs), wait_stream.next()).await {
+                Ok(Some(Ok(status))) => exit_code = Some(status.status_code),
+                Ok(Some(Err(_))) | Ok(None) => {}
+                Err(_) => {
+                    // 超时：kill 后再等一次回收 exit_code（kill 后 wait 立即返回）。
+                    timed_out = true;
+                    let _ = docker.kill_container(&container_id, None).await;
+                    if let Some(Ok(status)) = wait_stream.next().await {
+                        exit_code = Some(status.status_code);
+                    }
+                }
             }
         }
     }
