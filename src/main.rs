@@ -41,10 +41,10 @@ mod middleware;
 mod models;
 // mcp：Model Context Protocol 服务器（/mcp Streamable HTTP，bearer token 鉴权）。
 // 仅 server feature 编译；WASM 前端不引用任何 mcp 符号。
-// allow(dead_code)：T1 tracer bullet 仅接通 search_posts；token 管理服务端函数（T2）、
-// 完整工具集（T3-T5）、加密/解密的外部调用点在后续工单接入。
+// allow(dead_code)：原用于掩盖 T1 tracer bullet 期间未接线的 mcp/resources.rs（273 行
+// 完整资源子系统，从未 override ServerHandler::list_resources/read_resource）。
+// 已删除该模块（D1）—— MCP 现无死代码，allow 同步移除，以免未来再次静默掩盖死代码。
 #[cfg(feature = "server")]
-#[allow(dead_code)]
 mod mcp;
 mod pages;
 mod router;

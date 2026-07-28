@@ -324,6 +324,7 @@ pub struct UploadMediaParams {
     pub base64: String,
     /// 替代文本（alt），目前未持久化，保留供未来扩展。
     #[serde(default)]
+    #[allow(dead_code)] // 面向未来：客户端可传入，assets 表未存 alt 列
     pub alt: Option<String>,
 }
 

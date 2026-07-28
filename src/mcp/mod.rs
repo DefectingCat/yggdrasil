@@ -20,8 +20,6 @@ pub mod config;
 #[cfg(feature = "server")]
 pub mod crypto;
 #[cfg(feature = "server")]
-pub mod resources;
-#[cfg(feature = "server")]
 pub mod router;
 #[cfg(feature = "server")]
 pub mod server;
