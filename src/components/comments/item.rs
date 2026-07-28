@@ -21,7 +21,6 @@ use crate::models::comment::PublicComment;
 pub fn CommentItem(comment: PublicComment, post_id: i32) -> Element {
     let ctx: CommentContext = use_context();
     let mut active_reply = ctx.active_reply;
-    let refresh_trigger = ctx.refresh_trigger;
 
     // 孤儿评论按顶层展示
     let depth = if comment.parent_id.is_none() && comment.depth > 0 {
@@ -34,8 +33,6 @@ pub fn CommentItem(comment: PublicComment, post_id: i32) -> Element {
 
     let is_replying = active_reply() == Some(comment.id);
     let show_reply = depth < 20;
-
-    let _ = refresh_trigger;
 
     // 作者名展示为链接或普通文本
     let author_element = match &comment.author_url {

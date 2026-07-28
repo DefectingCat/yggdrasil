@@ -25,7 +25,6 @@ pub fn PostNavLinks(prev: Option<PostNav>, next: Option<PostNav>) -> Element {
                     to: Route::PostDetail {
                         slug: prev_post.slug.clone(),
                     },
-                    onclick: move |_evt: dioxus::events::MouseEvent| {},
                     span { class: "title", "« Prev" }
                     span { class: "post-title-nav", "{prev_post.title}" }
                 }
@@ -39,7 +38,6 @@ pub fn PostNavLinks(prev: Option<PostNav>, next: Option<PostNav>) -> Element {
                     to: Route::PostDetail {
                         slug: next_post.slug.clone(),
                     },
-                    onclick: move |_evt: dioxus::events::MouseEvent| {},
                     span { class: "title", "Next »" }
                     span { class: "post-title-nav", "{next_post.title}" }
                 }

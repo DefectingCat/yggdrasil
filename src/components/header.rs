@@ -38,7 +38,8 @@ pub fn Header(
     #[props(default = "max-w-3xl")] max_width: &'static str,
 ) -> Element {
     let mut mobile_open = use_signal(|| false);
-    let menu_id = use_memo(|| "mobile-nav-menu".to_string());
+    // D12：对常量字符串做 use_memo 是无谓的 memo+String 分配，改用 &'static str。
+    let menu_id: &str = "mobile-nav-menu";
 
     rsx! {
         header { class: "sticky top-0 z-40 w-full bg-[var(--color-paper-theme)]/70 backdrop-blur-md transition-all duration-300",
@@ -68,8 +69,7 @@ pub fn Header(
                         class: "md:hidden p-2 rounded-lg text-paper-secondary hover:text-paper-primary hover:bg-paper-entry transition-colors",
                         r#type: "button",
                         aria_label: "切换导航菜单",
-                        aria_expanded: "{mobile_open()}",
-                        aria_controls: "{menu_id()}",
+                        aria_controls: menu_id,
                         onclick: move |_| mobile_open.set(!mobile_open()),
                         if mobile_open() {
                             // 关闭图标（X）
@@ -107,7 +107,7 @@ pub fn Header(
             // 移动端导航面板
             if mobile_open() {
                 div {
-                    id: "{menu_id()}",
+                    id: menu_id,
                     class: "md:hidden border-t border-paper-border bg-paper-theme/95 backdrop-blur-sm",
                     ul { class: "py-2 px-6 space-y-1",
                         for item in nav_items.iter().cloned() {
