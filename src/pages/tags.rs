@@ -6,7 +6,7 @@
 //!
 //! 数据获取：
 //! - 标签云通过 `use_server_future(list_tags)` 获取全部标签信息。
-//! - 标签详情通过 `use_server_future` 调用 `get_posts_by_tag(tag, None, None)`
+//! - 标签详情通过 `use_server_future` 调用 `get_posts_by_tag(tag)`
 //!   获取该标签下的全部已发布文章（不分页）。
 //!   在 `wasm32` 目标下，这些 server function 的函数体被替换为向服务端端点发起 HTTP POST 请求的客户端存根；
 //!   实际的数据库访问逻辑仅在 `feature = "server"` 启用时运行。
@@ -140,7 +140,7 @@ fn TagDetailContent(tag: String) -> Element {
             Route::TagDetail { tag } => tag,
             _ => tag.clone(),
         };
-        get_posts_by_tag(current_tag, None, None)
+        get_posts_by_tag(current_tag)
     })?;
 
     // 将结果映射为 (posts, total) 形式以便渲染。
