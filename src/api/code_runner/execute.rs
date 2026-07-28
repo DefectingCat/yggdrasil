@@ -35,7 +35,7 @@ use crate::api::code_runner::progress::{
 #[cfg(feature = "server")]
 use crate::api::rate_limit::{check_code_exec_limit, get_client_ip};
 #[cfg(feature = "server")]
-use crate::infra::docker::{run_in_container, run_in_container_stream};
+use crate::infra::docker::{run_in_container, run_in_container_stream, OutputChunk};
 #[cfg(feature = "server")]
 use crate::infra::runner_config::{clamp_limits, RUNNER_CONFIG};
 #[cfg(feature = "server")]
@@ -94,27 +94,21 @@ async fn check_rate_limit_for_user() -> Result<(), ServerFnError> {
     Ok(())
 }
 
-/// 提交一次代码执行请求。
+/// 后台执行容器任务的核心：信号量限并发 → clamp_limits → 调用 runner → 写 EXEC_TASKS。
 ///
-/// 同步校验通过后立即返回 task_id，容器在后台执行；结果通过
-/// [`get_exec_result`] 轮询查询。语言不支持 / 源码过大 / 触发限流时同步返回错误。
+/// [`start_exec`]（轮询路径）与 [`start_exec_stream`]（SSE 路径）共用本函数，
+/// 唯一的行为分叉是 `stream_tx`：
+/// - `None`：走 [`run_in_container`]，输出仅落终态 buffer（轮询路径）。
+/// - `Some(tx)`：走 [`run_in_container_stream`]，逐 chunk 推给 SSE channel（流式路径）。
 ///
-/// admin 角色跳过速率限制（便于作者在沙箱调试），但仍受并发槽、
-/// 资源钳制与源码大小校验约束。
-#[server(StartExec, "/api")]
-pub async fn start_exec(req: ExecRequest) -> Result<String, ServerFnError> {
-    check_rate_limit_for_user().await?;
-    validate_exec_request(&req)?;
-
-    // 生成任务 ID 并入队
-    let task_id = uuid::Uuid::new_v4().to_string();
-    insert_task(task_id.clone());
-
-    // 顺手回收过期任务（同时清 EXEC_TASKS 和 EXEC_STREAMS）
-    gc_old_tasks();
-
-    // 后台执行：信号量限并发 → clamp_limits → run_in_container
-    let task_id_clone = task_id.clone();
+/// 其余（并发槽获取、资源钳制、状态映射、超时/失败脱敏、日志前缀）两条路径完全一致。
+/// 两个 runner 返回元组仅末尾多一个 `_timed_out`，此处统一裁成 4 元组后续处理。
+#[cfg(feature = "server")]
+fn spawn_exec_task(
+    task_id: String,
+    req: ExecRequest,
+    stream_tx: Option<tokio::sync::mpsc::Sender<OutputChunk>>,
+) {
     // 归一化为 canonical key（js→node / ts→bun / rs→rust），确保 LANGUAGES.get 命中、
     // ExecResult.language 回显 canonical（与 markdown 渲染期的 data-lang 一致）。
     let lang_key = normalize_lang(&req.language);
@@ -130,18 +124,18 @@ pub async fn start_exec(req: ExecRequest) -> Result<String, ServerFnError> {
         {
             Ok(Ok(t)) => t,
             _ => {
-                update_task_stage(&task_id_clone, ExecStatus::Failed, "系统繁忙，排队超时");
+                update_task_stage(&task_id, ExecStatus::Failed, "系统繁忙，排队超时");
                 return;
             }
         };
 
-        update_task_stage(&task_id_clone, ExecStatus::Running, "启动容器");
+        update_task_stage(&task_id, ExecStatus::Running, "启动容器");
 
         let lang_def = match LANGUAGES.get(&lang_key) {
             Some(d) => d,
             None => {
-                // 理论不可达：start_exec 已校验白名单；防御性兜底。
-                update_task_stage(&task_id_clone, ExecStatus::Failed, "语言未注册");
+                // 理论不可达：入口已校验白名单；防御性兜底。
+                update_task_stage(&task_id, ExecStatus::Failed, "语言未注册");
                 return;
             }
         };
@@ -153,15 +147,33 @@ pub async fn start_exec(req: ExecRequest) -> Result<String, ServerFnError> {
         let final_limits = clamp_limits(base_limits, lang_def.allow_network);
 
         let start_time = chrono::Utc::now();
-        let res = run_in_container(
-            &lang_def.image,
-            &lang_def.run_cmd,
-            &req.source,
-            &lang_def.extension,
-            final_limits,
-        )
-        .await;
-        let duration_ms = (chrono::Utc::now() - start_time).num_milliseconds().max(0) as u64;
+        // 唯一的行为分叉：流式路径逐 chunk 推 SSE，非流式仅落终态 buffer。
+        let stream_suffix = if stream_tx.is_some() { " (stream)" } else { "" };
+        let res = match stream_tx {
+            Some(tx) => run_in_container_stream(
+                &lang_def.image,
+                &lang_def.run_cmd,
+                &req.source,
+                &lang_def.extension,
+                final_limits,
+                tx,
+            )
+            .await
+            .map(|(exit_code, stdout, stderr, oom_killed, _)| {
+                (exit_code, stdout, stderr, oom_killed)
+            }),
+            None => run_in_container(
+                &lang_def.image,
+                &lang_def.run_cmd,
+                &req.source,
+                &lang_def.extension,
+                final_limits,
+            )
+            .await,
+        };
+        let duration_ms = (chrono::Utc::now() - start_time)
+            .num_milliseconds()
+            .max(0) as u64;
 
         drop(ticket); // 显式释放信号量
 
@@ -182,13 +194,13 @@ pub async fn start_exec(req: ExecRequest) -> Result<String, ServerFnError> {
                     duration_ms,
                     language: lang_key.clone(),
                 };
-                update_task_result(&task_id_clone, status, exec_res);
+                update_task_result(&task_id, status, exec_res);
             }
             Err(e) => {
                 // 系统内部异常脱敏：日志记详情，前端只见通用消息。
                 let s = e.to_string();
                 let is_timeout = s.contains("TimedOut");
-                tracing::error!(error = ?e, task_id = %task_id_clone, "container execution failed");
+                tracing::error!(error = ?e, task_id = %task_id, "container execution failed{}", stream_suffix);
                 let status = if is_timeout {
                     ExecStatus::Timeout
                 } else {
@@ -206,10 +218,34 @@ pub async fn start_exec(req: ExecRequest) -> Result<String, ServerFnError> {
                     duration_ms,
                     language: lang_key.clone(),
                 };
-                update_task_result(&task_id_clone, status, exec_res);
+                update_task_result(&task_id, status, exec_res);
             }
         }
     });
+}
+
+/// 提交一次代码执行请求。
+///
+/// 同步校验通过后立即返回 task_id，容器在后台执行；结果通过
+/// [`get_exec_result`] 轮询查询。语言不支持 / 源码过大 / 触发限流时同步返回错误。
+///
+/// admin 角色跳过速率限制（便于作者在沙箱调试），但仍受并发槽、
+/// 资源钳制与源码大小校验约束。
+#[server(StartExec, "/api")]
+pub async fn start_exec(req: ExecRequest) -> Result<String, ServerFnError> {
+    check_rate_limit_for_user().await?;
+    validate_exec_request(&req)?;
+
+    // 生成任务 ID 并入队
+    let task_id = uuid::Uuid::new_v4().to_string();
+    insert_task(task_id.clone());
+
+    // 顺手回收过期任务（同时清 EXEC_TASKS 和 EXEC_STREAMS）
+    gc_old_tasks();
+
+    // 后台执行：信号量限并发 → clamp_limits → run_in_container
+    // （spawn 逻辑见 spawn_exec_task；stream_tx=None 走非流式 runner）
+    spawn_exec_task(task_id.clone(), req, None);
 
     Ok(task_id)
 }
@@ -244,98 +280,8 @@ pub async fn start_exec_stream(req: ExecRequest) -> Result<String, ServerFnError
 
     gc_old_tasks();
 
-    let task_id_clone = task_id.clone();
-    // 同 start_exec：归一化别名，LANGUAGES.get 用 canonical key。
-    let lang_key = normalize_lang(&req.language);
-    tokio::spawn(async move {
-        let sem = &*RUNNER_SEMAPHORE;
-
-        let ticket = match tokio::time::timeout(
-            Duration::from_secs(RUNNER_CONFIG.queue_timeout_secs),
-            sem.acquire(),
-        )
-        .await
-        {
-            Ok(Ok(t)) => t,
-            _ => {
-                update_task_stage(&task_id_clone, ExecStatus::Failed, "系统繁忙，排队超时");
-                return;
-            }
-        };
-
-        update_task_stage(&task_id_clone, ExecStatus::Running, "启动容器");
-
-        let lang_def = match LANGUAGES.get(&lang_key) {
-            Some(d) => d,
-            None => {
-                update_task_stage(&task_id_clone, ExecStatus::Failed, "语言未注册");
-                return;
-            }
-        };
-
-        let base_limits = req
-            .overrides
-            .unwrap_or_else(|| lang_def.default_limits.clone());
-        let final_limits = clamp_limits(base_limits, lang_def.allow_network);
-
-        let start_time = chrono::Utc::now();
-        let res = run_in_container_stream(
-            &lang_def.image,
-            &lang_def.run_cmd,
-            &req.source,
-            &lang_def.extension,
-            final_limits,
-            tx,
-        )
-        .await;
-        let duration_ms = (chrono::Utc::now() - start_time).num_milliseconds().max(0) as u64;
-
-        drop(ticket); // 显式释放信号量
-
-        match res {
-            Ok((exit_code, stdout, stderr, oom_killed, _timed_out)) => {
-                let status = if oom_killed {
-                    ExecStatus::OomKilled
-                } else if exit_code == Some(0) {
-                    ExecStatus::Success
-                } else {
-                    ExecStatus::Error
-                };
-                let exec_res = ExecResult {
-                    status: status.clone(),
-                    stdout,
-                    stderr,
-                    exit_code,
-                    duration_ms,
-                    language: lang_key.clone(),
-                };
-                update_task_result(&task_id_clone, status, exec_res);
-            }
-            Err(e) => {
-                let s = e.to_string();
-                let is_timeout = s.contains("TimedOut");
-                tracing::error!(error = ?e, task_id = %task_id_clone, "container execution failed (stream)");
-                let status = if is_timeout {
-                    ExecStatus::Timeout
-                } else {
-                    ExecStatus::Failed
-                };
-                let exec_res = ExecResult {
-                    status: status.clone(),
-                    stdout: String::new(),
-                    stderr: if is_timeout {
-                        "执行超时".to_string()
-                    } else {
-                        "系统暂时不可用".to_string()
-                    },
-                    exit_code: None,
-                    duration_ms,
-                    language: lang_key.clone(),
-                };
-                update_task_result(&task_id_clone, status, exec_res);
-            }
-        }
-    });
+    // 公共 spawn 逻辑见 spawn_exec_task；stream_tx=Some(tx) 走 run_in_container_stream。
+    spawn_exec_task(task_id.clone(), req, Some(tx));
 
     Ok(task_id)
 }
