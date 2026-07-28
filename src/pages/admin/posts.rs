@@ -19,6 +19,7 @@ use crate::api::posts::{
     CreatePostResponse, PostStatsResponse, RebuildResult,
 };
 use crate::components::empty_state::{EmptyState, EmptyStateAction};
+use crate::components::forms::{FormInput, INPUT_INLINE_CLASS};
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::posts_skeleton::PostsSkeleton;
 use crate::components::ui::{
@@ -190,13 +191,13 @@ fn AllPostsList() -> Element {
     rsx! {
         // 搜索条：按标题过滤文章（仅管理后台用，覆盖草稿）。
         div { class: "flex gap-2 mb-4",
-            input {
-                class: "flex-1 px-4 py-2 border border-paper-border rounded-lg bg-paper-entry text-paper-primary placeholder:text-paper-tertiary focus:outline-none focus:border-paper-accent focus:ring-1 focus:ring-paper-accent/30",
-                r#type: "text",
+            FormInput {
+                r#type: "search",
                 placeholder: "搜索文章标题...",
-                value: "{search_input()}",
-                oninput: move |e| search_input.set(e.value()),
-                onkeydown: move |e| {
+                value: search_input(),
+                class: INPUT_INLINE_CLASS,
+                oninput: move |v: String| search_input.set(v),
+                onkeydown: move |e: KeyboardEvent| {
                     if e.key() == Key::Enter {
                         submit_search();
                     }
