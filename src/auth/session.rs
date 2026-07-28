@@ -7,8 +7,6 @@
 #[cfg(feature = "server")]
 use chrono::{DateTime, Duration, Utc};
 #[cfg(feature = "server")]
-use sha2::{Digest, Sha256};
-#[cfg(feature = "server")]
 use uuid::Uuid;
 
 #[cfg(feature = "server")]
@@ -20,9 +18,7 @@ pub fn generate_token() -> String {
 #[cfg(feature = "server")]
 /// 使用 SHA-256 对 token 进行哈希，用于数据库存储。
 pub fn hash_token(token: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(token.as_bytes());
-    hex::encode(hasher.finalize())
+    crate::utils::server::sha256_hex(token)
 }
 
 #[cfg(feature = "server")]

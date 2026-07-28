@@ -18,3 +18,6 @@ pub mod js;
 pub mod text;
 /// 跨平台时间/睡眠工具。
 pub mod time;
+/// 服务端共享常量与工具（hash、正则、上限）。
+#[cfg(feature = "server")]
+pub mod server;

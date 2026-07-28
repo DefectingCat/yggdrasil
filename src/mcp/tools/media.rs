@@ -19,8 +19,8 @@ use crate::db::pool::get_conn;
 use crate::models::mcp_token::TokenScope;
 use super::common::{internal, ok_json, require_scope};
 
-/// 与 web 上传一致的大小上限。
-const MAX_FILE_SIZE: usize = 5 * 1024 * 1024;
+/// 与 web 上传一致的大小上限（来自 utils::server）。
+use crate::utils::server::MAX_FILE_SIZE;
 
 #[tool_router(router = media_router, vis = "pub")]
 impl crate::mcp::server::YggMcpServer {

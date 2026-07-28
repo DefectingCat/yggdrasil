@@ -15,7 +15,7 @@ use axum::body::Body;
 use axum::http::{HeaderMap, Request, StatusCode};
 use axum::middleware::Next;
 use axum::response::Response;
-use sha2::{Digest, Sha256};
+use sha2::Digest;
 
 use crate::db::pool::get_conn;
 use crate::models::mcp_token::TokenScope;
@@ -46,9 +46,7 @@ pub fn extract_bearer(headers: &HeaderMap) -> Option<String> {
 
 /// 明文 token → SHA-256 hex（与 mcp_tokens.token_hash 列一致，用于 DB 查找）。
 pub fn hash_token(token: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(token.as_bytes());
-    hex::encode(hasher.finalize())
+    crate::utils::server::sha256_hex(token)
 }
 
 /// MCP 鉴权中间件：无 bearer 或 token 无效 → 401；否则注入 McpPrincipal。

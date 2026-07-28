@@ -28,7 +28,7 @@ use crate::auth::session::parse_session_token;
 #[cfg(feature = "server")]
 const ALLOWED_MIME_TYPES: &[&str] = &["image/jpeg", "image/png", "image/gif", "image/webp"];
 #[cfg(feature = "server")]
-const MAX_FILE_SIZE: usize = 5 * 1024 * 1024; // 5MB
+use crate::utils::server::MAX_FILE_SIZE;
 
 /// 构造统一的 JSON 错误响应：`{ "success": false, "error": msg }`。
 #[cfg(feature = "server")]
