@@ -52,14 +52,7 @@ pub async fn restore_post(post_id: i32) -> Result<CreatePostResponse, ServerFnEr
         // 恢复时确保 slug 在未删除文章中唯一（自动加后缀）；在事务内检查避免并发竞态。
         let new_slug = ensure_unique_slug(&tx, &current_slug, Some(post_id)).await?;
 
-        let tag_rows = tx
-            .query(
-                "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
-                &[&post_id],
-            )
-            .await
-            .map_err(AppError::query)?;
-        let tags: Vec<String> = tag_rows.iter().map(|r| r.get(0)).collect();
+        let tags = super::helpers::fetch_post_tags(&tx, post_id).await?;
 
         // 置空 deleted_at，并更新 slug（可能已加后缀）。
         let result = tx
@@ -120,14 +113,7 @@ pub async fn purge_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErro
         };
         let slug: String = slug_row.get(0);
 
-        let tag_rows = tx
-            .query(
-                "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
-                &[&post_id],
-            )
-            .await
-            .map_err(AppError::query)?;
-        let tags: Vec<String> = tag_rows.iter().map(|r| r.get(0)).collect();
+        let tags = super::helpers::fetch_post_tags(&tx, post_id).await?;
 
         let result = tx
             .execute(
@@ -194,15 +180,9 @@ pub async fn batch_restore_posts(post_ids: Vec<i32>) -> Result<CreatePostRespons
                 let new_slug = ensure_unique_slug(&tx, &current_slug, Some(*id)).await?;
 
                 if use_precise {
-                    let tag_rows = tx
-                        .query(
-                            "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
-                            &[&id],
-                        )
-                        .await
-                        .map_err(AppError::query)?;
-                    for tag_row in &tag_rows {
-                        affected_tags.insert(tag_row.get(0));
+                    let tags = super::helpers::fetch_post_tags(&tx, *id).await?;
+                    for tag in tags {
+                        affected_tags.insert(tag);
                     }
                 }
 
@@ -285,15 +265,9 @@ pub async fn batch_purge_posts(post_ids: Vec<i32>) -> Result<CreatePostResponse,
 
                 if let Some(slug_row) = slug_row {
                     let slug: String = slug_row.get(0);
-                    let tag_rows = tx
-                        .query(
-                            "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
-                            &[&id],
-                        )
-                        .await
-                        .map_err(AppError::query)?;
-                    for tag_row in &tag_rows {
-                        tags_set.insert(tag_row.get(0));
+                    let tags = super::helpers::fetch_post_tags(&tx, *id).await?;
+                    for tag in tags {
+                        tags_set.insert(tag);
                     }
                     slugs.push(slug);
                 }
@@ -363,14 +337,7 @@ pub async fn empty_trash() -> Result<CreatePostResponse, ServerFnError> {
             let slugs: Vec<String> = deleted_rows.iter().map(|r| r.get("slug")).collect();
             let ids: Vec<i32> = deleted_rows.iter().map(|r| r.get("id")).collect();
 
-            let tag_rows = tx
-                .query(
-                    "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = ANY($1)",
-                    &[&ids],
-                )
-                .await
-                .map_err(AppError::query)?;
-            let tags: Vec<String> = tag_rows.iter().map(|r| r.get(0)).collect();
+            let tags = super::helpers::fetch_post_tags_batch(&tx, &ids).await?;
 
             (slugs, tags)
         } else {

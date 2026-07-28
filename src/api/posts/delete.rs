@@ -42,14 +42,7 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
         };
         let slug: String = slug_row.get(0);
 
-        let tag_rows = tx
-            .query(
-                "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
-                &[&post_id],
-            )
-            .await
-            .map_err(AppError::query)?;
-        let tags: Vec<String> = tag_rows.iter().map(|r| r.get(0)).collect();
+        let tags = super::helpers::fetch_post_tags(&tx, post_id).await?;
 
         // 软删除：仅影响未被删除的文章。
         let result = tx
