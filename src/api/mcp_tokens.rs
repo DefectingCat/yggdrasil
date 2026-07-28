@@ -306,7 +306,7 @@ pub async fn get_mcp_client_configs(token: String) -> Result<McpClientConfigs, S
         );
         // (标题, 内容, 语言)：JSON 配置用 json 语法高亮，CLI 一行命令用 bash。
         let entries: [(&str, String, &str); 7] = [
-            ("Oh-My-Pi（~/.pi/agent/mcp.json 或 .pi/mcp.json）", c.omp_json, "json"),
+            ("Oh-My-Pi（项目根 .mcp.json / ~/.omp/agent/mcp.json 或 ~/.mcp.json）", c.omp_json, "json"),
             ("OpenCode（~/.config/opencode/opencode.json 或项目根 opencode.json）", c.opencode_json, "json"),
             ("Claude Code（.mcp.json / ~/.claude.json）", c.claude_code_json, "json"),
             ("Cursor（~/.cursor/mcp.json）", c.cursor_json, "json"),

@@ -25,8 +25,9 @@ pub struct ClientConfigs {
     /// Cline（`cline_mcp_settings.json`）。`type: "streamableHttp"`（注意驼峰，非 `sse`），
     /// 额外带 `disabled` / `autoApprove` 字段。
     pub cline_json: String,
-    /// Oh-My-Pi（`~/.pi/agent/mcp.json` 全局 / `.pi/mcp.json` 项目级）。与其它客户端的
-    /// 关键差异：字段名是 `transport`（而非 `type`），值仍为 `streamable-http`。
+    /// Oh-My-Pi（项目根 `.mcp.json` / 全局 `~/.omp/agent/mcp.json` 或 `~/.mcp.json`）。
+    /// omp 的协议字段是 `type: "http"`（与 Claude Code 同形），**不识别** `transport` /
+    /// `streamable-http`——后者会让 omp 退化为 stdio 并因缺 `command` 字段报错丢弃。
     pub omp_json: String,
     /// OpenCode（`opencode.json` 全局 `~/.config/opencode/opencode.json` / 项目根）。
     /// 关键差异：schema 根键是 `mcp`（非 `mcpServers`），远程端点用 `type: "remote"`
@@ -91,12 +92,13 @@ pub fn generate_client_configs(base_url: &str, token: &str) -> ClientConfigs {
             }
         }
     });
-
-    // --- Oh-My-Pi：字段名是 transport（非 type），值仍为 streamable-http ---
+    // --- Oh-My-Pi：type = "http"（与 Claude Code 同形）。omp 不识别 transport/streamable-http，
+    //     遇未知字段会退化为 stdio 并因缺 command 报错丢弃。与 Claude Code 的 JSON 体相同，
+    //     差异仅在配置文件路径（见上方字段文档）。
     let omp_json = serde_json::json!({
         "mcpServers": {
             SERVER_NAME: {
-                "transport": "streamable-http",
+                "type": "http",
                 "url": mcp_url,
                 "headers": { "Authorization": auth_header }
             }
@@ -215,13 +217,14 @@ mod tests {
     }
 
     #[test]
-    fn omp_json_uses_transport_field_not_type() {
+    fn omp_json_uses_type_http_not_transport() {
         let cfg = generate_client_configs(BASE, TOKEN);
         let v: serde_json::Value = serde_json::from_str(&cfg.omp_json).unwrap();
         let entry = &v["mcpServers"]["yggdrasil"];
-        // 关键差异：字段名是 transport（非 type）。
-        assert_eq!(entry["transport"], "streamable-http");
-        assert!(entry.get("type").is_none(), "omp 配置不应含 type 字段");
+        // omp 协议字段是 type: "http"（与 Claude Code 同形）。
+        assert_eq!(entry["type"], "http");
+        // 不应含 transport 字段——会让 omp 退化为 stdio 报错。
+        assert!(entry.get("transport").is_none(), "omp 配置不应含 transport 字段");
         assert_eq!(entry["url"], "https://rua.plus/mcp");
         assert_eq!(entry["headers"]["Authorization"], format!("Bearer {TOKEN}"));
     }
