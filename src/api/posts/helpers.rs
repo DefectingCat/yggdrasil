@@ -54,10 +54,7 @@ pub(super) fn row_to_post_list_item(row: &tokio_postgres::Row) -> PostListItem {
 /// 相比列表项额外包含上一篇/下一篇导航，
 /// 并在 content_html 为空时重新渲染 Markdown 以兼容旧数据。
 #[cfg(feature = "server")]
-pub(super) async fn row_to_post_full(
-    _client: &tokio_postgres::Client,
-    row: &tokio_postgres::Row,
-) -> Post {
+pub(super) async fn row_to_post_full(row: &tokio_postgres::Row) -> Post {
     let id: i32 = row.get("id");
     let role_str: String = row.get("status");
     let status = PostStatus::from_str(&role_str).unwrap_or(PostStatus::Draft);

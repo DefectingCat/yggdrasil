@@ -31,7 +31,6 @@ fn raw(patterns: &'static str, states: &'static str, task: Task) -> RawEntry {
 
 fn transitions_for(machine: &str) -> &'static HashMap<String, Vec<Transition>> {
     match machine {
-        "tex" => &TEX,
         "ce" => &CE,
         "a" => &A,
         "o" => &O,
@@ -48,45 +47,6 @@ fn transitions_for(machine: &str) -> &'static HashMap<String, Vec<Transition>> {
         _ => &CE,
     }
 }
-
-// =========================================================================
-// tex 状态机
-// =========================================================================
-
-static TEX: LazyLock<HashMap<String, Vec<Transition>>> = LazyLock::new(|| {
-    build_transitions(&[
-        raw("empty", "*", task(&[("copy", None)], None, false, false)),
-        raw(
-            "\\ce{(...)}",
-            "0",
-            task(
-                &[
-                    ("write", Some("{")),
-                    ("ce", None),
-                    ("write", Some("}")),
-                ],
-                None,
-                false,
-                false,
-            ),
-        ),
-        raw(
-            "\\pu{(...)}",
-            "0",
-            task(
-                &[
-                    ("write", Some("{")),
-                    ("pu", None),
-                    ("write", Some("}")),
-                ],
-                None,
-                false,
-                false,
-            ),
-        ),
-        raw("else", "0", task(&[("copy", None)], None, false, false)),
-    ])
-});
 
 // =========================================================================
 // ce 状态机（主解析器）

@@ -956,13 +956,6 @@ fn texify_go(input: &[Parsed], add_outer_braces: bool) -> String {
     res
 }
 
-fn go_inner(f: &Field) -> String {
-    match f {
-        Field::Str(s) => s.clone(),
-        Field::Nodes(v) => texify_go(v, false),
-    }
-}
-
 fn field_str(f: &Field) -> String {
     match f {
         Field::Str(s) => s.clone(),
@@ -1069,11 +1062,11 @@ fn texify_go2(buf: &NodeData) -> String {
         ),
         "state of aggregation" => format!(
             "\\mskip2mu {}",
-            buf.p1.as_ref().map(go_inner).unwrap_or_default()
+            buf.p1.as_ref().map(field_str).unwrap_or_default()
         ),
         "state of aggregation subscript" => format!(
             "\\mskip1mu {}",
-            buf.p1.as_ref().map(go_inner).unwrap_or_default()
+            buf.p1.as_ref().map(field_str).unwrap_or_default()
         ),
         "bond" => get_bond(buf.kind_.as_deref().unwrap_or("")),
         "frac" => {
@@ -1087,41 +1080,41 @@ fn texify_go2(buf: &NodeData) -> String {
         "pu-frac" => {
             let d = format!(
                 "\\frac{{{}}}{{{}}}",
-                buf.p1.as_ref().map(go_inner).unwrap_or_default(),
-                buf.p2.as_ref().map(go_inner).unwrap_or_default()
+                buf.p1.as_ref().map(field_str).unwrap_or_default(),
+                buf.p2.as_ref().map(field_str).unwrap_or_default()
             );
             format!("\\mathchoice{{\\textstyle{d}}}{{{d}}}{{{d}}}{{{d}}}")
         }
         "tex-math" => format!("{} ", buf.p1.as_ref().map(field_str).unwrap_or_default()),
         "frac-ce" => format!(
             "\\frac{{{}}}{{{}}}",
-            buf.p1.as_ref().map(go_inner).unwrap_or_default(),
-            buf.p2.as_ref().map(go_inner).unwrap_or_default()
+            buf.p1.as_ref().map(field_str).unwrap_or_default(),
+            buf.p2.as_ref().map(field_str).unwrap_or_default()
         ),
         "overset" => format!(
             "\\overset{{{}}}{{{}}}",
-            buf.p1.as_ref().map(go_inner).unwrap_or_default(),
-            buf.p2.as_ref().map(go_inner).unwrap_or_default()
+            buf.p1.as_ref().map(field_str).unwrap_or_default(),
+            buf.p2.as_ref().map(field_str).unwrap_or_default()
         ),
         "underset" => format!(
             "\\underset{{{}}}{{{}}}",
-            buf.p1.as_ref().map(go_inner).unwrap_or_default(),
-            buf.p2.as_ref().map(go_inner).unwrap_or_default()
+            buf.p1.as_ref().map(field_str).unwrap_or_default(),
+            buf.p2.as_ref().map(field_str).unwrap_or_default()
         ),
         "underbrace" => format!(
             "\\underbrace{{{}}}_{{{}}}",
-            buf.p1.as_ref().map(go_inner).unwrap_or_default(),
-            buf.p2.as_ref().map(go_inner).unwrap_or_default()
+            buf.p1.as_ref().map(field_str).unwrap_or_default(),
+            buf.p2.as_ref().map(field_str).unwrap_or_default()
         ),
         "color" => format!(
             "{{\\color{{{}}}{{{}}}}}",
             buf.color1.as_deref().unwrap_or(""),
-            buf.color2.as_ref().map(go_inner).unwrap_or_default()
+            buf.color2.as_ref().map(field_str).unwrap_or_default()
         ),
         "color0" => format!("\\color{{{}}}", buf.color.as_deref().unwrap_or("")),
         "arrow" => {
-            let rd = buf.rd.as_ref().map(go_inner).unwrap_or_default();
-            let rq = buf.rq.as_ref().map(go_inner).unwrap_or_default();
+            let rd = buf.rd.as_ref().map(field_str).unwrap_or_default();
+            let rq = buf.rq.as_ref().map(field_str).unwrap_or_default();
             let r = buf.r.as_deref().unwrap_or("");
             let mut arrow = get_arrow(r).to_string();
             if !rd.is_empty() || !rq.is_empty() {
@@ -1265,7 +1258,8 @@ fn to_tex(input: &str, kind: &str) -> String {
     // catch_unwind 无法阻止进程终止。保留它是为了本地开发时坏公式不炸测试。
     let result = std::panic::catch_unwind(|| {
         let parsed = go(input, kind);
-        texify_go(&parsed, kind != "tex")
+        // D5：TEX 状态机已删除（to_tex 仅以 ce/pu 调用，kind != "tex" 恒真）。
+        texify_go(&parsed, true)
     });
     result.unwrap_or_else(|_| input.to_string())
 }
