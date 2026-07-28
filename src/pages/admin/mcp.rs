@@ -522,22 +522,37 @@ fn ConfigCard() -> Element {
 fn ConfigSnippet(snippet: McpConfigSnippet) -> Element {
     let state: McpPageState = use_context();
     let mut toast = state.toast;
+    let mut copied = use_signal(|| false);
     let title = snippet.title.clone();
+    // 反馈就在按钮本身：Toast 渲染在页面顶部（见 Mcp 组件树），配置区在页面最末，
+    // 点击「复制」时 Toast 落在视口之外，用户看不到。故按钮就地短暂变绿提示「已复制」。
+    let copied_now = copied();
+    let btn_class = if copied_now {
+        "inline-flex items-center justify-center px-4 py-1.5 text-sm font-medium \
+         text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/30 \
+         rounded-full transition-all cursor-default"
+    } else {
+        BTN_PRIMARY_SM
+    };
+    let btn_label = if copied_now { "已复制" } else { "复制" };
     rsx! {
         div { class: "flex flex-col gap-2",
             div { class: "flex items-center justify-between",
                 span { class: "text-sm font-medium text-[var(--color-paper-primary)]", "{snippet.title}" }
                 button {
-                    class: "{BTN_PRIMARY_SM}",
+                    class: "{btn_class}",
                     onclick: move |_| {
                         let cc = snippet.content.clone();
                         let tt = title.clone();
+                        copied.set(true);
                         spawn(async move {
                             copy_clipboard_wasm(&cc).await;
                             toast.set(Some((format!("已复制：{tt}"), false)));
+                            crate::utils::time::sleep_ms(1500).await;
+                            copied.set(false);
                         });
                     },
-                    "复制"
+                    "{btn_label}"
                 }
             }
             // .md-content 是 highlight.css 的作用域钩子（.md-content pre code …）；
