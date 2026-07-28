@@ -61,14 +61,12 @@ pub fn CodeRunner(
     let mut has_output = use_signal(|| false);
 
     // 编辑器内容的唯一真源；初始化为 prop 值。
+    // C4 修复：删去 source_prop_signal。旧代码在 render body 里对它做镜像 .set()
+    // （if source != *source_prop_signal.read() { .set(...) }），这是项目
+    // dioxus-render-purity skill 明令禁止的反模式，且会触发一次额外渲染。
+    // Dioxus 0.7 的 prop 本身是响应式的——use_effect 闭包内捕获 prop 副本即可在
+    // prop 变化时（如 admin 切换语言重置示例代码）自动重跑，无需中间 signal。
     let mut source_signal = use_signal(|| source.clone());
-
-    // 监听 prop source 的变更。
-    // 由于 props 不是 signal，用辅助 signal 记录并同步它的最新值，以响应外部（如切换语言）的主动更新。
-    let mut source_prop_signal = use_signal(|| source.clone());
-    if source != *source_prop_signal.read() {
-        source_prop_signal.set(source.clone());
-    }
 
     // CodeMirror 容器 id：直接由确定性 prop 派生（不进 use_hook）。
     // instance_id 由父组件从纯函数片段解析的索引传入，SSR 与 hydration 同一 content_html
@@ -219,10 +217,11 @@ pub fn CodeRunner(
         });
 
         // source prop 外部变更（如 admin 页面切换语言重置示例代码）同步到
-        // signal + 编辑器。通过 source_prop_signal 订阅其变化。
-        // 此 effect 仅读取 source_prop_signal，不读取 source_signal，避免用户编辑时误触重置回环。
+        // signal + 编辑器。C4 修复后直接捕获 prop 副本：prop 变化时本 effect 自动重跑。
+        // 旧代码读 source_prop_signal 只为绕开 render-body 纯净性，现 signal 已删，
+        // 该 effect 退化为「seed」语义——prop 变即同步，用户编辑（改 source_signal）不触发。
         use_effect(move || {
-            let new_val = source_prop_signal.read().clone();
+            let new_val = source.clone();
             source_signal.set(new_val.clone());
             if let Some(h) = editor_handle.read().as_ref() {
                 h.instance().set_value(&new_val);
