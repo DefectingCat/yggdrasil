@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **MCP 服务器**：博客现在是一个 Model Context Protocol 服务器（`POST /mcp`，Streamable HTTP，无状态），管理员的 AI 客户端（Claude Code / Cursor / Cline）可经 bearer token 连接，把已发布文章当知识库检索，并执行几乎所有后台操作。
+  - **认证**：管理员在 `/admin/mcp` 签发令牌，三档作用域（read / write / admin），可选有效期（1/7/30/90 天 / 永不过期）。令牌明文经 AES-GCM-256 静态加密存储（可重查），SHA-256 哈希做每请求查找。
+  - **知识库（read）**：`search_posts` / `get_post` / `list_tags` 工具 + 已发布文章作为可枚举的 MCP Resources（`post://{slug}`，游标分页）。
+  - **写操作（write）**：文章 CRUD（含草稿）、评论审核、标签管理、媒体上传（base64 → WebP 转码去重）。
+  - **管理（admin）**：站点设置读写、代码运行器（沙箱执行）。
+  - **加固**：token-keyed 限流（默认 10/s burst 30，超限 429）、`last_used_at` 节流刷新、鉴权审计日志、Origin→403（spec 强制，rmcp 内置）、协议版本头校验、4MiB 请求体上限。
+  - **配置生成**：后台一键复制 4 种客户端配置（Claude Code / Cursor / Cline / 通用 JSON + CLI）。
+  - 传输用官方 `rmcp` crate（`=3.0.0-beta.3`，3.x 才有 Origin 校验等 spec 强制项）挂载于 axum。新增依赖 `rmcp`、`aes-gcm`、`base64`（均 server-only）。
+  - 新增环境变量 `MCP_TOKEN_ENC_KEY`（hex 编码 32 字节 AES-256 密钥，`openssl rand -hex 32` 生成）、`RATE_LIMIT_MCP_PER_SEC` / `RATE_LIMIT_MCP_BURST`。
 ## [0.6.2] - 2026-07-24
 
 ### Fixed

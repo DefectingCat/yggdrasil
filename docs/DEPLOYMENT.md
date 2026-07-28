@@ -39,6 +39,7 @@
 | `APP_BASE_URL` | `https://your-domain.example` | 写请求 CSRF 校验的可信 origin。不设时回退到请求 `Host` 头 + `X-Forwarded-Proto`，反代后若 `Host` 头可被客户端影响，该回退路径可被 CSRF 绕过。 |
 | `COOKIE_SECURE` | `true` | 给会话 Cookie 加 `Secure` 标志，浏览器仅在 HTTPS 下发送。明文 HTTP 生产环境**必开**。 |
 | `TRUSTED_PROXY_COUNT` | `1`（单层反代） | 应用前方的反向代理层数，用于从 `X-Forwarded-For` 提取真实客户端 IP。直接对外服务时为 `0`；一层 nginx/Caddy 时为 `1`。 |
+| `MCP_TOKEN_ENC_KEY` | `openssl rand -hex 32`（64 hex 字符） | **启用 MCP 功能时必填**。MCP 令牌静态加密主密钥（AES-GCM-256）。不设则 `/mcp` 端点对所有请求返回 401（无法签发/认证令牌）。轮换密钥会使已签发令牌无法解密重查（旧令牌仍可按哈希鉴权）。 |
 
 ### `TRUSTED_PROXY_COUNT` 设错的两种后果
 
@@ -96,7 +97,15 @@ server {
     # 健康检查：可不经 TLS 或单独配置探针路径。
     # GET /healthz —— liveness，进程存活即 200，不查 DB。
     # GET /readyz  —— readiness，执行 SELECT 1 检测 DB 连通性，不可达返回 503。
-}
+```
+
+### `/mcp` 端点（MCP 服务器）
+
+`POST /mcp`（MCP Streamable HTTP）被上面的 `location /` catch-all 自动代理，无需单独 location 块。注意：
+
+- **Origin 校验**：rmcp 的 `StreamableHttpServerConfig::with_allowed_origins` 取自 `APP_BASE_URL`（见 `src/mcp/router.rs`）。生产 MUST 设置 `APP_BASE_URL`，否则 Origin 白名单为空（对缺 `Origin` 头的请求放行——大多数原生 MCP 客户端不发 `Origin`，故影响有限，但浏览器发起的请求将不受保护）。
+- **认证**：MCP 用 bearer token（`Authorization: Bearer ygg_...`），**不**经 cookie session，故 `COOKIE_SECURE` 与 MCP 无关。令牌在 `/admin/mcp` 后台签发。
+- **限流**：MCP 走独立的 token-keyed 限流桶（`RATE_LIMIT_MCP_PER_SEC`/`_BURST`），与 web 的 IP-keyed 限流隔离。
 ```
 
 ### Caddy

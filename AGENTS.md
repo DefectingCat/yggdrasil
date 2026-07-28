@@ -19,8 +19,7 @@ Yggdrasil is a fullstack blog/CMS built with **Dioxus 0.7**. A single Rust crate
   - `src/api/` — endpoints: `auth.rs`, `posts/` (create/update/delete/trash/list/read/search/stats/tags/rebuild/helpers/types), `comments/`, `settings/`, `database/` (admin: console/export/backup), `code_runner/`, `upload.rs`, `image.rs`, `health.rs`, `sse`. Cross-cutting: `error.rs` (`AppError`), `csrf.rs`, `rate_limit.rs`, `sanitizer.rs`, `slug.rs`, `markdown.rs` (`render_markdown_enhanced`), `katex.rs`.
   - `src/db/` — `pool.rs` (`DB_POOL: LazyLock<deadpool>`, `get_conn()` runtime fast-fail, `get_conn_for_startup()` retry), `migrate.rs` (`MIGRATIONS` array + runner), `retry.rs`, `mod.rs` (`format_with_sources`, `DummyPool` stub).
   - `src/models/` — `post.rs`, `user.rs`, `comment.rs`, `settings.rs` (serde DTOs shared across SSR/cache/API).
-  - `src/auth/` — `password.rs` (Argon2), `session.rs` (UUID token, SHA-256 `hash_token`, cookie build/parse).
-  - `src/components/` — Dioxus components (layouts, header/nav/footer, post/comments/code_runner/skeletons/forms/ui atoms).
+  - `src/mcp/` — MCP server (`#[cfg(server)]`): `auth.rs` (bearer→principal middleware + rate limit + audit), `crypto.rs` (AES-GCM token encryption), `server.rs` (rmcp ServerHandler composing all tool routers), `router.rs` (StreamableHttpService mount), `config.rs` (client config generation, WASM-shared), `resources.rs` + `tools/{read,posts,comments,tags,media,settings,runner}.rs` (tool groups). See "MCP Server" section below.
   - `src/pages/` — route components. **`post_detail.rs` header docs are the canonical guide for `use_server_future` + route-subscription gotchas — read before editing pages.**
   - `src/tasks/` — server-only background loops spawned in `serve()`.
   - `src/infra/` — `docker.rs` (bollard), `runner_config.rs`.
@@ -29,8 +28,7 @@ Yggdrasil is a fullstack blog/CMS built with **Dioxus 0.7**. A single Rust crate
   - `src/*_bridge.rs` — wasm-bindgen bridges for JS editors/terminal (`tiptap_bridge`, `codemirror_bridge`, `xterm_bridge`).
 - `libs/` — pnpm JS workspace, packages named `@yggdrasil/*`. Each builds to a self-contained IIFE bundle written **directly into `public/<dir>/`** and consumed by the Rust side via window globals (`js_sys::Reflect::get` on object-literal modules, or global `__init*` functions via a typed `invoke_optional_global` helper).
   - `tiptap-editor` → `public/tiptap/` (rich-text Markdown editor), `codemirror-editor` → `public/codemirror/` (code-runner source editor), `lightbox` → `public/lightbox/`, `xterm-terminal` → `public/xterm/`, `yggdrasil-core` → `public/yggdrasil-core/`, `mermaid-renderer` (dynamically script-injected by yggdrasil-core on viewport visibility), `shared` (cross-lib constants: `ThemeName`, `THEME_CHANGE_EVENT` — inlined into each IIFE, not bundled).
-- `migrations/` — 14 numbered SQL files (`NNN_desc.sql`); each must also be registered in the `MIGRATIONS` array in `src/db/migrate.rs` (enforced by a compile-test).
-- `syntaxes/` — `.sublime-syntax` definitions (JSX/Kotlin/Swift/TSX/TypeScript/Vue/Zig); embedded via `include_str!` at compile time.
+- `migrations/` — 17 numbered SQL files (`NNN_desc.sql`); each must also be registered in the `MIGRATIONS` array in `src/db/migrate.rs` (enforced by a compile-test).
 - `themes/` — Catppuccin Latte (light) / Mocha (dark) `.tmTheme` for syntect.
 - `docker/` — `Dockerfile` (app), `build-runners.sh` + `runner-base/` + `runner-{python,node,go,rust,bun}/` (sandbox images).
 - `docs/` — `DEPLOYMENT.md`, `test-markdown.md` (rendering test fixture). `DEVELOPMENT.md` (perf benchmarking + highlighting guide). `CHANGELOG.md` (Keep a Changelog v1.1.0, SemVer; current `0.5.0`).
@@ -157,6 +155,17 @@ make docker-multiarch IMAGE=ghcr.io/owner/yggdrasil:latest   # amd64+arm64, push
     - **Build-tool binaries** (`src/bin/*`) and **`#[cfg(test)]` modules** are exempt — `unwrap`/`expect`/`panic` are idiomatic in tests and one-shot codegen tools.
     - **If clippy's `unwrap_used` / `expect_used` lints are later wired in** (`[lints]` table in `Cargo.toml`), the exemptions above are the intended `allow` set; do not relax them further without a documented invariant.
 
+## MCP Server
+
+The blog is also a **Model Context Protocol server** (single `/mcp` endpoint, Streamable HTTP, stateless per SEP-2567). The admin's AI clients (Claude Code / Cursor / Cline) connect via bearer token to query published posts as a knowledge base and perform nearly all backend operations. Spec: `docs/mcp-spec.md`; design research: `docs/mcp-research.md`.
+
+- **Transport**: official `rmcp` crate **pinned to `=3.0.0-beta.3`** (NOT stable `0.2.1` — it lacks Origin validation, protocol-version guard, body-size cap, and stateless config, all of which the 3.x beta ships). Mounted via `StreamableHttpService` → `Router::nest_service("/mcp", service)` in `src/mcp/router.rs`, merged into the app router in `src/main.rs`. rmcp handles Origin→403, `MCP-Protocol-Version` 400, and 4MiB body cap internally.
+- **Auth**: axum `from_fn` middleware (`src/mcp/auth.rs`) parses `Authorization: Bearer ygg_...`, SHA-256-hashes it, does a constant DB lookup on `mcp_tokens.token_hash`, and injects `McpPrincipal { user_id, scope, token_id }` into `request.extensions()`. Tools read it via the rmcp `Extension<http::request::Parts>` extractor. Token-keyed rate limiter (429), `last_used_at` throttle (≥60s), and audit `tracing::info!` live in the middleware.
+- **Token storage**: AES-GCM-256 ciphertext (`token_enc`, hex of nonce‖ct‖tag) + SHA-256 hash (`token_hash`) in `mcp_tokens` table (migration 017). Plaintext never stored; admin can re-reveal via decryption (key from `MCP_TOKEN_ENC_KEY` env, hex 32 bytes). Token mgmt server fns in `src/api/mcp_tokens.rs`, admin UI at `/admin/mcp`.
+- **Scopes**: `read` < `write` < `admin` (partial order via `TokenScope::grants()` in `src/models/mcp_token.rs`). read = published-only knowledge base; write = + posts/comments/tags/media (drafts visible); admin = + settings + code runner. Scope checked per-tool.
+- **Tool composition**: each tool group (`src/mcp/tools/<x>.rs`) uses `#[tool_router(router = <x>_router, vis = "pub")] impl YggMcpServer { ... }` to emit a public router fn returning `ToolRouter<YggMcpServer>`; `src/mcp/server.rs` composes them with `+` into one `ServerHandler`. All tools impl on the **same** `YggMcpServer` type (required for `ToolRouter<S>` `Add`). To add a tool group: write `tools/<name>.rs` with a named pub router on `YggMcpServer`, register in `tools/mod.rs`, and add `+ YggMcpServer::<name>_router()` in `server.rs::combined_router()`.
+- **Feature gating**: the entire `src/mcp/` module is `#[cfg(feature = "server")]` in `main.rs` (except `config.rs`, which is pure serde/string code the WASM admin UI needs). `rmcp`/`aes-gcm`/`base64` are server-only deps. The WASM build never touches MCP code — no stubs needed.
+- **Config generation**: `src/mcp/config.rs` + the `get_mcp_client_configs` server fn emit ready-to-paste JSON for Claude Code / Cursor / Cline / generic + a `claude mcp add` CLI one-liner.
 ## Workflow
 
 - **每完成一个功能点立即提交**。Agent 自主判断提交时机——当一个逻辑完整的改动通过验证(编译通过 / 测试通过)后,无需等待用户指令,直接 `git add` + `git commit`。
