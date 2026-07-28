@@ -738,8 +738,14 @@ pub fn get_image_dimensions(rel_path: &str) -> Option<(u32, u32)> {
         return Some(dims);
     }
     let full_path = std::path::Path::new("uploads").join(rel_path);
-    let data = std::fs::read(&full_path).ok()?;
-    let dims = read_dimensions_from_bytes(&data, rel_path)?;
+    // 只读取文件头部：尺寸信息位于各格式 header（PNG IHDR / GIF / WebP RIFF /
+    // JPEG SOF），无需把整张多 MB 图片读进内存。JPEG 的 SOF 可能跟在
+    // EXIF/APPn 标记之后，64 KiB 足以覆盖常见情况。
+    let file = std::fs::File::open(&full_path).ok()?;
+    use std::io::Read;
+    let mut header = Vec::new();
+    file.take(65_536).read_to_end(&mut header).ok()?;
+    let dims = read_dimensions_from_bytes(&header, rel_path)?;
     IMAGE_DIMENSIONS_CACHE.insert(rel_path.to_string(), dims);
     Some(dims)
 }

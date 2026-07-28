@@ -30,6 +30,10 @@ pub async fn check_pending_status(ids: Vec<i64>) -> Result<Vec<PendingStatusItem
         if ids.is_empty() {
             return Ok(vec![]);
         }
+        // 上限 100 条，防止超大 IN 列表拖慢查询或被滥用枚举评论状态。
+        if ids.len() > 100 {
+            return Ok(vec![]);
+        }
 
         // 限流防高速遍历枚举评论状态（L3）。本接口供访客轮询自己刚提交的评论
         // 审核状态，故不加 admin 鉴权；但 strict 限流（对 unknown IP 降级宽松桶）

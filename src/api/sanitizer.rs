@@ -363,7 +363,11 @@ fn sanitize(input: &str, config: &SanitizerConfig) -> String {
             Ok(())
         }));
 
-    lol_html::rewrite_str(input, settings).unwrap_or_default()
+    lol_html::rewrite_str(input, settings).unwrap_or_else(|e| {
+        // 静默返回空串会整篇丢弃正文，记录错误以便排查。
+        tracing::error!(error = ?e, input_len = input.len(), "HTML 清理失败，回退空串会丢弃正文");
+        String::new()
+    })
 }
 
 #[cfg(feature = "server")]
