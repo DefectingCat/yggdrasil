@@ -8,7 +8,7 @@
 
 #[cfg(feature = "server")]
 /// 对外暴露的 HTML 清理函数，委托给 sanitizer 模块。
-pub fn clean_html(input: &str) -> String {
+pub(crate) fn clean_html(input: &str) -> String {
     crate::api::sanitizer::clean_html(input)
 }
 

@@ -147,6 +147,12 @@ static COMMENT_ALLOWED_TAGS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| 
 });
 
 #[cfg(feature = "server")]
+/// 判断 data URI 是否属于安全图片类型。
+///
+/// D7：生产死代码——两处 SanitizerConfig（clean_html / clean_comment_html）均硬编码
+/// `allow_data_uri: false`，本函数在请求路径上不可达（is_safe_url 提前短路）。
+/// 保留作为防御纵深：测试锁定\"即便 flag=true 也只放行图片类型、拒绝 data:text/html\"
+/// 的安全不变量。若未来需要内联 data URI，flag + 本函数已就绪。
 fn is_safe_data_uri(url: &str) -> bool {
     // data URI 只允许安全的图片类型；禁止 data:text/html、data:application/javascript 等。
     let url = url.trim();

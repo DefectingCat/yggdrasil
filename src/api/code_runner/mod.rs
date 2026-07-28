@@ -45,6 +45,9 @@ pub enum ExecStatus {
     /// 系统层失败（拉起容器异常、排队超时等）。
     Failed,
     /// 触发速率限制。
+    ///
+    /// D8：服务端从不构造此变体（限流在 insert 前直接拒绝，返回 429）。
+    /// 保留供前端 ExecStatus label 反序列化兼容；勿在服务端 match 依赖它。
     RateLimited,
 }
 

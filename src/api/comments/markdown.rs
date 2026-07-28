@@ -9,7 +9,7 @@
 ///
 /// 实际委托给 `crate::api::sanitizer::clean_comment_html` 实现。
 #[cfg(feature = "server")]
-pub fn clean_comment_html(input: &str) -> String {
+pub(crate) fn clean_comment_html(input: &str) -> String {
     crate::api::sanitizer::clean_comment_html(input)
 }
 
