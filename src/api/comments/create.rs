@@ -143,9 +143,14 @@ pub async fn create_comment(
         // 基于文章、父评论、作者与内容计算哈希，防止短时间重复提交。
         let content_hash = compute_content_hash(post_id, parent_id, &author_name, &content_md);
 
-        // 在开事务前完成纯计算（Markdown 渲染、字段转义、IP/UA 提取），避免
-        // 在事务持锁期间做无谓工作，缩短关键排他锁窗口。
-        let content_html = crate::api::comments::markdown::render_comment_markdown(&content_md);
+        // Markdown 渲染（含 syntect 高亮 + KaTeX）是 CPU 密集任务，移到阻塞线程池执行，
+        // 避免阻塞 async runtime（M4）。content_md 下游 INSERT 仍需使用，故先克隆再移入闭包。
+        let md_for_render = content_md.clone();
+        let content_html = tokio::task::spawn_blocking(move || {
+            crate::api::comments::markdown::render_comment_markdown(&md_for_render)
+        })
+        .await
+        .map_err(|_| AppError::Internal("Markdown 渲染任务失败"))?;
         let author_name_safe = crate::utils::html::escape_html(author_name.trim());
         let author_url_safe = author_url
             .as_ref()
