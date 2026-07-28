@@ -56,28 +56,77 @@ pub fn hash_token(token: &str) -> String {
 /// 注意：这是 T1 的最小实现——每请求同步查库 + 同步更新 last_used_at。
 /// T6 会把 last_used_at 刷新改为节流（批量/惰性）以减负，鉴权查询本身保持同步
 /// （这是认证的必要代价，无法乐观）。
-pub async fn mcp_auth_middleware(mut req: Request<Body>, next: Next) -> Result<Response, StatusCode> {
+/// MCP 限流：按 token 计数的 governor 桶（与 web 的 IP-keyed 限流隔离）。
+///
+/// key 是 token_id（而非 user_id）：同一用户的多个令牌各自有独立配额，
+/// 避免一个泄露的高频令牌耗尽其它令牌的额度。阈值经
+/// RATE_LIMIT_MCP_PER_SEC / RATE_LIMIT_MCP_BURST 可调（默认 10/s, burst 30）。
+static MCP_LIMITER: std::sync::LazyLock<governor::DefaultKeyedRateLimiter<String>> =
+    std::sync::LazyLock::new(|| {
+        governor::RateLimiter::keyed(
+            governor::Quota::per_second(mcp_rate_per_sec())
+                .allow_burst(mcp_rate_burst()),
+        )
+    });
+
+fn mcp_rate_per_sec() -> std::num::NonZeroU32 {
+    let v = std::env::var("RATE_LIMIT_MCP_PER_SEC")
+        .ok()
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(10);
+    std::num::NonZeroU32::new(v.max(1)).expect("v.max(1) 保证非零")
+}
+
+fn mcp_rate_burst() -> std::num::NonZeroU32 {
+    let v = std::env::var("RATE_LIMIT_MCP_BURST")
+        .ok()
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(30);
+    std::num::NonZeroU32::new(v.max(1)).expect("v.max(1) 保证非零")
+}
+
+/// `last_used_at` 刷新节流：同一令牌的 UPDATE 至少间隔 60s，避免高频请求
+/// 每次都写库。窗口外才刷新，窗口内跳过（best-effort，失败静默）。
+const LAST_USED_REFRESH_SECS: i64 = 60;
+
+pub async fn mcp_auth_middleware(
+    mut req: Request<Body>,
+    next: Next,
+) -> Result<Response, StatusCode> {
     let token = match extract_bearer(req.headers()) {
         Some(t) => t,
         None => return Err(StatusCode::UNAUTHORIZED),
     };
-    match resolve_principal(&token).await {
-        Some(principal) => {
-            req.extensions_mut().insert(principal);
-            Ok(next.run(req).await)
-        }
-        None => Err(StatusCode::UNAUTHORIZED),
+    let principal = resolve_principal(&token)
+        .await
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    // 限流：按 token_id 计数。超限返回 429（Too Many Requests）。
+    if MCP_LIMITER.check_key(&principal.token_id).is_err() {
+        return Err(StatusCode::TOO_MANY_REQUESTS);
     }
+
+    // 审计：记录每次已认证的 MCP 请求（token_id + scope + user_id）。
+    // MCP 令牌是自主 AI 客户端，记录其活动有安全价值（事后可追溯滥用）。
+    tracing::info!(
+        user_id = principal.user_id,
+        scope = principal.scope.as_str(),
+        token_id = %principal.token_id,
+        "mcp request authenticated"
+    );
+
+    req.extensions_mut().insert(principal);
+    Ok(next.run(req).await)
 }
 
 /// 查库解析 token → 主体；未撤销、未过期才返回 Some。
 async fn resolve_principal(token: &str) -> Option<McpPrincipal> {
     let hash = hash_token(token);
     let client = get_conn().await.ok()?;
-    // 一次查询取出 + 校验所有条件；row-level 过滤避免 TOCTOU。
+    // 一次查询取出 + 校验所有条件，并带出 last_used_at 供节流判断。
     let row = client
         .query_opt(
-            "SELECT id, user_id, scope, expires_at, revoked_at
+            "SELECT id, user_id, scope, expires_at, revoked_at, last_used_at
              FROM mcp_tokens
              WHERE token_hash = $1
                AND revoked_at IS NULL
@@ -91,14 +140,20 @@ async fn resolve_principal(token: &str) -> Option<McpPrincipal> {
     let user_id: i32 = row.get(1);
     let scope_str: &str = row.get(2);
     let scope = TokenScope::from_db(scope_str)?;
+    let last_used: Option<chrono::DateTime<chrono::Utc>> = row.get(5);
 
-    // best-effort 刷新 last_used_at：失败不影响鉴权（已在 Some 分支）。
-    let _ = client
-        .execute(
-            "UPDATE mcp_tokens SET last_used_at = NOW() WHERE id = $1",
-            &[&token_id],
-        )
-        .await;
+    // 节流刷新 last_used_at：仅在 NULL 或距上次 ≥ 60s 时写库，避免高频请求每次 UPDATE。
+    let needs_refresh = last_used
+        .map(|t| (chrono::Utc::now() - t).num_seconds() >= LAST_USED_REFRESH_SECS)
+        .unwrap_or(true);
+    if needs_refresh {
+        let _ = client
+            .execute(
+                "UPDATE mcp_tokens SET last_used_at = NOW() WHERE id = $1",
+                &[&token_id],
+            )
+            .await;
+    }
 
     Some(McpPrincipal {
         user_id,
