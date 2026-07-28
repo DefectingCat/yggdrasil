@@ -53,11 +53,12 @@ const LIFETIME_OPTIONS: &[(TokenLifetime, &str)] = &[
 
 /// 配置骨架屏的尺寸变化：(标题宽度 px, 代码块高度 px)。
 ///
-/// 按 6 个真实配置片段的长短差异给出不同占位尺寸，让骨架屏更像即将出现的真实内容
+/// 按 7 个真实配置片段的长短差异给出不同占位尺寸，让骨架屏更像即将出现的真实内容
 /// 而非千篇一律的等高块。
 #[cfg(target_arch = "wasm32")]
 const CONFIG_SKELETON_SHAPES: &[(&str, &str)] = &[
     ("width: 320px;", "height: 152px;"), // Oh-My-Pi JSON
+    ("width: 280px;", "height: 168px;"), // OpenCode JSON
     ("width: 260px;", "height: 168px;"), // Claude Code JSON
     ("width: 200px;", "height: 136px;"), // Cursor JSON
     ("width: 220px;", "height: 168px;"), // Cline JSON
@@ -552,7 +553,7 @@ fn ConfigCard() -> Element {
 
             if loading() {
                 div { class: "flex flex-col gap-4",
-                    for i in 0..6 {
+                    for i in 0..7 {
                         div { key: "{i}", class: "flex flex-col gap-2",
                             div { class: "flex items-center justify-between",
                                 SkeletonBox {

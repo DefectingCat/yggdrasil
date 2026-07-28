@@ -1,12 +1,11 @@
 //! MCP 客户端配置片段生成。
 //!
-//! 管理员签发令牌后，需要把「如何把这个博客接入某个 AI 客户端」的配置粘进去。
-//! 不同客户端的配置文件格式不同，这里生成 4 种可直接复制粘贴的片段，全部指向
+//! 不同客户端的配置文件格式不同，这里生成多种可直接复制粘贴的片段，全部指向
 //! 同一个 `/mcp` 端点、携带同一个 `Authorization: Bearer` 头。
 //!
 //! 形状来源：`docs/mcp-research.md` §"Client-config output format"，各客户端官方文档
-//! （Claude Code / Cursor / Cline）核实。所有 JSON 都是 `serde_json` 构造再 pretty-print，
-//! 保证格式合法（不会手抖写错逗号/引号）。
+//! （Claude Code / Cursor / Cline / Oh-My-Pi / OpenCode）核实。所有 JSON 都是 `serde_json`
+//! 构造再 pretty-print，保证格式合法（不会手抖写错逗号/引号）。
 
 use serde::Serialize;
 
@@ -29,6 +28,10 @@ pub struct ClientConfigs {
     /// Oh-My-Pi（`~/.pi/agent/mcp.json` 全局 / `.pi/mcp.json` 项目级）。与其它客户端的
     /// 关键差异：字段名是 `transport`（而非 `type`），值仍为 `streamable-http`。
     pub omp_json: String,
+    /// OpenCode（`opencode.json` 全局 `~/.config/opencode/opencode.json` / 项目根）。
+    /// 关键差异：schema 根键是 `mcp`（非 `mcpServers`），远程端点用 `type: "remote"`
+    ///（非 `streamable-http`），并带 `$schema` 与 `enabled` 字段（2026 opencode.ai 官方文档）。
+    pub opencode_json: String,
     /// 通用原始 JSON：一个 server entry 的纯净形式，供其它兼容客户端粘贴。
     pub generic_json: String,
     /// Claude Code CLI 一行命令：`claude mcp add --transport http <name> <url> --header ...`。
@@ -100,6 +103,20 @@ pub fn generate_client_configs(base_url: &str, token: &str) -> ClientConfigs {
         }
     });
 
+    // --- OpenCode：根键 mcp（非 mcpServers），remote 端点用 type: "remote"（非 streamable-http） ---
+    // 带 $schema 与 enabled 字段（opencode.ai 官方文档要求）。
+    let opencode_json = serde_json::json!({
+        "$schema": "https://opencode.ai/config.json",
+        "mcp": {
+            SERVER_NAME: {
+                "type": "remote",
+                "url": mcp_url,
+                "enabled": true,
+                "headers": { "Authorization": auth_header }
+            }
+        }
+    });
+
     // --- 通用：单个 server entry 的纯净形式 ---
     let generic_json = serde_json::json!({
         "type": "streamable-http",
@@ -118,6 +135,7 @@ pub fn generate_client_configs(base_url: &str, token: &str) -> ClientConfigs {
         cursor_json: pretty_json(&cursor_json),
         cline_json: pretty_json(&cline_json),
         omp_json: pretty_json(&omp_json),
+        opencode_json: pretty_json(&opencode_json),
         generic_json: pretty_json(&generic_json),
         claude_cli,
     }
@@ -209,6 +227,21 @@ mod tests {
     }
 
     #[test]
+    fn opencode_json_uses_mcp_root_key_and_remote_type() {
+        let cfg = generate_client_configs(BASE, TOKEN);
+        let v: serde_json::Value = serde_json::from_str(&cfg.opencode_json).unwrap();
+        // 关键差异：根键是 mcp（非 mcpServers）。
+        assert!(v.get("mcpServers").is_none(), "opencode 配置不应含 mcpServers 键");
+        let entry = &v["mcp"]["yggdrasil"];
+        // 远程端点用 type: "remote"（非 streamable-http）。
+        assert_eq!(entry["type"], "remote");
+        assert_eq!(entry["enabled"], true);
+        assert_eq!(v["$schema"], "https://opencode.ai/config.json");
+        assert_eq!(entry["url"], "https://rua.plus/mcp");
+        assert_eq!(entry["headers"]["Authorization"], format!("Bearer {TOKEN}"));
+    }
+
+    #[test]
     fn claude_cli_one_liner_contains_url_and_header() {
         let cfg = generate_client_configs(BASE, TOKEN);
         assert!(cfg.claude_cli.contains("claude mcp add --transport http"));
@@ -219,8 +252,7 @@ mod tests {
     #[test]
     fn all_json_is_pretty_indented() {
         let cfg = generate_client_configs(BASE, TOKEN);
-        // pretty JSON 至少含一个换行 + 缩进（非单行紧凑形式）。
-        for s in [&cfg.claude_code_json, &cfg.cursor_json, &cfg.cline_json, &cfg.omp_json, &cfg.generic_json] {
+        for s in [&cfg.claude_code_json, &cfg.cursor_json, &cfg.cline_json, &cfg.omp_json, &cfg.opencode_json, &cfg.generic_json] {
             assert!(s.contains('\n'), "JSON 应是 pretty-printed: {s}");
             assert!(s.contains("  "), "JSON 应含 2 空格缩进: {s}");
         }
