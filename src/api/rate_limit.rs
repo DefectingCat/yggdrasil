@@ -129,6 +129,12 @@ fn limiter_gc_interval() -> Duration {
 fn ensure_limiter_gc() {
     static SPAWNED: std::sync::Once = std::sync::Once::new();
     SPAWNED.call_once(|| {
+        // 仅在 tokio 运行时上下文中派生 GC 任务。测试（非 #[tokio::test]）无运行时，
+        // tokio::spawn 会 panic 并毒化 Once，使后续调用全部 panic。try_current 在无
+        // 运行时时返回 Err，静默跳过——测试不依赖 GC，生产必有运行时。
+        if tokio::runtime::Handle::try_current().is_err() {
+            return;
+        }
         let interval = limiter_gc_interval();
         tokio::spawn(async move {
             loop {
