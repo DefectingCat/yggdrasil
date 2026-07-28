@@ -23,6 +23,8 @@ use crate::api::mcp_tokens::{
 #[cfg(target_arch = "wasm32")]
 use crate::components::forms::{FormSelect, INPUT_CLASS};
 #[cfg(target_arch = "wasm32")]
+use crate::components::skeletons::atoms::SkeletonBox;
+#[cfg(target_arch = "wasm32")]
 use crate::components::ui::{
     ADMIN_CARD_CLASS, ADMIN_TABLE_CLASS, BADGE_BASE, BTN_PRIMARY, BTN_PRIMARY_SM, BTN_TEXT_RED,
 };
@@ -45,6 +47,20 @@ const LIFETIME_OPTIONS: &[(TokenLifetime, &str)] = &[
     (TokenLifetime::Days30, "30 天"),
     (TokenLifetime::Days90, "90 天"),
     (TokenLifetime::Never, "永不过期"),
+];
+
+/// 配置骨架屏的尺寸变化：(标题宽度 px, 代码块高度 px)。
+///
+/// 按 6 个真实配置片段的长短差异给出不同占位尺寸，让骨架屏更像即将出现的真实内容
+/// 而非千篇一律的等高块。
+#[cfg(target_arch = "wasm32")]
+const CONFIG_SKELETON_SHAPES: &[(&str, &str)] = &[
+    ("width: 260px;", "height: 168px;"), // Claude Code JSON
+    ("width: 200px;", "height: 136px;"), // Cursor JSON
+    ("width: 220px;", "height: 168px;"), // Cline JSON
+    ("width: 320px;", "height: 152px;"), // Oh-My-Pi JSON
+    ("width: 160px;", "height: 104px;"), // 通用 JSON
+    ("width: 140px;", "height: 56px;"),  // CLI 一行命令
 ];
 
 /// 跨子组件共享的页面状态：刷新代际、一次性明文弹窗、配置用令牌、操作提示。
@@ -500,7 +516,23 @@ fn ConfigCard() -> Element {
             }
 
             if loading() {
-                p { class: "text-sm text-[var(--color-paper-tertiary)] py-4 text-center", "生成配置中…" }
+                div { class: "flex flex-col gap-4",
+                    for i in 0..6 {
+                        div { key: "{i}", class: "flex flex-col gap-2",
+                            div { class: "flex items-center justify-between",
+                                SkeletonBox {
+                                    class: "h-4 rounded",
+                                    style: CONFIG_SKELETON_SHAPES[i].0
+                                }
+                                SkeletonBox { class: "h-7 w-14 rounded-full" }
+                            }
+                            SkeletonBox {
+                                class: "rounded-lg",
+                                style: CONFIG_SKELETON_SHAPES[i].1
+                            }
+                        }
+                    }
+                }
             } else if let Some(c) = configs() {
                 div { class: "flex flex-col gap-4",
                     for snippet in c.snippets.iter() {
