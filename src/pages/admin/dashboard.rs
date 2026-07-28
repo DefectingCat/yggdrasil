@@ -37,7 +37,7 @@ pub fn Admin() -> Element {
                     }
                 });
                 spawn(async move {
-                    if let Ok(PostListResponse { posts, total: _ }) = list_posts(1, 5).await {
+                    if let Ok(PostListResponse { posts, total: _ }) = list_posts(1, 5, None).await {
                         recent_posts.set(Some(posts));
                     }
                 });

@@ -139,17 +139,30 @@ pub fn Posts() -> Element {
 /// 建立依赖，页码变化自动重载），不走路由。删除/重建逻辑与旧实现一致。
 #[component]
 fn AllPostsList() -> Element {
-    let current_page = use_signal(|| 1);
+    let mut current_page = use_signal(|| 1);
+    // 搜索输入框实时绑定的文本（每键即更新，但不触发请求）。
+    let mut search_input = use_signal(String::new);
+    // 已提交的搜索词：空串表示不搜索。仅在此值变化时才重新请求，避免逐键打 DB。
+    let mut search_query = use_signal(String::new);
 
     // 分页列表加载（loading / posts / total / error）由 use_paginated 统一管理。
-    // 闭包内读取 current_page（.with）建立 reactive 依赖，翻页时自动重新请求。
+    // page 闭包内同时读取 current_page 与 search_query 建立响应式依赖：
+    // 翻页、或提交新搜索词（即便停留在第 1 页）都会自动重新请求。
+    // fetch 闭包在发起请求时读取 search_query 的当前值传给后端按标题过滤。
     let paginated = use_paginated(
-        move || current_page.with(|p| *p),
+        move || {
+            let _ = search_query();
+            current_page.with(|p| *p)
+        },
         POSTS_PER_PAGE,
-        |p, pp| async move {
-            list_posts(p, pp)
-                .await
-                .map(|PostListResponse { posts, total }| (posts, total))
+        move |p, pp| {
+            let q = search_query();
+            async move {
+                list_posts(p, pp, if q.is_empty() { None } else { Some(q) })
+                    .await
+                    .map(|PostListResponse { posts, total }| (posts, total))
+                    .map_err(|e| e.to_string())
+            }
         },
     );
     let mut posts = paginated.items;
@@ -165,18 +178,65 @@ fn AllPostsList() -> Element {
     // 的覆盖先点的，故用 HashSet），按行通过 contains 判断 loading 态。
     let mut rebuilding = use_signal(std::collections::HashSet::<i32>::new);
     let get_posts = move || -> Vec<PostListItem> { posts() };
+    // 是否处于搜索结果视图（用于区分空状态文案 / 隐藏「写文章」入口）。
+    let is_searching = move || !search_query().is_empty();
+    // 提交搜索：写入 search_query 并回到第 1 页（搜索结果从首页开始分页）。
+    let mut submit_search = move || {
+        let q = search_input().trim().to_string();
+        search_query.set(q);
+        current_page.set(1);
+    };
 
     rsx! {
+        // 搜索条：按标题过滤文章（仅管理后台用，覆盖草稿）。
+        div { class: "flex gap-2 mb-4",
+            input {
+                class: "flex-1 px-4 py-2 border border-paper-border rounded-lg bg-paper-entry text-paper-primary placeholder:text-paper-tertiary focus:outline-none focus:border-paper-accent focus:ring-1 focus:ring-paper-accent/30",
+                r#type: "text",
+                placeholder: "搜索文章标题...",
+                value: "{search_input()}",
+                oninput: move |e| search_input.set(e.value()),
+                onkeydown: move |e| {
+                    if e.key() == Key::Enter {
+                        submit_search();
+                    }
+                },
+            }
+            button {
+                class: "{BTN_PRIMARY}",
+                onclick: move |_| submit_search(),
+                "搜索"
+            }
+            if is_searching() {
+                button {
+                    class: "{BTN_OUTLINE}",
+                    onclick: move |_| {
+                        search_input.set(String::new());
+                        search_query.set(String::new());
+                        current_page.set(1);
+                    },
+                    "清除"
+                }
+            }
+        }
+
         if loading() && posts().is_empty() {
             DelayedSkeleton { PostsSkeleton {} }
         } else if posts().is_empty() {
-            EmptyState {
-                title: "暂无文章",
-                description: "还没有创建任何文章，开始写下你的第一篇文字吧。",
-                action: EmptyStateAction {
-                    label: "写文章".to_string(),
-                    to: Route::Write {},
-                },
+            if is_searching() {
+                EmptyState {
+                    title: "未找到匹配的文章",
+                    description: "换个标题关键词再试一次。",
+                }
+            } else {
+                EmptyState {
+                    title: "暂无文章",
+                    description: "还没有创建任何文章，开始写下你的第一篇文字吧。",
+                    action: EmptyStateAction {
+                        label: "写文章".to_string(),
+                        to: Route::Write {},
+                    },
+                }
             }
         } else {
             div { class: "{ADMIN_TABLE_CLASS}",

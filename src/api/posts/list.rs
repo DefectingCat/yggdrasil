@@ -117,7 +117,11 @@ pub async fn list_published_posts(
 ///
 /// 需要 admin 权限；结果按创建时间降序，不走缓存。
 #[server(ListPosts, "/api")]
-pub async fn list_posts(page: i32, per_page: i32) -> Result<PostListResponse, ServerFnError> {
+pub async fn list_posts(
+    page: i32,
+    per_page: i32,
+    search: Option<String>,
+) -> Result<PostListResponse, ServerFnError> {
     // 与公开接口保持一致的分页钳制，避免单次请求拉取过多记录。
     let (page, per_page) = clamp_pagination(page, per_page);
     let _user = get_current_admin_user().await?;
@@ -126,32 +130,87 @@ pub async fn list_posts(page: i32, per_page: i32) -> Result<PostListResponse, Se
     {
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
-        let count_row = client
-            .query_one("SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL", &[])
-            .await
-            .map_err(AppError::query)?;
-        let total: i64 = count_row.get(0);
+        // 归一化标题搜索词：trim 后为空则视为不搜索；限长 200 字符并转义 SQL
+        // LIKE 通配符（% / _ / \），避免用户输入导致模式错配或全表误匹配。
+        // 与 search.rs 的全文检索不同：管理后台需覆盖草稿，且仅按标题匹配。
+        let title_filter: Option<String> = search
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| {
+                let mut esc = String::with_capacity(s.len());
+                for ch in s.chars().take(200) {
+                    match ch {
+                        '\\' | '%' | '_' => {
+                            esc.push('\\');
+                            esc.push(ch);
+                        }
+                        _ => esc.push(ch),
+                    }
+                }
+                esc
+            });
 
         let offset = ((page - 1).max(0) as i64) * (per_page as i64);
         let limit = per_page as i64;
-        let rows = client
-            .query(
-                "SELECT
-                    p.id, p.author_id, p.title, p.slug, p.summary, p.status,
-                    p.published_at, p.created_at, p.updated_at, p.cover_image,
-                    p.word_count, p.reading_time,
-                    COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags
-                 FROM posts p
-                 LEFT JOIN post_tags pt ON p.id = pt.post_id
-                 LEFT JOIN tags t ON pt.tag_id = t.id
-                 WHERE p.deleted_at IS NULL
-                 GROUP BY p.id
-                 ORDER BY p.created_at DESC
-                 LIMIT $1 OFFSET $2",
-                &[&limit, &offset],
-            )
-            .await
-            .map_err(AppError::query)?;
+
+        // 有搜索词时按 title ILIKE 子串匹配过滤（双侧 %），否则走原全量列表。
+        // posts 表对管理后台属低频访问、行数有限，ILIKE 全表扫可接受，靠 LIMIT 兜底。
+        let (total, rows) = if let Some(esc) = title_filter {
+            let pattern = format!("%{esc}%");
+            let total: i64 = client
+                .query_one(
+                    "SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL AND title ILIKE $1 ESCAPE '\\'",
+                    &[&pattern],
+                )
+                .await
+                .map_err(AppError::query)?
+                .get(0);
+            let rows = client
+                .query(
+                    "SELECT
+                        p.id, p.author_id, p.title, p.slug, p.summary, p.status,
+                        p.published_at, p.created_at, p.updated_at, p.cover_image,
+                        p.word_count, p.reading_time,
+                        COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags
+                     FROM posts p
+                     LEFT JOIN post_tags pt ON p.id = pt.post_id
+                     LEFT JOIN tags t ON pt.tag_id = t.id
+                     WHERE p.deleted_at IS NULL AND p.title ILIKE $3 ESCAPE '\\'
+                     GROUP BY p.id
+                     ORDER BY p.created_at DESC
+                     LIMIT $1 OFFSET $2",
+                    &[&limit, &offset, &pattern],
+                )
+                .await
+                .map_err(AppError::query)?;
+            (total, rows)
+        } else {
+            let total: i64 = client
+                .query_one("SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL", &[])
+                .await
+                .map_err(AppError::query)?
+                .get(0);
+            let rows = client
+                .query(
+                    "SELECT
+                        p.id, p.author_id, p.title, p.slug, p.summary, p.status,
+                        p.published_at, p.created_at, p.updated_at, p.cover_image,
+                        p.word_count, p.reading_time,
+                        COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags
+                     FROM posts p
+                     LEFT JOIN post_tags pt ON p.id = pt.post_id
+                     LEFT JOIN tags t ON pt.tag_id = t.id
+                     WHERE p.deleted_at IS NULL
+                     GROUP BY p.id
+                     ORDER BY p.created_at DESC
+                     LIMIT $1 OFFSET $2",
+                    &[&limit, &offset],
+                )
+                .await
+                .map_err(AppError::query)?;
+            (total, rows)
+        };
 
         let posts: Vec<_> = rows.iter().map(row_to_post_list_item).collect();
 
