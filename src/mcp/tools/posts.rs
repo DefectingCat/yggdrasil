@@ -390,6 +390,17 @@ impl crate::mcp::server::YggMcpServer {
             }
         };
 
+        // M6 修复：发布后文章出现在公开标签列表页，须失效标签缓存（api update.rs:202
+        // 会失效，此 MCP 路径此前漏掉 → 标签页新发文陈旧 ≤120s）。
+        let tag_rows = client
+            .query(
+                "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
+                &[&p.post_id],
+            )
+            .await
+            .map_err(|e| internal(e, "select tags"))?;
+        let tags: Vec<String> = tag_rows.iter().map(|r| r.get(0)).collect();
+
         let result = client
             .execute(
                 "UPDATE posts SET status = 'published', \
@@ -405,6 +416,7 @@ impl crate::mcp::server::YggMcpServer {
 
         cache::invalidate_post_metadata();
         cache::invalidate_post_by_slug(&slug).await;
+        cache::invalidate_tag_posts_for(&tags).await;
         ssr_cache::invalidate_ssr_route(&format!("/post/{slug}"));
         ssr_cache::invalidate_ssr_all_public();
         ssr_cache::bump_global_generation();
@@ -424,7 +436,7 @@ impl crate::mcp::server::YggMcpServer {
         Parameters(p): Parameters<PostIdParams>,
         Extension(parts): Extension<http::request::Parts>,
     ) -> Result<CallToolResult, McpError> {
-        let _principal = require_scope(&parts, "trash_post", TokenScope::Write)?;
+        let principal = require_scope(&parts, "trash_post", TokenScope::Write)?;
 
         let mut client = get_conn().await.map_err(|e| internal(e, "db connection"))?;
         let tx = client
@@ -434,8 +446,8 @@ impl crate::mcp::server::YggMcpServer {
 
         let slug_row = tx
             .query_opt(
-                "SELECT slug FROM posts WHERE id = $1 AND deleted_at IS NULL FOR UPDATE",
-                &[&p.post_id],
+                "SELECT slug FROM posts WHERE id = $1 AND author_id = $2 AND deleted_at IS NULL FOR UPDATE",
+                &[&p.post_id, &principal.user_id],
             )
             .await
             .map_err(|e| internal(e, "select post"))?;
@@ -488,7 +500,7 @@ impl crate::mcp::server::YggMcpServer {
         Parameters(p): Parameters<PostIdParams>,
         Extension(parts): Extension<http::request::Parts>,
     ) -> Result<CallToolResult, McpError> {
-        let _principal = require_scope(&parts, "delete_post", TokenScope::Write)?;
+        let principal = require_scope(&parts, "delete_post", TokenScope::Write)?;
 
         let mut client = get_conn().await.map_err(|e| internal(e, "db connection"))?;
         let tx = client
@@ -498,8 +510,8 @@ impl crate::mcp::server::YggMcpServer {
 
         let slug_row = tx
             .query_opt(
-                "SELECT slug FROM posts WHERE id = $1 FOR UPDATE",
-                &[&p.post_id],
+                "SELECT slug FROM posts WHERE id = $1 AND author_id = $2 FOR UPDATE",
+                &[&p.post_id, &principal.user_id],
             )
             .await
             .map_err(|e| internal(e, "select post"))?;
