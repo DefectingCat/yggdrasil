@@ -10,6 +10,7 @@
 //!   生产反代 `proxy_set_header Host $host` 会把真实域名转发进来，必须加入否则 rmcp 一律 403。
 //!
 //! 未设置 `APP_BASE_URL` 则两者均空（rmcp 对缺 Origin 放行；Host 回退默认表仅本地可用）。
+//! 开发期额外放行 `0.0.0.0`（dx 代理改写 Host 的容错），生产域名态保持严格。
 //! 生产部署 MUST 设置 `APP_BASE_URL`（见 docs/DEPLOYMENT.md）。
 //! 协议版本头、体积上限（4MiB 默认）由 rmcp 内置，无需此处重复。
 
@@ -50,6 +51,21 @@ pub fn mcp_route() -> Router {
                 }
             }
         }
+    }
+
+    // 开发期容错：APP_BASE_URL 未设或仍是 localhost 系（开发态）时，额外放行 0.0.0.0。
+    // 原因：`dx serve --addr 0.0.0.0` 转发到后端原生 server 时会把 Host 头改写成
+    // `0.0.0.0:<随机端口>`（原生 server 端口每次重编译变化），rmcp 据此判 rebinding 攻击
+    // 一律 403——导致 MCP 在 dx 开发代理（:8080）下完全不可用。0.0.0.0 仅在本地开发无攻击
+    // 价值，故仅在未配置生产域名时放行；生产域名态保持严格。
+    let is_dev = base_url
+        .as_deref()
+        .and_then(|b| http::Uri::try_from(b).ok())
+        .and_then(|u| u.authority().map(|a| a.host().to_lowercase()))
+        .map(|h| matches!(h.as_str(), "localhost" | "127.0.0.1" | "::1"))
+        .unwrap_or(true); // 未设 APP_BASE_URL 视为开发态
+    if is_dev && !allowed_hosts.iter().any(|h| h == "0.0.0.0") {
+        allowed_hosts.push("0.0.0.0".into());
     }
 
     let mut config = StreamableHttpServerConfig::default()
