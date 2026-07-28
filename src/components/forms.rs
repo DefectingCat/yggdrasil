@@ -7,6 +7,10 @@ use dioxus::prelude::*;
 /// 输入框基础 CSS 类，统一文本框、邮箱框、URL 框等样式。
 pub const INPUT_CLASS: &str = "w-full px-4 py-2 border border-paper-border rounded-2xl bg-paper-entry text-paper-primary placeholder:text-paper-tertiary focus:outline-none focus:border-paper-accent focus:ring-1 focus:ring-paper-accent/30 transition-colors duration-200";
 
+/// 内联输入框 CSS 类：与 [`INPUT_CLASS`] 同主题，但用 `flex-1 min-w-0` 取代 `w-full`，
+/// 用于与按钮并排、需填充剩余宽度的场景（搜索栏、URL 输入栏等）。
+pub const INPUT_INLINE_CLASS: &str = "flex-1 min-w-0 px-4 py-2 border border-paper-border rounded-2xl bg-paper-entry text-paper-primary placeholder:text-paper-tertiary focus:outline-none focus:border-paper-accent focus:ring-1 focus:ring-paper-accent/30 transition-colors duration-200";
+
 /// 主按钮 CSS 类，用于表单提交等主操作按钮。
 pub const BUTTON_PRIMARY_CLASS: &str = "w-full py-2.5 px-4 bg-paper-accent text-white font-medium rounded-full hover:brightness-110 active:scale-[0.98] transition-all duration-200 cursor-pointer";
 
@@ -317,6 +321,9 @@ pub fn FormSelect<T: Clone + PartialEq + 'static>(
 /// - `disabled`：是否禁用（可选，缺省 `false`）
 /// - `oninput`：输入事件回调，返回新的字符串值
 /// - `onkeydown`：可选的键盘事件回调
+/// - `class`：自定义 class（可选，缺省用 [`INPUT_CLASS`] 全宽表单款）。
+///   内联/固定宽度场景传 [`INPUT_INLINE_CLASS`] 或自定义类串，覆盖默认样式。
+/// - `mono`：是否使用等宽字体（代码片段、表名、JSON 等，缺省 `false`）
 #[component]
 pub fn FormInput(
     id: Option<String>,
@@ -328,16 +335,22 @@ pub fn FormInput(
     oninput: EventHandler<String>,
     #[props(default)]
     onkeydown: Option<EventHandler<KeyboardEvent>>,
+    #[props(default)]
+    class: Option<&'static str>,
+    #[props(default)]
+    mono: bool,
 ) -> Element {
+    let base = class.unwrap_or(INPUT_CLASS);
+    let mono_class = if mono { " font-mono" } else { "" };
     let disabled_class = if disabled {
-        "opacity-60 cursor-not-allowed"
+        " opacity-60 cursor-not-allowed"
     } else {
         ""
     };
     rsx! {
         input {
             id: id.unwrap_or_default(),
-            class: "{INPUT_CLASS} {disabled_class}",
+            class: "{base}{mono_class}{disabled_class}",
             r#type: "{r#type}",
             placeholder: "{placeholder}",
             value: "{value}",

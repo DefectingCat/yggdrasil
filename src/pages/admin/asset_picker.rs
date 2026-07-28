@@ -5,6 +5,7 @@
 //! 纯 Dioxus 组件，不触碰 Tiptap；数据加载仅在 WASM 前端发生。
 
 use dioxus::prelude::*;
+use crate::components::forms::{FormInput, INPUT_INLINE_CLASS};
 
 #[cfg(target_arch = "wasm32")]
 use crate::api::assets::list_assets;
@@ -69,12 +70,12 @@ pub fn AssetPickerModal(
                     h2 { class: "text-lg font-bold text-[var(--color-paper-primary)] shrink-0",
                         "选择封面图"
                     }
-                    input {
-                        class: "flex-1 min-w-0 text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-2xl px-4 py-2 shadow-sm transition-all",
+                    FormInput {
                         r#type: "search",
                         placeholder: "搜索文件名 / alt",
-                        value: "{query}",
-                        oninput: move |evt| query.set(evt.value()),
+                        value: query(),
+                        class: INPUT_INLINE_CLASS,
+                        oninput: move |v: String| query.set(v),
                     }
                     // 上传新图：成功后直接选中
                     label { class: "shrink-0 text-sm font-medium px-4 py-2 rounded-full bg-[var(--color-paper-primary)] text-[var(--color-paper-theme)] hover:opacity-80 transition-opacity cursor-pointer",

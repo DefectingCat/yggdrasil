@@ -9,6 +9,7 @@
 use dioxus::prelude::*;
 
 use crate::components::code_runner::CodeRunner;
+use crate::components::forms::FormInput;
 use crate::components::ui::{ADMIN_CARD_CLASS, BTN_PRIMARY_SM};
 use crate::infra::runner_config::ResourceLimits;
 
@@ -107,12 +108,12 @@ pub fn Runner() -> Element {
                     label { class: "text-sm font-medium text-[var(--color-paper-secondary)]",
                         "资源覆盖 (JSON, 可选)"
                     }
-                    input {
-                        class: "w-full px-3 py-2 text-sm border border-paper-border rounded-lg bg-[var(--color-paper-theme)] text-[var(--color-paper-primary)] font-mono focus:outline-none focus:border-[var(--color-paper-accent)] transition-colors",
+                    FormInput {
                         r#type: "text",
                         placeholder: "如 {{\"timeout_secs\":10,\"memory_mb\":512}}",
-                        value: "{overrides_json()}",
-                        oninput: move |e| overrides_json.set(e.value()),
+                        value: overrides_json(),
+                        mono: true,
+                        oninput: move |v: String| overrides_json.set(v),
                     }
                     if !override_error.is_empty() {
                         p { class: "text-xs text-red-500 dark:text-red-400", "{override_error}" }

@@ -22,6 +22,7 @@ use crate::api::assets::AssetListResponse;
 use crate::api::assets::{BatchDeleteAssetsResponse, PurgeOrphansResponse, RebuildAssetsResponse};
 use crate::components::empty_state::EmptyState;
 use crate::components::ui::{FilterTabs, Pagination};
+use crate::components::forms::FormInput;
 #[cfg(target_arch = "wasm32")]
 use crate::utils::js::invoke_optional_global;
 #[cfg(target_arch = "wasm32")]
@@ -247,14 +248,12 @@ pub fn Assets() -> Element {
                             "重建索引"
                         }
                     }
-                    input {
-                        class: "w-56 text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-2xl px-4 py-2 shadow-sm transition-all",
+                    FormInput {
                         r#type: "search",
                         placeholder: "搜索文件名 / alt",
-                        value: "{query}",
-                        oninput: move |evt| {
-                            query.set(evt.value());
-                        },
+                        value: query(),
+                        class: "w-56 text-sm px-4 py-2 border border-paper-border rounded-2xl bg-paper-entry text-paper-primary placeholder:text-paper-tertiary focus:outline-none focus:border-paper-accent focus:ring-1 focus:ring-paper-accent/30 transition-colors",
+                        oninput: move |v: String| query.set(v),
                     }
                     button {
                         class: "{sort_created_class}",
@@ -576,12 +575,12 @@ pub fn Assets() -> Element {
                                             }
                                         } else if editing_alt().as_deref() == Some(a.id.as_str()) {
                                             div { class: "flex items-center gap-1 mt-2",
-                                                input {
-                                                    class: "flex-1 min-w-0 text-[10px] bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-full px-2 py-1 transition-all",
+                                                FormInput {
                                                     r#type: "text",
                                                     placeholder: "alt 文本",
-                                                    value: "{alt_input}",
-                                                    oninput: move |evt| alt_input.set(evt.value()),
+                                                    value: alt_input(),
+                                                    class: "flex-1 min-w-0 text-[10px] px-2 py-1 rounded-full border border-paper-border bg-paper-entry text-paper-primary placeholder:text-paper-tertiary focus:outline-none focus:border-paper-accent transition-colors",
+                                                    oninput: move |v: String| alt_input.set(v),
                                                 }
                                                 button {
                                                     class: "text-[10px] font-medium cursor-pointer px-2 py-1 rounded-full bg-[var(--color-paper-primary)] text-[var(--color-paper-theme)] hover:opacity-80 transition-opacity",

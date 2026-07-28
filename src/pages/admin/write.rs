@@ -17,7 +17,7 @@ use crate::api::posts::{
 #[cfg(target_arch = "wasm32")]
 use crate::tiptap_bridge::{consume_upload_event, upload_image_file, EditorHandle};
 // 共享上传状态类型：两端都编译（rsx 在 server SSR 时也要渲染这些结构）。
-use crate::components::forms::FormSelect;
+use crate::components::forms::{FormInput, FormSelect, INPUT_INLINE_CLASS};
 use crate::components::ui::{LoadingButton, BTN_CLOSE_ICON, BTN_PRIMARY_SM};
 use crate::components::write_skeleton::WriteSkeleton;
 use crate::models::post::Post;
@@ -35,11 +35,6 @@ use wasm_bindgen::closure::Closure;
 use dioxus::html::HasFileData;
 #[cfg(target_arch = "wasm32")]
 use dioxus::web::{WebEventExt, WebFileExt};
-
-/// 元信息表单复用的样式常量（label 与 input 各一份，避免多处重复粘贴）。
-/// 提升到模块级以便 CoverUploader 的 URL 输入框复用。
-const META_INPUT_CLASS: &str =
-    "w-full text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-2xl px-4 py-3 shadow-sm transition-all";
 
 /// 新建文章页面组件。
 ///
@@ -408,7 +403,6 @@ fn write_editor(post_id: Option<i32>) -> Element {
         }
     };
 
-    // 元信息表单复用样式见模块级 META_INPUT_CLASS。
 
     rsx! {
         // 根容器:flex 分区布局。layout 给 write 的 main 是 flex 容器(无 padding/不滚动),
@@ -496,11 +490,11 @@ fn write_editor(post_id: Option<i32>) -> Element {
                         label { class: "block text-xs font-semibold uppercase tracking-wide text-[var(--color-paper-tertiary)] mb-3",
                             "链接"
                         }
-                        input {
-                            class: "w-full text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-2xl px-3 py-2 transition-all",
+                        FormInput {
+                            r#type: "text",
                             placeholder: "自动生成",
-                            value: "{slug}",
-                            oninput: move |evt| slug.set(evt.value()),
+                            value: slug(),
+                            oninput: move |v: String| slug.set(v),
                         }
                     }
                     // 标签节
@@ -508,11 +502,11 @@ fn write_editor(post_id: Option<i32>) -> Element {
                         label { class: "block text-xs font-semibold uppercase tracking-wide text-[var(--color-paper-tertiary)] mb-3",
                             "标签"
                         }
-                        input {
-                            class: "w-full text-sm bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] placeholder-[var(--color-paper-tertiary)] focus:outline-none border border-[var(--color-paper-border)] focus:border-[var(--color-paper-primary)] rounded-2xl px-3 py-2 transition-all",
+                        FormInput {
+                            r#type: "text",
                             placeholder: "逗号分隔...",
-                            value: "{tags}",
-                            oninput: move |evt| tags.set(evt.value()),
+                            value: tags(),
+                            oninput: move |v: String| tags.set(v),
                         }
                     }
                     // 摘要节
@@ -809,12 +803,13 @@ fn CoverUploader(cover_image: Signal<String>, cover_uploading: Signal<bool>) -> 
         // —— URL 输入模式（内联展开，空态时叠加在容器外，避免与拖拽区争抢点击）——
         if cover_url_mode() && cover_image().is_empty() {
             div { class: "flex items-center gap-2 mt-2",
-                input {
-                    class: "flex-1 {META_INPUT_CLASS}",
+                FormInput {
+                    r#type: "url",
                     placeholder: "粘贴图片链接...",
-                    value: "{cover_url_input}",
-                    oninput: move |evt| cover_url_input.set(evt.value()),
-                    onkeydown: move |evt| {
+                    value: cover_url_input(),
+                    class: INPUT_INLINE_CLASS,
+                    oninput: move |v: String| cover_url_input.set(v),
+                    onkeydown: move |evt: KeyboardEvent| {
                         if evt.key() == Key::Enter {
                             let v = cover_url_input().trim().to_string();
                             if !v.is_empty() {

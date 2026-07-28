@@ -2,7 +2,7 @@
 
 use dioxus::prelude::*;
 
-use crate::components::forms::{FORM_SELECT_COMPACT_CLASS, FormSelect};
+use crate::components::forms::{FormInput, FORM_SELECT_COMPACT_CLASS, FormSelect};
 use crate::components::ui::BTN_PRIMARY_SM;
 
 /// 数据导出 tab：按表/按查询导出 SQL/CSV，走 Axum 流式下载。
@@ -66,12 +66,12 @@ pub(super) fn ExportTab() -> Element {
                 if mode().as_str() == "table" {
                     div {
                         label { class: "block text-sm text-paper-secondary mb-1", "表名" }
-                        input {
+                        FormInput {
                             r#type: "text",
-                            class: "w-full px-3 py-2 text-sm border border-paper-border rounded bg-paper-theme text-paper-primary font-mono",
                             placeholder: "如 posts",
-                            value: "{table_name}",
-                            oninput: move |e| table_name.set(e.value()),
+                            value: table_name(),
+                            mono: true,
+                            oninput: move |v: String| table_name.set(v),
                         }
                         p { class: "text-xs text-paper-secondary mt-1",
                             "仅支持 public schema 下的用户表，表名需为合法标识符"
