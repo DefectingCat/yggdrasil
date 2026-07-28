@@ -148,7 +148,7 @@ pub(super) async fn row_to_post_full(row: &tokio_postgres::Row) -> Post {
 /// 对传入的每个标签：若不存在则插入 tags 表，否则查询已有 id，
 /// 然后在 post_tags 表中建立关联。不会删除旧关联，调用方需先清理。
 #[cfg(feature = "server")]
-pub(super) async fn sync_tags(
+pub(crate) async fn sync_tags(
     tx: &deadpool_postgres::Transaction<'_>,
     post_id: i32,
     tags: &[String],
@@ -191,7 +191,7 @@ pub(super) async fn sync_tags(
 
 /// 清洗标签列表：去头尾空白、过滤空字符串并去重（保留原始顺序）。
 #[cfg(feature = "server")]
-pub(super) fn clean_tags(tags: &[String]) -> Vec<String> {
+pub(crate) fn clean_tags(tags: &[String]) -> Vec<String> {
     let mut seen = std::collections::HashSet::new();
     tags.iter()
         .map(|t| t.trim().to_string())
@@ -240,7 +240,7 @@ pub(crate) fn extract_asset_paths(content_html: &str, cover_image: Option<&str>)
 /// 再按 content_html + cover_image 中出现的 /uploads/ 路径重建。
 /// 未登记到 assets 表的路径（如回填前的旧图）静默跳过，由重建索引兜底。
 #[cfg(feature = "server")]
-pub(super) async fn sync_asset_refs(
+pub(crate) async fn sync_asset_refs(
     tx: &deadpool_postgres::Transaction<'_>,
     post_id: i32,
     content_html: &str,

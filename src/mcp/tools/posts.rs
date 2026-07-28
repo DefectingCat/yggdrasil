@@ -134,13 +134,13 @@ impl crate::mcp::server::YggMcpServer {
             .map_err(|e| internal(e, "insert post"))?;
         let post_id: i32 = row.get(0);
 
-        let tags_cleaned = clean_tags(&p.tags);
-        sync_tags(&tx, post_id, &tags_cleaned)
+        let tags_cleaned = crate::api::posts::helpers::clean_tags(&p.tags);
+        crate::api::posts::helpers::sync_tags(&tx, post_id, &tags_cleaned)
             .await
-            .map_err(|e| internal(e, "sync_tags"))?;
-        sync_asset_refs(&tx, post_id, &content_html, cover_image.as_deref())
+            .map_err(|_| internal("tag sync", "sync_tags"))?;
+        crate::api::posts::helpers::sync_asset_refs(&tx, post_id, &content_html, cover_image.as_deref())
             .await
-            .map_err(|e| internal(e, "sync_asset_refs"))?;
+            .map_err(|_| internal("asset_refs sync", "sync_asset_refs"))?;
 
         tx.commit().await.map_err(|e| internal(e, "commit"))?;
 
@@ -317,18 +317,18 @@ impl crate::mcp::server::YggMcpServer {
             ));
         }
 
-        let tags_cleaned = clean_tags(&p.tags);
+        let tags_cleaned = crate::api::posts::helpers::clean_tags(&p.tags);
         let tags_for_invalidation = tags_cleaned.clone();
 
         tx.execute("DELETE FROM post_tags WHERE post_id = $1", &[&p.post_id])
             .await
             .map_err(|e| internal(e, "delete old post_tags"))?;
-        sync_tags(&tx, p.post_id, &tags_cleaned)
+        crate::api::posts::helpers::sync_tags(&tx, p.post_id, &tags_cleaned)
             .await
-            .map_err(|e| internal(e, "sync_tags"))?;
-        sync_asset_refs(&tx, p.post_id, &content_html, cover_image.as_deref())
+            .map_err(|_| internal("tag sync", "sync_tags"))?;
+        crate::api::posts::helpers::sync_asset_refs(&tx, p.post_id, &content_html, cover_image.as_deref())
             .await
-            .map_err(|e| internal(e, "sync_asset_refs"))?;
+            .map_err(|_| internal("asset_refs sync", "sync_asset_refs"))?;
 
         tx.commit().await.map_err(|e| internal(e, "commit"))?;
 
@@ -662,73 +662,3 @@ fn ok_json<T: serde::Serialize>(val: T) -> Result<CallToolResult, McpError> {
     )]))
 }
 
-// ---------------------------------------------------------------------------
-// 标签 + 素材引用同步（镜像 src/api/posts/helpers.rs，因 pub(super) 不可跨模块调用）
-// ---------------------------------------------------------------------------
-
-/// 清洗标签：去空白、过滤空串、去重（保留顺序）。
-fn clean_tags(tags: &[String]) -> Vec<String> {
-    let mut seen = std::collections::HashSet::new();
-    tags.iter()
-        .map(|t| t.trim().to_string())
-        .filter(|t| !t.is_empty())
-        .filter(|t| seen.insert(t.to_lowercase()))
-        .collect()
-}
-
-/// 在事务中同步文章-标签关联（不删除旧关联，调用方负责预清理）。
-async fn sync_tags(
-    tx: &deadpool_postgres::Transaction<'_>,
-    post_id: i32,
-    tags: &[String],
-) -> Result<(), tokio_postgres::Error> {
-    for tag_name in tags {
-        let tag_id: i32 = {
-            let row = tx
-                .query_opt(
-                    "INSERT INTO tags (name) VALUES ($1) ON CONFLICT (name) DO NOTHING RETURNING id",
-                    &[&tag_name.as_str()],
-                )
-                .await?;
-            match row {
-                Some(r) => r.get(0),
-                None => {
-                    let row = tx
-                        .query_opt("SELECT id FROM tags WHERE name = $1", &[&tag_name.as_str()])
-                        .await?;
-                    // 清洗已去重，ON CONFLICT 后必然存在。
-                    row.expect("tag must exist after ON CONFLICT").get(0)
-                }
-            }
-        };
-        tx.execute(
-            "INSERT INTO post_tags (post_id, tag_id) VALUES ($1, $2)",
-            &[&post_id, &tag_id],
-        )
-        .await?;
-    }
-    Ok(())
-}
-
-/// 在事务中同步文章的素材引用（自带 DELETE 再重建）。
-async fn sync_asset_refs(
-    tx: &deadpool_postgres::Transaction<'_>,
-    post_id: i32,
-    content_html: &str,
-    cover_image: Option<&str>,
-) -> Result<(), tokio_postgres::Error> {
-    tx.execute("DELETE FROM asset_refs WHERE post_id = $1", &[&post_id])
-        .await?;
-
-    let paths = crate::api::posts::helpers::extract_asset_paths(content_html, cover_image);
-    if !paths.is_empty() {
-        tx.execute(
-            "INSERT INTO asset_refs (asset_id, post_id) \
-             SELECT id, $1 FROM assets WHERE path = ANY($2) \
-             ON CONFLICT DO NOTHING",
-            &[&post_id, &paths],
-        )
-        .await?;
-    }
-    Ok(())
-}
