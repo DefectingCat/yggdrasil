@@ -16,11 +16,12 @@ use serde::Serialize;
 /// `token` 形如 `ygg_...`，已嵌入各片段的 `Authorization` 头中。
 #[derive(Debug, Clone, Serialize)]
 pub struct ClientConfigs {
-    /// Claude Code（`.mcp.json` / `~/.claude.json`）与 Cursor（`~/.cursor/mcp.json`）。
-    /// `type: "streamable-http"`，`url`，`headers.Authorization`。
+    /// Claude Code（`.mcp.json` / `~/.claude.json`）。注意 `type` 值是 `"http"`
+    ///（不是 `"streamable-http"`——Claude Code 用 `"streamable-http"` 会静默失败/卡在
+    /// "connecting"，2026 官方文档明确要求 `http`）。字段：`type`，`url`，`headers.Authorization`。
     pub claude_code_json: String,
-    /// Cursor 专用变体（`type: "streamable-http"`）——与 claude_code_json 实际相同，
-    /// 单独列出便于 UI 分别展示与标注文件路径。
+    /// Cursor（`~/.cursor/mcp.json`）。与 Claude Code 的关键差异：**不带 `type` 字段**——
+    /// Cursor 按远程 URL 自动识别 streamable-http；仅需 `url` + `headers.Authorization`。
     pub cursor_json: String,
     /// Cline（`cline_mcp_settings.json`）。`type: "streamableHttp"`（注意驼峰，非 `sse`），
     /// 额外带 `disabled` / `autoApprove` 字段。
@@ -54,18 +55,26 @@ pub fn generate_client_configs(base_url: &str, token: &str) -> ClientConfigs {
     let mcp_url = join_mcp_url(base_url);
     let auth_header = format!("Bearer {token}");
 
-    // --- Claude Code / Cursor：type = "streamable-http" ---
+    // --- Claude Code：type = "http"（非 "streamable-http"，否则静默连接失败） ---
     let claude_code_json = serde_json::json!({
         "mcpServers": {
             SERVER_NAME: {
-                "type": "streamable-http",
+                "type": "http",
                 "url": mcp_url,
                 "headers": { "Authorization": auth_header }
             }
         }
     });
-    // Cursor 与 Claude Code 格式一致（type 都接受 streamable-http），仅展示标签不同。
-    let cursor_json = claude_code_json.clone();
+
+    // --- Cursor：不带 type 字段，按 URL 自动识别 streamable-http ---
+    let cursor_json = serde_json::json!({
+        "mcpServers": {
+            SERVER_NAME: {
+                "url": mcp_url,
+                "headers": { "Authorization": auth_header }
+            }
+        }
+    });
 
     // --- Cline：type = "streamableHttp"（驼峰），带 disabled / autoApprove ---
     let cline_json = serde_json::json!({
@@ -149,14 +158,19 @@ mod tests {
             v["mcpServers"]["yggdrasil"]["headers"]["Authorization"],
             format!("Bearer {TOKEN}")
         );
-        assert_eq!(v["mcpServers"]["yggdrasil"]["type"], "streamable-http");
+        assert_eq!(v["mcpServers"]["yggdrasil"]["type"], "http"); // 非 "streamable-http"（会静默失败）
         assert_eq!(v["mcpServers"]["yggdrasil"]["url"], "https://rua.plus/mcp");
     }
 
     #[test]
-    fn cursor_json_equals_claude_code_json() {
+    fn cursor_json_has_no_type_field() {
         let cfg = generate_client_configs(BASE, TOKEN);
-        assert_eq!(cfg.cursor_json, cfg.claude_code_json);
+        let v: serde_json::Value = serde_json::from_str(&cfg.cursor_json).unwrap();
+        let entry = &v["mcpServers"]["yggdrasil"];
+        // Cursor 按 URL 自动识别远程端点，不带 type 字段。
+        assert!(entry.get("type").is_none(), "cursor 配置不应含 type 字段");
+        assert_eq!(entry["url"], "https://rua.plus/mcp");
+        assert_eq!(entry["headers"]["Authorization"], format!("Bearer {TOKEN}"));
     }
 
     #[test]

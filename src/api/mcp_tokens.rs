@@ -269,9 +269,9 @@ fn row_to_mcp_token_meta(row: &tokio_postgres::Row) -> McpToken {
 /// 为可两端共享的 DTO，让 WASM 前端能经 server fn 拿到配置字符串。
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct McpClientConfigs {
-    /// Claude Code（`.mcp.json` / `~/.claude.json`）与 Cursor（`~/.cursor/mcp.json`）。
+    /// Claude Code（`.mcp.json` / `~/.claude.json`）。`type: "http"`（非 `streamable-http`）。
     pub claude_code_json: String,
-    /// Cursor 专用变体（与 claude_code_json 相同，单独列出便于标注）。
+    /// Cursor（`~/.cursor/mcp.json`）。不带 `type` 字段，按 URL 自动识别 streamable-http。
     pub cursor_json: String,
     /// Cline（`cline_mcp_settings.json`）。
     pub cline_json: String,
