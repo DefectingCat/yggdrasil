@@ -12,7 +12,7 @@ use crate::components::frontend_layout::FrontendLayout;
 use crate::context::UserContext;
 use crate::pages::about::About;
 use crate::pages::admin::{
-    Admin, AdminComments, AdminCommentsPage, Assets, Posts, Runner, System, Write, WriteEdit,
+    Admin, AdminComments, AdminCommentsPage, Assets, Mcp, Posts, Runner, System, Write, WriteEdit,
 };
 use crate::pages::archives::Archives;
 use crate::pages::home::{Home, HomePage};
@@ -92,6 +92,9 @@ pub enum Route {
         /// 代码试运行沙箱（作者预览可运行代码块输出）
         #[route("/runner")]
         Runner {},
+        /// MCP 令牌管理 + 客户端配置生成
+        #[route("/mcp")]
+        Mcp {},
     #[end_layout]
     #[end_nest]
 

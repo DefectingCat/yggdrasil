@@ -18,6 +18,8 @@ pub mod posts_trash;
 pub mod runner;
 /// 系统管理页面模块（数据库 + 服务器状态 + SQL 控制台 + 导出 + 备份）。
 pub mod system;
+/// MCP 令牌管理 + 客户端配置生成页面模块。
+pub mod mcp;
 /// 文章编辑器页面模块（基于 Tiptap 富文本编辑器）。
 pub mod write;
 
@@ -33,5 +35,7 @@ pub use posts::Posts;
 pub use runner::Runner;
 /// 系统管理入口组件。
 pub use system::System;
+/// MCP 令牌管理 + 客户端配置生成页面组件。
+pub use mcp::Mcp;
 /// 文章编辑器组件（新建与编辑模式）。
 pub use write::{Write, WriteEdit};

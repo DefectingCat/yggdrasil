@@ -25,6 +25,8 @@ pub mod image;
 /// KaTeX 服务端数学公式渲染（server-only）。
 #[cfg(feature = "server")]
 pub mod katex;
+/// MCP 访问令牌管理（签发 / 列表 / 重查 / 撤销）的 Dioxus server function。
+pub mod mcp_tokens;
 /// Markdown 渲染与 HTML 清理。
 pub mod markdown;
 /// mhchem 化学公式转译器（\ce/\pu → LaTeX，server-only）。

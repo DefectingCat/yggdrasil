@@ -74,6 +74,8 @@ katex-rs = { version = "0.2", optional = true }
 rmcp = { version = "=3.0.0-beta.3", optional = true, features = ["server", "macros", "transport-streamable-http-server", "transport-worker"] }
 # MCP token 静态加密（AES-GCM）：管理员可在后台重查明文，DB 不裸存。
 aes-gcm = { version = "0.10", optional = true }
+# MCP 媒体上传：base64 解码（AI 客户端经 JSON 传图）。
+base64 = { version = "0.22", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = ["Document", "Window", "Storage", "Element", "HtmlElement", "DomTokenList", "MediaQueryList", "HtmlImageElement", "MouseEvent", "KeyboardEvent", "Node", "EventTarget", "Navigator", "Clipboard", "File", "FileList", "FormData", "Request", "RequestInit", "Response", "Headers", "ClipboardEvent", "DataTransfer", "HtmlInputElement", "EventSource", "MessageEvent"] }
@@ -139,4 +141,5 @@ server = [
     "dep:katex-rs",
     "dep:rmcp",
     "dep:aes-gcm",
+    "dep:base64",
 ]
