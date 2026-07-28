@@ -102,9 +102,53 @@ static UNKNOWN_BUCKET_LIMITER: LazyLock<DefaultKeyedRateLimiter<String>> = LazyL
     )
 });
 
+/// 限流桶 GC 间隔（秒）：周期性调用 governor 的 `retain_recent`，回收已恢复为
+/// 「初始态」的 IP 键，防止 IP 轮换攻击下键空间无限膨胀。
+///
+/// 默认 300 秒。governor 的 `retain_recent` 只丢弃与「新桶」不可区分的键（即限流
+/// 窗口早已冷却、保留与否都不影响后续请求），因此即便间隔较长，内存占用也只反映
+/// 「最近活跃过且仍在限流窗口内」的 IP 集合，而非历史全集。可用
+/// `RATE_LIMIT_GC_INTERVAL_SECS` 覆盖（值越小越激进，回收越勤）。
+#[cfg(feature = "server")]
+fn limiter_gc_interval() -> Duration {
+    let secs = std::env::var("RATE_LIMIT_GC_INTERVAL_SECS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(300);
+    Duration::from_secs(secs.max(1))
+}
+
+/// 启动后台限流桶 GC 任务（全进程仅生效一次）。
+///
+/// 七个 IP 键控限流器均为独立的 `DefaultKeyedRateLimiter`，没有集中状态表，故采用
+/// 惰性启动：首个请求到达任一 `check_*` 时，经 `Once` 派生一个常驻 tokio 任务，按
+/// [`limiter_gc_interval`] 周期对全部限流器调用 `retain_recent`，回收长时间未命中的
+/// 键。这直接缓解 IP 轮换攻击下的内存膨胀——攻击者不断换 IP 制造新键，GC 周期性剔除
+/// 已冷却的旧键，使键集合大小收敛到「限流窗口内的活跃 IP」。
+#[cfg(feature = "server")]
+fn ensure_limiter_gc() {
+    static SPAWNED: std::sync::Once = std::sync::Once::new();
+    SPAWNED.call_once(|| {
+        let interval = limiter_gc_interval();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(interval).await;
+                STRICT_LIMITER.retain_recent();
+                UPLOAD_LIMITER.retain_recent();
+                IMAGE_LIMITER.retain_recent();
+                COMMENT_LIMITER.retain_recent();
+                CODE_EXEC_LIMITER.retain_recent();
+                CODE_EXEC_DAILY_LIMITER.retain_recent();
+                UNKNOWN_BUCKET_LIMITER.retain_recent();
+            }
+        });
+    });
+}
+
 #[cfg(feature = "server")]
 /// 检查评论请求是否超出限流阈值。
 pub fn check_comment_limit(ip: &str) -> Result<(), String> {
+    ensure_limiter_gc();
     COMMENT_LIMITER
         .check_key(&ip.to_string())
         .map(|_| ())
@@ -114,6 +158,7 @@ pub fn check_comment_limit(ip: &str) -> Result<(), String> {
 #[cfg(feature = "server")]
 /// 检查图片访问请求是否超出限流阈值，返回 HTTP 状态码。
 pub fn check_image_limit(ip: &str) -> Result<(), StatusCode> {
+    ensure_limiter_gc();
     IMAGE_LIMITER
         .check_key(&ip.to_string())
         .map(|_| ())
@@ -133,6 +178,21 @@ fn is_valid_ip(ip: &str) -> bool {
     ip.parse::<std::net::IpAddr>().is_ok()
 }
 
+/// 从 `X-Forwarded-For` 头按信任代理层数提取真实客户端 IP。
+///
+/// # 伪造风险（务必正确配置 `TRUSTED_PROXY_COUNT`）
+///
+/// XFF 头由客户端**可写**，本函数以 `parts[len-1-trusted_proxy_count]` 选取
+/// 「可信代理链最左侧之外」的地址。该取值**完全依赖 `TRUSTED_PROXY_COUNT` 与真实
+/// 代理跳数精确相等**，一旦不符即可被滥用：
+/// - **配得偏大**：会选中客户端伪造的地址——攻击者在请求里塞入多个伪 XFF 段，
+///   使选中的「客户端 IP」落为其伪造值，从而绕过按 IP 的限流（每次伪造一个新 IP），
+///   或令多个真实用户被错误归并到同一代理 IP 的桶里。
+/// - **配得偏小**：会选中某一跳中间代理的 IP，导致所有用户共享同一个限流桶。
+///
+/// 因此生产部署**必须**由最外层反向代理覆盖/重写 XFF（而非原样转发客户端 XFF），
+/// 并令 `TRUSTED_PROXY_COUNT` 等于「客户端 → 服务端」之间的真实代理跳数。
+/// 详见 `AGENTS.md` 中 `TRUSTED_PROXY_COUNT` 的部署说明。
 #[cfg(feature = "server")]
 fn ip_from_x_forwarded_for(value: &str, trusted_proxy_count: usize) -> Option<String> {
     // X-Forwarded-For 格式：client, proxy1, proxy2, ..., proxyN
@@ -231,6 +291,7 @@ pub fn get_client_ip(headers: &http::HeaderMap) -> String {
 /// 严格桶导致正常用户被误杀。生产环境配好 TRUSTED_PROXY_COUNT 后走真实 IP，
 /// 始终命中严格桶。
 pub fn check_strict_limit(ip: &str) -> Result<(), String> {
+    ensure_limiter_gc();
     if ip == "unknown" {
         UNKNOWN_BUCKET_LIMITER
             .check_key(&ip.to_string())
@@ -247,6 +308,7 @@ pub fn check_strict_limit(ip: &str) -> Result<(), String> {
 #[cfg(feature = "server")]
 /// 检查上传请求是否超出限流阈值。
 pub fn check_upload_limit(ip: &str) -> Result<(), String> {
+    ensure_limiter_gc();
     UPLOAD_LIMITER
         .check_key(&ip.to_string())
         .map(|_| ())
@@ -258,6 +320,7 @@ pub fn check_upload_limit(ip: &str) -> Result<(), String> {
 ///
 /// 两层任一被限即拒绝。返回中文错误消息，供 server function 直接透传给前端。
 pub fn check_code_exec_limit(ip: &str) -> Result<(), String> {
+    ensure_limiter_gc();
     CODE_EXEC_LIMITER
         .check_key(&ip.to_string())
         .map_err(|_| "请求过于频繁，请稍后再试".to_string())?;
