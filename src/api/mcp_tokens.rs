@@ -275,6 +275,8 @@ pub struct McpClientConfigs {
     pub cursor_json: String,
     /// Cline（`cline_mcp_settings.json`）。
     pub cline_json: String,
+    /// Oh-My-Pi（`~/.pi/agent/mcp.json` / `.pi/mcp.json`）。字段名 `transport`，非 `type`。
+    pub omp_json: String,
     /// 通用原始 JSON（单 server entry）。
     pub generic_json: String,
     /// Claude Code CLI 一行命令。
@@ -300,6 +302,7 @@ pub async fn get_mcp_client_configs(token: String) -> Result<McpClientConfigs, S
             claude_code_json: configs.claude_code_json,
             cursor_json: configs.cursor_json,
             cline_json: configs.cline_json,
+            omp_json: configs.omp_json,
             generic_json: configs.generic_json,
             claude_cli: configs.claude_cli,
         })

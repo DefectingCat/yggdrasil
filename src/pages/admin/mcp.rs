@@ -506,6 +506,7 @@ fn ConfigCard() -> Element {
                     ConfigSnippet { title: "Claude Code（.mcp.json / ~/.claude.json）".to_string(), content: c.claude_code_json.clone() }
                     ConfigSnippet { title: "Cursor（~/.cursor/mcp.json）".to_string(), content: c.cursor_json.clone() }
                     ConfigSnippet { title: "Cline（cline_mcp_settings.json）".to_string(), content: c.cline_json.clone() }
+                    ConfigSnippet { title: "Oh-My-Pi（~/.pi/agent/mcp.json 或 .pi/mcp.json）".to_string(), content: c.omp_json.clone() }
                     ConfigSnippet { title: "通用（单 server entry）".to_string(), content: c.generic_json.clone() }
                     ConfigSnippet { title: "Claude Code CLI".to_string(), content: c.claude_cli.clone() }
                 }

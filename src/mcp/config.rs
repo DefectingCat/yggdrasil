@@ -25,6 +25,9 @@ pub struct ClientConfigs {
     /// Cline（`cline_mcp_settings.json`）。`type: "streamableHttp"`（注意驼峰，非 `sse`），
     /// 额外带 `disabled` / `autoApprove` 字段。
     pub cline_json: String,
+    /// Oh-My-Pi（`~/.pi/agent/mcp.json` 全局 / `.pi/mcp.json` 项目级）。与其它客户端的
+    /// 关键差异：字段名是 `transport`（而非 `type`），值仍为 `streamable-http`。
+    pub omp_json: String,
     /// 通用原始 JSON：一个 server entry 的纯净形式，供其它兼容客户端粘贴。
     pub generic_json: String,
     /// Claude Code CLI 一行命令：`claude mcp add --transport http <name> <url> --header ...`。
@@ -77,6 +80,17 @@ pub fn generate_client_configs(base_url: &str, token: &str) -> ClientConfigs {
         }
     });
 
+    // --- Oh-My-Pi：字段名是 transport（非 type），值仍为 streamable-http ---
+    let omp_json = serde_json::json!({
+        "mcpServers": {
+            SERVER_NAME: {
+                "transport": "streamable-http",
+                "url": mcp_url,
+                "headers": { "Authorization": auth_header }
+            }
+        }
+    });
+
     // --- 通用：单个 server entry 的纯净形式 ---
     let generic_json = serde_json::json!({
         "type": "streamable-http",
@@ -94,6 +108,7 @@ pub fn generate_client_configs(base_url: &str, token: &str) -> ClientConfigs {
         claude_code_json: pretty_json(&claude_code_json),
         cursor_json: pretty_json(&cursor_json),
         cline_json: pretty_json(&cline_json),
+        omp_json: pretty_json(&omp_json),
         generic_json: pretty_json(&generic_json),
         claude_cli,
     }
@@ -168,6 +183,18 @@ mod tests {
     }
 
     #[test]
+    fn omp_json_uses_transport_field_not_type() {
+        let cfg = generate_client_configs(BASE, TOKEN);
+        let v: serde_json::Value = serde_json::from_str(&cfg.omp_json).unwrap();
+        let entry = &v["mcpServers"]["yggdrasil"];
+        // 关键差异：字段名是 transport（非 type）。
+        assert_eq!(entry["transport"], "streamable-http");
+        assert!(entry.get("type").is_none(), "omp 配置不应含 type 字段");
+        assert_eq!(entry["url"], "https://rua.plus/mcp");
+        assert_eq!(entry["headers"]["Authorization"], format!("Bearer {TOKEN}"));
+    }
+
+    #[test]
     fn claude_cli_one_liner_contains_url_and_header() {
         let cfg = generate_client_configs(BASE, TOKEN);
         assert!(cfg.claude_cli.contains("claude mcp add --transport http"));
@@ -179,7 +206,7 @@ mod tests {
     fn all_json_is_pretty_indented() {
         let cfg = generate_client_configs(BASE, TOKEN);
         // pretty JSON 至少含一个换行 + 缩进（非单行紧凑形式）。
-        for s in [&cfg.claude_code_json, &cfg.cursor_json, &cfg.cline_json, &cfg.generic_json] {
+        for s in [&cfg.claude_code_json, &cfg.cursor_json, &cfg.cline_json, &cfg.omp_json, &cfg.generic_json] {
             assert!(s.contains('\n'), "JSON 应是 pretty-printed: {s}");
             assert!(s.contains("  "), "JSON 应含 2 空格缩进: {s}");
         }
