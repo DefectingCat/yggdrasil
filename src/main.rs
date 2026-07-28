@@ -39,6 +39,13 @@ mod hooks;
 #[cfg(feature = "server")]
 mod middleware;
 mod models;
+// mcp：Model Context Protocol 服务器（/mcp Streamable HTTP，bearer token 鉴权）。
+// 仅 server feature 编译；WASM 前端不引用任何 mcp 符号。
+// allow(dead_code)：T1 tracer bullet 仅接通 search_posts；token 管理服务端函数（T2）、
+// 完整工具集（T3-T5）、加密/解密的外部调用点在后续工单接入。
+#[cfg(feature = "server")]
+#[allow(dead_code)]
+mod mcp;
 mod pages;
 mod router;
 // sysinfo_sampler：主机指标快照。
@@ -333,7 +340,8 @@ fn main() {
                 .merge(export_route)
                 .merge(sse_route)
                 .merge(app_routes)
-                .merge(static_routes);
+                .merge(static_routes)
+                .merge(crate::mcp::router::mcp_route());
 
             // 版本头中间件置于最终合并 router 的最外层：所有端点（含 /healthz、/uploads/*、
             // 被 CSRF 拒/超时/admin_guard 重定向的响应）都会带上版本头。受 EXPOSE_VERSION_HEADERS 控制。

@@ -65,6 +65,7 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "016",
         include_str!("../../migrations/016_assets_content_hash.sql"),
     ),
+    ("017", include_str!("../../migrations/017_mcp_tokens.sql")),
     // 新增迁移在此追加，同时在 migrations/ 下创建对应 .sql 文件。
 ];
 
