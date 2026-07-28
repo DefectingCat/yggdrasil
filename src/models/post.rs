@@ -78,12 +78,17 @@ pub struct Post {
     pub next_post: Option<PostNav>,
 }
 
+/// 将时间戳格式化为展示用的 `YYYY-MM-DD` 字符串。
+///
+/// 此前 `Post::formatted_date` 与 `PostListItem::formatted_date` 各有一份逐字相同的实现。
+fn format_date(dt: DateTime<Utc>) -> String {
+    dt.format("%Y-%m-%d").to_string()
+}
+
 impl Post {
     /// 返回用于展示的文章日期：优先使用发布时间，否则回退到创建时间。
     pub fn formatted_date(&self) -> String {
-        self.published_at
-            .map(|d| d.format("%Y-%m-%d").to_string())
-            .unwrap_or_else(|| self.created_at.format("%Y-%m-%d").to_string())
+        format_date(self.published_at.unwrap_or(self.created_at))
     }
 }
 
@@ -126,9 +131,7 @@ pub struct PostListItem {
 impl PostListItem {
     /// 返回用于展示的文章日期：优先使用发布时间，否则回退到创建时间。
     pub fn formatted_date(&self) -> String {
-        self.published_at
-            .map(|d| d.format("%Y-%m-%d").to_string())
-            .unwrap_or_else(|| self.created_at.format("%Y-%m-%d").to_string())
+        format_date(self.published_at.unwrap_or(self.created_at))
     }
 
     /// 返回中文状态标签。
