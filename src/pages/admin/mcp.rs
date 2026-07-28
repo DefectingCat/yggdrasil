@@ -18,7 +18,7 @@ use dioxus::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use crate::api::mcp_tokens::{
     create_mcp_token, get_mcp_client_configs, list_mcp_tokens, reveal_mcp_token, revoke_mcp_token,
-    McpClientConfigs, TokenLifetime,
+    McpClientConfigs, McpConfigSnippet, TokenLifetime,
 };
 #[cfg(target_arch = "wasm32")]
 use crate::components::forms::{FormSelect, INPUT_CLASS};
@@ -503,12 +503,9 @@ fn ConfigCard() -> Element {
                 p { class: "text-sm text-[var(--color-paper-tertiary)] py-4 text-center", "生成配置中…" }
             } else if let Some(c) = configs() {
                 div { class: "flex flex-col gap-4",
-                    ConfigSnippet { title: "Claude Code（.mcp.json / ~/.claude.json）".to_string(), content: c.claude_code_json.clone() }
-                    ConfigSnippet { title: "Cursor（~/.cursor/mcp.json）".to_string(), content: c.cursor_json.clone() }
-                    ConfigSnippet { title: "Cline（cline_mcp_settings.json）".to_string(), content: c.cline_json.clone() }
-                    ConfigSnippet { title: "Oh-My-Pi（~/.pi/agent/mcp.json 或 .pi/mcp.json）".to_string(), content: c.omp_json.clone() }
-                    ConfigSnippet { title: "通用（单 server entry）".to_string(), content: c.generic_json.clone() }
-                    ConfigSnippet { title: "Claude Code CLI".to_string(), content: c.claude_cli.clone() }
+                    for snippet in c.snippets.iter() {
+                        ConfigSnippet { key: "{snippet.title}", snippet: snippet.clone() }
+                    }
                 }
             } else {
                 p { class: "text-sm text-[var(--color-paper-tertiary)] py-4 text-center",
@@ -522,17 +519,18 @@ fn ConfigCard() -> Element {
 /// 单个配置片段卡片（标题 + 代码块 + 复制按钮）。
 #[cfg(target_arch = "wasm32")]
 #[component]
-fn ConfigSnippet(title: String, content: String) -> Element {
+fn ConfigSnippet(snippet: McpConfigSnippet) -> Element {
     let state: McpPageState = use_context();
     let mut toast = state.toast;
+    let title = snippet.title.clone();
     rsx! {
         div { class: "flex flex-col gap-2",
             div { class: "flex items-center justify-between",
-                span { class: "text-sm font-medium text-[var(--color-paper-primary)]", "{title}" }
+                span { class: "text-sm font-medium text-[var(--color-paper-primary)]", "{snippet.title}" }
                 button {
                     class: "{BTN_PRIMARY_SM}",
                     onclick: move |_| {
-                        let cc = content.clone();
+                        let cc = snippet.content.clone();
                         let tt = title.clone();
                         spawn(async move {
                             copy_clipboard_wasm(&cc).await;
@@ -542,9 +540,13 @@ fn ConfigSnippet(title: String, content: String) -> Element {
                     "复制"
                 }
             }
-            pre {
-                class: "bg-[var(--color-paper-code-bg)] text-[var(--color-paper-primary)] rounded-lg p-3 text-xs overflow-x-auto font-mono",
-                code { "{content}" }
+            // .md-content 是 highlight.css 的作用域钩子（.md-content pre code …）；
+            // 仅包裹 pre，不触及标题/按钮，避免 prose 排式泄漏。
+            div { class: "md-content",
+                pre {
+                    class: "bg-[var(--color-paper-code-bg)] text-[var(--color-paper-primary)] rounded-lg p-3 text-xs overflow-x-auto font-mono",
+                    code { dangerous_inner_html: "{snippet.content_html}" }
+                }
             }
         }
     }

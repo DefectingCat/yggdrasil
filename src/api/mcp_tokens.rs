@@ -262,50 +262,66 @@ fn row_to_mcp_token_meta(row: &tokio_postgres::Row) -> McpToken {
     }
 }
 
-/// 4 种客户端配置 + CLI 一行命令的序列化 DTO。
+/// 单个客户端配置片段：标题 + 原始文本（供复制）+ syntect 高亮 HTML（供展示）。
 ///
-/// 由 `get_mcp_client_configs` server fn 返回。`ClientConfigs`（在 `src/mcp/config.rs`）
-/// 是 server-only（`mcp` 模块整体 `#[cfg(feature = "server")]` 门控），这里复制字段
-/// 为可两端共享的 DTO，让 WASM 前端能经 server fn 拿到配置字符串。
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct McpClientConfigs {
-    /// Claude Code（`.mcp.json` / `~/.claude.json`）。`type: "http"`（非 `streamable-http`）。
-    pub claude_code_json: String,
-    /// Cursor（`~/.cursor/mcp.json`）。不带 `type` 字段，按 URL 自动识别 streamable-http。
-    pub cursor_json: String,
-    /// Cline（`cline_mcp_settings.json`）。
-    pub cline_json: String,
-    /// Oh-My-Pi（`~/.pi/agent/mcp.json` / `.pi/mcp.json`）。字段名 `transport`，非 `type`。
-    pub omp_json: String,
-    /// 通用原始 JSON（单 server entry）。
-    pub generic_json: String,
-    /// Claude Code CLI 一行命令。
-    pub claude_cli: String,
+/// 高亮 HTML 由 `crate::highlight::server::highlight_code` 生成（spaced CSS class 风格，
+/// 配合 `public/highlight.css`）；前端需将其置于 `.md-content pre code` 作用域下，
+/// 否则高亮 CSS 选择器不匹配（见 `src/bin/generate_highlight_css.rs` 的 base 重写）。
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct McpConfigSnippet {
+    /// 显示标题（含客户端名与目标文件路径）。
+    pub title: String,
+    /// 原始配置文本（供「复制」按钮复制，未高亮）。
+    pub content: String,
+    /// syntect 高亮后的 HTML（`<span>` 序列，无 `<pre>/<code>` 外壳）。
+    pub content_html: String,
 }
 
-/// 根据明文令牌生成 4 种客户端配置 + CLI 一行命令。
+/// 各客户端 MCP 配置片段集合。
 ///
-/// 配置生成在服务端完成（`crate::mcp::config` 是 server-only 模块），返回给前端展示。
-/// `APP_BASE_URL` 环境变量也只在服务端读取。仅 admin。
+/// 由 `get_mcp_client_configs` server fn 返回。`ClientConfigs`（在 `src/mcp/config.rs`）
+/// 是 server-only（`mcp` 模块整体 `#[cfg(feature = "server")]` 门控）；这里把每个片段的
+/// 原始文本与高亮 HTML 打包为可两端共享的 DTO，让 WASM 前端单次请求即可渲染带高亮的配置块。
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct McpClientConfigs {
+    /// 有序配置片段（标题、原始文本、高亮 HTML）。
+    pub snippets: Vec<McpConfigSnippet>,
+}
+
+/// 根据明文令牌生成各客户端配置片段（含 syntect 高亮 HTML）。
+///
+/// 配置生成与高亮均在服务端完成（`crate::mcp::config` / `crate::highlight` 均为
+/// server-only），返回给前端展示。`APP_BASE_URL` 环境变量也只在服务端读取。仅 admin。
 #[server]
 pub async fn get_mcp_client_configs(token: String) -> Result<McpClientConfigs, ServerFnError> {
     #[cfg(feature = "server")]
     {
         use crate::api::auth::get_current_admin_user;
+        use crate::highlight::server::highlight_code;
 
         let _admin = get_current_admin_user().await?;
-        let configs = crate::mcp::config::generate_client_configs(
+        let c = crate::mcp::config::generate_client_configs(
             &crate::mcp::config::base_url_from_env(),
             &token,
         );
-        Ok(McpClientConfigs {
-            claude_code_json: configs.claude_code_json,
-            cursor_json: configs.cursor_json,
-            cline_json: configs.cline_json,
-            omp_json: configs.omp_json,
-            generic_json: configs.generic_json,
-            claude_cli: configs.claude_cli,
-        })
+        // (标题, 内容, 语言)：JSON 配置用 json 语法高亮，CLI 一行命令用 bash。
+        let entries: [(&str, String, &str); 6] = [
+            ("Claude Code（.mcp.json / ~/.claude.json）", c.claude_code_json, "json"),
+            ("Cursor（~/.cursor/mcp.json）", c.cursor_json, "json"),
+            ("Cline（cline_mcp_settings.json）", c.cline_json, "json"),
+            ("Oh-My-Pi（~/.pi/agent/mcp.json 或 .pi/mcp.json）", c.omp_json, "json"),
+            ("通用（单 server entry）", c.generic_json, "json"),
+            ("Claude Code CLI", c.claude_cli, "bash"),
+        ];
+        let snippets = entries
+            .into_iter()
+            .map(|(title, content, lang)| McpConfigSnippet {
+                title: title.to_string(),
+                content_html: highlight_code(&content, Some(lang)),
+                content,
+            })
+            .collect();
+        Ok(McpClientConfigs { snippets })
     }
     #[cfg(not(feature = "server"))]
     unreachable!()

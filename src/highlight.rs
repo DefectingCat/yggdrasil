@@ -508,4 +508,36 @@ const message = ref('Hello Vue!')
         let by_ts = highlight_code(code, Some("ts"));
         assert_eq!(result, by_ts);
     }
+
+    #[test]
+    fn highlight_code_json_produces_spans() {
+        // MCP 客户端配置页的 JSON 片段经此路径高亮；验证 json 解析为彩色语法而非纯文本。
+        let code = r#"{"mcpServers": {"yggdrasil": {"type": "http"}}}"#;
+        let result = highlight_code(code, Some("json"));
+        assert!(
+            result.contains("<span"),
+            "json 应触发语法高亮, got: {}",
+            result
+        );
+        assert!(
+            !result.contains(r#"<span class="text plain">"#),
+            "json 不应回退纯文本: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn highlight_code_bash_alias_produces_spans() {
+        // MCP 客户端配置页的 CLI 一行命令经 bash 别名高亮。
+        let code = "claude mcp add --transport http yggdrasil https://example.com/mcp";
+        let result = highlight_code(code, Some("bash"));
+        assert!(
+            result.contains("<span"),
+            "bash 别名应触发语法高亮, got: {}",
+            result
+        );
+        // bash 别名与直接传 sh 的输出须一致（别名表 "bash" -> "sh"）。
+        let by_sh = highlight_code(code, Some("sh"));
+        assert_eq!(result, by_sh);
+    }
 }
