@@ -79,6 +79,7 @@ pub fn get_session_from_ctx() -> Option<String> {
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use super::*;
+    use sha2::Digest; // hash_token_known_value 用 Sha256::digest 校验已知值
 
     #[test]
     fn parse_session_found() {
