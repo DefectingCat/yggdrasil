@@ -11,6 +11,10 @@ use tokio::time::interval;
 const CACHE_DIR: &str = "uploads/.cache";
 const BYTES_PER_MB: u64 = 1024 * 1024;
 const SECS_PER_HOUR: u64 = 3600;
+/// 保留期上限（小时）：防止误配极大值导致 `max_age_hours * SECS_PER_HOUR` 溢出，
+/// 或 `now - max_age` 在 SystemTime 上下溢 panic（release `panic="abort"` 会直接
+/// 崩溃整个进程，而非单次清理失败）。10 年对图片磁盘缓存已远超合理范围。
+const MAX_AGE_HOURS_CAP: u64 = 87_600; // 10 年
 
 /// 启动图片磁盘缓存清理循环，每小时触发一次。
 pub async fn run_cleanup() {
@@ -57,9 +61,14 @@ pub async fn cleanup_image_cache_at(
         return Ok((Vec::new(), 0));
     }
 
-    let max_age = Duration::from_secs(max_age_hours * SECS_PER_HOUR);
+    // C5 防护：clamp 上限防止乘法溢出；saturating_mul 双保险；checked_sub 防 SystemTime
+    // 下溢 panic（极端配置/时钟回拨时 max_age 可能超过 now 距 UNIX_EPOCH 的时长）。
+    let max_age_hours = max_age_hours.min(MAX_AGE_HOURS_CAP);
+    let max_age = Duration::from_secs(max_age_hours.saturating_mul(SECS_PER_HOUR));
     let now = SystemTime::now();
-    let cutoff = now - max_age;
+    let cutoff = now
+        .checked_sub(max_age)
+        .unwrap_or(SystemTime::UNIX_EPOCH);
 
     let mut entries: Vec<(PathBuf, u64, SystemTime)> = Vec::new();
     collect_files(base, &mut entries).await?;
@@ -240,6 +249,25 @@ mod tests {
         let (deleted, _freed) = cleanup_image_cache_at(&dir, 1024, 0).await.unwrap();
         assert_eq!(deleted.len(), 1);
         assert!(!nested.exists());
+
+        tokio::fs::remove_dir_all(&dir).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn cleanup_with_huge_max_age_does_not_panic() {
+        // C5 回归：极大保留期不得导致 u64 乘法溢出或 SystemTime 下溢 panic。
+        // 旧代码 `max_age_hours * SECS_PER_HOUR` 在 debug 溢出 panic、release 回绕；
+        // 回绕后的巨大 max_age 又使 `now - max_age` 下溢 panic（panic="abort" 崩进程）。
+        let dir = temp_cache_dir();
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let recent = dir.join("recent.dat");
+        tokio::fs::write(&recent, b"recent").await.unwrap();
+
+        // u64::MAX 小时：未加防护时会溢出/下溢；加防护后被 clamp 到 10 年上限，
+        // recent 文件（刚写入）应保留。
+        let (deleted, _freed) = cleanup_image_cache_at(&dir, 1024, u64::MAX).await.unwrap();
+        assert!(deleted.is_empty(), "巨大 max_age 不应删除任何文件, got: {deleted:?}");
+        assert!(recent.exists());
 
         tokio::fs::remove_dir_all(&dir).await.unwrap();
     }
