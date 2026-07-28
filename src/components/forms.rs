@@ -11,8 +11,11 @@ pub const INPUT_CLASS: &str = "w-full px-4 py-2 border border-paper-border round
 pub const BUTTON_PRIMARY_CLASS: &str = "w-full py-2.5 px-4 bg-paper-accent text-white font-medium rounded-full hover:brightness-110 active:scale-[0.98] transition-all duration-200 cursor-pointer";
 
 /// FormSelect 实例 id 计数器（跨泛型单例化全局唯一）。
-#[allow(dead_code)] // server 构建下仅被 dead 的 FormSelect 组件体引用
 static FORM_SELECT_ID: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// FormSelect 紧凑触发器样式：工具栏内联小下拉（自动刷新、导出格式等）。
+/// 自动宽度 + text-sm + 小圆角，chevron 与面板样式与默认表单款一致。
+pub const FORM_SELECT_COMPACT_CLASS: &str = "inline-flex w-auto cursor-pointer select-none text-left text-sm pl-3 pr-8 py-1 border border-paper-border rounded-lg bg-paper-theme text-paper-primary focus:outline-none focus:border-paper-accent focus:ring-1 focus:ring-paper-accent/30 transition-colors duration-200";
 
 /// 面板应向上展开的条件：视口下方空间不足，且上方空间比下方更宽余。
 ///
@@ -27,7 +30,6 @@ fn should_flip(trigger_top: f64, trigger_bottom: f64, viewport_height: f64, pane
 }
 
 /// 键盘导航的循环索引：在 `len` 个选项中从 `cur` 移动 `delta`（±1），越界回绕。
-#[allow(dead_code)] // 同 should_flip
 fn wrap_index(cur: usize, delta: i32, len: usize) -> usize {
     if len == 0 {
         return 0;
@@ -101,12 +103,19 @@ pub fn FormSelect<T: Clone + PartialEq + 'static>(
     value: T,
     options: Vec<(T, &'static str)>,
     onchange: EventHandler<T>,
+    /// 触发器样式覆盖：缺省为全宽表单款；工具栏内联场景传
+    /// [`FORM_SELECT_COMPACT_CLASS`]，或自定义类串（如编辑器底部胶囊）。
+    #[props(default)]
+    trigger_class: Option<&'static str>,
 ) -> Element {
-    // 触发器样式与 INPUT_CLASS 同族（右侧 pr-10 预留 chevron 位）；面板与
-    // POPOVER_PANEL_CLASS 同源（卡片化圆角 + 阴影）。定义在函数体内：当前仅
-    // wasm 端后台页面使用本组件，模块级常量在 server 构建下会触发 dead_code。
+    // 面板与 POPOVER_PANEL_CLASS 同源（卡片化圆角 + 阴影）。宽度取 max(触发器,
+    // 最长选项)：紧凑触发器（如“手动”）下面板仍能完整展示长选项；上限防出屏。
+    // 定义在函数体内：模块级私有常量若仅被 wasm 门控调用点引用，会在 server
+    // 构建下触发 dead_code。
     const TRIGGER_CLASS: &str = "w-full block cursor-pointer truncate select-none text-left pl-4 pr-10 py-2 border border-paper-border rounded-2xl bg-paper-entry text-paper-primary focus:outline-none focus:border-paper-accent focus:ring-1 focus:ring-paper-accent/30 transition-colors duration-200";
-    const PANEL_CLASS: &str = "absolute inset-x-0 z-50 max-h-60 overflow-y-auto rounded-2xl border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] p-1.5 shadow-lg animate-select-enter";
+    const PANEL_CLASS: &str = "absolute left-0 z-50 w-max min-w-full max-w-[calc(100vw_-_2rem)] max-h-60 overflow-y-auto rounded-2xl border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] p-1.5 shadow-lg animate-select-enter";
+
+    let trigger_cls = trigger_class.unwrap_or(TRIGGER_CLASS);
 
     let id_prefix = use_hook(|| FORM_SELECT_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
 
@@ -179,7 +188,7 @@ pub fn FormSelect<T: Clone + PartialEq + 'static>(
             button {
                 id: "{trigger_id}",
                 r#type: "button",
-                class: "{TRIGGER_CLASS}",
+                class: "{trigger_cls}",
                 aria_haspopup: "listbox",
                 aria_expanded: "{open()}",
                 aria_activedescendant: active_descendant,

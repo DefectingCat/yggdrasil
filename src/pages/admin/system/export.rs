@@ -2,6 +2,7 @@
 
 use dioxus::prelude::*;
 
+use crate::components::forms::{FORM_SELECT_COMPACT_CLASS, FormSelect};
 use crate::components::ui::BTN_PRIMARY_SM;
 
 /// 数据导出 tab：按表/按查询导出 SQL/CSV，走 Axum 流式下载。
@@ -96,12 +97,14 @@ pub(super) fn ExportTab() -> Element {
                 div { class: "flex flex-wrap items-center gap-4",
                     div { class: "flex items-center gap-2",
                         span { class: "text-sm text-paper-secondary", "格式" }
-                        select {
-                            class: "text-sm border border-paper-border rounded px-2 py-1 bg-paper-theme text-paper-primary",
-                            value: "{format}",
-                            onchange: move |e| format.set(e.value()),
-                            option { value: "csv", "CSV" }
-                            option { value: "sql", "SQL (INSERT)" }
+                        FormSelect {
+                            trigger_class: Some(FORM_SELECT_COMPACT_CLASS),
+                            value: format(),
+                            options: vec![
+                                ("csv".to_string(), "CSV"),
+                                ("sql".to_string(), "SQL (INSERT)"),
+                            ],
+                            onchange: move |v| format.set(v),
                         }
                     }
                     label { class: "flex items-center gap-1 text-sm text-paper-secondary",

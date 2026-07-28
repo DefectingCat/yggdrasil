@@ -2,11 +2,21 @@
 
 use dioxus::prelude::*;
 
+use crate::components::forms::{FORM_SELECT_COMPACT_CLASS, FormSelect};
 use crate::components::skeletons::atoms::SkeletonBox;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::ui::LoadingButton;
 
 use super::format_bytes;
+
+/// 自动刷新间隔可选项（秒；None = 手动）。
+const REFRESH_INTERVAL_OPTIONS: &[(Option<u32>, &str)] = &[
+    (None, "手动"),
+    (Some(1), "1s"),
+    (Some(2), "2s"),
+    (Some(5), "5s"),
+    (Some(30), "30s"),
+];
 
 /// 数据库状态 tab：概览卡片 + 表清单 + 索引 Top + 活跃连接。
 /// 手动刷新按钮 + 自动刷新开关（1s/2s/5s/30s/手动，默认手动）。
@@ -136,27 +146,11 @@ pub(super) fn DbStatusTab() -> Element {
                 }
                 div { class: "flex items-center gap-2",
                     span { class: "text-sm text-paper-secondary", "自动刷新" }
-                    select {
-                        class: "text-sm border border-paper-border rounded px-2 py-1 bg-paper-theme text-paper-primary",
-                        value: "{refresh_interval().map(|s| s.to_string()).unwrap_or_default()}",
-                        onchange: move |e| {
-                            let v = e.value();
-                            refresh_interval
-                                .set(
-                                    match v.as_str() {
-                                        "1" => Some(1),
-                                        "2" => Some(2),
-                                        "5" => Some(5),
-                                        "30" => Some(30),
-                                        _ => None,
-                                    },
-                                );
-                        },
-                        option { value: "", "手动" }
-                        option { value: "1", "1s" }
-                        option { value: "2", "2s" }
-                        option { value: "5", "5s" }
-                        option { value: "30", "30s" }
+                    FormSelect {
+                        trigger_class: Some(FORM_SELECT_COMPACT_CLASS),
+                        value: refresh_interval(),
+                        options: REFRESH_INTERVAL_OPTIONS.to_vec(),
+                        onchange: move |v| refresh_interval.set(v),
                     }
                 }
             }

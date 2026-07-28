@@ -2,6 +2,7 @@
 
 use dioxus::prelude::*;
 
+use crate::components::forms::{FORM_SELECT_COMPACT_CLASS, FormSelect};
 use crate::components::skeletons::atoms::SkeletonBox;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::ui::LoadingButton;
@@ -23,6 +24,15 @@ fn format_uptime(secs: u64) -> String {
         format!("{secs}s")
     }
 }
+/// 自动刷新间隔可选项（毫秒；None = 手动）。
+const REFRESH_MS_OPTIONS: &[(Option<u32>, &str)] = &[
+    (None, "手动"),
+    (Some(500), "500ms"),
+    (Some(1000), "1s"),
+    (Some(2000), "2s"),
+    (Some(5000), "5s"),
+];
+
 /// 服务器状态 tab：应用内指标（连接池/会话/缓存命中率）+ 主机层（CPU/内存/磁盘）。
 /// 手动刷新 + 自动刷新开关（500ms/1s/2s/5s/手动，默认手动）。
 /// 主机层数据由后台 500ms 采样，前端轮询只读快照零成本，故可高频。
@@ -158,27 +168,11 @@ pub(super) fn ServerStatusTab() -> Element {
                 }
                 div { class: "flex items-center gap-2",
                     span { class: "text-sm text-paper-secondary", "自动刷新" }
-                    select {
-                        class: "text-sm border border-paper-border rounded px-2 py-1 bg-paper-theme text-paper-primary",
-                        value: "{refresh_ms().map(|s| s.to_string()).unwrap_or_default()}",
-                        onchange: move |e| {
-                            let v = e.value();
-                            refresh_ms
-                                .set(
-                                    match v.as_str() {
-                                        "500" => Some(500),
-                                        "1000" => Some(1000),
-                                        "2000" => Some(2000),
-                                        "5000" => Some(5000),
-                                        _ => None,
-                                    },
-                                );
-                        },
-                        option { value: "", "手动" }
-                        option { value: "500", "500ms" }
-                        option { value: "1000", "1s" }
-                        option { value: "2000", "2s" }
-                        option { value: "5000", "5s" }
+                    FormSelect {
+                        trigger_class: Some(FORM_SELECT_COMPACT_CLASS),
+                        value: refresh_ms(),
+                        options: REFRESH_MS_OPTIONS.to_vec(),
+                        onchange: move |v| refresh_ms.set(v),
                     }
                 }
             }

@@ -17,6 +17,7 @@ use crate::api::posts::{
 #[cfg(target_arch = "wasm32")]
 use crate::tiptap_bridge::{consume_upload_event, upload_image_file, EditorHandle};
 // 共享上传状态类型：两端都编译（rsx 在 server SSR 时也要渲染这些结构）。
+use crate::components::forms::FormSelect;
 use crate::components::ui::{LoadingButton, BTN_CLOSE_ICON, BTN_PRIMARY_SM};
 use crate::components::write_skeleton::WriteSkeleton;
 use crate::models::post::Post;
@@ -549,33 +550,15 @@ fn write_editor(post_id: Option<i32>) -> Element {
                     "取消"
                 }
                 div { class: "w-px h-5 bg-[var(--color-paper-border)]" }
-                div { class: "relative inline-flex items-center px-4 py-2 rounded-full text-sm font-medium text-[var(--color-paper-secondary)] border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] cursor-pointer hover:bg-[var(--color-paper-theme)] transition-colors",
-                    select {
-                        class: "absolute inset-0 w-full h-full opacity-0 cursor-pointer",
-                        style: "appearance: none; -webkit-appearance: none;",
-                        value: "{status}",
-                        onchange: move |evt| status.set(evt.value()),
-                        option { value: "draft", "存为草稿" }
-                        option { value: "published", "直接发布" }
-                    }
-                    span { class: "pr-2 text-[var(--color-paper-primary)]",
-                        if status() == "draft" {
-                            "存为草稿"
-                        } else {
-                            "直接发布"
-                        }
-                    }
-                    svg {
-                        class: "h-3.5 w-3.5 text-[var(--color-paper-tertiary)] pointer-events-none",
-                        xmlns: "http://www.w3.org/2000/svg",
-                        view_box: "0 0 20 20",
-                        fill: "currentColor",
-                        path {
-                            fill_rule: "evenodd",
-                            d: "M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z",
-                            clip_rule: "evenodd",
-                        }
-                    }
+                // 文章状态下拉（胶囊触发器；贴底栏，面板自动向上展开）
+                FormSelect {
+                    trigger_class: Some("inline-flex w-auto cursor-pointer select-none text-left text-sm font-medium pl-4 pr-8 py-2 rounded-full border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] hover:bg-[var(--color-paper-theme)] focus:outline-none focus:border-paper-accent focus:ring-1 focus:ring-paper-accent/30 transition-colors duration-200"),
+                    value: status(),
+                    options: vec![
+                        ("draft".to_string(), "存为草稿"),
+                        ("published".to_string(), "直接发布"),
+                    ],
+                    onchange: move |v| status.set(v),
                 }
                 div { class: "w-px h-5 bg-[var(--color-paper-border)]" }
                 LoadingButton {
