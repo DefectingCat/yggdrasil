@@ -314,7 +314,7 @@ pub fn FormSelect<T: Clone + PartialEq + 'static>(
 /// - `r#type`：input 类型（如 `"text"`、`"email"`、`"password"`）
 /// - `placeholder`：占位提示文本
 /// - `value`：当前值
-/// - `disabled`：是否禁用
+/// - `disabled`：是否禁用（可选，缺省 `false`）
 /// - `oninput`：输入事件回调，返回新的字符串值
 /// - `onkeydown`：可选的键盘事件回调
 #[component]
@@ -323,8 +323,10 @@ pub fn FormInput(
     r#type: &'static str,
     placeholder: &'static str,
     value: String,
+    #[props(default)]
     disabled: bool,
     oninput: EventHandler<String>,
+    #[props(default)]
     onkeydown: Option<EventHandler<KeyboardEvent>>,
 ) -> Element {
     let disabled_class = if disabled {

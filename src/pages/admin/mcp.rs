@@ -21,7 +21,7 @@ use crate::api::mcp_tokens::{
     McpClientConfigs, McpConfigSnippet, TokenLifetime,
 };
 #[cfg(target_arch = "wasm32")]
-use crate::components::forms::{FormSelect, INPUT_CLASS};
+use crate::components::forms::{FormInput, FormSelect};
 #[cfg(target_arch = "wasm32")]
 use crate::components::skeletons::atoms::SkeletonBox;
 #[cfg(target_arch = "wasm32")]
@@ -427,12 +427,11 @@ fn CreateTokenCard() -> Element {
                 // 名称
                 div { class: "flex flex-col gap-2",
                     label { class: "text-sm font-medium text-[var(--color-paper-secondary)]", "名称" }
-                    input {
-                        class: "{INPUT_CLASS}",
+                    FormInput {
                         r#type: "text",
                         placeholder: "如 claude-code-macbook",
-                        value: "{name()}",
-                        oninput: move |e| name.set(e.value()),
+                        value: name(),
+                        oninput: move |v: String| name.set(v),
                     }
                 }
                 // 作用域
@@ -542,12 +541,11 @@ fn ConfigCard() -> Element {
 
             div { class: "flex flex-col gap-2",
                 label { class: "text-sm font-medium text-[var(--color-paper-secondary)]", "令牌明文" }
-                input {
-                    class: "{INPUT_CLASS}",
+                FormInput {
                     r#type: "text",
                     placeholder: "ygg_...",
-                    value: "{manual_token()}",
-                    oninput: move |e| on_manual_input(e.value()),
+                    value: manual_token(),
+                    oninput: move |v: String| on_manual_input(v),
                 }
             }
 
