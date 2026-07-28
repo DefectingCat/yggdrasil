@@ -452,7 +452,6 @@ fn ConfigCard() -> Element {
     use_effect(move || {
         let token = config_token();
         let Some(t) = token else { return; };
-        if loading() { return; }
         loading.set(true);
         manual_token.set(t.clone());
         spawn(async move {
