@@ -15,7 +15,6 @@ use axum::body::Body;
 use axum::http::{HeaderMap, Request, StatusCode};
 use axum::middleware::Next;
 use axum::response::Response;
-use sha2::Digest;
 
 use crate::db::pool::get_conn;
 use crate::models::mcp_token::TokenScope;
