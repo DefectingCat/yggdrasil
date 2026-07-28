@@ -55,10 +55,10 @@ const LIFETIME_OPTIONS: &[(TokenLifetime, &str)] = &[
 /// 而非千篇一律的等高块。
 #[cfg(target_arch = "wasm32")]
 const CONFIG_SKELETON_SHAPES: &[(&str, &str)] = &[
+    ("width: 320px;", "height: 152px;"), // Oh-My-Pi JSON
     ("width: 260px;", "height: 168px;"), // Claude Code JSON
     ("width: 200px;", "height: 136px;"), // Cursor JSON
     ("width: 220px;", "height: 168px;"), // Cline JSON
-    ("width: 320px;", "height: 152px;"), // Oh-My-Pi JSON
     ("width: 160px;", "height: 104px;"), // 通用 JSON
     ("width: 140px;", "height: 56px;"),  // CLI 一行命令
 ];
