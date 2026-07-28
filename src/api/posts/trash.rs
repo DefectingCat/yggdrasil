@@ -76,17 +76,9 @@ pub async fn restore_post(post_id: i32) -> Result<CreatePostResponse, ServerFnEr
 
         tx.commit().await.map_err(AppError::tx)?;
 
-        // 精准失效：列表、标签云、统计、旧 slug 与新 slug、相关标签文章。
-        crate::cache::invalidate_post_metadata();
-        crate::cache::invalidate_post_by_slug(&current_slug).await;
-        crate::cache::invalidate_post_by_slug(&new_slug).await;
-        crate::cache::invalidate_tag_posts_for(&tags).await;
-
-        // SSR：回收站操作影响详情页与所有列表页（含归档）。
-        crate::ssr_cache::invalidate_ssr_route(&format!("/post/{current_slug}"));
-        crate::ssr_cache::invalidate_ssr_route(&format!("/post/{new_slug}"));
-        crate::ssr_cache::invalidate_ssr_all_public();
-        crate::ssr_cache::bump_global_generation();
+        // 精准失效：列表、标签云、统计、旧/新 slug 与相关标签文章（moka + SSR）。
+        let restore_slugs = [current_slug, new_slug.clone()];
+        crate::cache::invalidate_for_post_write(&restore_slugs, &tags).await;
 
         Ok(CreatePostResponse::ok(
             "恢复成功".to_string(),
@@ -151,15 +143,8 @@ pub async fn purge_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErro
 
         tx.commit().await.map_err(AppError::tx)?;
 
-        // 精准失效相关缓存。
-        crate::cache::invalidate_post_metadata();
-        crate::cache::invalidate_post_by_slug(&slug).await;
-        crate::cache::invalidate_tag_posts_for(&tags).await;
-
-        // SSR：彻底删除影响详情页与所有列表页。
-        crate::ssr_cache::invalidate_ssr_route(&format!("/post/{slug}"));
-        crate::ssr_cache::invalidate_ssr_all_public();
-        crate::ssr_cache::bump_global_generation();
+        // 精准失效相关缓存（moka + SSR）。
+        crate::cache::invalidate_for_post_write(std::slice::from_ref(&slug), &tags).await;
 
         Ok(CreatePostResponse::ok(
             "彻底删除成功".to_string(),
@@ -240,19 +225,17 @@ pub async fn batch_restore_posts(post_ids: Vec<i32>) -> Result<CreatePostRespons
         tx.commit().await.map_err(AppError::tx)?;
 
         if use_precise {
-            // 精准失效：先去重 slug，再统一失效列表/标签云/统计/标签文章。
-            let unique_slugs: std::collections::HashSet<String> =
-                affected_slugs.into_iter().collect();
-            crate::cache::invalidate_post_metadata();
-            for slug in &unique_slugs {
-                crate::cache::invalidate_post_by_slug(slug).await;
-            }
-            crate::cache::invalidate_tag_posts_for(&affected_tags.into_iter().collect::<Vec<_>>())
-                .await;
-
-            // SSR：批量恢复影响多篇文章的列表项，全量失效。
-            crate::ssr_cache::invalidate_ssr_all_public();
-            crate::ssr_cache::bump_global_generation();
+            // 精准失效：先去重 slug，再统一失效列表/标签云/统计/单篇/SSR。
+            let unique_slugs: Vec<String> = affected_slugs
+                .into_iter()
+                .collect::<std::collections::HashSet<_>>()
+                .into_iter()
+                .collect();
+            crate::cache::invalidate_for_post_write(
+                &unique_slugs,
+                &affected_tags.into_iter().collect::<Vec<_>>(),
+            )
+            .await;
         } else {
             // 影响集过大时回退到全量失效，避免大量串行缓存操作。
             crate::cache::invalidate_all_post_caches();
@@ -332,19 +315,8 @@ pub async fn batch_purge_posts(post_ids: Vec<i32>) -> Result<CreatePostResponse,
         tx.commit().await.map_err(AppError::tx)?;
 
         if use_precise {
-            crate::cache::invalidate_post_metadata();
-            for slug in &slugs {
-                crate::cache::invalidate_post_by_slug(slug).await;
-            }
-            crate::cache::invalidate_tag_posts_for(&tags).await;
-
-            // M5 修复：批量彻底删除影响详情页与所有列表页，须物理失效 SSR 缓存
-            // （仅 bump_global_generation 只是观测指标，不真正失效 Dioxus 0.7 SSR 缓存）。
-            for slug in &slugs {
-                crate::ssr_cache::invalidate_ssr_route(&format!("/post/{slug}"));
-            }
-            crate::ssr_cache::invalidate_ssr_all_public();
-            crate::ssr_cache::bump_global_generation();
+            // 精准失效（M5：批量删除影响详情页与所有列表页，逐 slug 物理失效 SSR + 全量公开页）。
+            crate::cache::invalidate_for_post_write(&slugs, &tags).await;
         } else {
             // 影响集过大时回退到全量失效，避免大量串行缓存操作。
             crate::cache::invalidate_all_post_caches();
@@ -413,19 +385,8 @@ pub async fn empty_trash() -> Result<CreatePostResponse, ServerFnError> {
         tx.commit().await.map_err(AppError::tx)?;
 
         if use_precise {
-            crate::cache::invalidate_post_metadata();
-            for slug in &slugs {
-                crate::cache::invalidate_post_by_slug(slug).await;
-            }
-            crate::cache::invalidate_tag_posts_for(&tags).await;
-
-            // M5 修复：清空回收站影响详情页与所有列表页，须物理失效 SSR 缓存
-            // （仅 bump_global_generation 只是观测指标，不真正失效 Dioxus 0.7 SSR 缓存）。
-            for slug in &slugs {
-                crate::ssr_cache::invalidate_ssr_route(&format!("/post/{slug}"));
-            }
-            crate::ssr_cache::invalidate_ssr_all_public();
-            crate::ssr_cache::bump_global_generation();
+            // 精准失效（M5：清空回收站影响详情页与所有列表页，逐 slug 物理失效 SSR + 全量公开页）。
+            crate::cache::invalidate_for_post_write(&slugs, &tags).await;
         } else {
             // 影响集过大时回退到全量失效，避免大量串行缓存操作。
             crate::cache::invalidate_all_post_caches();

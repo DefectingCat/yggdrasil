@@ -66,15 +66,8 @@ pub async fn delete_post(post_id: i32) -> Result<CreatePostResponse, ServerFnErr
 
         tx.commit().await.map_err(AppError::tx)?;
 
-        // 删除后按影响范围精准失效缓存。
-        crate::cache::invalidate_post_metadata();
-        crate::cache::invalidate_post_by_slug(&slug).await;
-        crate::cache::invalidate_tag_posts_for(&tags).await;
-
-        // SSR：删除影响详情页（变 404）与所有列表页。
-        crate::ssr_cache::invalidate_ssr_route(&format!("/post/{slug}"));
-        crate::ssr_cache::invalidate_ssr_all_public();
-        crate::ssr_cache::bump_global_generation();
+        // 删除后按影响范围精准失效缓存（moka + SSR）。
+        crate::cache::invalidate_for_post_write(std::slice::from_ref(&slug), &tags).await;
 
         Ok(CreatePostResponse::ok(
             "删除成功".to_string(),
