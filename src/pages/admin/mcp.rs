@@ -21,7 +21,7 @@ use crate::api::mcp_tokens::{
     McpClientConfigs, TokenLifetime,
 };
 #[cfg(target_arch = "wasm32")]
-use crate::components::forms::INPUT_CLASS;
+use crate::components::forms::{FormSelect, INPUT_CLASS};
 #[cfg(target_arch = "wasm32")]
 use crate::components::ui::{
     ADMIN_CARD_CLASS, ADMIN_TABLE_CLASS, BADGE_BASE, BTN_PRIMARY, BTN_PRIMARY_SM, BTN_TEXT_RED,
@@ -386,39 +386,19 @@ fn CreateTokenCard() -> Element {
                 // 作用域
                 div { class: "flex flex-col gap-2",
                     label { class: "text-sm font-medium text-[var(--color-paper-secondary)]", "作用域" }
-                    select {
-                        class: "{INPUT_CLASS}",
-                        onchange: move |e| {
-                            if let Some(s) = SCOPE_OPTIONS
-                                .iter()
-                                .find(|(_, label)| *label == e.value().as_str())
-                                .map(|(s, _)| *s)
-                            {
-                                scope.set(s);
-                            }
-                        },
-                        for (s, label) in SCOPE_OPTIONS {
-                            option { value: "{label}", selected: *s == scope(), "{label}" }
-                        }
+                    FormSelect {
+                        value: scope(),
+                        options: SCOPE_OPTIONS.to_vec(),
+                        onchange: move |s| scope.set(s),
                     }
                 }
                 // 有效期
                 div { class: "flex flex-col gap-2",
                     label { class: "text-sm font-medium text-[var(--color-paper-secondary)]", "有效期" }
-                    select {
-                        class: "{INPUT_CLASS}",
-                        onchange: move |e| {
-                            if let Some(l) = LIFETIME_OPTIONS
-                                .iter()
-                                .find(|(_, label)| *label == e.value().as_str())
-                                .map(|(l, _)| *l)
-                            {
-                                lifetime.set(l);
-                            }
-                        },
-                        for (l, label) in LIFETIME_OPTIONS {
-                            option { value: "{label}", selected: *l == lifetime(), "{label}" }
-                        }
+                    FormSelect {
+                        value: lifetime(),
+                        options: LIFETIME_OPTIONS.to_vec(),
+                        onchange: move |l| lifetime.set(l),
                     }
                 }
             }
