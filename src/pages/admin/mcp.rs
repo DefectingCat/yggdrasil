@@ -25,6 +25,8 @@ use crate::components::forms::{FormSelect, INPUT_CLASS};
 #[cfg(target_arch = "wasm32")]
 use crate::components::skeletons::atoms::SkeletonBox;
 #[cfg(target_arch = "wasm32")]
+use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
+#[cfg(target_arch = "wasm32")]
 use crate::components::ui::{
     ADMIN_CARD_CLASS, ADMIN_TABLE_CLASS, BADGE_BASE, BTN_PRIMARY, BTN_PRIMARY_SM, BTN_TEXT_RED,
 };
@@ -158,6 +160,7 @@ fn TokenList() -> Element {
     let mut state: McpPageState = use_context();
     let mut tokens = use_signal(|| Vec::<McpTokenSummary>::new());
     let mut loaded_gen = use_signal(|| None::<u32>);
+    let mut loading = use_signal(|| true);
 
     let reload_gen = state.reload_gen;
     let mut toast = state.toast;
@@ -172,6 +175,7 @@ fn TokenList() -> Element {
                     Ok(list) => tokens.set(list),
                     Err(e) => toast.set(Some((format!("加载失败：{e}"), true))),
                 }
+                loading.set(false);
             });
         }
     });
@@ -231,8 +235,39 @@ fn TokenList() -> Element {
                 }
             }
 
-            // 表格
-            if tokens().is_empty() {
+            // 表格区：首次加载（loading 且无数据）显示骨架屏，加载后无数据显示空态，否则显示表格。
+            if loading() && tokens().is_empty() {
+                DelayedSkeleton {
+                    div { class: "{ADMIN_TABLE_CLASS}",
+                        table { class: "w-full text-sm",
+                            thead {
+                                tr { class: "bg-[var(--color-paper-theme)]/50",
+                                    th { class: "px-4 py-3", SkeletonBox { class: "h-3 w-10" } }
+                                    th { class: "px-4 py-3", SkeletonBox { class: "h-3 w-8" } }
+                                    th { class: "px-4 py-3", SkeletonBox { class: "h-3 w-8" } }
+                                    th { class: "px-4 py-3", SkeletonBox { class: "h-3 w-8" } }
+                                    th { class: "px-4 py-3", SkeletonBox { class: "h-3 w-12" } }
+                                    th { class: "px-4 py-3", SkeletonBox { class: "h-3 w-8" } }
+                                    th { class: "px-4 py-3", SkeletonBox { class: "h-3 w-10 ml-auto" } }
+                                }
+                            }
+                            tbody {
+                                for _ in 0..4 {
+                                    tr { class: "border-b border-[var(--color-paper-border)] last:border-b-0",
+                                        td { class: "px-4 py-3", SkeletonBox { class: "h-4 w-28" } }
+                                        td { class: "px-4 py-3", SkeletonBox { class: "h-4 w-12" } }
+                                        td { class: "px-4 py-3", SkeletonBox { class: "h-4 w-16" } }
+                                        td { class: "px-4 py-3", SkeletonBox { class: "h-4 w-16" } }
+                                        td { class: "px-4 py-3", SkeletonBox { class: "h-4 w-20" } }
+                                        td { class: "px-4 py-3", SkeletonBox { class: "h-5 w-10 rounded-full" } }
+                                        td { class: "px-4 py-3", SkeletonBox { class: "h-4 w-24 ml-auto" } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if tokens().is_empty() {
                 p { class: "text-[var(--color-paper-secondary)] text-sm py-4 text-center",
                     "暂无令牌。在下方新建一个。"
                 }
