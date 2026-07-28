@@ -16,7 +16,7 @@
 
 // Component/PathBuf/chrono::Utc 仅 server 构建的备份逻辑用到。
 #[cfg(feature = "server")]
-use std::path::{Component, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 #[cfg(feature = "server")]
 use chrono::Utc;
@@ -81,11 +81,15 @@ async fn run_backup(task_id: &str) {
     let _ = std::fs::create_dir_all(BACKUP_DIR);
     let timestamp = Utc::now().format("%Y%m%d_%H%M%S").to_string();
 
-    // 探测 pg_dump
-    let pg_dump_ok = std::process::Command::new("pg_dump")
-        .arg("--version")
-        .output()
-        .is_ok();
+    // 探测 pg_dump（fork+exec+wait 仍是阻塞系统调用，移出 tokio worker 线程）
+    let pg_dump_ok = tokio::task::spawn_blocking(|| {
+        std::process::Command::new("pg_dump")
+            .arg("--version")
+            .output()
+            .is_ok()
+    })
+    .await
+    .unwrap_or(false);
 
     if pg_dump_ok {
         run_pg_dump_backup(task_id, &timestamp).await;
@@ -163,32 +167,36 @@ async fn run_pg_dump_backup(task_id: &str, timestamp: &str) {
             return;
         }
     };
-    let child = match std::process::Command::new("pg_dump")
-        .arg(&db_url)
-        // --clean --if-exists：生成 DROP ... IF EXISTS，让恢复幂等（先删后建），
-        // 否则恢复时表已存在 → CREATE/COPY 全部失败、数据零写入。
-        .arg("--clean")
-        .arg("--if-exists")
-        .stdout(std::process::Stdio::from(stdout_file))
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-    {
-        Ok(c) => c,
-        Err(e) => {
-            tasks::update(
-                task_id,
-                "pg_dump 启动失败",
-                100,
-                TaskStatus::Failed,
-                None,
-                Some(e.to_string()),
-                None,
-            );
-            return;
-        }
-    };
-    let output = child.wait_with_output();
-    match output {
+    // pg_dump 导出可持续数十秒到数分钟，整个子进程生命周期（spawn + wait_with_output）
+    // 移入 spawn_blocking，避免阻塞 tokio worker 线程。注意 stdout 重定向到备份文件，
+    // 故不能用 .output()（它会用 piped 覆盖 stdout 配置）；保留 spawn() + wait_with_output()
+    // 两段式。闭包返回 Result<Output, (bool, io::Error)>：true=启动(spawn)阶段失败，
+    // false=等待(wait)阶段失败，分别对应原有「启动失败」「执行失败」两条上报路径；
+    // 闭包 panic（JoinError）按「执行失败」处理。
+    let dump_result = tokio::task::spawn_blocking(
+        move || -> Result<std::process::Output, (bool, std::io::Error)> {
+            std::process::Command::new("pg_dump")
+                .arg(db_url)
+                // --clean --if-exists：生成 DROP ... IF EXISTS，让恢复幂等（先删后建），
+                // 否则恢复时表已存在 → CREATE/COPY 全部失败、数据零写入。
+                .arg("--clean")
+                .arg("--if-exists")
+                .stdout(std::process::Stdio::from(stdout_file))
+                .stderr(std::process::Stdio::piped())
+                .spawn()
+                .map_err(|e| (true, e))?
+                .wait_with_output()
+                .map_err(|e| (false, e))
+        },
+    )
+    .await
+    .unwrap_or_else(|join_e| {
+        Err((
+            false,
+            std::io::Error::other(join_e.to_string()),
+        ))
+    });
+    match dump_result {
         Ok(o) if o.status.success() => {
             tasks::update(
                 task_id,
@@ -212,7 +220,18 @@ async fn run_pg_dump_backup(task_id: &str, timestamp: &str) {
                 None,
             );
         }
-        Err(e) => {
+        Err((true, e)) => {
+            tasks::update(
+                task_id,
+                "pg_dump 启动失败",
+                100,
+                TaskStatus::Failed,
+                None,
+                Some(e.to_string()),
+                None,
+            );
+        }
+        Err((false, e)) => {
             tasks::update(
                 task_id,
                 "pg_dump 执行失败",
@@ -360,9 +379,9 @@ pub async fn restore_backup(filename: String, confirm: bool) -> Result<String, S
             return Err(AppError::NotFound("备份文件不存在").into());
         }
 
-        // 签名校验：首行需含签名
-        let content = std::fs::read_to_string(&path).unwrap_or_default();
-        if !has_valid_signature(&content) {
+        // 签名校验：仅读取首行（备份文件可达数十 MB，无需整文件读入内存）。
+        let first_line = read_first_line(&path).unwrap_or_default();
+        if !has_valid_signature(&first_line) {
             return Err(
                 AppError::BadRequest("非本系统生成的备份文件，拒绝恢复".to_string()).into(),
             );
@@ -415,10 +434,14 @@ async fn run_restore(task_id: &str, filename: &str) {
             return;
         }
     };
-    let psql_ok = std::process::Command::new("psql")
-        .arg("--version")
-        .output()
-        .is_ok();
+    let psql_ok = tokio::task::spawn_blocking(|| {
+        std::process::Command::new("psql")
+            .arg("--version")
+            .output()
+            .is_ok()
+    })
+    .await
+    .unwrap_or(false);
     if !psql_ok {
         tasks::update(
             task_id,
@@ -440,17 +463,26 @@ async fn run_restore(task_id: &str, filename: &str) {
         None,
         None,
     );
-    let output = std::process::Command::new("psql")
-        .arg(&db_url)
-        // ON_ERROR_STOP=1：遇 SQL 错误立即中止（退出码 3）。
-        // 不加这个，psql 即使满屏 ERROR 也返回 0，status.success() 误报成功。
-        .arg("-v")
-        .arg("ON_ERROR_STOP=1")
-        .arg("-f")
-        .arg(&path)
-        .stderr(std::process::Stdio::piped())
-        .output();
-    match output {
+    // psql 恢复可持续数十秒到数分钟，整段 .output() 移入 spawn_blocking，避免阻塞
+    // tokio worker 线程。db_url/path 按值移入闭包（闭包外不再使用）；闭包 panic
+    // （JoinError）按「启动失败」上报。
+    let restore_result = tokio::task::spawn_blocking(move || {
+        std::process::Command::new("psql")
+            .arg(db_url)
+            // ON_ERROR_STOP=1：遇 SQL 错误立即中止（退出码 3）。
+            // 不加这个，psql 即使满屏 ERROR 也返回 0，status.success() 误报成功。
+            .arg("-v")
+            .arg("ON_ERROR_STOP=1")
+            .arg("-f")
+            .arg(path)
+            .stderr(std::process::Stdio::piped())
+            .output()
+    })
+    .await
+    .unwrap_or_else(|join_e| {
+        Err(std::io::Error::other(join_e.to_string()))
+    });
+    match restore_result {
         Ok(o) if o.status.success() => {
             // 恢复用备份时刻的数据重建了 posts 等表，必须冲刷全部文章相关缓存
             // 与 SSR 世代号，否则前端仍读旧数据（被删的文章不会重新出现）。
@@ -502,8 +534,10 @@ pub async fn list_backups() -> Result<Vec<BackupInfo>, ServerFnError> {
                     Ok(m) => m,
                     Err(_) => continue,
                 };
-                let mode = std::fs::read_to_string(entry.path())
-                    .map(|s| parse_backup_mode(&s))
+                // 仅读取前 3 行（签名/created_at/mode），避免把每个（可能数十 MB
+                // 的）备份文件整文件读入内存只为取 `-- mode:` 行。
+                let mode = read_first_lines(entry.path(), 3)
+                    .map(|lines| parse_backup_mode(&lines.join("\n")))
                     .unwrap_or_else(|_| "unknown".to_string());
                 let created_at = meta
                     .modified()
@@ -613,6 +647,25 @@ fn has_valid_signature(content: &str) -> bool {
         .next()
         .map(|l| l.trim().contains(BACKUP_SIGNATURE))
         .unwrap_or(false)
+}
+
+/// 仅读取文件首行（用于签名校验，避免把整个备份文件读入内存）。
+#[cfg(feature = "server")]
+fn read_first_line(path: impl AsRef<Path>) -> std::io::Result<String> {
+    use std::io::BufRead;
+    let mut reader = std::io::BufReader::new(std::fs::File::open(path)?);
+    let mut line = String::new();
+    reader.read_line(&mut line)?;
+    Ok(line)
+}
+
+/// 读取文件前 `n` 行（用于解析 `-- mode:` 等头部元信息，避免整文件读入内存）。
+/// 不足 `n` 行时返回实际读到的行；任一行读取失败则整体返回该错误。
+#[cfg(feature = "server")]
+fn read_first_lines(path: impl AsRef<Path>, n: usize) -> std::io::Result<Vec<String>> {
+    use std::io::BufRead;
+    let reader = std::io::BufReader::new(std::fs::File::open(path)?);
+    reader.lines().take(n).collect()
 }
 
 /// Axum 处理器：下载备份文件（admin 鉴权 + 路径白名单）。
