@@ -64,36 +64,22 @@ impl crate::mcp::server::YggMcpServer {
             _ => crate::api::slug::slugify(&p.title),
         };
 
-        // Markdown 渲染是 CPU 密集任务。
-        let md = p.content_md.clone();
-        let rendered = tokio::task::spawn_blocking(move || {
-            crate::api::markdown::render_markdown_enhanced(&md)
-        })
+        // Markdown 渲染 + 度量派生收敛到 helper（R4）。
+        let fields = crate::api::posts::helpers::render_post_fields(
+            &p.content_md,
+            &p.status,
+            p.cover_image.as_deref(),
+        )
         .await
-        .map_err(|e| internal(e, "markdown render"))?;
-        let content_html = rendered.html;
-        let toc_html = if rendered.toc_html.is_empty() {
-            None
-        } else {
-            Some(rendered.toc_html)
-        };
+        .map_err(|_| internal("markdown render", "render_post_fields"))?;
         let summary = p
             .summary
             .as_deref()
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(|s| s.to_string())
-            .unwrap_or_else(|| crate::utils::text::auto_summary(&p.content_md));
-        let post_status = PostStatus::from_str(&p.status).unwrap_or(PostStatus::Draft);
-        let cover_image = p
-            .cover_image
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string());
-        let word_count = crate::utils::text::count_words(&p.content_md);
-        let reading_time = crate::utils::text::reading_time(word_count);
-        let published_at = if post_status == PostStatus::Published {
+            .unwrap_or(fields.auto_summary);
+        let published_at = if fields.status == PostStatus::Published {
             Some(chrono::Utc::now())
         } else {
             None
@@ -121,13 +107,13 @@ impl crate::mcp::server::YggMcpServer {
                     &final_slug,
                     &summary,
                     &p.content_md,
-                    &content_html,
-                    &toc_html,
-                    &post_status.as_str(),
+                    &fields.content_html,
+                    &fields.toc_html,
+                    &fields.status.as_str(),
                     &published_at,
-                    &cover_image,
-                    &(word_count as i32),
-                    &(reading_time as i32),
+                    &fields.cover_image,
+                    &fields.word_count,
+                    &fields.reading_time,
                 ],
             )
             .await
@@ -138,18 +124,14 @@ impl crate::mcp::server::YggMcpServer {
         crate::api::posts::helpers::sync_tags(&tx, post_id, &tags_cleaned)
             .await
             .map_err(|_| internal("tag sync", "sync_tags"))?;
-        crate::api::posts::helpers::sync_asset_refs(&tx, post_id, &content_html, cover_image.as_deref())
+        crate::api::posts::helpers::sync_asset_refs(&tx, post_id, &fields.content_html, fields.cover_image.as_deref())
             .await
             .map_err(|_| internal("asset_refs sync", "sync_asset_refs"))?;
 
         tx.commit().await.map_err(|e| internal(e, "commit"))?;
 
-        // 与 web 后台一致的缓存失效。
-        cache::invalidate_post_metadata();
-        cache::invalidate_post_by_slug(&final_slug).await;
-        cache::invalidate_tag_posts_for(&tags_cleaned).await;
-        ssr_cache::invalidate_ssr_all_public();
-        ssr_cache::bump_global_generation();
+        // 与 web 后台一致的缓存失效（moka + SSR）。
+        cache::invalidate_for_post_write(std::slice::from_ref(&final_slug), &tags_cleaned).await;
 
         ok_json(PostResult {
             success: true,
@@ -176,34 +158,21 @@ impl crate::mcp::server::YggMcpServer {
             return Err(McpError::invalid_request("content_md must not be empty", None));
         }
 
-        let md = p.content_md.clone();
-        let rendered = tokio::task::spawn_blocking(move || {
-            crate::api::markdown::render_markdown_enhanced(&md)
-        })
+        // Markdown 渲染 + 度量派生收敛到 helper（R4）。
+        let fields = crate::api::posts::helpers::render_post_fields(
+            &p.content_md,
+            &p.status,
+            p.cover_image.as_deref(),
+        )
         .await
-        .map_err(|e| internal(e, "markdown render"))?;
-        let content_html = rendered.html;
-        let toc_html = if rendered.toc_html.is_empty() {
-            None
-        } else {
-            Some(rendered.toc_html)
-        };
+        .map_err(|_| internal("markdown render", "render_post_fields"))?;
         let summary = p
             .summary
             .as_deref()
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(|s| s.to_string())
-            .unwrap_or_else(|| crate::utils::text::auto_summary(&p.content_md));
-        let post_status = PostStatus::from_str(&p.status).unwrap_or(PostStatus::Draft);
-        let cover_image = p
-            .cover_image
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string());
-        let word_count = crate::utils::text::count_words(&p.content_md);
-        let reading_time = crate::utils::text::reading_time(word_count);
+            .unwrap_or(fields.auto_summary);
 
         let mut client = get_conn().await.map_err(|e| internal(e, "db connection"))?;
         let tx = client
@@ -251,16 +220,9 @@ impl crate::mcp::server::YggMcpServer {
                 .map_err(|e| internal(e, "ensure_unique_slug"))?;
 
         // 旧标签。
-        let old_tags: Vec<String> = {
-            let rows = tx
-                .query(
-                    "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
-                    &[&p.post_id],
-                )
-                .await
-                .map_err(|e| internal(e, "select old tags"))?;
-            rows.iter().map(|r| r.get(0)).collect()
-        };
+        let old_tags = crate::api::posts::helpers::fetch_post_tags(&tx, p.post_id)
+            .await
+            .map_err(|_| internal("select old tags", "select old tags"))?;
 
         // 旧状态/发布时间 → 计算新 published_at。
         let old_status_row = tx
@@ -270,7 +232,7 @@ impl crate::mcp::server::YggMcpServer {
             )
             .await
             .map_err(|e| internal(e, "select old status"))?;
-        let published_at = if post_status == PostStatus::Published {
+        let published_at = if fields.status == PostStatus::Published {
             let was_published = old_status_row
                 .as_ref()
                 .map(|r| {
@@ -298,13 +260,13 @@ impl crate::mcp::server::YggMcpServer {
                     &final_slug,
                     &summary,
                     &p.content_md,
-                    &content_html,
-                    &toc_html,
-                    &post_status.as_str(),
+                    &fields.content_html,
+                    &fields.toc_html,
+                    &fields.status.as_str(),
                     &published_at,
-                    &cover_image,
-                    &(word_count as i32),
-                    &(reading_time as i32),
+                    &fields.cover_image,
+                    &fields.word_count,
+                    &fields.reading_time,
                     &p.post_id,
                 ],
             )
@@ -326,7 +288,7 @@ impl crate::mcp::server::YggMcpServer {
         crate::api::posts::helpers::sync_tags(&tx, p.post_id, &tags_cleaned)
             .await
             .map_err(|_| internal("tag sync", "sync_tags"))?;
-        crate::api::posts::helpers::sync_asset_refs(&tx, p.post_id, &content_html, cover_image.as_deref())
+        crate::api::posts::helpers::sync_asset_refs(&tx, p.post_id, &fields.content_html, fields.cover_image.as_deref())
             .await
             .map_err(|_| internal("asset_refs sync", "sync_asset_refs"))?;
 
@@ -392,14 +354,9 @@ impl crate::mcp::server::YggMcpServer {
 
         // M6 修复：发布后文章出现在公开标签列表页，须失效标签缓存（api update.rs:202
         // 会失效，此 MCP 路径此前漏掉 → 标签页新发文陈旧 ≤120s）。
-        let tag_rows = client
-            .query(
-                "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
-                &[&p.post_id],
-            )
+        let tags = crate::api::posts::helpers::fetch_post_tags(&client, p.post_id)
             .await
-            .map_err(|e| internal(e, "select tags"))?;
-        let tags: Vec<String> = tag_rows.iter().map(|r| r.get(0)).collect();
+            .map_err(|_| internal("select tags", "select tags"))?;
 
         let result = client
             .execute(
@@ -414,12 +371,8 @@ impl crate::mcp::server::YggMcpServer {
             return Err(McpError::invalid_request("文章不存在", None));
         }
 
-        cache::invalidate_post_metadata();
-        cache::invalidate_post_by_slug(&slug).await;
-        cache::invalidate_tag_posts_for(&tags).await;
-        ssr_cache::invalidate_ssr_route(&format!("/post/{slug}"));
-        ssr_cache::invalidate_ssr_all_public();
-        ssr_cache::bump_global_generation();
+        // 发布后失效文章详情、列表、标签与 SSR 缓存（moka + SSR）。
+        cache::invalidate_for_post_write(std::slice::from_ref(&slug), &tags).await;
 
         ok_json(PostResult {
             success: true,
@@ -456,14 +409,9 @@ impl crate::mcp::server::YggMcpServer {
         };
         let slug: String = slug_row.get(0);
 
-        let tag_rows = tx
-            .query(
-                "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
-                &[&p.post_id],
-            )
+        let tags = crate::api::posts::helpers::fetch_post_tags(&tx, p.post_id)
             .await
-            .map_err(|e| internal(e, "select tags"))?;
-        let tags: Vec<String> = tag_rows.iter().map(|r| r.get(0)).collect();
+            .map_err(|_| internal("select tags", "select tags"))?;
 
         let result = tx
             .execute(
@@ -478,12 +426,8 @@ impl crate::mcp::server::YggMcpServer {
 
         tx.commit().await.map_err(|e| internal(e, "commit"))?;
 
-        cache::invalidate_post_metadata();
-        cache::invalidate_post_by_slug(&slug).await;
-        cache::invalidate_tag_posts_for(&tags).await;
-        ssr_cache::invalidate_ssr_route(&format!("/post/{slug}"));
-        ssr_cache::invalidate_ssr_all_public();
-        ssr_cache::bump_global_generation();
+        // 移入回收站后失效相关缓存（moka + SSR）。
+        cache::invalidate_for_post_write(std::slice::from_ref(&slug), &tags).await;
 
         ok_json(PostResult {
             success: true,
@@ -520,14 +464,9 @@ impl crate::mcp::server::YggMcpServer {
         };
         let slug: String = slug_row.get(0);
 
-        let tag_rows = tx
-            .query(
-                "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
-                &[&p.post_id],
-            )
+        let tags = crate::api::posts::helpers::fetch_post_tags(&tx, p.post_id)
             .await
-            .map_err(|e| internal(e, "select tags"))?;
-        let tags: Vec<String> = tag_rows.iter().map(|r| r.get(0)).collect();
+            .map_err(|_| internal("select tags", "select tags"))?;
 
         let result = tx
             .execute("DELETE FROM posts WHERE id = $1", &[&p.post_id])
@@ -539,12 +478,8 @@ impl crate::mcp::server::YggMcpServer {
 
         tx.commit().await.map_err(|e| internal(e, "commit"))?;
 
-        cache::invalidate_post_metadata();
-        cache::invalidate_post_by_slug(&slug).await;
-        cache::invalidate_tag_posts_for(&tags).await;
-        ssr_cache::invalidate_ssr_route(&format!("/post/{slug}"));
-        ssr_cache::invalidate_ssr_all_public();
-        ssr_cache::bump_global_generation();
+        // 彻底删除后失效相关缓存（moka + SSR）。
+        cache::invalidate_for_post_write(std::slice::from_ref(&slug), &tags).await;
 
         ok_json(PostResult {
             success: true,

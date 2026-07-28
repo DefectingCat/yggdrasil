@@ -10,7 +10,7 @@
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
-use super::helpers::{clean_tags, get_current_admin_user, sync_asset_refs, sync_tags};
+use super::helpers::{clean_tags, get_current_admin_user, render_post_fields, sync_asset_refs, sync_tags};
 use super::types::CreatePostResponse;
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
@@ -40,29 +40,12 @@ pub async fn update_post(
     {
         let mut client = get_conn().await.map_err(AppError::db_conn)?;
 
-        // Markdown 渲染移到阻塞线程池执行。
-        let md_for_render = content_md.clone();
-        let rendered = tokio::task::spawn_blocking(move || {
-            crate::api::markdown::render_markdown_enhanced(&md_for_render)
-        })
-        .await
-        .map_err(|_| AppError::Internal("Markdown 渲染任务失败"))?;
-        let content_html = rendered.html;
-        let toc_html = if rendered.toc_html.is_empty() {
-            None::<String>
-        } else {
-            Some(rendered.toc_html)
-        };
-        // 未填写摘要时自动从正文提取。
+        // Markdown 渲染 + 度量派生收敛到 helper（R4）。
+        let fields = render_post_fields(&content_md, &status, cover_image.as_deref()).await?;
+        // 未填写摘要时用自动摘要兜底。
         let summary = summary
             .filter(|s| !s.trim().is_empty())
-            .unwrap_or_else(|| crate::utils::text::auto_summary(&content_md));
-        let post_status = PostStatus::from_str(&status).unwrap_or(PostStatus::Draft);
-        let cover_image = cover_image.filter(|s| !s.trim().is_empty());
-
-        // 重新计算字数与阅读时长，保持与正文同步。
-        let word_count = crate::utils::text::count_words(&content_md);
-        let reading_time = crate::utils::text::reading_time(word_count);
+            .unwrap_or(fields.auto_summary);
 
         let tx = client.transaction().await.map_err(AppError::tx)?;
 
@@ -104,16 +87,7 @@ pub async fn update_post(
             crate::api::slug::ensure_unique_slug(&tx, &base_slug, Some(post_id)).await?;
 
         // 获取文章旧标签，用于后续失效标签缓存。
-        let old_tags: Vec<String> = {
-            let rows = tx
-                .query(
-                    "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
-                    &[&post_id],
-                )
-                .await
-                .map_err(AppError::query)?;
-            rows.iter().map(|r| r.get(0)).collect()
-        };
+        let old_tags = super::helpers::fetch_post_tags(&tx, post_id).await?;
 
         // 获取旧状态与旧发布时间，用于决定是否需要更新 published_at。
         let old_status_row = tx
@@ -126,7 +100,7 @@ pub async fn update_post(
 
         // 发布时：若之前已发布则保留原时间，否则使用当前时间。
         // 非发布时：保留原有 published_at（若为草稿可能为 None）。
-        let published_at = if post_status == PostStatus::Published {
+        let published_at = if fields.status == PostStatus::Published {
             let was_published = old_status_row
                 .as_ref()
                 .map(|r| {
@@ -156,13 +130,13 @@ pub async fn update_post(
                     &final_slug,
                     &summary,
                     &content_md,
-                    &content_html,
-                    &toc_html,
-                    &post_status.as_str(),
+                    &fields.content_html,
+                    &fields.toc_html,
+                    &fields.status.as_str(),
                     &published_at,
-                    &cover_image,
-                    &(word_count as i32),
-                    &(reading_time as i32),
+                    &fields.cover_image,
+                    &fields.word_count,
+                    &fields.reading_time,
                     &post_id,
                 ],
             )
@@ -184,7 +158,7 @@ pub async fn update_post(
         sync_tags(&tx, post_id, &tags_cleaned).await?;
 
         // 同步素材引用关联（asset_refs）：内部自带 DELETE 再重建。
-        sync_asset_refs(&tx, post_id, &content_html, cover_image.as_deref()).await?;
+        sync_asset_refs(&tx, post_id, &fields.content_html, fields.cover_image.as_deref()).await?;
 
         tx.commit().await.map_err(AppError::tx)?;
 

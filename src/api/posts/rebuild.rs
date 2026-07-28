@@ -8,7 +8,7 @@
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
-use super::helpers::get_current_admin_user;
+use super::helpers::{get_current_admin_user, render_post_fields_minimal};
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
 use crate::api::posts::{CreatePostResponse, RebuildResult};
@@ -62,41 +62,27 @@ pub async fn rebuild_content_html(rebuild_all: bool) -> Result<RebuildResult, Se
             let id: i32 = row.get(0);
             let content_md: String = row.get(1);
 
-            // Markdown 渲染在阻塞线程池执行；spawn_blocking 的 JoinError 自动捕获 panic，
-            // 替代原先的 catch_unwind。
-            let md_for_render = content_md.clone();
-            let rendered = match tokio::task::spawn_blocking(move || {
-                crate::api::markdown::render_markdown_enhanced(&md_for_render)
-            })
-            .await
-            {
-                Ok(r) => r,
-                Err(_) => {
-                    failed += 1;
-                    if errors.len() < MAX_DISPLAY_ERRORS {
-                        errors.push(format!("文章 #{id}: 渲染异常"));
+            // Markdown 渲染 + 度量派生收敛到 helper（R4）。
+            let (content_html, toc_html, word_count, reading_time) =
+                match render_post_fields_minimal(&content_md).await {
+                    Ok(f) => f,
+                    Err(_) => {
+                        failed += 1;
+                        if errors.len() < MAX_DISPLAY_ERRORS {
+                            errors.push(format!("文章 #{id}: 渲染异常"));
+                        }
+                        continue;
                     }
-                    continue;
-                }
-            };
-
-            let toc_html = if rendered.toc_html.is_empty() {
-                None::<String>
-            } else {
-                Some(rendered.toc_html)
-            };
-
-            let word_count = crate::utils::text::count_words(&content_md);
-            let reading_time = crate::utils::text::reading_time(word_count);
+                };
 
             match tx
                 .execute(
                     "UPDATE posts SET content_html = $1, toc_html = $2, word_count = $3, reading_time = $4 WHERE id = $5",
                     &[
-                        &rendered.html,
+                        &content_html,
                         &toc_html,
-                        &(word_count as i32),
-                        &(reading_time as i32),
+                        &word_count,
+                        &reading_time,
                         &id,
                     ],
                 )
@@ -183,30 +169,17 @@ pub async fn rebuild_post_content_html(post_id: i32) -> Result<CreatePostRespons
         let content_md: String = row.get(0);
         let slug: String = row.get(1);
 
-        // Markdown 渲染在阻塞线程池执行（CPU 密集）。
-        let md_for_render = content_md.clone();
-        let rendered = tokio::task::spawn_blocking(move || {
-            crate::api::markdown::render_markdown_enhanced(&md_for_render)
-        })
-        .await
-        .map_err(|_| AppError::Internal("Markdown 渲染任务失败"))?;
-
-        let toc_html = if rendered.toc_html.is_empty() {
-            None::<String>
-        } else {
-            Some(rendered.toc_html)
-        };
-
-        let word_count = crate::utils::text::count_words(&content_md);
-        let reading_time = crate::utils::text::reading_time(word_count);
+        // Markdown 渲染 + 度量派生收敛到 helper（R4）。
+        let (content_html, toc_html, word_count, reading_time) =
+            render_post_fields_minimal(&content_md).await?;
 
         tx.execute(
             "UPDATE posts SET content_html = $1, toc_html = $2, word_count = $3, reading_time = $4 WHERE id = $5",
             &[
-                &rendered.html,
+                &content_html,
                 &toc_html,
-                &(word_count as i32),
-                &(reading_time as i32),
+                &word_count,
+                &reading_time,
                 &post_id,
             ],
         )

@@ -10,7 +10,7 @@
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
-use super::helpers::{clean_tags, get_current_admin_user, sync_asset_refs, sync_tags};
+use super::helpers::{clean_tags, get_current_admin_user, render_post_fields, sync_asset_refs, sync_tags};
 use super::types::CreatePostResponse;
 #[cfg(feature = "server")]
 use crate::api::error::AppError;
@@ -63,32 +63,15 @@ pub async fn create_post(
     {
         let mut client = get_conn().await.map_err(AppError::db_conn)?;
 
-        // Markdown 渲染（含 syntect 高亮）是 CPU 密集任务，移到阻塞线程池执行。
-        let md_for_render = content_md.clone();
-        let rendered = tokio::task::spawn_blocking(move || {
-            crate::api::markdown::render_markdown_enhanced(&md_for_render)
-        })
-        .await
-        .map_err(|_| AppError::Internal("Markdown 渲染任务失败"))?;
-        let content_html = rendered.html;
-        let toc_html = if rendered.toc_html.is_empty() {
-            None::<String>
-        } else {
-            Some(rendered.toc_html)
-        };
-        // 未填写摘要时自动从正文提取。
+        // Markdown 渲染 + 度量派生收敛到 helper（R4）。
+        let fields = render_post_fields(&content_md, &status, cover_image.as_deref()).await?;
+        // 未填写摘要时用自动摘要兜底。
         let summary = summary
             .filter(|s| !s.trim().is_empty())
-            .unwrap_or_else(|| crate::utils::text::auto_summary(&content_md));
-        let post_status = PostStatus::from_str(&status).unwrap_or(PostStatus::Draft);
-        let cover_image = cover_image.filter(|s| !s.trim().is_empty());
-
-        // 计算字数与阅读时长，随文章一并持久化，供列表查询直接使用。
-        let word_count = crate::utils::text::count_words(&content_md);
-        let reading_time = crate::utils::text::reading_time(word_count);
+            .unwrap_or(fields.auto_summary);
 
         // 发布状态的文章设置当前发布时间；草稿则为 None。
-        let published_at = if post_status == PostStatus::Published {
+        let published_at = if fields.status == PostStatus::Published {
             Some(chrono::Utc::now())
         } else {
             None
@@ -111,13 +94,13 @@ pub async fn create_post(
                     &final_slug,
                     &summary,
                     &content_md,
-                    &content_html,
-                    &toc_html,
-                    &post_status.as_str(),
+                    &fields.content_html,
+                    &fields.toc_html,
+                    &fields.status.as_str(),
                     &published_at,
-                    &cover_image,
-                    &(word_count as i32),
-                    &(reading_time as i32),
+                    &fields.cover_image,
+                    &fields.word_count,
+                    &fields.reading_time,
                 ],
             )
             .await
@@ -130,7 +113,7 @@ pub async fn create_post(
         sync_tags(&tx, post_id, &tags_cleaned).await?;
 
         // 同步素材引用关联（asset_refs）：内部自带 DELETE 再重建。
-        sync_asset_refs(&tx, post_id, &content_html, cover_image.as_deref()).await?;
+        sync_asset_refs(&tx, post_id, &fields.content_html, fields.cover_image.as_deref()).await?;
 
         tx.commit().await.map_err(AppError::tx)?;
 

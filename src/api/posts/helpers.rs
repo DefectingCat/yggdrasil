@@ -8,7 +8,7 @@ use crate::api::error::AppError;
 #[cfg(feature = "server")]
 use crate::models::post::{Post, PostListItem, PostStatus};
 #[cfg(feature = "server")]
-use crate::utils::text::{count_words, reading_time};
+use crate::utils::text::{auto_summary, count_words, reading_time};
 
 /// 复用认证模块的当前 admin 用户获取逻辑。
 #[cfg(feature = "server")]
@@ -199,6 +199,36 @@ pub(crate) fn clean_tags(tags: &[String]) -> Vec<String> {
         .filter(|t| seen.insert(t.to_lowercase()))
         .collect()
 }
+#[cfg(feature = "server")]
+/// 取指定文章的全部标签名（按 post_tags 关联）。R5：此前 9+ 处重复同一条 SQL。
+pub(crate) async fn fetch_post_tags(
+    client: &impl deadpool_postgres::GenericClient,
+    post_id: i32,
+) -> Result<Vec<String>, AppError> {
+    let rows = client
+        .query(
+            "SELECT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = $1",
+            &[&post_id],
+        )
+        .await
+        .map_err(AppError::query)?;
+    Ok(rows.iter().map(|r| r.get(0)).collect())
+}
+#[cfg(feature = "server")]
+/// 批量取多篇文章的标签名并集（去重）。用于批量删除/清空回收站的缓存失效。
+pub(crate) async fn fetch_post_tags_batch(
+    client: &impl deadpool_postgres::GenericClient,
+    post_ids: &[i32],
+) -> Result<Vec<String>, AppError> {
+    let rows = client
+        .query(
+            "SELECT DISTINCT t.name FROM tags t JOIN post_tags pt ON t.id = pt.tag_id WHERE pt.post_id = ANY($1)",
+            &[&post_ids],
+        )
+        .await
+        .map_err(AppError::query)?;
+    Ok(rows.iter().map(|r| r.get(0)).collect())
+}
 
 /// 匹配 HTML/Markdown 中出现的本地上传图片路径，捕获组为相对路径
 /// （如 `2026/07/24/153000.<uuid>.webp`，不含 /uploads/ 前缀与 query）。
@@ -262,6 +292,92 @@ pub(crate) async fn sync_asset_refs(
         .map_err(AppError::tx)?;
     }
     Ok(())
+}
+
+/// Markdown 渲染 + 度量派生的完整结果。
+///
+/// `auto_summary` 为正文自动摘要（非用户填写值），调用方负责与用户 summary 合并。
+/// `word_count` / `reading_time` 已转为 `i32` 以直接绑定 SQL 参数。
+#[cfg(feature = "server")]
+pub(crate) struct RenderedFields {
+    pub content_html: String,
+    pub toc_html: Option<String>,
+    pub auto_summary: String,
+    pub status: PostStatus,
+    pub cover_image: Option<String>,
+    pub word_count: i32,
+    pub reading_time: i32,
+}
+
+/// 渲染 Markdown 并派生全部度量字段（R4）。
+///
+/// 收敛 create / update / MCP 写操作中重复的「spawn_blocking 渲染 → 7 步派生」：
+/// content_html、toc_html（空则 None）、auto_summary、status（from_str 回退 Draft）、
+/// cover_image（trim 后非空则保留）、word_count、reading_time。
+#[cfg(feature = "server")]
+pub(crate) async fn render_post_fields(
+    content_md: &str,
+    status_str: &str,
+    cover_image: Option<&str>,
+) -> Result<RenderedFields, AppError> {
+    let md_for_render = content_md.to_string();
+    let rendered = tokio::task::spawn_blocking(move || {
+        crate::api::markdown::render_markdown_enhanced(&md_for_render)
+    })
+    .await
+    .map_err(|_| AppError::Internal("Markdown 渲染任务失败"))?;
+
+    let toc_html = if rendered.toc_html.is_empty() {
+        None
+    } else {
+        Some(rendered.toc_html)
+    };
+
+    let auto_summary = auto_summary(content_md);
+    let status = PostStatus::from_str(status_str).unwrap_or(PostStatus::Draft);
+    let cover_image = cover_image
+        .filter(|s| !s.trim().is_empty())
+        .map(str::to_string);
+
+    let word_count = count_words(content_md);
+    let reading_time = reading_time(word_count);
+
+    Ok(RenderedFields {
+        content_html: rendered.html,
+        toc_html,
+        auto_summary,
+        status,
+        cover_image,
+        word_count: word_count as i32,
+        reading_time: reading_time as i32,
+    })
+}
+
+/// 渲染 Markdown 并仅派生重建所需的最小字段（R4）。
+///
+/// rebuild 仅需 content_html / toc_html / word_count / reading_time，
+/// 不计算 summary / status / cover_image，避免无谓开销。
+#[cfg(feature = "server")]
+pub(crate) async fn render_post_fields_minimal(
+    content_md: &str,
+) -> Result<(String, Option<String>, i32, i32), AppError> {
+    let md_for_render = content_md.to_string();
+    let rendered = tokio::task::spawn_blocking(move || {
+        crate::api::markdown::render_markdown_enhanced(&md_for_render)
+    })
+    .await
+    .map_err(|_| AppError::Internal("Markdown 渲染任务失败"))?;
+
+    let toc_html = if rendered.toc_html.is_empty() {
+        None
+    } else {
+        Some(rendered.toc_html)
+    };
+
+    let word_count = count_words(content_md);
+    let reading_time = reading_time(word_count);
+
+    Ok((rendered.html, toc_html, word_count as i32, reading_time as i32))
 }
 
 #[cfg(all(test, feature = "server"))]
