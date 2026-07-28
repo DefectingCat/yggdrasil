@@ -83,6 +83,22 @@
     animation: popover-enter 150ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
+  /* 下拉选择面板入场（仅垂直微移，无水平居中变换；展开方向由 transform-origin 控制） */
+  @keyframes select-enter {
+    0% {
+      opacity: 0;
+      transform: translateY(-4px) scale(0.98);
+    }
+    100% {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .animate-select-enter {
+    animation: select-enter 150ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
   /* 列表行进场（比 page-enter 更轻的位移，供 admin 列表逐行 stagger 使用，
      配合内联 style="animation-delay: Nms" 与 both fill-mode 实现阶梯入场） */
   @keyframes row-enter {
@@ -1100,6 +1116,7 @@
   .page-enter,
   .animate-page-enter,
   .animate-popover-enter,
+  .animate-select-enter,
   .animate-row-enter {
     animation: none;
   }
