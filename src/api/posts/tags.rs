@@ -30,7 +30,7 @@ pub async fn list_tags() -> Result<TagListResponse, ServerFnError> {
         // 聚合标签对应的已发布、未删除文章数量。
         let rows = client
             .query(
-                "SELECT t.id, t.name, COUNT(pt.post_id) as post_count
+                "SELECT t.id, t.name, COUNT(p.id) as post_count
                  FROM tags t
                  LEFT JOIN post_tags pt ON t.id = pt.tag_id
                  LEFT JOIN posts p ON pt.post_id = p.id AND p.deleted_at IS NULL AND p.status = 'published'

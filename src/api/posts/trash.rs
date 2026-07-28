@@ -338,13 +338,19 @@ pub async fn batch_purge_posts(post_ids: Vec<i32>) -> Result<CreatePostResponse,
             }
             crate::cache::invalidate_tag_posts_for(&tags).await;
 
-            // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
+            // M5 修复：批量彻底删除影响详情页与所有列表页，须物理失效 SSR 缓存
+            // （仅 bump_global_generation 只是观测指标，不真正失效 Dioxus 0.7 SSR 缓存）。
+            for slug in &slugs {
+                crate::ssr_cache::invalidate_ssr_route(&format!("/post/{slug}"));
+            }
+            crate::ssr_cache::invalidate_ssr_all_public();
             crate::ssr_cache::bump_global_generation();
         } else {
             // 影响集过大时回退到全量失效，避免大量串行缓存操作。
             crate::cache::invalidate_all_post_caches();
             crate::cache::invalidate_search_results();
-            // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
+            // M5 修复：回退路径同样须物理失效 SSR。
+            crate::ssr_cache::invalidate_ssr_all_public();
             crate::ssr_cache::bump_global_generation();
         }
 
@@ -413,13 +419,19 @@ pub async fn empty_trash() -> Result<CreatePostResponse, ServerFnError> {
             }
             crate::cache::invalidate_tag_posts_for(&tags).await;
 
-            // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
+            // M5 修复：清空回收站影响详情页与所有列表页，须物理失效 SSR 缓存
+            // （仅 bump_global_generation 只是观测指标，不真正失效 Dioxus 0.7 SSR 缓存）。
+            for slug in &slugs {
+                crate::ssr_cache::invalidate_ssr_route(&format!("/post/{slug}"));
+            }
+            crate::ssr_cache::invalidate_ssr_all_public();
             crate::ssr_cache::bump_global_generation();
         } else {
             // 影响集过大时回退到全量失效，避免大量串行缓存操作。
             crate::cache::invalidate_all_post_caches();
             crate::cache::invalidate_search_results();
-            // 递增 SSR 全局世代号（未来就绪基础设施；当前不会使 Dioxus 0.7 SSR 缓存失效）。
+            // M5 修复：回退路径同样须物理失效 SSR。
+            crate::ssr_cache::invalidate_ssr_all_public();
             crate::ssr_cache::bump_global_generation();
         }
 
