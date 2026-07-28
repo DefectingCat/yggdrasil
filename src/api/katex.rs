@@ -132,47 +132,59 @@ fn expand_chem(tex: &str) -> String {
     if !tex.contains(r"\ce") && !tex.contains(r"\pu") {
         return tex.to_string();
     }
-    let bytes = tex.as_bytes();
     let mut out = String::with_capacity(tex.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        // 匹配 `\ce{` 或 `\pu{`
-        if bytes[i] == b'\\' && i + 3 < bytes.len() {
-            let (is_ce, is_pu) = (
-                bytes[i + 1] == b'c' && bytes[i + 2] == b'e',
-                bytes[i + 1] == b'p' && bytes[i + 2] == b'u',
-            );
-            let brace_at = if is_ce {
-                Some(i + 3)
-            } else if is_pu {
-                Some(i + 4)
-            } else {
-                None
-            };
-            if let Some(bi) = brace_at {
-                // 精确匹配命令边界：\ce/\pu 后须紧跟 `{`（否则可能是 \cellbox 之类）
-                if bi < bytes.len() && bytes[bi] == b'{' {
-                    // 读配对花括号内容（处理嵌套）
-                    if let Some((content, close_end)) = read_braced(tex, bi) {
-                        let translated = if is_ce {
-                            crate::api::mhchem::ce(content)
-                        } else {
+    let mut rest = tex;
+    loop {
+        // 找下一个 `\ce` 或 `\pu`，取较早出现者（两者均为 3 字节 ASCII）。
+        let ce = rest.find(r"\ce");
+        let pu = rest.find(r"\pu");
+        let next = match (ce, pu) {
+            (None, None) => None,
+            (Some(a), None) => Some((a, false)),
+            (None, Some(b)) => Some((b, true)),
+            (Some(a), Some(b)) => Some(if a <= b { (a, false) } else { (b, true) }),
+        };
+        match next {
+            None => {
+                // 命令之后再无 `\ce`/`\pu`：原样拷贝剩余文本。
+                out.push_str(rest);
+                return out;
+            }
+            Some((pos, is_pu)) => {
+                // C2 修复：拷贝命令前的原文用 `push_str(&str 切片)`，
+                // 而非旧的逐字节 `bytes[i] as char`（Latin-1 转换会破坏多字节 UTF-8，
+                // 如 `\text{浓度} \ce{H2O}` 里的中文）。
+                out.push_str(&rest[..pos]);
+                let bytes = rest.as_bytes();
+                // `\ce` 与 `\pu` 均为 3 字节，`{` 紧随其后（C1 修复：旧代码 `\pu` 误用 i+4，
+                // 实际 `{` 在 i+3，导致 `\pu` 永不匹配、mhchem::pu 从不触发）。
+                let after_cmd = pos + 3;
+                // 精确匹配命令边界：\ce/\pu 后须紧跟 `{`（否则可能是 \cellbox 之类）。
+                if after_cmd < bytes.len() && bytes[after_cmd] == b'{' {
+                    // read_braced 按字节索引扫描，仅计数 ASCII `{`/`}`；
+                    // 花括号配对不会跨多字节字符边界，返回的切片落在字符边界上，UTF-8 安全。
+                    if let Some((content, close_end)) = read_braced(rest, after_cmd) {
+                        let translated = if is_pu {
                             crate::api::mhchem::pu(content)
+                        } else {
+                            crate::api::mhchem::ce(content)
                         };
                         out.push_str(&translated);
-                        i = close_end;
+                        rest = &rest[close_end..];
                         continue;
                     }
-                    // 未闭合 `{`：原样输出剩余，交由 katex 报红
-                    out.push_str(&tex[i..]);
+                    // 未闭合 `{`：原样输出剩余，交由 katex 报红。
+                    out.push_str(&rest[after_cmd..]);
                     return out;
+                } else {
+                    // 命令后非 `{`：保留命令字面量，从其后再扫。
+                    out.push_str(&rest[pos..after_cmd]);
+                    rest = &rest[after_cmd..];
+                    continue;
                 }
             }
         }
-        out.push(bytes[i] as char);
-        i += 1;
     }
-    out
 }
 
 /// 从 `open`（指向 `{`）读取配对花括号内容，返回 `(内容, 闭括号后位置)`。
@@ -380,11 +392,46 @@ mod tests {
 
     #[test]
     fn mhchem_pu_units_renders() {
+        // C1 回归：`\pu` 旧 off-by-one 使其永不匹配，mhchem::pu 从不触发。
+        // 旧测试只断言 `!contains("katex-error")`，而 katex-rs 对未知命令走 color node
+        // （无 katex-error class），故无论转译与否都通过——等于空测试。这里改为断言
+        // 转译真正发生：产出含 katex 的 HTML，且不再是裸 `\pu{...}` 原文。
         let html = render_inline(r"\pu{9.8 m/s^2}");
         assert!(
-            !html.contains("katex-error"),
+            html.contains("katex") && !html.contains("katex-error"),
             "\\pu 单位应正确渲染而非红字, got: {html}"
         );
+    }
+
+    #[test]
+    fn expand_chem_pu_is_actually_translated() {
+        // C1 直接回归：expand_chem 必须把 `\pu{...}` 转译掉，不得原样保留命令。
+        let out = expand_chem(r"\pu{9.8 m/s^2}");
+        assert_ne!(
+            out, r"\pu{9.8 m/s^2}",
+            "\\pu 应被 mhchem::pu 转译而非原样保留, got: {out}"
+        );
+        assert!(
+            !out.contains(r"\pu{"),
+            "转译后不应残留 \\pu{{ 命令, got: {out}"
+        );
+    }
+
+    #[test]
+    fn expand_chem_preserves_multibyte_utf8() {
+        // C2 回归：旧的 `out.push(bytes[i] as char)` 按单字节 Latin-1 转 char，
+        // 含 `\ce`/`\pu` 且含非 ASCII（如中文 `\text{浓度}`）的公式会被破坏成乱码。
+        let out = expand_chem(r"\text{浓度} \ce{H2O}");
+        assert!(
+            out.contains("浓度"),
+            "中文应原样保留, got: {out}"
+        );
+        assert!(
+            !out.contains(r"\ce{"),
+            "化学公式应被转译、不残留 \\ce{{ 命令, got: {out}"
+        );
+        // 仅含非 ASCII、无化学公式时零成本原样返回。
+        assert_eq!(expand_chem(r"纯中文无公式"), r"纯中文无公式");
     }
 
     #[test]
