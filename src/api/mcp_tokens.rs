@@ -177,6 +177,12 @@ pub async fn reveal_mcp_token(id: String) -> Result<Option<String>, ServerFnErro
         let admin = get_current_admin_user().await?;
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
+        // id 由前端以字符串传入（表 id 列是 uuid）：解析失败视作令牌不存在。
+        let id = match uuid::Uuid::parse_str(&id) {
+            Ok(u) => u,
+            Err(_) => return Ok(None),
+        };
+
         // 仅取属于当前管理员的令牌的密文，避免越权解密他人令牌。
         let row = client
             .query_opt(
@@ -209,6 +215,12 @@ pub async fn revoke_mcp_token(id: String) -> Result<(), ServerFnError> {
 
         let admin = get_current_admin_user().await?;
         let client = get_conn().await.map_err(AppError::db_conn)?;
+
+        // id 解析失败视作令牌不存在（静默无操作，避免探测）。
+        let id = match uuid::Uuid::parse_str(&id) {
+            Ok(u) => u,
+            Err(_) => return Ok(()),
+        };
 
         client
             .execute(
