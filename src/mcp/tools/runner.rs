@@ -18,13 +18,12 @@ use rmcp::{schemars, tool, tool_router, ErrorData as McpError};
 
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use super::common::require_admin;
 
 use crate::api::code_runner::execute::RUNNER_SEMAPHORE;
 use crate::api::code_runner::languages::{is_supported_lang, normalize_lang, LANGUAGES};
 use crate::infra::docker::run_in_container;
 use crate::infra::runner_config::{clamp_limits, RUNNER_CONFIG};
-use crate::mcp::auth::McpPrincipal;
-use crate::models::mcp_token::TokenScope;
 
 /// `run_code` 入参。
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -96,20 +95,6 @@ impl crate::mcp::server::YggMcpServer {
     }
 }
 
-/// 作用域守卫：admin 工具要求 `token.scope >= admin`，不足则返回 insufficient_scope。
-fn require_admin(parts: &http::request::Parts, tool: &str) -> Result<(), McpError> {
-    let principal = parts
-        .extensions
-        .get::<McpPrincipal>()
-        .ok_or_else(|| McpError::invalid_request("missing MCP principal", None))?;
-    if !principal.scope.grants(TokenScope::Admin) {
-        return Err(McpError::invalid_request(
-            format!("insufficient_scope: {tool} requires admin"),
-            None,
-        ));
-    }
-    Ok(())
-}
 
 /// 执行一次容器内代码运行（同步收集输出）。
 ///

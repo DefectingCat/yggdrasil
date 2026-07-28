@@ -17,11 +17,10 @@ use rmcp::model::{CallToolResult, ContentBlock, TextContent};
 use rmcp::{schemars, tool, tool_router, ErrorData as McpError};
 
 use serde::Deserialize;
+use super::common::require_admin;
 
 use crate::api::error::AppError;
 use crate::db::pool::get_conn;
-use crate::mcp::auth::McpPrincipal;
-use crate::models::mcp_token::TokenScope;
 use crate::models::settings::{
     TrashSettings, DEFAULT_AUTO_PURGE_ENABLED, DEFAULT_RETENTION_DAYS,
 };
@@ -87,20 +86,6 @@ impl crate::mcp::server::YggMcpServer {
     }
 }
 
-/// 作用域守卫：admin 工具要求 `token.scope >= admin`，不足则返回 insufficient_scope。
-fn require_admin(parts: &http::request::Parts, tool: &str) -> Result<(), McpError> {
-    let principal = parts
-        .extensions
-        .get::<McpPrincipal>()
-        .ok_or_else(|| McpError::invalid_request("missing MCP principal", None))?;
-    if !principal.scope.grants(TokenScope::Admin) {
-        return Err(McpError::invalid_request(
-            format!("insufficient_scope: {tool} requires admin"),
-            None,
-        ));
-    }
-    Ok(())
-}
 
 /// 读取回收站配置（与 `get_trash_settings` 的 SQL 一致）。
 ///

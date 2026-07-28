@@ -10,14 +10,14 @@
 
 use rmcp::handler::server::tool::Extension;
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{CallToolResult, ContentBlock, TextContent};
+use rmcp::model::CallToolResult;
 use rmcp::{schemars, tool, tool_router, ErrorData as McpError};
 use serde::Deserialize;
 
 use crate::cache;
 use crate::db::pool::get_conn;
-use crate::mcp::auth::McpPrincipal;
 use crate::models::mcp_token::TokenScope;
+use super::common::{internal, ok_json, require_scope};
 
 #[tool_router(router = comments_router, vis = "pub")]
 impl crate::mcp::server::YggMcpServer {
@@ -342,37 +342,3 @@ struct CommentResult {
     message: String,
 }
 
-// ---------------------------------------------------------------------------
-// 鉴权 + 错误辅助
-// ---------------------------------------------------------------------------
-
-fn require_scope(
-    parts: &http::request::Parts,
-    tool: &str,
-    scope: TokenScope,
-) -> Result<McpPrincipal, McpError> {
-    let p = parts
-        .extensions
-        .get::<McpPrincipal>()
-        .ok_or_else(|| McpError::invalid_request("missing MCP principal", None))?;
-    if !p.scope.grants(scope) {
-        return Err(McpError::invalid_request(
-            format!("insufficient_scope: {tool} requires {}", scope.as_str()),
-            None,
-        ));
-    }
-    Ok(p.clone())
-}
-
-fn internal<E: std::fmt::Display>(e: E, ctx: &'static str) -> McpError {
-    tracing::error!("mcp comments {ctx}: {e}");
-    McpError::internal_error(ctx, None)
-}
-
-fn ok_json<T: serde::Serialize>(val: T) -> Result<CallToolResult, McpError> {
-    let text = serde_json::to_string_pretty(&val)
-        .map_err(|e| internal(e, "encode result"))?;
-    Ok(CallToolResult::success(vec![ContentBlock::Text(
-        TextContent::new(text),
-    )]))
-}
