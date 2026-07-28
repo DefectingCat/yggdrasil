@@ -169,7 +169,7 @@ fn AllPostsList() -> Element {
     let mut posts = paginated.items;
     let mut total = paginated.total;
     let loading = paginated.loading;
-    let _error = paginated.error;
+    let error = paginated.error;
 
     // 删除中 / 重建中文章 ID 集合：均由本组件持有（业务逻辑不归 hook 管）。
     // 改为非乐观删除后行会保留至请求完成，可并发点多个删除，故用 HashSet
@@ -221,7 +221,12 @@ fn AllPostsList() -> Element {
             }
         }
 
-        if loading() && posts().is_empty() {
+        if error().is_some() {
+            EmptyState {
+                title: "加载失败",
+                description: "获取文章列表时发生错误，请稍后重试。",
+            }
+        } else if loading() && posts().is_empty() {
             DelayedSkeleton { PostsSkeleton {} }
         } else if posts().is_empty() {
             if is_searching() {
