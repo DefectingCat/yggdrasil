@@ -138,17 +138,8 @@ pub async fn list_posts(
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(|s| {
-                let mut esc = String::with_capacity(s.len());
-                for ch in s.chars().take(200) {
-                    match ch {
-                        '\\' | '%' | '_' => {
-                            esc.push('\\');
-                            esc.push(ch);
-                        }
-                        _ => esc.push(ch),
-                    }
-                }
-                esc
+                let truncated: String = s.chars().take(200).collect();
+                crate::utils::server::escape_like_pattern(&truncated)
             });
 
         let offset = ((page - 1).max(0) as i64) * (per_page as i64);

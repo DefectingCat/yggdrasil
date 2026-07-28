@@ -56,10 +56,7 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
         }
 
         // 转义 SQL LIKE 通配符，避免用户输入 % / _ 导致全表扫描。
-        let escaped = q
-            .replace('\\', "\\\\")
-            .replace('%', "\\%")
-            .replace('_', "\\_");
+        let escaped = crate::utils::server::escape_like_pattern(q);
 
         // 使用 ILIKE 做子串模糊匹配（双侧 %）。注意：此查询无法利用 trgm GIN
         // 索引（仅前缀模式命中），走全表扫，靠 LIMIT 50 + search 限流兜底。

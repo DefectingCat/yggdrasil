@@ -197,10 +197,7 @@ pub async fn search_published(query: &str, limit: u32) -> Result<Vec<SearchHit>,
 
     let client = get_conn().await.map_err(|e| format!("db conn: {e}"))?;
 
-    let escaped = q
-        .replace('\\', "\\\\")
-        .replace('%', "\\%")
-        .replace('_', "\\_");
+    let escaped = crate::utils::server::escape_like_pattern(q);
 
     let rows = client
         .query(
