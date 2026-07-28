@@ -373,7 +373,19 @@ async fn execute_one(
 
     if read_only {
         // 只读：取结果集。列名从第一行取（空结果集时无列名，前端容错）。
-        let rows = client.query(stmt_sql, &[]).await.map_err(AppError::query)?;
+        // 包成子查询并追加 LIMIT MAX_ROWS+1，让 DB 只回传这么多行——避免
+        // `SELECT * FROM big_table` 把整张表物化进内存（仅 statement_timeout 兜底，M11）。
+        // +1 行供客户端检测截断：实际行数 > MAX_ROWS 时 truncated=true。
+        // 内层 SQL 已带 LIMIT 时外层 LIMIT 取更小值，结果正确；列名随子查询透传。
+        let limited_sql = format!(
+            "SELECT * FROM ({}) AS q LIMIT {}",
+            stmt_sql.trim_end_matches(';'),
+            MAX_ROWS + 1
+        );
+        let rows = client
+            .query(&limited_sql, &[])
+            .await
+            .map_err(AppError::query)?;
         let columns: Vec<String> = rows
             .first()
             .map(|r| r.columns().iter().map(|c| c.name().to_string()).collect())
