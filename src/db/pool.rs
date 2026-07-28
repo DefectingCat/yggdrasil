@@ -13,6 +13,7 @@ use std::time::Duration;
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod, Runtime};
 use tokio_postgres::config::Host;
 use tokio_postgres::{Config, NoTls};
+use crate::utils::server::parse_migrate_startup_timeout;
 
 /// 解析 `DATABASE_URL` 并注入 `statement_timeout`，返回配置好的 `tokio_postgres::Config`。
 ///
@@ -154,10 +155,7 @@ pub async fn get_conn() -> Result<deadpool_postgres::Object, deadpool_postgres::
 /// 适用 docker-compose（无 healthcheck）、本机忘启 Postgres 等“DB 起得比 app 慢”的场景。
 pub async fn get_conn_for_startup(
 ) -> Result<deadpool_postgres::Object, deadpool_postgres::PoolError> {
-    let timeout_secs = std::env::var("MIGRATE_STARTUP_TIMEOUT_SECS")
-        .ok()
-        .and_then(|s| s.parse::<u64>().ok())
-        .unwrap_or(30);
+    let timeout_secs = parse_migrate_startup_timeout();
 
     let deadline = tokio::time::Instant::now() + Duration::from_secs(timeout_secs);
     let retry_interval = Duration::from_millis(500);
@@ -241,10 +239,7 @@ pub async fn ensure_database() -> Result<(), String> {
     }
 
     // 3. 在启动超时窗口内反复尝试连接 `postgres` 维护库。
-    let timeout_secs = std::env::var("MIGRATE_STARTUP_TIMEOUT_SECS")
-        .ok()
-        .and_then(|s| s.parse::<u64>().ok())
-        .unwrap_or(30);
+    let timeout_secs = parse_migrate_startup_timeout();
     let deadline = tokio::time::Instant::now() + Duration::from_secs(timeout_secs);
     let retry_interval = Duration::from_millis(500);
 

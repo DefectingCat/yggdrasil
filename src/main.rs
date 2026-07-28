@@ -142,10 +142,7 @@ fn main() {
             let mut conn = match db::pool::get_conn_for_startup().await {
                 Ok(conn) => conn,
                 Err(e) => {
-                    let secs = std::env::var("MIGRATE_STARTUP_TIMEOUT_SECS")
-                        .ok()
-                        .and_then(|s| s.parse::<u64>().ok())
-                        .unwrap_or(30);
+                    let secs = crate::utils::server::parse_migrate_startup_timeout();
                     tracing::error!("could not connect to database within {secs}s startup window: {e}");
                     eprintln!("ERROR: could not connect to database within {secs}s startup window: {e}");
                     eprintln!("HINT: is PostgreSQL running and reachable at the configured DATABASE_URL?");
