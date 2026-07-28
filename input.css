@@ -83,15 +83,19 @@
     animation: popover-enter 150ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
-  /* 下拉选择面板入场（仅垂直微移，无水平居中变换；展开方向由 transform-origin 控制） */
+  /* 下拉选择面板入场。面板的水平居中用 [transform:translateX(-50%)]（不用
+     -translate-x-1/2 utility：Tailwind v4 的 translate utility 走独立 translate
+     属性，会与此处 transform 关键帧叠加成双倍位移），关键帧 fill 值须与面板
+     静态 transform 完全一致，否则动画结束时水平位置跳变；垂直仅微移，展开
+     方向由 transform-origin 控制。 */
   @keyframes select-enter {
     0% {
       opacity: 0;
-      transform: translateY(-4px) scale(0.98);
+      transform: translateX(-50%) translateY(-4px) scale(0.98);
     }
     100% {
       opacity: 1;
-      transform: none;
+      transform: translateX(-50%);
     }
   }
 

@@ -110,10 +110,14 @@ pub fn FormSelect<T: Clone + PartialEq + 'static>(
 ) -> Element {
     // 面板与 POPOVER_PANEL_CLASS 同源（卡片化圆角 + 阴影）。宽度取 max(触发器,
     // 最长选项)：紧凑触发器（如“手动”）下面板仍能完整展示长选项；上限防出屏。
+    // 水平以触发器中心居中：面板宽于触发器时两侧对称探出，窄触发器不失衡。
+    // 居中用 [transform:translateX(-50%)] 而非 -translate-x-1/2 utility：Tailwind
+    // v4 的 translate utility 走独立 translate 属性，会与 select-enter 关键帧的
+    // transform 叠加造成双倍位移；关键帧的 fill 值与此处 transform 完全一致。
     // 定义在函数体内：模块级私有常量若仅被 wasm 门控调用点引用，会在 server
     // 构建下触发 dead_code。
     const TRIGGER_CLASS: &str = "w-full block cursor-pointer truncate select-none text-left pl-4 pr-10 py-2 border border-paper-border rounded-2xl bg-paper-entry text-paper-primary focus:outline-none focus:border-paper-accent focus:ring-1 focus:ring-paper-accent/30 transition-colors duration-200";
-    const PANEL_CLASS: &str = "absolute left-0 z-50 w-max min-w-full max-w-[calc(100vw_-_2rem)] max-h-60 overflow-y-auto rounded-2xl border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] p-1.5 shadow-lg animate-select-enter";
+    const PANEL_CLASS: &str = "absolute left-1/2 z-50 w-max min-w-full max-w-[calc(100vw_-_2rem)] [transform:translateX(-50%)] max-h-60 overflow-y-auto rounded-2xl border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] p-1.5 shadow-lg animate-select-enter";
 
     let trigger_cls = trigger_class.unwrap_or(TRIGGER_CLASS);
 
