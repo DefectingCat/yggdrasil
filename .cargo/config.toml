@@ -1,3 +1,20 @@
+# Dioxus 0.7.9 的 #[server(Fn, "/api")] 宏会在 URL 末尾追加一个去冲突数字后缀:
+#   xxh64( <key> + ":" + module_path!(), 0 )
+# 默认 <key> = CARGO_MANIFEST_DIR(编译时 crate 绝对路径)。本项目的部署流程中
+# server 二进制与 WASM 前端在不同的目录下编译:
+#   - server: host 上 `cross build`   → CARGO_MANIFEST_DIR = 宿主绝对路径
+#   - wasm:   Dockerfile.cross 容器内 → CARGO_MANIFEST_DIR = /build (WORKDIR)
+# 两者不同 → 数字后缀不一致 → 浏览器请求的 /api/login<host 路径 hash> 在
+# server 上只注册了 /api/login</build hash> → 路由不匹配 → Dioxus SSR 兜底
+# GET handler 接管 → POST 到 GET-only 路由 → 405 Method Not Allowed
+# (allow: GET,HEAD)。这是结构性 bug,每次交叉编译部署必现。
+#
+# 宏内置逃生舱:编译时若设置了 SERVER_FN_OVERRIDE_KEY,则用它替代
+# CARGO_MANIFEST_DIR 作为 hash key(见 dioxus-fullstack-macro src/lib.rs:392)。
+# [env] 让 cargo 把该变量注入 rustc,server 与 wasm 两次编译读到同一个值,
+# 后缀恒定一致,与编译目录无关。本地 dev / 同机原生编译同样受惠(无副作用)。
+[env]
+SERVER_FN_OVERRIDE_KEY = "yggdrasil"
 # Workaround for Dioxus 0.7.9 leaking the wasm_js getrandom backend cfg
 # into the server build. We disable DX's automatic flag in the Makefile
 # and set it only for the wasm32 target here.
