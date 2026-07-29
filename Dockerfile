@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
 
 # -----------------------------------------------------------------------------
-# Builder stage: compile the static-linked musl server binary and frontend assets
+# Builder stage: build frontend assets (WASM/CSS/JS); server binary is COPYed in
 # -----------------------------------------------------------------------------
 # Trixie (Debian 13, glibc 2.41) — required because the prebuilt `dx` v0.7.9
 # binary (aarch64/x86_64-unknown-linux-gnu) needs GLIBC_2.39; Bookworm only
 # ships 2.36, so `dx --version` fails with "version `GLIBC_2.39' not found".
-FROM rust:1.96-trixie AS builder
+FROM --platform=$BUILDPLATFORM rust:1.96-trixie AS builder
 
 # Point every network download at a Chinese mirror so the build is fast/reliable
 # from inside the container (the host proxy at 127.0.0.1:10808 is unreachable
@@ -34,8 +34,7 @@ RUN sed -i \
     /etc/apt/sources.list.d/debian.sources
 
 # Install system build tooling. Native dependencies are needed for:
-#   - musl-tools: linker for x86_64-unknown-linux-musl
-#   - cmake/clang/nasm/libssl-dev: libwebp (zenwebp), ring, syntect
+#   - cmake/clang/nasm: dx WASM toolchain + binaryen
 #   - binaryen: provides `wasm-opt` on PATH so dx's release client build
 #     uses the local binary instead of fetching one from GitHub Releases.
 #     dx's internal wasm-opt download ignores GH_PROXY (only the explicit
@@ -43,6 +42,9 @@ RUN sed -i \
 #     hangs ~80 min then fails with "stream error received: unspecific
 #     protocol error detected" trying to fetch wasm-opt mid-build.
 #   - curl/gnupg/ca-certificates: download tooling
+# (musl-tools was removed: the server is no longer compiled in the container —
+# see the COPY .cross-out/server step below. The cross toolchain lives on the
+# host, used by `make build-server-cross`.)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
@@ -51,7 +53,6 @@ RUN apt-get update \
         nasm \
         pkg-config \
         libssl-dev \
-        musl-tools \
         binaryen \
         ca-certificates \
         curl \
@@ -87,11 +88,10 @@ RUN mkdir -p /usr/local/cargo \
         "${RS_PROXY}" \
         > /usr/local/cargo/config.toml
 
-# Add the targets used by Dioxus fullstack builds. Both musl targets are
-# installed; each buildx platform leg builds only its native one (see below).
-RUN rustup target add wasm32-unknown-unknown \
-        x86_64-unknown-linux-musl aarch64-unknown-linux-musl
-
+# wasm32 is the only target needed here — the builder compiles only the Dioxus
+# client WASM bundle. The server binary is cross-compiled on the host and
+# COPYed in (see below), so no musl target is required in the container.
+RUN rustup target add wasm32-unknown-unknown
 # Install the Dioxus CLI from the official prebuilt binary (GitHub Releases),
 # NOT `cargo install` (which compiles dx-cli's huge dep tree from source — the
 # slowest single Docker step). The release tag v0.7.9 matches the crate version
@@ -190,35 +190,22 @@ RUN dx build @client --release --debug-symbols=false --wasm-js-cfg false && \
     mkdir -p /build/dist/public && \
     cp -r /build/target/dx/yggdrasil/*/web/public/* /build/dist/public/
 
-# Build the server as a fully static musl binary, **natively for the buildx
-# platform leg**. Each leg builds only its own arch, so musl-gcc (which Debian
-# ships for the host arch only) and the target always match — no cross-compiler,
-# no QEMU. Cross-compiling here (e.g. building the x86_64 musl target from an
-# arm64 leg) breaks ring: cc-rs emits -m64 for the x86_64 target and hands it to
-# the arm64 musl-gcc, whose cc1 has no -m64 → "unrecognized command-line option".
-RUN ARCH="$(dpkg --print-architecture)" \
-    && case "$ARCH" in \
-        amd64) MUSL_TARGET=x86_64-unknown-linux-musl  ;; \
-        arm64) MUSL_TARGET=aarch64-unknown-linux-musl ;; \
-        *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
-    esac \
-    && export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
-    && export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
-    && export RUSTFLAGS="-C target-feature=+crt-static -C relocation-model=static" \
-    && cargo build --release --target "$MUSL_TARGET" --no-default-features --features server
+# The server binary is cross-compiled on the HOST before `docker build` runs
+# (see `make build-server-cross` / `make docker-amd64`), then COPYed in here.
+# This avoids the cross-compile blocker that previously forced a native-per-leg
+# design: cc-rs emits `-m64` for x86_64 targets, but Debian's musl-tools only
+# ships a host-arch musl-gcc whose cc1 rejects `-m64`. On the host we use
+# `cross` (or `cargo-zigbuild`), whose musl-cross toolchain accepts `-m64`, to
+# produce a fully-static x86_64-musl binary — then the container only needs to
+# build the architecture-INDEPENDENT assets (WASM, CSS, JS libs).
+#
+# Because the builder is pinned to $BUILDPLATFORM, the whole frontend build
+# (pnpm, dx WASM, tailwind) runs at native speed with NO QEMU emulation,
+# regardless of which arch the final image targets.
+COPY .cross-out/server /build/server
 
 # Ensure the uploads directory exists for runtime image caching.
 RUN mkdir -p uploads
-
-# Stage the built binary + assets at arch-independent paths so the scratch
-# runtime stage can COPY them without knowing which musl target was built.
-RUN ARCH="$(dpkg --print-architecture)" \
-    && case "$ARCH" in \
-        amd64) MUSL_TARGET=x86_64-unknown-linux-musl  ;; \
-        arm64) MUSL_TARGET=aarch64-unknown-linux-musl ;; \
-        *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
-    esac \
-    && cp "/build/target/${MUSL_TARGET}/release/yggdrasil" /build/server
 
 # -----------------------------------------------------------------------------
 # Runtime stage: minimal scratch image with the static musl binary

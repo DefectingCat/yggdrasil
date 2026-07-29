@@ -1,4 +1,4 @@
-.PHONY: dev build build-linux build-freebsd freebsd-sysroot docker docker-amd64 docker-apple docker-multiarch css css-watch clean build-libs build-editor build-codemirror build-lightbox build-core build-xterm highlight-css katex-css test doc doc-open start lint fix restore-webp
+.PHONY: dev build build-linux build-freebsd freebsd-sysroot docker docker-amd64 docker-apple docker-multiarch build-server-cross css css-watch clean build-libs build-editor build-codemirror build-lightbox build-core build-xterm highlight-css katex-css test doc doc-open start lint fix restore-webp
 
 build:
 	@rm -rf static/
@@ -173,12 +173,15 @@ doc:
 doc-open:
 	@RUSTDOCFLAGS="--default-theme=ayu" cargo doc --no-deps --document-private-items --open
 
-# Multi-arch image build via buildx. The Dockerfile builds each platform leg
-# natively (amd64→x86_64 musl, arm64→aarch64 musl), so no cross-compiler or
-# QEMU is needed. Docker Desktop ships a buildx builder that handles this.
+# Docker image build. The Dockerfile pins the builder to $BUILDPLATFORM (native
+# arch) and only builds architecture-INDEPENDENT assets (WASM/CSS/JS) inside
+# it — NO QEMU emulation of the build environment. The server binary is
+# cross-compiled on the HOST (by build-server-cross) to the target arch and
+# COPYed into the image. So even on Apple Silicon, building an amd64 image runs
+# the whole frontend build at native speed.
 #
 #   make docker              native arch only, load into local daemon (for testing)
-#   make docker-amd64        x86_64 only, load into local daemon (buildx + QEMU on Apple Silicon)
+#   make docker-amd64        x86_64 image: cross-compiles server on host (no QEMU), then docker build
 #   make docker-apple        x86_64 only, via Apple Container CLI (macOS 26+, Apple Silicon native; no Docker needed)
 #   make docker-multiarch    build amd64+arm64 and push to a registry
 #                            (multi-arch manifests can't be --load-ed locally)
@@ -204,10 +207,29 @@ GIT_BUILD_ARGS = --build-arg YGG_BUILD_GIT_DESCRIBE="$(GIT_DESCRIBE)" \
 docker:
 	@docker buildx build --load $(GIT_BUILD_ARGS) -t yggdrasil .
 
-# Cross-build x86_64 into the local daemon. buildx 仿真非原生架构,无需修改 Dockerfile
-# (它本就按 dpkg --print-architecture 自适应选 musl target)。Apple Silicon 上走 QEMU,
-# 比 native 慢;产物可直接 docker run / docker save 导出。
-docker-amd64:
+# Cross-compile the server binary to x86_64-unknown-linux-musl on the HOST,
+# into .cross-out/server. The Dockerfile COPYs this binary in (the container
+# never compiles the server — see the "server binary is cross-compiled on the
+# HOST" note in the Dockerfile). `cross` runs the build inside a prebuilt
+# x86_64-musl toolchain container that accepts cc-rs's -m64 (which Debian's
+# host-arch musl-gcc rejects), so ring/mimalloc cross-compile cleanly.
+#
+# CROSS_IMAGE points `cross` at a registry mirror (default: Nanjing University's
+# GHCR mirror, fast from China). Set to ghcr.io/cross-rs/x86_64-unknown-linux-musl
+# to use upstream GHCR directly.
+CROSS_IMAGE ?= ghcr.nju.edu.cn/cross-rs/x86_64-unknown-linux-musl:main
+build-server-cross:
+	@CROSS_TARGET_X86_64_UNKNOWN_LINUX_MUSL_IMAGE="$(CROSS_IMAGE)" \
+		cross build --release --target x86_64-unknown-linux-musl \
+		--no-default-features --features server
+	@mkdir -p .cross-out
+	@cp target/x86_64-unknown-linux-musl/release/yggdrasil .cross-out/server
+	@echo "Server binary staged at .cross-out/server"
+
+# Cross-build the amd64 image into the local daemon. Depends on the pre-cross-
+# compiled server binary (built on the host, no QEMU). Product is directly
+# docker run / docker save exportable.
+docker-amd64: build-server-cross
 	@docker buildx build --platform linux/amd64 --load $(GIT_BUILD_ARGS) -t yggdrasil:amd64 .
 
 docker-multiarch:

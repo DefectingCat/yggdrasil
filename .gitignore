@@ -1,4 +1,5 @@
 /target
+/.cross-out
 /dist
 /.dioxus
 /.omc
