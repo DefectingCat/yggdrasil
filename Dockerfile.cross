@@ -1,12 +1,41 @@
 # syntax=docker/dockerfile:1
 
+# =============================================================================
+# Cross-build an amd64 image on an arm64 host WITHOUT QEMU.
+#
+# The whole point of this file: a native arm64 builder (Docker Desktop pinned to
+# $BUILDPLATFORM) compiles an x86_64 server binary, then hands it to a
+# linux/amd64 scratch image. No Rosetta, no QEMU TCG, no `cross` — those crash
+# (rustc SIGSEGV under QEMU) and Rosetta is unavailable with Docker VMM.
+#
+# The build is split into TWO native-arm64 builder stages because the two
+# toolchains it needs cannot live in one base image:
+#
+#   Stage A (frontend, rust:1.96-trixie / glibc)  — the prebuilt `dx` CLI is a
+#     glibc binary needing GLIBC_2.39, so it only runs on Trixie (glibc 2.41).
+#     Builds the WASM client + JS libs + syntax/katex/tailwind CSS.
+#
+#   Stage B (server, rust:1.96-alpine3.22 / musl) — the ONLY reliable zig
+#     source in China is Alpine's apk (TUNA mirror). ziglang.org is unreachable,
+#     GitHub Releases carries NO zig binaries, and every Chinese "ziglang"
+#     mirror returns an HTML error page. Alpine's zig is dynamically linked to
+#     musl+LLVM, so it cannot be copied into the glibc frontend stage — hence a
+#     separate native-musl stage where zig runs in its home environment.
+#     cargo-zigbuild uses zig as the x86_64-musl C+Rust linker, producing a
+#     fully static ELF (ring / libmimalloc-sys / zenwebp all cross-compile via
+#     zig's bundled musl sysroot).
+#
+# Stage C is a linux/amd64 scratch that just COPYs the two artifacts.
+# =============================================================================
+
+
 # -----------------------------------------------------------------------------
-# Builder stage: compile the static-linked musl server binary and frontend assets
+# Stage A: frontend assets (glibc Trixie, native arm64)
 # -----------------------------------------------------------------------------
 # Trixie (Debian 13, glibc 2.41) — required because the prebuilt `dx` v0.7.9
 # binary (aarch64/x86_64-unknown-linux-gnu) needs GLIBC_2.39; Bookworm only
 # ships 2.36, so `dx --version` fails with "version `GLIBC_2.39' not found".
-FROM --platform=$BUILDPLATFORM rust:1.96-trixie AS builder
+FROM --platform=$BUILDPLATFORM rust:1.96-trixie AS frontend
 
 # Point every network download at a Chinese mirror so the build is fast/reliable
 # from inside the container (the host proxy at 127.0.0.1:10808 is unreachable
@@ -34,7 +63,6 @@ RUN sed -i \
     /etc/apt/sources.list.d/debian.sources
 
 # Install system build tooling. Native dependencies are needed for:
-#   - musl-tools: linker for x86_64-unknown-linux-musl
 #   - cmake/clang/nasm/libssl-dev: libwebp (zenwebp), ring, syntect
 #   - binaryen: provides `wasm-opt` on PATH so dx's release client build
 #     uses the local binary instead of fetching one from GitHub Releases.
@@ -43,6 +71,8 @@ RUN sed -i \
 #     hangs ~80 min then fails with "stream error received: unspecific
 #     protocol error detected" trying to fetch wasm-opt mid-build.
 #   - curl/gnupg/ca-certificates: download tooling
+# (musl-tools / the x86_64 musl target are NOT needed here — the server
+# binary is built in Stage B now; this stage only emits the WASM client.)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
@@ -51,7 +81,6 @@ RUN apt-get update \
         nasm \
         pkg-config \
         libssl-dev \
-        musl-tools \
         binaryen \
         ca-certificates \
         curl \
@@ -75,8 +104,14 @@ RUN ARCH="$(dpkg --print-architecture)" \
     && corepack prepare pnpm@11.8.0 --activate
 
 # Configure npm/pnpm to use the npmmirror registry for all subsequent installs.
+# pnpm 11 enables verify-deps-before-run by default: before every `pnpm run` it
+# re-checks node_modules against the lockfile, spawning a subprocess that can
+# flake (and reach the registry) right after a --frozen-lockfile install. Since
+# we always install --frozen-lockfile immediately before, the check is redundant
+# — disable it for a deterministic Docker build.
 RUN npm config set registry "${NPM_REGISTRY}" \
-    && pnpm config set registry "${NPM_REGISTRY}"
+    && pnpm config set registry "${NPM_REGISTRY}" \
+    && pnpm config set verify-deps-before-run false
 
 # --- Rust: point rustup and cargo at the rsproxy mirror. ---
 ENV RUSTUP_DIST_SERVER=${RS_PROXY}
@@ -87,10 +122,9 @@ RUN mkdir -p /usr/local/cargo \
         "${RS_PROXY}" \
         > /usr/local/cargo/config.toml
 
-# Add the targets used by Dioxus fullstack builds. Both musl targets are
-# installed; each buildx platform leg builds only its native one (see below).
-RUN rustup target add wasm32-unknown-unknown \
-        x86_64-unknown-linux-musl aarch64-unknown-linux-musl
+# The frontend stage only builds the WASM client bundle — it needs just the
+# wasm32 target. (Server musl targets moved to Stage B.)
+RUN rustup target add wasm32-unknown-unknown
 
 # Install the Dioxus CLI from the official prebuilt binary (GitHub Releases),
 # NOT `cargo install` (which compiles dx-cli's huge dep tree from source — the
@@ -139,16 +173,20 @@ RUN ARCH="$(dpkg --print-architecture)" \
 WORKDIR /build
 
 # Cache the pnpm workspace node_modules by copying only package manifests first.
-# Copying all 4 libs' manifests + the workspace root lets pnpm install everything
-# in one shot; this layer is reused as long as the manifests don't change.
-# `pnpm-workspace.yaml` declares a patched dep (@tiptap/markdown) pointing at
-# `patches/@tiptap__markdown@3.27.3.patch`, so the patches/ tree must be present
-# before `pnpm install --frozen-lockfile` or it fails with ENOENT on the patch.
+# pnpm-workspace.yaml uses `packages: ['*']`, so EVERY sub-package's package.json
+# must be present before `pnpm install --frozen-lockfile` — otherwise pnpm only
+# links deps for the manifests it can see, and `pnpm -r run build` later fails
+# (e.g. mermaid-renderer "Cannot find module 'mermaid'"). This layer is reused as
+# long as the manifests don't change. The patches/ tree must be present too
+# (@tiptap/markdown patched dep → ENOENT on the patch otherwise).
 COPY libs/package.json libs/pnpm-workspace.yaml libs/pnpm-lock.yaml libs/
 COPY libs/patches/                         libs/patches/
+COPY libs/shared/package.json             libs/shared/
 COPY libs/tiptap-editor/package.json      libs/tiptap-editor/
 COPY libs/codemirror-editor/package.json  libs/codemirror-editor/
 COPY libs/lightbox/package.json           libs/lightbox/
+COPY libs/xterm-terminal/package.json     libs/xterm-terminal/
+COPY libs/mermaid-renderer/package.json   libs/mermaid-renderer/
 COPY libs/yggdrasil-core/package.json     libs/yggdrasil-core/
 RUN cd libs && pnpm install --frozen-lockfile
 
@@ -179,10 +217,9 @@ COPY . .
 # which left math rendering as bare spans without KaTeX fonts.
 RUN make build-libs && make highlight-css && make katex-css && tailwindcss -i input.css -o public/style.css --minify
 
-# Build the client-side Dioxus WASM bundle. We use dx only for the client assets;
-# dx's linker wrapper is incompatible with a raw static linker, so the server
-# binary is built with plain cargo in the next step. The client build emits a
-# ready-to-serve public/ directory under target/dx/yggdrasil/*/web/public.
+# Build the client-side Dioxus WASM bundle. dx builds only the client assets.
+# The client build emits a ready-to-serve public/ directory under
+# target/dx/yggdrasil/*/web/public.
 # restore-webp overwrites dx's re-encoded VP8L .webp stills with the source
 # originals — keep in sync with make build-linux, which runs the same target.
 RUN dx build @client --release --debug-symbols=false --wasm-js-cfg false && \
@@ -190,24 +227,81 @@ RUN dx build @client --release --debug-symbols=false --wasm-js-cfg false && \
     mkdir -p /build/dist/public && \
     cp -r /build/target/dx/yggdrasil/*/web/public/* /build/dist/public/
 
-# The server binary is cross-compiled on the HOST before `docker build` (by
-# `make build-server-cross` → `cross`), then COPYed in here. This avoids the
-# -m64 blocker that would arise from in-container cross-compile, AND keeps the
-# whole frontend build (pnpm/dx/tailwind) at native speed — the builder is
-# pinned to $BUILDPLATFORM so it runs the host's native arch with no QEMU.
-COPY .cross-out/server /build/server
 
 # -----------------------------------------------------------------------------
-# Runtime stage: minimal scratch image with the static musl binary
+# Stage B: server binary (Alpine musl, native arm64)
+#
+# Alpine is the home environment for zig here: its apk package is the only
+# China-reachable zig source, and it is dynamically linked to musl+LLVM so it
+# can only run natively inside this musl stage. cargo-zigbuild drives zig as
+# the x86_64-unknown-linux-musl C+Rust cross-linker; zig bundles its own musl
+# sysroot, so ring / libmimalloc-sys / zenwebp compile without any system
+# cross-toolchain. The output is a fully static ELF dropped into a linux/amd64
+# scratch image by Stage C.
+# -----------------------------------------------------------------------------
+FROM --platform=$BUILDPLATFORM rust:1.96-alpine3.22 AS server
+
+ARG RS_PROXY=https://rsproxy.cn
+
+# TUNA mirror for apk; install zig (the cross-linker) plus the build tooling
+# Alpine's C build scripts may invoke on the host (make/cc for proc-macros and
+# build-script host binaries). zig itself provides the x86_64 target compiler.
+RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apk/repositories \
+    && apk add --no-cache zig build-base musl-dev pkgconfig
+
+# rsproxy for rustup + crates.
+ENV RUSTUP_DIST_SERVER=${RS_PROXY}
+ENV RUSTUP_UPDATE_ROOT=${RS_PROXY}/rustup
+RUN mkdir -p /usr/local/cargo \
+    && printf \
+        '[source.crates-io]\nreplace-with = "rsproxy-sparse"\n\n[source.rsproxy-sparse]\nregistry = "sparse+%s/index/"\n' \
+        "${RS_PROXY}" \
+        > /usr/local/cargo/config.toml
+
+# The cross-compile target (the host target, aarch64-unknown-linux-musl, is
+# already installed by the rust:1.96-alpine3.22 base image for build-scripts
+# and proc-macros that run on the builder).
+RUN rustup target add x86_64-unknown-linux-musl
+
+# cargo-zigbuild generates zig-cc wrapper scripts and points cargo's linker
+# env at them, overriding the project .cargo/config.toml's `x86_64-linux-musl-gcc`
+# linker (which does not exist here). Pure-Rust crate; builds cleanly on musl.
+RUN cargo install cargo-zigbuild --version 0.23.0 --locked
+
+# Same git build-args as Stage A (build.rs reads them via env, and the server
+# fn hash key is fixed by SERVER_FN_OVERRIDE_KEY in the project .cargo/config.toml
+# — identical on both stages, so the /api/<fn><suffix> paths match between the
+# server binary and the WASM client).
+ARG YGG_BUILD_GIT_DESCRIBE=""
+ARG YGG_BUILD_GIT_HASH=""
+ARG YGG_BUILD_GIT_COMMIT_DATE=""
+ENV YGG_BUILD_GIT_DESCRIBE=${YGG_BUILD_GIT_DESCRIBE}
+ENV YGG_BUILD_GIT_HASH=${YGG_BUILD_GIT_HASH}
+ENV YGG_BUILD_GIT_COMMIT_DATE=${YGG_BUILD_GIT_COMMIT_DATE}
+
+WORKDIR /build
+COPY . .
+
+# Cross-compile the static-linked server binary to x86_64-musl. .cross-out and
+# the host `cross` toolchain are gone — the binary is produced entirely inside
+# this container now, so `make docker-amd64` needs nothing on the host but
+# Docker itself.
+RUN cargo zigbuild --release --target x86_64-unknown-linux-musl \
+        --no-default-features --features server \
+    && cp target/x86_64-unknown-linux-musl/release/yggdrasil /build/server
+
+
+# -----------------------------------------------------------------------------
+# Stage C: runtime — minimal linux/amd64 scratch image
 # -----------------------------------------------------------------------------
 FROM scratch
 
 WORKDIR /app
 
-# Copy the static musl server binary and the bundled public assets.
-COPY --from=builder --chown=65534:65534 /build/server /app/server
-COPY --from=builder --chown=65534:65534 /build/dist/public /app/public
-COPY --from=builder --chown=65534:65534 /build/uploads /app/uploads
+# Copy the static x86_64 musl server binary and the bundled public assets.
+COPY --from=server --chown=65534:65534 /build/server /app/server
+COPY --from=frontend --chown=65534:65534 /build/dist/public /app/public
+COPY --from=frontend --chown=65534:65534 /build/uploads /app/uploads
 
 # The app checks for DATABASE_URL on startup even though this image is intended
 # to run without a real database. A placeholder is enough to let the server boot.

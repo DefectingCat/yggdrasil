@@ -139,16 +139,23 @@ RUN ARCH="$(dpkg --print-architecture)" \
 WORKDIR /build
 
 # Cache the pnpm workspace node_modules by copying only package manifests first.
-# Copying all 4 libs' manifests + the workspace root lets pnpm install everything
-# in one shot; this layer is reused as long as the manifests don't change.
+# Copying every sub-package's manifest + the workspace root lets pnpm install
+# everything in one shot; this layer is reused as long as the manifests don't
+# change. pnpm-workspace.yaml uses `packages: ['*']`, so ALL sub-package
+# manifests must be present before `pnpm install --frozen-lockfile` or pnpm
+# only links deps for the manifests it sees and `pnpm -r run build` fails later
+# (e.g. mermaid-renderer "Cannot find module 'mermaid'").
 # `pnpm-workspace.yaml` declares a patched dep (@tiptap/markdown) pointing at
 # `patches/@tiptap__markdown@3.27.3.patch`, so the patches/ tree must be present
 # before `pnpm install --frozen-lockfile` or it fails with ENOENT on the patch.
 COPY libs/package.json libs/pnpm-workspace.yaml libs/pnpm-lock.yaml libs/
 COPY libs/patches/                         libs/patches/
+COPY libs/shared/package.json             libs/shared/
 COPY libs/tiptap-editor/package.json      libs/tiptap-editor/
 COPY libs/codemirror-editor/package.json  libs/codemirror-editor/
 COPY libs/lightbox/package.json           libs/lightbox/
+COPY libs/xterm-terminal/package.json     libs/xterm-terminal/
+COPY libs/mermaid-renderer/package.json   libs/mermaid-renderer/
 COPY libs/yggdrasil-core/package.json     libs/yggdrasil-core/
 RUN cd libs && pnpm install --frozen-lockfile
 

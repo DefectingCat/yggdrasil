@@ -12,8 +12,8 @@ docker buildx build --platform linux/amd64 --load \
   -t localhost/yggdrasil-runner-base:latest docker/runner-base; or exit 1
 docker tag localhost/yggdrasil-runner-base:latest yggdrasil-runner-base:latest; or exit 1
 
-echo "==> [2/7] 构建主应用镜像(cross 交叉编译,无 QEMU)"
-# make docker-amd64 在 arm64 机自动走 build-server-cross + Dockerfile.cross
+echo "==> [2/7] 构建主应用镜像(容器内 zig 交叉编译 x86_64,无 QEMU)"
+# make docker-amd64 在 arm64 机走 Dockerfile.cross(双 builder:Trixe 前端 + Alpine server)
 # (Makefile 按 HOST_ARCH 分支);git 信息透传由 Makefile 内部 GIT_BUILD_ARGS 完成
 make docker-amd64; or exit 1
 # 脚本后续统一用 localhost/yggdrasil:latest,这里对齐 tag
