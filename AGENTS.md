@@ -31,7 +31,7 @@ Yggdrasil is a fullstack blog/CMS built with **Dioxus 0.7**. A single Rust crate
 - `migrations/` — 17 numbered SQL files (`NNN_desc.sql`); each must also be registered in the `MIGRATIONS` array in `src/db/migrate.rs` (enforced by a compile-test).
 - `themes/` — Catppuccin Latte (light) / Mocha (dark) `.tmTheme` for syntect.
 - `docker/` — `Dockerfile` (app), `build-runners.sh` + `runner-base/` + `runner-{python,node,go,rust,bun}/` (sandbox images).
-- `docs/` — `DEPLOYMENT.md`, `test-markdown.md` (rendering test fixture). `DEVELOPMENT.md` (perf benchmarking + highlighting guide). `CHANGELOG.md` (Keep a Changelog v1.1.0, SemVer; current `0.5.0`).
+- `docs/` — `DEPLOYMENT.md`, `test-markdown.md` (rendering test fixture). `DEVELOPMENT.md` (perf benchmarking + highlighting guide). Repo-root `CHANGELOG.md` (Keep a Changelog v1.1.0, SemVer) is `include_str!`-embedded and served at `/changelog` (`src/api/changelog.rs`).
 - `scripts/` — `migrate.sh` (manual DB migration runner; companion to the built-in startup migrator), `xun.fish` (full-deploy pipeline to the `xun` server — build all images, scp, rolling-restart `app` only, verify).
 - `static/` — Dioxus IncrementalRenderer persists SSR HTML here at runtime (gitignored output, not source).
 

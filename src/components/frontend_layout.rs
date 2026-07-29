@@ -29,7 +29,7 @@ fn route_skeleton(route: &Route) -> Element {
         Route::Search {} => rsx! {
             DelayedSkeleton { SearchSkeleton {} }
         },
-        Route::PostDetail { .. } => rsx! {
+        Route::PostDetail { .. } | Route::Changelog { .. } => rsx! {
             DelayedSkeleton { PostDetailSkeleton {} }
         },
         Route::NotFound { .. } => rsx! {

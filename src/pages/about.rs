@@ -8,16 +8,19 @@
 //! 而本站名为 Yggdrasil——北欧神话中的世界树，记忆的容器。
 //! 书写即对遗忘的抵抗：世界遗忘的，树记得。
 //!
-//! 文末的「年轮」小节收录站点元链接（如 rustdoc 站点文档），
-//! 向 [`LINKS`] 数组追加一行即可新增条目。
+//! 文末的「年轮」小节收录站点元信息：站内条目（更新日志）用 `Link` 走 SPA
+//! 导航，站外/静态条目（如 rustdoc 站点文档）向 [`LINKS`] 数组追加一行即可。
 
 use dioxus::prelude::*;
 
-/// 「年轮」链接列表：`(URL, 名称, 一句描述)`。
+use crate::router::Route;
+
+/// 「年轮」外链列表：`(URL, 名称, 一句描述)`。
 ///
-/// 这些目标均在 Dioxus SPA 路由之外（静态文件或站外地址），
+/// 仅收录 Dioxus SPA 路由之外的目标（静态文件或站外地址），
 /// 因此渲染为普通 `<a target="_blank">` 而非 `Link`——
 /// `Link` 只接受 `Route` 枚举，指向未注册路径会被路由兜进 404。
+/// 站内条目（如更新日志）不使用本数组，直接在下方以 `Link` 单独渲染。
 const LINKS: &[(&str, &str, &str)] = &[(
     "/doc/yggdrasil/index.html",
     "站点文档",
@@ -65,6 +68,29 @@ pub fn About() -> Element {
                     "年轮"
                 }
                 div { class: "max-w-xl mx-auto",
+                    // 站内条目：SPA 导航用 Link，右箭头 →；外链行是新标签页 ↗。
+                    // 更新日志是固定设施，不进 LINKS 数组。
+                    Link {
+                        to: Route::Changelog {},
+                        class: "group flex items-baseline justify-between gap-4 py-3 border-b border-paper-border/50",
+                        span { class: "flex items-baseline gap-1.5 text-paper-primary font-medium group-hover:text-paper-accent transition-colors",
+                            "更新日志"
+                            svg {
+                                xmlns: "http://www.w3.org/2000/svg",
+                                width: "14",
+                                height: "14",
+                                view_box: "0 0 24 24",
+                                fill: "none",
+                                stroke: "currentColor",
+                                stroke_width: "2",
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                class: "text-paper-tertiary group-hover:text-paper-accent group-hover:translate-x-0.5 transition-all",
+                                path { d: "M5 12h14M13 6l6 6-6 6" }
+                            }
+                        }
+                        span { class: "text-sm text-paper-secondary", "每一圈年轮，都是一次生长" }
+                    }
                     for (href, name, desc) in LINKS.iter().copied() {
                         a {
                             key: "{href}",

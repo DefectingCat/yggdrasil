@@ -15,6 +15,7 @@ use crate::pages::admin::{
     Admin, AdminComments, AdminCommentsPage, Assets, Mcp, Posts, Runner, System, Write, WriteEdit,
 };
 use crate::pages::archives::Archives;
+use crate::pages::changelog::Changelog;
 use crate::pages::home::{Home, HomePage};
 use crate::pages::login::Login;
 use crate::pages::not_found::NotFound;
@@ -55,6 +56,9 @@ pub enum Route {
             /// 关于页面
             #[route("/about")]
             About {},
+            /// 更新日志页
+            #[route("/changelog")]
+            Changelog {},
             /// 404 兜底路由，匹配所有未命中路径
             #[route("/:..segments")]
             NotFound { segments: Vec<String> },

@@ -8,6 +8,8 @@
 pub mod auth;
 /// 素材管理（assets/asset_refs）的 Dioxus server function。
 pub mod assets;
+/// 更新日志（内嵌 CHANGELOG.md 渲染）的 Dioxus server function。
+pub mod changelog;
 /// 代码运行接口与数据结构。
 pub mod code_runner;
 /// 评论相关接口。
