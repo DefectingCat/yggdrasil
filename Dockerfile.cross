@@ -6,7 +6,7 @@
 # Trixie (Debian 13, glibc 2.41) — required because the prebuilt `dx` v0.7.9
 # binary (aarch64/x86_64-unknown-linux-gnu) needs GLIBC_2.39; Bookworm only
 # ships 2.36, so `dx --version` fails with "version `GLIBC_2.39' not found".
-FROM rust:1.96-trixie AS builder
+FROM --platform=$BUILDPLATFORM rust:1.96-trixie AS builder
 
 # Point every network download at a Chinese mirror so the build is fast/reliable
 # from inside the container (the host proxy at 127.0.0.1:10808 is unreachable
@@ -190,35 +190,12 @@ RUN dx build @client --release --debug-symbols=false --wasm-js-cfg false && \
     mkdir -p /build/dist/public && \
     cp -r /build/target/dx/yggdrasil/*/web/public/* /build/dist/public/
 
-# Build the server as a fully static musl binary, **natively for the buildx
-# platform leg**. Each leg builds only its own arch, so musl-gcc (which Debian
-# ships for the host arch only) and the target always match — no cross-compiler,
-# no QEMU. Cross-compiling here (e.g. building the x86_64 musl target from an
-# arm64 leg) breaks ring: cc-rs emits -m64 for the x86_64 target and hands it to
-# the arm64 musl-gcc, whose cc1 has no -m64 → "unrecognized command-line option".
-RUN ARCH="$(dpkg --print-architecture)" \
-    && case "$ARCH" in \
-        amd64) MUSL_TARGET=x86_64-unknown-linux-musl  ;; \
-        arm64) MUSL_TARGET=aarch64-unknown-linux-musl ;; \
-        *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
-    esac \
-    && export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
-    && export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
-    && export RUSTFLAGS="-C target-feature=+crt-static -C relocation-model=static" \
-    && cargo build --release --target "$MUSL_TARGET" --no-default-features --features server
-
-# Ensure the uploads directory exists for runtime image caching.
-RUN mkdir -p uploads
-
-# Stage the built binary + assets at arch-independent paths so the scratch
-# runtime stage can COPY them without knowing which musl target was built.
-RUN ARCH="$(dpkg --print-architecture)" \
-    && case "$ARCH" in \
-        amd64) MUSL_TARGET=x86_64-unknown-linux-musl  ;; \
-        arm64) MUSL_TARGET=aarch64-unknown-linux-musl ;; \
-        *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
-    esac \
-    && cp "/build/target/${MUSL_TARGET}/release/yggdrasil" /build/server
+# The server binary is cross-compiled on the HOST before `docker build` (by
+# `make build-server-cross` → `cross`), then COPYed in here. This avoids the
+# -m64 blocker that would arise from in-container cross-compile, AND keeps the
+# whole frontend build (pnpm/dx/tailwind) at native speed — the builder is
+# pinned to $BUILDPLATFORM so it runs the host's native arch with no QEMU.
+COPY .cross-out/server /build/server
 
 # -----------------------------------------------------------------------------
 # Runtime stage: minimal scratch image with the static musl binary

@@ -173,15 +173,19 @@ doc:
 doc-open:
 	@RUSTDOCFLAGS="--default-theme=ayu" cargo doc --no-deps --document-private-items --open
 
-# Docker image build. The Dockerfile pins the builder to $BUILDPLATFORM (native
-# arch) and only builds architecture-INDEPENDENT assets (WASM/CSS/JS) inside
-# it — NO QEMU emulation of the build environment. The server binary is
-# cross-compiled on the HOST (by build-server-cross) to the target arch and
-# COPYed into the image. So even on Apple Silicon, building an amd64 image runs
-# the whole frontend build at native speed.
+# Docker image build. Two Dockerfiles cover two scenarios:
+#
+#   Dockerfile        in-container server build (native arch). Works on any host
+#                     when the target arch == host arch — e.g. an x86 Linux box
+#                     building an amd64 image. Zero host-side toolchain deps.
+#   Dockerfile.cross  builder pinned to $BUILDPLATFORM + host-prebuilt server.
+#                     Used when host arch != target arch — e.g. Apple Silicon
+#                     (arm64) building an amd64 image. Needs `cross` (or another
+#                     musl cross toolchain) on the host; frontend still builds
+#                     native (no QEMU).
 #
 #   make docker              native arch only, load into local daemon (for testing)
-#   make docker-amd64        x86_64 image: cross-compiles server on host (no QEMU), then docker build
+#   make docker-amd64        x86_64 image; picks the right Dockerfile for your host
 #   make docker-apple        x86_64 only, via Apple Container CLI (macOS 26+, Apple Silicon native; no Docker needed)
 #   make docker-multiarch    build amd64+arm64 and push to a registry
 #                            (multi-arch manifests can't be --load-ed locally)
@@ -195,6 +199,7 @@ doc-open:
 # 再 export 成 ENV,build.rs 的 std::env::var 优先读它。三个值在 Make 变量
 # 里采集一次,所有 docker target 复用;git 不可用时退化为空串,Dockerfile
 # 默认值也是空,build.rs 最终降级为 "unknown",不阻断构建。
+HOST_ARCH := $(shell uname -m)
 IMAGE ?= yggdrasil
 PLATFORMS ?= linux/amd64,linux/arm64
 GIT_DESCRIBE := $(shell git describe --tags --always --dirty 2>/dev/null)
@@ -208,11 +213,11 @@ docker:
 	@docker buildx build --load $(GIT_BUILD_ARGS) -t yggdrasil .
 
 # Cross-compile the server binary to x86_64-unknown-linux-musl on the HOST,
-# into .cross-out/server. The Dockerfile COPYs this binary in (the container
-# never compiles the server — see the "server binary is cross-compiled on the
-# HOST" note in the Dockerfile). `cross` runs the build inside a prebuilt
-# x86_64-musl toolchain container that accepts cc-rs's -m64 (which Debian's
-# host-arch musl-gcc rejects), so ring/mimalloc cross-compile cleanly.
+# into .cross-out/server. `cross` runs the build inside a prebuilt x86_64-musl
+# toolchain container whose x86_64-linux-musl-gcc accepts cc-rs's -m64 (which a
+# host-arch musl-gcc rejects when cross-compiling), so ring/mimalloc build
+# cleanly. Only needed when the host can't build the target natively (i.e. an
+# arm64 host building for amd64).
 #
 # CROSS_IMAGE points `cross` at a registry mirror (default: Nanjing University's
 # GHCR mirror, fast from China). Set to ghcr.io/cross-rs/x86_64-unknown-linux-musl
@@ -226,11 +231,18 @@ build-server-cross:
 	@cp target/x86_64-unknown-linux-musl/release/yggdrasil .cross-out/server
 	@echo "Server binary staged at .cross-out/server"
 
-# Cross-build the amd64 image into the local daemon. Depends on the pre-cross-
-# compiled server binary (built on the host, no QEMU). Product is directly
-# docker run / docker save exportable.
-docker-amd64: build-server-cross
+# Build an amd64 image. On an x86_64 host the builder compiles the server
+# in-container (plain Dockerfile, no host toolchain deps). On any other host
+# (e.g. Apple Silicon arm64) the server is cross-compiled on the host with
+# `cross` first, then the frontend is built natively in Dockerfile.cross (no
+# QEMU). Product is directly docker run / docker save exportable.
+docker-amd64:
+ifeq ($(HOST_ARCH),x86_64)
 	@docker buildx build --platform linux/amd64 --load $(GIT_BUILD_ARGS) -t yggdrasil:amd64 .
+else
+	@$(MAKE) build-server-cross
+	@docker buildx build --platform linux/amd64 --load -f Dockerfile.cross $(GIT_BUILD_ARGS) -t yggdrasil:amd64 .
+endif
 
 docker-multiarch:
 	@docker buildx build --platform $(PLATFORMS) $(GIT_BUILD_ARGS) -t $(IMAGE) --push .
