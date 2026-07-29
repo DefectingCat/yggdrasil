@@ -12,12 +12,12 @@ docker buildx build --platform linux/amd64 --load \
   -t localhost/yggdrasil-runner-base:latest docker/runner-base; or exit 1
 docker tag localhost/yggdrasil-runner-base:latest yggdrasil-runner-base:latest; or exit 1
 
-echo "==> [2/7] 构建主应用镜像(透传 git 信息)"
-docker buildx build --platform linux/amd64 --load \
-  --build-arg YGG_BUILD_GIT_DESCRIBE=(git describe --tags --always --dirty) \
-  --build-arg YGG_BUILD_GIT_HASH=(git rev-parse HEAD) \
-  --build-arg YGG_BUILD_GIT_COMMIT_DATE=(git log -1 --format=%cd --date=iso-strict) \
-  -t localhost/yggdrasil:latest .; or exit 1
+echo "==> [2/7] 构建主应用镜像(cross 交叉编译,无 QEMU)"
+# make docker-amd64 在 arm64 机自动走 build-server-cross + Dockerfile.cross
+# (Makefile 按 HOST_ARCH 分支);git 信息透传由 Makefile 内部 GIT_BUILD_ARGS 完成
+make docker-amd64; or exit 1
+# 脚本后续统一用 localhost/yggdrasil:latest,这里对齐 tag
+docker tag yggdrasil:amd64 localhost/yggdrasil:latest; or exit 1
 
 echo "==> [3/7] 构建 5 个 runner 子镜像"
 for img in $RUNNERS
