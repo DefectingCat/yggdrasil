@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0] - 2026-07-29
 
 ### Added
 
@@ -18,6 +18,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **配置生成**：后台一键复制 4 种客户端配置（Claude Code / Cursor / Cline / 通用 JSON + CLI）。
   - 传输用官方 `rmcp` crate（`=3.0.0-beta.3`，3.x 才有 Origin 校验等 spec 强制项）挂载于 axum。新增依赖 `rmcp`、`aes-gcm`、`base64`（均 server-only）。
   - 新增环境变量 `MCP_TOKEN_ENC_KEY`（hex 编码 32 字节 AES-256 密钥，`openssl rand -hex 32` 生成）、`RATE_LIMIT_MCP_PER_SEC` / `RATE_LIMIT_MCP_BURST`。
+- **素材管理（媒体库）**：新增 `media_assets` 注册表数据层与 `/admin/assets` 管理页，把上传的图片当作一等公民管理。
+  - **只读列表页**：素材网格 + 引用/未引用（孤儿）筛选；引用徽标展示被哪些文章引用。
+  - **删除保护、孤儿清理与 alt 编辑**：被引用素材不可删除；可一键清理无引用的孤儿素材；就地编辑 alt 文本。
+  - **全量索引重建**：扫描 `posts.content_html` 重建每张图片的引用关系（批量 500）。
+  - **封面「从素材库选择」联动**：写文章页封面图改为从媒体库挑选，封面与素材库打通。
+  - **灯箱预览**：素材网格接入 Lightbox，支持图集切换浏览。
+  - **搜索与防抖**：素材页搜索框 300ms 防抖。
+  - **多选与批量删除**。
+  - **上传去重**：上传图片按内容 SHA-256 计算指纹，重复上传直接复用已登记素材，不再产生冗余文件。
+  - **Pagination 页码跳转**：素材列表分页支持页码直跳（`Pagination` 组件新增跳转能力）。
+- **关于页重设计**：关于页重制为「世界树与遗忘」主题叙事，新增年轮式链接区。
+- **`/changelog` 页面**：新增更新日志页，内嵌渲染 `CHANGELOG.md`，并在年轮区接入入口。
+- **后台仪表盘动画**：仪表盘分块进场动画 + 数字滚动，节奏可调。
+- **`FormSelect` 主题化下拉组件**：封装自定义主题化下拉弹层，替代原生 `<select>`（OS 弹窗无法跟随主题）；全项目原生 `<select>` 统一替换为 `FormSelect`。
+- **后台文章搜索**：文章列表支持按标题搜索。
+- **MCP 配置生成 UI**：客户端配置代码块加语法高亮、复制按钮就地反馈；令牌列表与配置生成 loading 替换为骨架屏；新增 OpenCode 客户端配置片段。
+
+### Changed
+
+- **重构系列 R2–R6**：抽取 `tools/common.rs` 消除 MCP helper 四重拷贝（R2）；放宽 posts helpers 可见性并删除 MCP 内的平行拷贝（R3）；抽取 `render_post_fields` 消除文章渲染 + 字数/阅读时间度量的重复（R4）；抽取 `fetch_post_tags` 消除 9+ 处标签查询重复（R5）；抽取 `invalidate_for_post_write` 统一写后缓存失效序列（R6）。
+- **utils 常量集中**：集中 `hash_token` / `EMAIL_REGEX` / `MAX_FILE_SIZE` 的重复定义；集中 `MIGRATE_STARTUP_TIMEOUT_SECS` 解析；提取 `formatted_date` 公共实现；统一 LIKE 模式转义（`consts`）。
+- **输入框统一 `FormInput`**：后台文章搜索框、SQL 控制台输入框等统一改用 `FormInput` 公共组件。
+- **代码运行器执行层**：抽取 `spawn_exec_task` 消除 `start_exec` / `stream` 重复（M10）。
+
+### Fixed
+
+- **KaTeX `\pu` 转译**：修复 `\pu` 预转译的 off-by-one 与 UTF-8 破坏（C1+C2）。
+- **代码运行器**：流式执行超限时回收挂起的容器，避免泄漏（C3）；移除 `source_prop_signal` 的渲染纯净性违规（C4）。
+- **图片缓存清理任务**：防溢出/下溢 panic（C5）。
+- **MCP 工具归属与缓存**：trash/delete 补归属校验 + `publish_post` 标签缓存失效（M1+M6）；标签文章数计数 + 批量删除 SSR 失效（M2+M5）。
+- **备份/恢复**：`pg_dump`/`psql` 移入 `spawn_blocking` 并按行读取，避免阻塞异步线程（M3）。
+- **评论**：评论 markdown 渲染移入 `spawn_blocking`（M4）。
+- **标签页缓存**：移除未使用且永不失效的 `PostsByTagPage` 缓存键（M7）。
+- **限流**：键控限流器定期 GC + XFF 伪造风险文档化（M8），GC 任务派生守卫运行时可用性。
+- **数据导出**：不再向 HTTP 响应泄露原始 DB 错误（M9）。
+- **SQL 控制台**：读路径追加 `LIMIT` 避免全表物化（M11）；`SHOW` 只读分类修正。
+- **后台文章列表**：渲染拉取失败的错误态（M12）。
+- **素材管理**：uuid 参数序列化失败导致上传 500；`SUM(size_bytes)` 显式转 bigint 修复列表 500；引用徽标加 `z-10` 修复被 blur-img 遮盖；灯箱图集切换不重算几何导致图片压扁；删除返回「素材不存在」时刷新网格自愈过期数据；工具栏右侧按钮沉入 `FilterTabs` 区域紧贴横幅；操作横幅上下间距不对称（40/8 → 24/24）。
+- **MCP**：reveal/revoke 令牌时将字符串 id 解析为 `Uuid`；`FormSelect` 面板水平居中修复双倍位移；客户端配置格式修正（Claude Code / Cursor / Cline，联网核实 2026）；配置生成 `use_effect` 死循环；开发期放行 `0.0.0.0` Host 让 dx 代理可用、Host 白名单加入 `APP_BASE_URL` 域名。
+- **文档**：修正文档漂移（AGENTS.md / DEPLOYMENT / .env.example 等）。
+
+### Removed
+
+- **死代码清理 D1–D12**：删除死模块 `resources.rs`、死 `User` 结构体、未用参数、mhchem 冗余分支、死导出与文档化死分支、未使用且永不失效的缓存键等；收窄模块级 allow。
+- 迁移后补回/移除测试中失效的 `sha2::Digest` 导入。
 ## [0.6.2] - 2026-07-24
 
 ### Fixed
