@@ -65,13 +65,21 @@ RUN ARCH="$(dpkg --print-architecture)" \
 RUN npm config set registry "${NPM_REGISTRY}" \
     && pnpm config set registry "${NPM_REGISTRY}"
 
-# ── Rust: rsproxy 镜像 ──────────────────────────────────────────
+# ── Rust: rsproxy 镜像（字节跳动，2026 年仍为社区主流方案）──────────
+# https://rsproxy.cn/  官方配置指南
 ENV RUSTUP_DIST_SERVER=${RS_PROXY}
 ENV RUSTUP_UPDATE_ROOT=${RS_PROXY}/rustup
 RUN mkdir -p /usr/local/cargo \
     && printf \
-        '[source.crates-io]\nreplace-with = "rsproxy-sparse"\n\n[source.rsproxy-sparse]\nregistry = "sparse+%s/index/"\n' \
-        "${RS_PROXY}" \
+        '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+        '[source.crates-io]' \
+        'replace-with = "rsproxy-sparse"' \
+        '[source.rsproxy]' \
+        "registry = \"${RS_PROXY}/crates.io-index\"" \
+        '[source.rsproxy-sparse]' \
+        "registry = \"sparse+${RS_PROXY}/index/\"" \
+        '[net]' \
+        'git-fetch-with-cli = true' \
         > /usr/local/cargo/config.toml
 
 # 开发只需 wasm32 target（dx serve 原生编译 server + 交叉编译 wasm 前端）

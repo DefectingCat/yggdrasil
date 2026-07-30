@@ -43,11 +43,14 @@ services:
       - yggdrasil-dev-node-modules:/build/libs/node_modules
       # pnpm 全局 store — named volume 避免重复下载
       - yggdrasil-dev-pnpm-store:/root/.local/share/pnpm/store
+      # cargo registry + git 缓存 — named volume 避免 crate 重复下载
+      - yggdrasil-dev-cargo-registry:/usr/local/cargo/registry
+      - yggdrasil-dev-cargo-git:/usr/local/cargo/git
       # 防止 pnpm 在项目根目录创建 .pnpm-store/ 泄漏到宿主 bind mount
       - /build/.pnpm-store
       # Code runner: 挂载 Docker socket（取消注释以启用代码沙箱功能）
       # 注意: 需先构建 runner 镜像 (bash docker/build-runners.sh)
-      # - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "8080:8080"
     environment:
