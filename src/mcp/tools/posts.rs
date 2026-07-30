@@ -141,9 +141,9 @@ impl crate::mcp::server::YggMcpServer {
         })
     }
 
-    /// 更新指定文章（重新渲染 Markdown、同步标签与素材引用）。要求 write 作用域。
+    /// 更新指定文章（PATCH 语义：仅更新提供的字段）。要求 write 作用域。
     /// 仅文章原作者可更新。
-    #[tool(description = "更新一篇已有文章。重新渲染 Markdown，同步标签。仅文章原作者可更新。")]
+    #[tool(description = "部分更新一篇已有文章（PATCH 语义）。仅更新提供的字段：未提供 content_md 时跳过重新渲染；未提供 summary 时随 content_md 联动（自动提取或保留旧值）。仅文章原作者可更新。")]
     async fn update_post(
         &self,
         Parameters(p): Parameters<UpdatePostParams>,
@@ -151,28 +151,26 @@ impl crate::mcp::server::YggMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let principal = require_scope(&parts, "update_post", TokenScope::Write)?;
 
-        if p.title.trim().is_empty() {
+        use tokio_postgres::types::ToSql;
+
+        // 至少一个可更新字段。
+        let any_change = p.title.is_some()
+            || p.content_md.is_some()
+            || p.summary.is_some()
+            || p.slug.is_some()
+            || p.tags.is_some()
+            || p.status.is_some()
+            || p.cover_image.is_some();
+        if !any_change {
+            return Err(McpError::invalid_request("至少提供一个可更新字段", None));
+        }
+        // 提供时的非空校验。
+        if matches!(&p.title, Some(t) if t.trim().is_empty()) {
             return Err(McpError::invalid_request("title must not be empty", None));
         }
-        if p.content_md.trim().is_empty() {
+        if matches!(&p.content_md, Some(c) if c.trim().is_empty()) {
             return Err(McpError::invalid_request("content_md must not be empty", None));
         }
-
-        // Markdown 渲染 + 度量派生收敛到 helper（R4）。
-        let fields = crate::api::posts::helpers::render_post_fields(
-            &p.content_md,
-            &p.status,
-            p.cover_image.as_deref(),
-        )
-        .await
-        .map_err(|_| internal("markdown render", "render_post_fields"))?;
-        let summary = p
-            .summary
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string())
-            .unwrap_or(fields.auto_summary);
 
         let mut client = get_conn().await.map_err(|e| internal(e, "db connection"))?;
         let tx = client
@@ -180,146 +178,226 @@ impl crate::mcp::server::YggMcpServer {
             .await
             .map_err(|e| internal(e, "begin txn"))?;
 
-        // 查旧 slug（用于缓存失效）。
-        let old_slug: Option<String> = tx
-            .query_opt("SELECT slug FROM posts WHERE id = $1", &[&p.post_id])
-            .await
-            .map_err(|e| internal(e, "select old slug"))?
-            .map(|r| r.get(0));
-
-        // 校验存在、未删除、归属当前用户。
-        let exists: bool = tx
+        // 校验存在、未删除、归属，并取旧值（slug/status/published_at/cover）。
+        let old_row = tx
             .query_opt(
-                "SELECT 1 FROM posts WHERE id = $1 AND author_id = $2 AND deleted_at IS NULL",
+                "SELECT slug, status, published_at, cover_image FROM posts \
+                 WHERE id = $1 AND author_id = $2 AND deleted_at IS NULL",
                 &[&p.post_id, &principal.user_id],
             )
             .await
-            .map_err(|e| internal(e, "check ownership"))?
-            .is_some();
-        if !exists {
-            return Err(McpError::invalid_request(
-                "文章不存在或无权限",
-                None,
-            ));
-        }
+            .map_err(|e| internal(e, "select post"))?;
+        let Some(old_row) = old_row else {
+            return Err(McpError::invalid_request("文章不存在或无权限", None));
+        };
+        let old_slug: String = old_row.get(0);
+        let old_status: String = old_row.get(1);
+        let old_published_at: Option<chrono::DateTime<chrono::Utc>> = old_row.get(2);
+        let old_cover: Option<String> = old_row.get(3);
 
-        // 确定基础 slug。
-        let base_slug = match &p.slug {
-            Some(s) if !s.trim().is_empty() => {
-                let s = s.trim();
-                if !crate::api::slug::is_valid_slug(s) {
-                    return Err(McpError::invalid_request("slug 格式无效", None));
+        // 渲染（仅当 content_md 提供时）。status/cover 用新值或回退旧值。
+        let rendered: Option<crate::api::posts::helpers::RenderedFields> = match &p.content_md {
+            Some(md) => {
+                let status_for_render = p.status.as_deref().unwrap_or(&old_status);
+                let cover_for_render: Option<&str> = p
+                    .cover_image
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .or(old_cover.as_deref());
+                Some(
+                    crate::api::posts::helpers::render_post_fields(
+                        md,
+                        status_for_render,
+                        cover_for_render,
+                    )
+                    .await
+                    .map_err(|_| internal("markdown render", "render_post_fields"))?,
+                )
+            }
+            None => None,
+        };
+
+        // summary 决策（随 content_md 联动）：
+        //  提供了 summary → 用之（空则回退自动提取）；未提供但 content_md 变了 → 自动提取；都未变 → 不动。
+        let summary_value: Option<String> = match (&p.summary, &rendered) {
+            (Some(s), r) => {
+                let t = s.trim();
+                if t.is_empty() {
+                    r.as_ref().map(|f| f.auto_summary.clone())
+                } else {
+                    Some(t.to_string())
                 }
-                s.to_string()
             }
-            _ => crate::api::slug::slugify(&p.title),
+            (None, Some(f)) => Some(f.auto_summary.clone()),
+            (None, None) => None,
         };
-        let final_slug =
-            crate::api::slug::ensure_unique_slug(&tx, &base_slug, Some(p.post_id))
-                .await
-                .map_err(|e| internal(e, "ensure_unique_slug"))?;
 
-        // 旧标签。
-        let old_tags = crate::api::posts::helpers::fetch_post_tags(&tx, p.post_id)
-            .await
-            .map_err(|_| internal("select old tags", "select old tags"))?;
+        // slug 决策（仅显式提供才动；空串视为未提供）。
+        let new_slug: Option<String> = match &p.slug {
+            Some(s) => {
+                let t = s.trim();
+                if t.is_empty() {
+                    None
+                } else if !crate::api::slug::is_valid_slug(t) {
+                    return Err(McpError::invalid_request("slug 格式无效", None));
+                } else {
+                    Some(t.to_string())
+                }
+            }
+            None => None,
+        };
+        let final_slug: Option<String> = match new_slug {
+            Some(base) => Some(
+                crate::api::slug::ensure_unique_slug(&tx, &base, Some(p.post_id))
+                    .await
+                    .map_err(|e| internal(e, "ensure_unique_slug"))?,
+            ),
+            None => None,
+        };
 
-        // 旧状态/发布时间 → 计算新 published_at。
-        let old_status_row = tx
-            .query_opt(
-                "SELECT status, published_at FROM posts WHERE id = $1",
-                &[&p.post_id],
-            )
-            .await
-            .map_err(|e| internal(e, "select old status"))?;
-        let published_at = if fields.status == PostStatus::Published {
-            let was_published = old_status_row
-                .as_ref()
-                .map(|r| {
-                    let s: String = r.get(0);
-                    s == "published"
+        // status + published_at 决策（首发 published 填 published_at；转 draft 保留旧值）。
+        let new_status: Option<PostStatus> = p
+            .status
+            .as_deref()
+            .map(|s| PostStatus::from_str(s).unwrap_or(PostStatus::Draft));
+        let published_at: Option<Option<chrono::DateTime<chrono::Utc>>> = match &new_status {
+            Some(PostStatus::Published) => {
+                Some(if old_status == "published" {
+                    old_published_at
+                } else {
+                    Some(chrono::Utc::now())
                 })
-                .unwrap_or(false);
-            let existing: Option<chrono::DateTime<chrono::Utc>> =
-                old_status_row.as_ref().and_then(|r| r.get(1));
-            if was_published {
-                existing
-            } else {
-                Some(chrono::Utc::now())
             }
-        } else {
-            old_status_row.and_then(|r| r.get(1))
+            Some(PostStatus::Draft) => Some(old_published_at),
+            None => None,
         };
 
+        // cover 决策（空串 → 清空 None）。
+        let new_cover: Option<String> = p
+            .cover_image
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        let cover_changed = p.cover_image.is_some();
+
+        // 动态构建 UPDATE（仅 SET 提供的字段）。
+        let mut sets: Vec<String> = Vec::new();
+        let mut params: Vec<Box<dyn ToSql + Sync + Send>> = Vec::new();
+        let mut idx = 1usize;
+        macro_rules! push {
+            ($col:expr, $val:expr) => {{
+                sets.push(format!("{} = ${}", $col, idx));
+                params.push(Box::new($val));
+                idx += 1;
+            }};
+        }
+        if let Some(t) = &p.title {
+            push!("title", t.trim().to_string());
+        }
+        if let Some(c) = &p.content_md {
+            push!("content_md", c.clone());
+        }
+        if let Some(f) = &rendered {
+            push!("content_html", f.content_html.clone());
+            push!("toc_html", f.toc_html.clone());
+            push!("word_count", f.word_count);
+            push!("reading_time", f.reading_time);
+        }
+        if let Some(s) = &summary_value {
+            push!("summary", s.clone());
+        }
+        if let Some(s) = &final_slug {
+            push!("slug", s.clone());
+        }
+        if let Some(st) = &new_status {
+            push!("status", st.as_str().to_string());
+        }
+        if let Some(pa) = published_at {
+            push!("published_at", pa);
+        }
+        if cover_changed {
+            push!("cover_image", new_cover.clone());
+        }
+        sets.push("updated_at = NOW()".to_string());
+
+        let sql = format!("UPDATE posts SET {} WHERE id = ${}", sets.join(", "), idx);
+        params.push(Box::new(p.post_id));
+        let refs: Vec<&(dyn ToSql + Sync)> =
+            params.iter().map(|b| b.as_ref() as &(dyn ToSql + Sync)).collect();
         let updated = tx
-            .execute(
-                "UPDATE posts SET title = $1, slug = $2, summary = $3, content_md = $4, content_html = $5, toc_html = $6, status = $7, published_at = $8, cover_image = $9, word_count = $10, reading_time = $11, updated_at = NOW()
-                 WHERE id = $12",
-                &[
-                    &p.title.trim(),
-                    &final_slug,
-                    &summary,
-                    &p.content_md,
-                    &fields.content_html,
-                    &fields.toc_html,
-                    &fields.status.as_str(),
-                    &published_at,
-                    &fields.cover_image,
-                    &fields.word_count,
-                    &fields.reading_time,
-                    &p.post_id,
-                ],
-            )
+            .execute(&sql, &refs)
             .await
             .map_err(|e| internal(e, "update post"))?;
         if updated == 0 {
-            return Err(McpError::invalid_request(
-                "文章不存在或无权限",
-                None,
-            ));
+            return Err(McpError::invalid_request("文章不存在或无权限", None));
         }
 
-        let tags_cleaned = crate::api::posts::helpers::clean_tags(&p.tags);
-        let tags_for_invalidation = tags_cleaned.clone();
+        // 标签同步（仅当 tags 提供时）。先取旧标签供缓存失效，再完全替换。
+        let tags_changed = p.tags.is_some();
+        let mut old_tags: Vec<String> = Vec::new();
+        if tags_changed {
+            old_tags = crate::api::posts::helpers::fetch_post_tags(&tx, p.post_id)
+                .await
+                .map_err(|_| internal("select old tags", "fetch_post_tags"))?;
+            let tags_cleaned =
+                crate::api::posts::helpers::clean_tags(p.tags.as_ref().unwrap());
+            tx.execute("DELETE FROM post_tags WHERE post_id = $1", &[&p.post_id])
+                .await
+                .map_err(|e| internal(e, "delete old post_tags"))?;
+            crate::api::posts::helpers::sync_tags(&tx, p.post_id, &tags_cleaned)
+                .await
+                .map_err(|_| internal("tag sync", "sync_tags"))?;
+        }
 
-        tx.execute("DELETE FROM post_tags WHERE post_id = $1", &[&p.post_id])
-            .await
-            .map_err(|e| internal(e, "delete old post_tags"))?;
-        crate::api::posts::helpers::sync_tags(&tx, p.post_id, &tags_cleaned)
-            .await
-            .map_err(|_| internal("tag sync", "sync_tags"))?;
-        crate::api::posts::helpers::sync_asset_refs(&tx, p.post_id, &fields.content_html, fields.cover_image.as_deref())
-            .await
-            .map_err(|_| internal("asset_refs sync", "sync_asset_refs"))?;
+        // 素材引用同步（content_html 或 cover 变了）。
+        if rendered.is_some() || cover_changed {
+            let content_html: String = match &rendered {
+                Some(f) => f.content_html.clone(),
+                None => tx
+                    .query_one("SELECT content_html FROM posts WHERE id = $1", &[&p.post_id])
+                    .await
+                    .map_err(|e| internal(e, "select content_html"))?
+                    .get::<_, String>(0),
+            };
+            let cover_for_sync = new_cover.as_deref().or(old_cover.as_deref());
+            crate::api::posts::helpers::sync_asset_refs(&tx, p.post_id, &content_html, cover_for_sync)
+                .await
+                .map_err(|_| internal("asset_refs sync", "sync_asset_refs"))?;
+        }
 
         tx.commit().await.map_err(|e| internal(e, "commit"))?;
 
+        // 缓存失效（moka + SSR）。
+        let effective_slug = final_slug.clone().unwrap_or_else(|| old_slug.clone());
+
         cache::invalidate_post_metadata();
-        cache::invalidate_post_by_slug(&final_slug).await;
+        cache::invalidate_post_by_slug(&effective_slug).await;
 
-        let all_tags: Vec<String> = old_tags
-            .into_iter()
-            .chain(tags_for_invalidation)
-            .collect::<std::collections::HashSet<_>>()
-            .into_iter()
-            .collect();
-        cache::invalidate_tag_posts_for(&all_tags).await;
-
-        if let Some(old) = &old_slug {
-            if old != &final_slug {
-                cache::invalidate_post_by_slug(old).await;
-                ssr_cache::invalidate_ssr_route(&format!("/post/{old}"));
+        if let Some(new) = &final_slug {
+            if new != &old_slug {
+                cache::invalidate_post_by_slug(&old_slug).await;
+                ssr_cache::invalidate_ssr_route(&format!("/post/{old_slug}"));
             }
         }
-        ssr_cache::invalidate_ssr_route(&format!("/post/{final_slug}"));
+        ssr_cache::invalidate_ssr_route(&format!("/post/{effective_slug}"));
         ssr_cache::invalidate_ssr_all_public();
         ssr_cache::bump_global_generation();
+
+        if tags_changed {
+            let new_tags = crate::api::posts::helpers::clean_tags(p.tags.as_ref().unwrap());
+            let mut all: std::collections::HashSet<String> = old_tags.into_iter().collect();
+            all.extend(new_tags);
+            let all_tags: Vec<String> = all.into_iter().collect();
+            cache::invalidate_tag_posts_for(&all_tags).await;
+        }
 
         ok_json(PostResult {
             success: true,
             message: "更新成功".into(),
             post_id: Some(p.post_id),
-            slug: Some(final_slug),
+            slug: Some(effective_slug),
         })
     }
 
@@ -521,23 +599,25 @@ pub struct CreatePostParams {
 pub struct UpdatePostParams {
     /// 要更新的文章 id。
     pub post_id: i32,
-    /// 新标题。
-    pub title: String,
-    /// 新 Markdown 正文。
-    pub content_md: String,
-    /// 新摘要。
+    /// 新标题。未提供则不修改（且不联动 slug）。
+    #[serde(default)]
+    pub title: Option<String>,
+    /// 新 Markdown 正文。未提供则不重新渲染（content_html/toc/度量保持不变）。
+    #[serde(default)]
+    pub content_md: Option<String>,
+    /// 新摘要。content_md 变化且未提供时自动从正文提取；content_md 未变且未提供则保留旧值。
     #[serde(default)]
     pub summary: Option<String>,
-    /// 新 slug。
+    /// 新 slug。未提供则不修改；提供则校验格式并自动去重。
     #[serde(default)]
     pub slug: Option<String>,
-    /// 新标签列表（完全替换旧标签）。
+    /// 新标签列表。未提供则不修改；提供空列表则清空标签（完全替换旧标签）。
     #[serde(default)]
-    pub tags: Vec<String>,
-    /// 新状态。
-    #[serde(default = "default_status")]
-    pub status: String,
-    /// 新封面图 URL。
+    pub tags: Option<Vec<String>>,
+    /// 新状态：`draft` / `published`。未提供则不修改。
+    #[serde(default)]
+    pub status: Option<String>,
+    /// 新封面图 URL。未提供则不修改；空字符串清空封面。
     #[serde(default)]
     pub cover_image: Option<String>,
 }
