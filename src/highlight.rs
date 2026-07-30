@@ -22,6 +22,7 @@ pub mod server {
         ("JSX", include_str!("../syntaxes/JSX.sublime-syntax")),
         ("Kotlin", include_str!("../syntaxes/Kotlin.sublime-syntax")),
         ("Swift", include_str!("../syntaxes/Swift.sublime-syntax")),
+        ("TOML", include_str!("../syntaxes/TOML.sublime-syntax")),
         ("TSX", include_str!("../syntaxes/TSX.sublime-syntax")),
         (
             "TypeScript",
@@ -539,5 +540,77 @@ const message = ref('Hello Vue!')
         // bash 别名与直接传 sh 的输出须一致（别名表 "bash" -> "sh"）。
         let by_sh = highlight_code(code, Some("sh"));
         assert_eq!(result, by_sh);
+    }
+    #[test]
+    fn highlight_code_toml() {
+        // 官方 sublimehq TOML 语法（version: 2），覆盖表头/键/字符串/数字/布尔/注释。
+        let code = "\
+[package]
+name = \"yggdrasil\"
+version = \"1.0\"
+edition = 2021
+
+[dependencies]
+syntect = { version = \"5\", features = [\"html\"] }
+published = true
+# a comment";
+        let result = highlight_code(code, Some("toml"));
+        // 根作用域 source.toml —— 证明命中真正的 TOML 语法而非纯文本。
+        assert!(
+            result.contains(r#"<span class="source toml">"#),
+            "TOML 未命中 source.toml 根作用域: {}",
+            result
+        );
+        assert!(
+            !result.contains(r#"<span class="text plain">"#),
+            "TOML 不应回退到纯文本: {}",
+            result
+        );
+        // [package] 表头 -> entity name section
+        assert!(
+            result.contains("entity name section"),
+            "TOML 表头未识别为 section: {}",
+            result
+        );
+        // 键 name/version/edition -> string unquoted
+        assert!(
+            result.contains("string unquoted"),
+            "TOML 裸键未被识别: {}",
+            result
+        );
+        // "yggdrasil" 字符串值 -> string quoted double
+        assert!(
+            result.contains("string quoted double"),
+            "TOML 字符串值未被识别: {}",
+            result
+        );
+        // 2021 -> constant numeric
+        assert!(
+            result.contains("constant numeric"),
+            "TOML 数字未被识别: {}",
+            result
+        );
+        // true -> constant language boolean
+        assert!(
+            result.contains("constant language boolean"),
+            "TOML 布尔值未被识别: {}",
+            result
+        );
+        // # a comment -> comment line number-sign
+        assert!(
+            result.contains("comment line number-sign"),
+            "TOML 注释未被识别: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn highlight_code_toml_uppercase_matches_lowercase() {
+        // 语法注册了 .toml 扩展名；大写标识经小写回退路径应与 toml 等价。
+        let code = "[package]\nname = \"x\"";
+        let lower = highlight_code(code, Some("toml"));
+        let upper = highlight_code(code, Some("TOML"));
+        assert_eq!(lower, upper);
+        assert!(lower.contains(r#"<span class="source toml">"#));
     }
 }
