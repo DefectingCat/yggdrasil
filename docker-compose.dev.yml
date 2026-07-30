@@ -61,9 +61,7 @@ services:
       APP_BASE_URL: http://localhost:8080
       # Code runner（取消 Docker socket 挂载后启用）
       DOCKER_SOCKET_PATH: /var/run/docker.sock
-    # dx serve 前台运行，日志直接输出到 docker compose
-    stdin_open: true
-    tty: true
+    # dx serve --interactive false 前台运行，日志直接输出到 docker compose
 
 volumes:
   yggdrasil-dev-target:
