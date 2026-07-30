@@ -11,6 +11,13 @@ use crate::components::comments::list::CommentList;
 use crate::components::skeletons::comment_skeleton::CommentListSkeleton;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::utils::comment_storage::{self, PendingComment};
+use crate::utils::time::sleep_ms;
+
+/// 待审核评论状态的轮询间隔（毫秒）。
+///
+/// 仅在本地存在待审核评论时才轮询；30s 在「审核通过后尽快反映」与「不触发 strict
+/// 限流（默认 1 req/s, burst 5）」之间取平衡。
+const PENDING_POLL_INTERVAL_MS: u32 = 30_000;
 
 /// 评论上下文，供评论相关组件共享状态。
 ///
@@ -53,16 +60,29 @@ pub fn CommentSection(post_id: i32) -> Element {
         ctx.pending_comments.set(pending);
     });
 
-    // 轮询待审核评论状态，已处理（非 pending）的评论从本地移除
+    // 轮询待审核评论状态：只要本地还有待审核评论，就定期查询其审核状态。
+    //
+    // 旧实现把 pending_comments 快照进闭包、use_future 仅在信号变化时跑一次——
+    // 用户提交评论后立即查（此时仍是 pending），之后管理员通过审核时信号未变，
+    // future 不再重跑，导致「审核中」徽章永久残留（issue #9）。这与 backup.rs 的
+    // 进度轮询属同类 bug，沿用「长生命周期 loop + 循环内读信号」的模式修复：
+    // 一旦某条评论变为非 pending（通常为已通过），就从本地移除并刷新已审核列表，
+    // 使其以正式状态进入评论树，而非一直挂着「审核中」占位。
     use_future(move || {
-        let pending_val = ctx.pending_comments.read().clone();
+        // 同步段读取建立响应式依赖：pending_comments 变化（新评论提交 / 本轮移除）
+        // 时 use_future 自动重启，确保循环 return 退出后仍能重新进入轮询。
+        let _ = ctx.pending_comments.read();
+        let mut pending_comments = ctx.pending_comments;
+        let mut refresh_trigger = ctx.refresh_trigger;
         async move {
-            let ids: Vec<i64> = pending_val.iter().map(|c| c.id).collect();
-            if ids.is_empty() {
-                return;
-            }
-            match check_pending_status(ids).await {
-                Ok(statuses) => {
+            loop {
+                let ids: Vec<i64> = pending_comments.read().iter().map(|c| c.id).collect();
+                if ids.is_empty() {
+                    // 无待审核评论：停止轮询，等待响应式重启（新评论提交时触发）。
+                    return;
+                }
+
+                if let Ok(statuses) = check_pending_status(ids).await {
                     let to_remove: Vec<i64> = statuses
                         .into_iter()
                         .filter(|s| s.status != "pending")
@@ -70,14 +90,19 @@ pub fn CommentSection(post_id: i32) -> Element {
                         .collect();
                     if !to_remove.is_empty() {
                         comment_storage::remove_pending_ids(post_id, &to_remove);
-                        ctx.pending_comments
+                        // 评论状态已变化（多为已通过）：刷新已审核列表，使其以正式
+                        // 状态进入评论树。peek 不订阅信号，避免给本 future 引入
+                        // 额外响应式依赖；先取出值再 set，规避 peek 守卫与 set 的借用冲突。
+                        let next = !*refresh_trigger.peek();
+                        refresh_trigger.set(next);
+                        pending_comments
                             .write()
                             .retain(|c| !to_remove.contains(&c.id));
                     }
                 }
-                Err(_e) => {
-                    // 在 WASM 环境下静默忽略，服务器端日志不可用
-                }
+                // Err（如限流）静默忽略，统一在下方 sleep 后下一轮重试。
+
+                sleep_ms(PENDING_POLL_INTERVAL_MS).await;
             }
         }
     });
