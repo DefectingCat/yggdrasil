@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-07-30
+
+### Added
+
+- **TOML 语法高亮**：``` ```toml ``` 代码块此前回退为纯文本（syntect 默认精选集不含 TOML）；现已引入官方 sublimehq TOML v2 语法，支持日期时间、数组表、内联表与多行字符串。
+- **Docker 开发环境**：新增 `Dockerfile.dev` + `docker-compose.dev.yml`，内置 dx 0.7.9、tailwindcss v4、Node 22/pnpm 与 wasm32 target；源码 bind mount 实现热重载，cargo/pnpm 缓存跨重启持久化，直连宿主原生 PostgreSQL。新增 `make docker-dev` / `docker-dev-down` / `docker-dev-shell` 便利 target。
+- **x86_64 镜像零 QEMU 交叉编译**：改用 `Dockerfile.cross` 三阶段构建（Trixie 编前端 + Alpine/zig 交叉编 server + scratch 合并产物），arm64 Mac 上不再经 QEMU/Rosetta 翻译，告别 cross 工具链容器在 Rosetta 下的 SIGSEGV 崩溃。
+
+### Changed
+
+- **MCP 媒体上传改为带外传输，彻底移除 base64**：`upload_media` 工具改为接收 URL，由服务端经 SSRF 防护抓取（强制 https、DNS 解析即锁 IP 杜绝 rebinding、禁重定向、流式体积上限、超时）；新增 `POST /api/mcp/upload` bearer multipart 端点，供 host/shell 直接 POST 二进制。二进制不再进 JSON-RPC，不再受 4MiB 请求体上限（原 base64 路径实际仅约 2.8MiB 原始图）约束。新增 server-only 依赖 `reqwest`（rustls-tls，musl 静态链接友好），移除 `base64` 依赖。
+
+### Fixed
+
+- **交叉编译部署后登录 405**：Dioxus 0.7.9 的 server-fn URL 末尾去冲突后缀为 `xxh64(CARGO_MANIFEST_DIR + module_path!, 0)`；host 交叉编译与容器内编译的 `CARGO_MANIFEST_DIR` 不同，导致前后端算出不同 URL 后缀，POST 落入 SSR 兜底 GET 路由返回 405。改由 `.cargo/config.toml` 固定 `SERVER_FN_OVERRIDE_KEY`，两次编译读到同一哈希 key。
+- **Dockerfile 漏拷 workspace 包**：两个 Dockerfile 的 pnpm manifest COPY 此前只拷了 4/7 个包，补齐 `shared` / `xterm-terminal` / `mermaid-renderer`。
+
 ## [0.7.0] - 2026-07-29
 
 ### Added
