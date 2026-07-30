@@ -1,4 +1,4 @@
-.PHONY: dev build build-linux build-freebsd freebsd-sysroot docker docker-amd64 docker-apple docker-multiarch css css-watch clean build-libs build-editor build-codemirror build-lightbox build-core build-xterm highlight-css katex-css test doc doc-open start lint fix restore-webp
+.PHONY: dev build build-linux build-freebsd freebsd-sysroot docker docker-amd64 docker-apple docker-multiarch docker-dev docker-dev-down docker-dev-shell css css-watch clean build-libs build-editor build-codemirror build-lightbox build-core build-xterm highlight-css katex-css test doc doc-open start lint fix restore-webp
 
 build:
 	@rm -rf static/
@@ -230,6 +230,22 @@ endif
 
 docker-multiarch:
 	@docker buildx build --platform $(PLATFORMS) $(GIT_BUILD_ARGS) -t $(IMAGE) --push .
+
+# ── Docker 开发环境 ────────────────────────────────────────────
+# 使用 Dockerfile.dev + docker-compose.dev.yml 在容器内运行 dx serve。
+# 源码 bind mount 到容器，宿主 IDE 编辑即时可见，dx serve inotify 热重载。
+# PostgreSQL 由 compose 管理（端口 5433 避免与宿主 5432 冲突）。
+# 首次启动需编译 Rust 依赖（~10 分钟），后续启动约 10 秒（cargo target 缓存）。
+docker-dev:
+	@docker compose -f docker-compose.dev.yml up --build
+
+# 停止并移除 dev 容器（volume 数据保留）。
+docker-dev-down:
+	@docker compose -f docker-compose.dev.yml down
+
+# 进入 dev 容器的交互式 shell（容器需已在运行）。
+docker-dev-shell:
+	@docker compose -f docker-compose.dev.yml exec dev bash
 
 clean:
 	@cargo clean

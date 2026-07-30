@@ -1,0 +1,145 @@
+# syntax=docker/dockerfile:1
+#
+# Dockerfile.dev — 开发镜像（dx serve 热重载）
+#
+# 与生产 Dockerfile 共享相同的镜像源（TUNA/rsproxy/npmmirror/gh-proxy）和工具链
+# 安装逻辑，但去掉所有构建步骤（源码通过 bind mount 挂载，不 COPY 进镜像）。
+#
+# 用法：docker compose -f docker-compose.dev.yml up --build
+#
+# 容器内布局：
+#   /build         ← bind mount 宿主源码（编辑即时可见）
+#   target/        ← named volume（cargo 编译产物，跨重启缓存）
+#   libs/node_modules ← named volume（pnpm 虚拟存储，跨重启缓存）
+
+FROM rust:1.97-trixie
+
+# ── 镜像源（与生产 Dockerfile 一致）─────────────────────────────
+ARG DEBIAN_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/debian
+ARG DEBIAN_SECURITY_MIRROR=https://mirrors.tuna.tsinghua.edu.cn/debian-security
+ARG NODE_MIRROR=https://registry.npmmirror.com/-/binary/node
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+ARG RS_PROXY=https://rsproxy.cn
+ARG GH_PROXY=https://gh-proxy.com
+
+# --- Debian apt: 改写 DEB822 源到 TUNA 镜像 ---
+RUN sed -i \
+    -e "s|http://deb.debian.org/debian|${DEBIAN_MIRROR}|g" \
+    -e "s|http://deb.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
+    -e "s|http://security.debian.org/debian-security|${DEBIAN_SECURITY_MIRROR}|g" \
+    /etc/apt/sources.list.d/debian.sources
+
+# ── 系统构建依赖 ─────────────────────────────────────────────────
+# 与生产 Dockerfile 相同，但去掉 musl-tools（dev 构建是原生 glibc 目标，
+# 不需要 musl 交叉链接）。postgresql-client 方便容器内 psql 调试。
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        cmake \
+        clang \
+        nasm \
+        pkg-config \
+        libssl-dev \
+        binaryen \
+        ca-certificates \
+        curl \
+        gnupg \
+        git \
+        make \
+        postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Node.js 22 + pnpm（与生产 Dockerfile 一致）──────────────────
+ARG NODE_VERSION=22.20.0
+RUN ARCH="$(dpkg --print-architecture)" \
+    && case "$ARCH" in \
+        amd64)  NODE_ARCH=x64   ;; \
+        arm64)  NODE_ARCH=arm64 ;; \
+        *) echo "unsupported arch: $ARCH" >&2; exit 1; \
+    esac \
+    && curl -fsSL "${NODE_MIRROR}/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.gz" \
+        | tar -xz -C /usr/local --strip-components=1 \
+    && corepack enable \
+    && corepack prepare pnpm@11.8.0 --activate
+
+RUN npm config set registry "${NPM_REGISTRY}" \
+    && pnpm config set registry "${NPM_REGISTRY}"
+
+# ── Rust: rsproxy 镜像 ──────────────────────────────────────────
+ENV RUSTUP_DIST_SERVER=${RS_PROXY}
+ENV RUSTUP_UPDATE_ROOT=${RS_PROXY}/rustup
+RUN mkdir -p /usr/local/cargo \
+    && printf \
+        '[source.crates-io]\nreplace-with = "rsproxy-sparse"\n\n[source.rsproxy-sparse]\nregistry = "sparse+%s/index/"\n' \
+        "${RS_PROXY}" \
+        > /usr/local/cargo/config.toml
+
+# 开发只需 wasm32 target（dx serve 原生编译 server + 交叉编译 wasm 前端）
+RUN rustup target add wasm32-unknown-unknown
+
+# ── dx CLI（与生产 Dockerfile 一致，从 GitHub Releases 安装预编译二进制）──
+ARG DX_VERSION=0.7.9
+RUN ARCH="$(dpkg --print-architecture)" \
+    && case "$ARCH" in \
+        amd64) DX_TRIPLET=x86_64-unknown-linux-gnu  DX_SHA256=3b132551b480bc96f938f9f0d37936ee1190f994977539dcc347eaf38540d005 ;; \
+        arm64) DX_TRIPLET=aarch64-unknown-linux-gnu DX_SHA256=8cf14db0b11b43b31dd6d39e71b00e567f2fccfde85ae3a8f7ef0f8745e5ccfb ;; \
+        *) echo "unsupported arch: $ARCH" >&2; exit 1; \
+    esac \
+    && DX_URL="${GH_PROXY:+${GH_PROXY}/}https://github.com/DioxusLabs/dioxus/releases/download/v${DX_VERSION}/dx-${DX_TRIPLET}.tar.gz" \
+    && curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors --retry-connrefused --continue-at - "${DX_URL}" -o /tmp/dx.tar.gz \
+    && echo "${DX_SHA256}  /tmp/dx.tar.gz" | sha256sum -c - \
+    && tar -xzf /tmp/dx.tar.gz -C /usr/local/bin \
+    && rm /tmp/dx.tar.gz \
+    && dx --version
+
+# ── Tailwind CSS v4 standalone ──────────────────────────────────
+ARG TAILWIND_VERSION=4.3.1
+RUN ARCH="$(dpkg --print-architecture)" \
+    && case "$ARCH" in \
+        amd64)  TW_ARCH=x64   ;; \
+        arm64)  TW_ARCH=arm64 ;; \
+        *) echo "unsupported arch: $ARCH" >&2; exit 1; \
+    esac \
+    && GH_URL="${GH_PROXY:+${GH_PROXY}/}https://github.com/tailwindlabs/tailwindcss/releases/download/v${TAILWIND_VERSION}/tailwindcss-linux-${TW_ARCH}" \
+    && curl -fsSL -o /usr/local/bin/tailwindcss "${GH_URL}" \
+    && chmod +x /usr/local/bin/tailwindcss
+
+WORKDIR /build
+
+# ── 开发启动脚本（内联，避免 .dockerignore 排除 docker/ 目录）────
+# 执行 make dev 的等价流程：pnpm install → build-libs → highlight-css
+# → katex-css → tailwindcss → dx serve。每步都是幂等的（named volume
+# 缓存），后续启动约 10 秒。首次启动需编译 Rust 依赖（~10 分钟）。
+COPY <<'ENTRYPOINT' /usr/local/bin/dev-entrypoint.sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd /build
+
+echo "▸ Installing JS dependencies..."
+(cd libs && pnpm install)
+
+echo "▸ Building JS libraries..."
+make build-libs
+
+if [ ! -f public/highlight.css ]; then
+    echo "▸ Generating highlight.css (first run compiles Rust deps, ~10 min)..."
+    make highlight-css
+fi
+
+if [ ! -f public/katex/katex.min.css ]; then
+    echo "▸ Copying KaTeX CSS..."
+    make katex-css
+fi
+
+echo "▸ Building Tailwind CSS..."
+make css
+
+rm -rf static/
+
+echo "▸ Starting dx serve on :8080..."
+SSR_CACHE_SECS=0 exec dx serve --addr 0.0.0.0
+ENTRYPOINT
+RUN chmod +x /usr/local/bin/dev-entrypoint.sh
+
+CMD ["dev-entrypoint.sh"]
