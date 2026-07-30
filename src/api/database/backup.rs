@@ -138,15 +138,14 @@ async fn run_pg_dump_backup(task_id: &str, timestamp: &str) {
     header.push_str("-- mode: pg_dump\n");
 
     // 先写签名头，再追加 pg_dump 输出。
-    let write_header = std::fs::write(&path, &header);
-    if write_header.is_err() {
+    if let Err(e) = std::fs::write(&path, &header) {
         tasks::update(
             task_id,
             "写入备份文件失败",
             100,
             TaskStatus::Failed,
             None,
-            Some("无法写入备份目录".to_string()),
+            Some(format!("无法写入备份目录: {e}")),
             None,
         );
         return;
@@ -335,14 +334,14 @@ async fn run_sql_fallback_backup(task_id: &str, timestamp: &str) {
         );
     }
 
-    if std::fs::write(&path, out).is_err() {
+    if let Err(e) = std::fs::write(&path, out) {
         tasks::update(
             task_id,
             "写入备份文件失败",
             100,
             TaskStatus::Failed,
             None,
-            Some("无法写入备份目录".to_string()),
+            Some(format!("无法写入备份目录: {e}")),
             None,
         );
         return;

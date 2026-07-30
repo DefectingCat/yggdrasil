@@ -34,7 +34,8 @@ public/doc/
 # ---------------------------------------------------------------------------
 uploads/*
 !uploads/.gitkeep
-backups/
+backups/*
+!backups/.gitkeep
 
 # ---------------------------------------------------------------------------
 # Machine-local / unrelated directories — not build inputs.

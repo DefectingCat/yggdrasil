@@ -318,6 +318,7 @@ WORKDIR /app
 COPY --from=server --chown=65534:65534 /build/server /app/server
 COPY --from=frontend --chown=65534:65534 /build/dist/public /app/public
 COPY --from=frontend --chown=65534:65534 /build/uploads /app/uploads
+COPY --from=frontend --chown=65534:65534 /build/backups /app/backups
 
 # The app checks for DATABASE_URL on startup even though this image is intended
 # to run without a real database. A placeholder is enough to let the server boot.

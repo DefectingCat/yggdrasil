@@ -227,8 +227,10 @@ RUN ARCH="$(dpkg --print-architecture)" \
     && export RUSTFLAGS="-C target-feature=+crt-static -C relocation-model=static" \
     && cargo build --release --target "$MUSL_TARGET" --no-default-features --features server
 
-# Ensure the uploads directory exists for runtime image caching.
-RUN mkdir -p uploads
+# Ensure the uploads/backups directories exist for runtime. backups/ holds DB
+# dump files written by the backup feature; without a nobody-owned dir here the
+# scratch runtime (USER 65534) cannot create it under root-owned /app.
+RUN mkdir -p uploads backups
 
 # Stage the built binary + assets at arch-independent paths so the scratch
 # runtime stage can COPY them without knowing which musl target was built.
@@ -251,6 +253,7 @@ WORKDIR /app
 COPY --from=builder --chown=65534:65534 /build/server /app/server
 COPY --from=builder --chown=65534:65534 /build/dist/public /app/public
 COPY --from=builder --chown=65534:65534 /build/uploads /app/uploads
+COPY --from=builder --chown=65534:65534 /build/backups /app/backups
 
 # The app checks for DATABASE_URL on startup even though this image is intended
 # to run without a real database. A placeholder is enough to let the server boot.
