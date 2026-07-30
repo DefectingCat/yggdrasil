@@ -197,6 +197,19 @@ RUN dx build @client --release --debug-symbols=false --wasm-js-cfg false && \
     mkdir -p /build/dist/public && \
     cp -r /build/target/dx/yggdrasil/*/web/public/* /build/dist/public/
 
+# Generate the project's rustdoc API docs and stage them under public/doc so
+# they are served at /doc on the live site. Mirrors `make doc` exactly:
+# --no-deps skips dependency docs, --document-private-items documents internal
+# / private items (this is effectively a single-crate binary — without it the
+# pages would be nearly empty), RUSTDOCFLAGS pins the ayu theme. The tiny
+# index.html redirects bare /doc to the real crate entry yggdrasil/.
+# NOTE: .dockerignore excludes host-side public/doc/, so this RUN is the ONLY
+# channel that puts the docs into the image — without it /doc is a 404 online.
+RUN RUSTDOCFLAGS="--default-theme=ayu" cargo doc --no-deps --document-private-items && \
+    rm -rf dist/public/doc && \
+    cp -r target/doc dist/public/doc && \
+    printf '<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=yggdrasil/index.html"><title>Redirecting…</title></head><body><script>location.replace("yggdrasil/index.html")</script></body></html>' > dist/public/doc/index.html
+
 # Build the server as a fully static musl binary, **natively for the buildx
 # platform leg**. Each leg builds only its own arch, so musl-gcc (which Debian
 # ships for the host arch only) and the target always match — no cross-compiler,
