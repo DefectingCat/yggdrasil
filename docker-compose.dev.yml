@@ -11,12 +11,13 @@
 # 架构：
 #   ┌─────────────────────────────────────────────────────┐
 #   │ Host (macOS)                                        │
+#   │   PostgreSQL :5432 (宿主原生, 不由 compose 管理)      │
 #   │   IDE 编辑源码 ──bind mount──▶ /build (dev container)│
 #   │   浏览器 ◀── :8080 ────────── dx serve (:8080)       │
 #   └─────────────────────────────────────────────────────┘
-#         │
-#         ├── db (PostgreSQL 18) ◀── dev container :5432
-#         └── Docker socket (可选, code runner 沙箱)
+#
+# 数据库：dev 容器通过 host.docker.internal 连接宿主 PostgreSQL。
+# 前提：宿主已运行 PostgreSQL 且 DATABASE_URL 指向它（见 .env）。
 #
 # Volume 策略：
 #   .:/build                      bind mount 源码（IDE 编辑即时可见）
@@ -25,26 +26,14 @@
 #   cargo registry → named volume crate 下载缓存
 
 services:
-  db:
-    image: postgres:18-alpine
-    environment:
-      POSTGRES_DB: yggdrasil
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5433:5432"
-    volumes:
-      - yggdrasil-dev-db:/var/lib/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
   dev:
     build:
       context: .
       dockerfile: Dockerfile.dev
+    # host.docker.internal 在 Docker Desktop 上自动解析到宿主 IP，
+    # 让容器内的 server 能连接宿主原生 PostgreSQL（:5432）。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       # 源码 bind mount — 宿主编辑即时可见，dx serve inotify 热重载
       - .:/build
@@ -62,21 +51,18 @@ services:
     ports:
       - "8080:8080"
     environment:
-      DATABASE_URL: postgres://postgres:postgres@db:5432/yggdrasil
+      # 连接宿主 PostgreSQL。端口/密码/库名按 .env 调整。
+      DATABASE_URL: postgres://postgres:postgres@host.docker.internal:5432/yggdrasil
       RUST_LOG: info
       SSR_CACHE_SECS: "0"
       APP_BASE_URL: http://localhost:8080
       # Code runner（取消 Docker socket 挂载后启用）
       DOCKER_SOCKET_PATH: /var/run/docker.sock
-    depends_on:
-      db:
-        condition: service_healthy
     # dx serve 前台运行，日志直接输出到 docker compose
     stdin_open: true
     tty: true
 
 volumes:
-  yggdrasil-dev-db:
   yggdrasil-dev-target:
   yggdrasil-dev-node-modules:
   yggdrasil-dev-cargo-registry:
