@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-07-30
+
+### Added
+
+- **MCP `update_post` 部分更新**：`update_post` 改为 PATCH 语义，`UpdatePostParams` 所有可改字段（title / content_md / summary / slug / tags / status / cover_image）改为 `Option`，仅 `post_id` 必填；服务端按提供的字段动态构建 `UPDATE SET` 子句，未提供 `content_md` 时跳过 Markdown 重新渲染，省去 `spawn_blocking` 开销。语义要点：`summary` 随正文联动（正文变且未给则自动提取）；`slug` 仅显式提供才改动；`tags` 为 `None` 不改、`Some` 替换（空列表清空）；`cover_image` 为 `None` 不改、空串清空、URL 设置；`status` 变化时首发自动填 `published_at`。旧的全量调用（同时传 title+content_md）行为不变，向后兼容。
+
 ## [0.8.0] - 2026-07-30
 
 ### Added
