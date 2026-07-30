@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **TOML 语法高亮**：``` ```toml ``` 代码块此前回退为纯文本（syntect 默认精选集不含 TOML）；现已引入官方 sublimehq TOML v2 语法，支持日期时间、数组表、内联表与多行字符串。
+- **TOML 语法高亮**：`toml` 代码块此前回退为纯文本（syntect 默认精选集不含 TOML）；现已引入官方 sublimehq TOML v2 语法，支持日期时间、数组表、内联表与多行字符串。
 - **Docker 开发环境**：新增 `Dockerfile.dev` + `docker-compose.dev.yml`，内置 dx 0.7.9、tailwindcss v4、Node 22/pnpm 与 wasm32 target；源码 bind mount 实现热重载，cargo/pnpm 缓存跨重启持久化，直连宿主原生 PostgreSQL。新增 `make docker-dev` / `docker-dev-down` / `docker-dev-shell` 便利 target。
 - **x86_64 镜像零 QEMU 交叉编译**：改用 `Dockerfile.cross` 三阶段构建（Trixie 编前端 + Alpine/zig 交叉编 server + scratch 合并产物），arm64 Mac 上不再经 QEMU/Rosetta 翻译，告别 cross 工具链容器在 Rosetta 下的 SIGSEGV 崩溃。
 
@@ -86,6 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **死代码清理 D1–D12**：删除死模块 `resources.rs`、死 `User` 结构体、未用参数、mhchem 冗余分支、死导出与文档化死分支、未使用且永不失效的缓存键等；收窄模块级 allow。
 - 迁移后补回/移除测试中失效的 `sha2::Digest` 导入。
+
 ## [0.6.2] - 2026-07-24
 
 ### Fixed
@@ -183,7 +184,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **代码运行器（Code Runner）**：读者可在文章页直接运行 ``` ```lang runnable ``` 代码块，在隔离的 Docker 容器中执行，支持 Python / Node.js / Go / Rust 四种语言；admin 侧 `/admin/runner` 试验沙箱页支持任意代码试跑（跳过速率限制）。三层架构：`src/infra/docker.rs`（bollard 执行层，只读 rootfs + tmpfs + 资源/能力限制 + `ContainerGuard` Drop 强制清理）、`src/api/code_runner/`（任务注册表、语言注册表、双速率限制 + 白名单 + 大小检查）、Markdown 渲染层（`PostContent` 拆分 `Html`/`Runnable` 片段，每块渲染为真实 `<CodeRunner>` vdom 元素）。所有 `CODE_RUNNER_*` 环境变量可调，支持 per-IP 速率与每日上限。
+- **代码运行器（Code Runner）**：读者可在文章页直接运行 ` `lang runnable ``` 代码块，在隔离的 Docker 容器中执行，支持 Python / Node.js / Go / Rust 四种语言；admin 侧 `/admin/runner` 试验沙箱页支持任意代码试跑（跳过速率限制）。三层架构：`src/infra/docker.rs`（bollard 执行层，只读 rootfs + tmpfs + 资源/能力限制 + `ContainerGuard` Drop 强制清理）、`src/api/code_runner/`（任务注册表、语言注册表、双速率限制 + 白名单 + 大小检查）、Markdown 渲染层（`PostContent` 拆分 `Html`/`Runnable` 片段，每块渲染为真实 `<CodeRunner>` vdom 元素）。所有 `CODE_RUNNER_*` 环境变量可调，支持 per-IP 速率与每日上限。
 - **流式代码执行（SSE + xterm.js）**：CodeRunner 切换为 SSE + xterm.js 流式输出方案。新增 `xterm-terminal` IIFE 子工程（xterm.js 6.0）、`xterm_bridge.rs` wasm-bindgen 绑定、`/api/exec/stream` SSE 端点、Docker 执行层流式路径（wait 与 log 读取并发）；支持无缓冲 stdout（`python -u`）、SSE done 事件回传 `duration_ms`、运行前隐藏输出区 + skeleton 占位。
 - **`/admin/system` 管理后台**：全新管理区，5 个 tab —— 数据库状态（表统计/活跃连接/迁移版本）、服务器状态（sysinfo 主机指标 + moka 缓存命中率轮询）、SQL 控制台（全读写，4 道护栏：sqlparser AST 门 + WHERE 缺失拒绝 + 查询超时 + 前端确认；单元格类型化渲染 NULL/布尔/数字、表头 sticky、行截断展开）、数据导出（Axum 流式 SQL/CSV）、备份恢复（`pg_dump` 优先 + COPY 回退、DashMap 任务进度表 + 轮询、备份文件签名校验 + 路径白名单）。
 - **UI 重新设计（工业极简 + Catppuccin）**：全站配色迁移到 Catppuccin（Latte/Mocha），移除 Rust 中硬编码颜色，统一语义色阶；后台重设计为现代极简侧边栏布局（写文章页改为左右两栏、编辑器自适应高度）；圆角 token 化为三档梯度（32/16/8）并统一所有组件；Markdown 表格重设计 + 表格单元格圆角防背景溢出；全局路由切换平滑挂载动画 + View Transitions 圆形展开主题切换动画；编辑器背景图（线条小狗）有内容时自动调淡透明度。
