@@ -1242,7 +1242,7 @@ fn get_operator(a: &str) -> String {
 /// - 状态机有 watchdog 防死循环。
 /// - `to_tex` 仍包 `catch_unwind`，仅作 dev/test 护栏。
 ///
-/// 坏公式可能产出退化输出，但不应 panic。[`all_match_patterns_compile`] 测试
+/// 坏公式可能产出退化输出，但不应 panic。`all_match_patterns_compile` 测试
 /// 在测试期捕获正则转录回归。
 pub fn ce(input: &str) -> String {
     to_tex(input, "ce")

@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Asset {
     pub id: String,
-    /// 相对路径，如 "2026/07/24/153000.<uuid>.webp"（不含 /uploads/ 前缀）。
+    /// 相对路径，如 `2026/07/24/153000.<uuid>.webp`（不含 /uploads/ 前缀）。
     pub path: String,
     pub filename: String,
     pub mime: String,

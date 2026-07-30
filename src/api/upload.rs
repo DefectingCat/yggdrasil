@@ -1,8 +1,8 @@
 //! 图片上传：web 处理器 + 共享入库流水线。
 //!
-//! 两条入口共用 [`process_image_upload`]：
-//! - web `POST /api/upload`（cookie 鉴权，multipart）—— 见 [`upload_image`]；
-//! - MCP `POST /api/mcp/upload`（bearer 鉴权，multipart）—— 见 [`mcp_upload_image`]；
+//! 两条入口共用 `process_image_upload`：
+//! - web `POST /api/upload`（cookie 鉴权，multipart）—— 见 `upload_image`；
+//! - MCP `POST /api/mcp/upload`（bearer 鉴权，multipart）—— 见 `mcp_upload_image`；
 //! - MCP `upload_media` 工具（URL 抓取）—— 见 `src/mcp/tools/media.rs`。
 //!
 //! 流水线：magic bytes 检 MIME → 大小校验 → 尺寸/像素校验 → SHA-256 内容去重
@@ -52,7 +52,7 @@ fn upload_error<T: serde::Serialize>(status: StatusCode, msg: T) -> (StatusCode,
 /// 处理图片上传的 Axum handler（web 端，cookie 鉴权）。
 ///
 /// 流程：限流 → 解析 session → 校验 admin → 读取 multipart → 早拒非法声明类型 →
-/// 读取字节 → 交给共享流水线 [`process_image_upload`]。
+/// 读取字节 → 交给共享流水线 `process_image_upload`。
 ///
 /// `ConnectInfo` 以可选扩展注入：`dioxus::server::serve()` 接管了 listener，
 /// 无法调用 `into_make_service_with_connect_info::<SocketAddr>()`，所以这里
@@ -156,7 +156,7 @@ fn mcp_upload_error<T: serde::Serialize>(status: StatusCode, msg: T) -> Response
 
 /// 处理图片上传的 Axum handler（MCP 端，bearer token 鉴权）。
 ///
-/// 与 web [`upload_image`] 的区别：
+/// 与 web `upload_image` 的区别：
 /// - 鉴权用 `Authorization: Bearer ygg_...`（不是 cookie），经
 ///   [`crate::mcp::auth::resolve_bearer_principal`] 解析；
 /// - 不挂 CSRF 中间件——bearer 在请求头里，浏览器不会自动附带，无 CSRF 风险；

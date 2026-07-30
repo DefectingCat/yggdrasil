@@ -2,9 +2,9 @@
 //!
 //! 三个 `read` 作用域工具，均经 `Extension<http::request::Parts>` 读取鉴权中间件
 //! 注入的 `McpPrincipal`，校验 `scope.grants(TokenScope::Read)`：
-//! - [`search_posts`](ReadTools::search_posts)：pg_trgm 模糊搜索已发布文章；
-//! - [`get_post`](ReadTools::get_post)：按 slug 取单篇已发布文章全文；
-//! - [`list_tags`](ReadTools::list_tags)：标签 + 关联已发布文章数。
+//! - `search_posts`：pg_trgm 模糊搜索已发布文章；
+//! - `get_post`：按 slug 取单篇已发布文章全文；
+//! - `list_tags`：标签 + 关联已发布文章数。
 //!
 //! 本模块只声明工具路由；`server.rs`（Main 装配）把 `read_router()` 合并进
 //! 复合 `ServerHandler`。SQL 与 `src/api/posts/{search,read,tags}.rs` 的

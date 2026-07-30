@@ -13,10 +13,10 @@
 //!    （解析时返回公网 IP 骗过校验，连接瞬间返回内网 IP 的攻击）。
 //! 3. **禁重定向**：302 可重定向到内网 IP 绕过白名单——设 `redirect(Policy::none)`，
 //!    抓取器对每个跳转点零信任。
-//! 4. **体积上限**：流式读 + 累计字节，超过 [`MAX_FILE_SIZE`] 立即中止，避免无界
+//! 4. **体积上限**：流式读 + 累计字节，超过 `MAX_FILE_SIZE` 立即中止，避免无界
 //!    响应（Content-Length 可伪造、可缺省）撑爆内存。
 //! 5. **超时**：连接 + 整体读取封顶，防慢速 loris 式拖挂。
-//! 6. **白名单兜底**：最终交给 [`process_image_upload`]，magic bytes 二次验真，
+//! 6. **白名单兜底**：最终交给 `process_image_upload`，magic bytes 二次验真，
 //!    Content-Type 不被信任。
 //!
 //! 抓取在异步 reqwest 中执行（不阻塞 worker；转码/校验仍走 spawn_blocking）。
