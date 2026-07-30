@@ -2,7 +2,6 @@
 
 build:
 	@rm -rf static/
-	@cd libs && pnpm install --frozen-lockfile
 	@$(MAKE) build-libs
 	@$(MAKE) highlight-css
 	@$(MAKE) katex-css
@@ -12,7 +11,6 @@ build:
 	@$(MAKE) restore-webp
 
 build-linux:
-	@cd libs && pnpm install --frozen-lockfile
 	@$(MAKE) build-libs
 	@$(MAKE) highlight-css
 	@$(MAKE) katex-css
@@ -97,10 +95,9 @@ katex-css:
 	@echo "KaTeX CSS ready at public/katex/"
 
 # 并行构建全部 libs/ 子项目（pnpm -r 拓扑顺序，无相互依赖则并发）。
-# 依赖安装由调用方负责（build/build-linux 用 pnpm install --frozen-lockfile，
-# dev 假设 node_modules 已存在）。
+# build-libs 会先安装依赖（pnpm install），无需调用方自行安装。
 build-libs:
-	@cd libs && pnpm -r run build
+	@cd libs && pnpm install && pnpm -r run build
 
 # 单库便利 target（替代旧的 build-<name>，用 pnpm --filter 精确定位）。
 build-editor:     ; @cd libs && pnpm --filter @yggdrasil/tiptap-editor run build
@@ -116,7 +113,7 @@ dev: build-libs highlight-css katex-css
 	@echo "Building CSS..."
 	@$(MAKE) css
 	@echo "Starting dx serve..."
-	@SSR_CACHE_SECS=0 dx serve --addr 0.0.0.0
+	@SSR_CACHE_SECS=0 dx serve --addr 0.0.0.0 --interactive false
 
 css:
 	@tailwindcss -i input.css -o public/style.css

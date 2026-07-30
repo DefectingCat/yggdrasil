@@ -114,40 +114,7 @@ RUN ARCH="$(dpkg --print-architecture)" \
 
 WORKDIR /build
 
-# ── 开发启动脚本（内联，避免 .dockerignore 排除 docker/ 目录）────
-# 执行 make dev 的等价流程：pnpm install → build-libs → highlight-css
-# → katex-css → tailwindcss → dx serve。每步都是幂等的（named volume
-# 缓存），后续启动约 10 秒。首次启动需编译 Rust 依赖（~10 分钟）。
-COPY <<'ENTRYPOINT' /usr/local/bin/dev-entrypoint.sh
-#!/usr/bin/env bash
-set -euo pipefail
-
-cd /build
-
-echo "▸ Installing JS dependencies..."
-(cd libs && pnpm install)
-
-echo "▸ Building JS libraries..."
-make build-libs
-
-if [ ! -f public/highlight.css ]; then
-    echo "▸ Generating highlight.css (first run compiles Rust deps, ~10 min)..."
-    make highlight-css
-fi
-
-if [ ! -f public/katex/katex.min.css ]; then
-    echo "▸ Copying KaTeX CSS..."
-    make katex-css
-fi
-
-echo "▸ Building Tailwind CSS..."
-make css
-
-rm -rf static/
-
-echo "▸ Starting dx serve on :8080..."
-SSR_CACHE_SECS=0 exec dx serve --addr 0.0.0.0 --interactive false
-ENTRYPOINT
-RUN chmod +x /usr/local/bin/dev-entrypoint.sh
-
-CMD ["dev-entrypoint.sh"]
+# 启动开发服务器：make dev 内含 pnpm install → build-libs → highlight-css
+# → katex-css → tailwindcss → dx serve --interactive false。
+# pnpm install 和 CSS 生成每次都执行（幂等，pnpm 有缓存秒完）。
+CMD ["make", "dev"]
