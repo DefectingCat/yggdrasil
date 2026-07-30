@@ -81,6 +81,42 @@ fn mcp_rate_burst() -> std::num::NonZeroU32 {
         .unwrap_or(30);
     std::num::NonZeroU32::new(v.max(1)).expect("v.max(1) 保证非零")
 }
+/// MCP 上传专用限流（与 MCP_LIMITER 隔离）：上传是重操作（转码 + 落盘），
+/// 单独配额避免一个高频令牌的普通请求耗尽上传额度，反之亦然。
+/// 阈值经 RATE_LIMIT_MCP_UPLOAD_PER_SEC / _BURST 可调（默认 2/s, burst 5）。
+static MCP_UPLOAD_LIMITER: std::sync::LazyLock<governor::DefaultKeyedRateLimiter<String>> =
+    std::sync::LazyLock::new(|| {
+        governor::RateLimiter::keyed(
+            governor::Quota::per_second(mcp_upload_rate_per_sec())
+                .allow_burst(mcp_upload_rate_burst()),
+        )
+    });
+
+fn mcp_upload_rate_per_sec() -> std::num::NonZeroU32 {
+    let v = std::env::var("RATE_LIMIT_MCP_UPLOAD_PER_SEC")
+        .ok()
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(2);
+    std::num::NonZeroU32::new(v.max(1)).expect("v.max(1) 保证非零")
+}
+
+fn mcp_upload_rate_burst() -> std::num::NonZeroU32 {
+    let v = std::env::var("RATE_LIMIT_MCP_UPLOAD_BURST")
+        .ok()
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(5);
+    std::num::NonZeroU32::new(v.max(1)).expect("v.max(1) 保证非零")
+}
+
+/// bearer 端点专用：按 token_id 检查上传配额。超限返回 Err(脱敏消息)。
+pub(crate) fn check_mcp_upload_limit(token_id: &str) -> Result<(), &'static str> {
+    // governor 的 keyed 限流器要求 &String 键；token_id 是 &str，转一次。
+    let key = token_id.to_string();
+    if MCP_UPLOAD_LIMITER.check_key(&key).is_err() {
+        return Err("上传过于频繁，请稍后再试");
+    }
+    Ok(())
+}
 
 /// `last_used_at` 刷新节流：同一令牌的 UPDATE 至少间隔 60s，避免高频请求
 /// 每次都写库。窗口外才刷新，窗口内跳过（best-effort，失败静默）。
@@ -117,7 +153,7 @@ pub async fn mcp_auth_middleware(
 }
 
 /// 查库解析 token → 主体；未撤销、未过期才返回 Some。
-async fn resolve_principal(token: &str) -> Option<McpPrincipal> {
+pub(crate) async fn resolve_principal(token: &str) -> Option<McpPrincipal> {
     let hash = hash_token(token);
     let client = get_conn().await.ok()?;
     // 一次查询取出 + 校验所有条件，并带出 last_used_at 供节流判断。
@@ -157,4 +193,17 @@ async fn resolve_principal(token: &str) -> Option<McpPrincipal> {
         scope,
         token_id: token_id.to_string(),
     })
+}
+/// bearer 端点鉴权：从 Authorization 头解析 bearer → 查库解析主体。
+///
+/// 供 `/api/mcp/upload` 等不在 `/mcp` 中间件链上的端点复用——这些端点
+/// 自行做 bearer 鉴权（不经 rmcp，不走 McpPrincipal→extensions 注入路径）。
+/// 失败统一返回 401（不区分缺失/无效/过期，避免 token 探测）。
+pub(crate) async fn resolve_bearer_principal(
+    headers: &HeaderMap,
+) -> Result<McpPrincipal, StatusCode> {
+    let token = extract_bearer(headers).ok_or(StatusCode::UNAUTHORIZED)?;
+    resolve_principal(&token)
+        .await
+        .ok_or(StatusCode::UNAUTHORIZED)
 }

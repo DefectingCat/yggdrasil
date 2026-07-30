@@ -74,8 +74,10 @@ katex-rs = { version = "0.2", optional = true }
 rmcp = { version = "=3.0.0-beta.3", optional = true, features = ["server", "macros", "transport-streamable-http-server", "transport-worker"] }
 # MCP token 静态加密（AES-GCM）：管理员可在后台重查明文，DB 不裸存。
 aes-gcm = { version = "0.10", optional = true }
-# MCP 媒体上传：base64 解码（AI 客户端经 JSON 传图）。
-base64 = { version = "0.22", optional = true }
+# MCP 媒体上传：URL 抓取（服务端按图，带 SSRF 防护）。rustls-tls 不引入 OpenSSL，
+# 对静态 musl 链接友好；stream 用于按大小上限流式读取，避免无界响应撑爆内存。
+# 重定向在代码里禁用（避免被 302 到内网 IP，绕过 SSRF 白名单）。
+reqwest = { version = "0.12", optional = true, default-features = false, features = ["rustls-tls", "stream"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = ["Document", "Window", "Storage", "Element", "HtmlElement", "DomTokenList", "MediaQueryList", "HtmlImageElement", "MouseEvent", "KeyboardEvent", "Node", "EventTarget", "Navigator", "Clipboard", "File", "FileList", "FormData", "Request", "RequestInit", "Response", "Headers", "ClipboardEvent", "DataTransfer", "HtmlInputElement", "EventSource", "MessageEvent"] }
@@ -140,6 +142,6 @@ server = [
     "dep:mimalloc",
     "dep:katex-rs",
     "dep:rmcp",
+    "dep:reqwest",
     "dep:aes-gcm",
-    "dep:base64",
 ]

@@ -256,6 +256,21 @@ fn main() {
                 ))
                 .layer(axum::middleware::from_fn(crate::api::csrf::csrf_middleware));
 
+            // MCP bearer 上传端点（带外二进制传输）：bearer 鉴权在 handler 内部完成，
+            // 不挂 CSRF（bearer 在请求头，浏览器不自动附带，无 CSRF 风险）。
+            // 10MiB body + 300s 超时与 web 上传一致；二进制不经 JSON-RPC，绕开
+            // rmcp 的 4MiB 请求体上限。token-keyed 限流在 handler 内 check。
+            let mcp_upload_route = axum::Router::new()
+                .route(
+                    "/api/mcp/upload",
+                    axum::routing::post(crate::api::upload::mcp_upload_image),
+                )
+                .layer(axum::extract::DefaultBodyLimit::max(10 * 1024 * 1024))
+                .layer(TimeoutLayer::with_status_code(
+                    StatusCode::REQUEST_TIMEOUT,
+                    Duration::from_secs(300),
+                ));
+
             // 数据导出：流式响应，走 GET + query（参数较短）。
             // 鉴权在 handler 内部从 cookie 校验 admin；CSRF 最外层拦截非法来源。
             let export_route = axum::Router::new()
@@ -332,8 +347,8 @@ fn main() {
                     axum::routing::get(|| async { StatusCode::NOT_FOUND }),
                 );
 
-            // 合并：upload 路由 300s 超时；export 路由 120s；sse 路由无超时（长连接）；app routes 加可选压缩/30s；static routes 无任何中间件
             let router = upload_route
+                .merge(mcp_upload_route)
                 .merge(export_route)
                 .merge(sse_route)
                 .merge(app_routes)

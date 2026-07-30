@@ -46,3 +46,6 @@ pub mod settings;
 pub mod slug;
 /// 图片上传的 Axum 处理器。
 pub mod upload;
+/// SSRF 防护的 URL 抓取（服务端按图，供 MCP upload_media 工具）。
+#[cfg(feature = "server")]
+pub mod url_fetch;
