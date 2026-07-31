@@ -226,9 +226,12 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     && export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
     && export RUSTFLAGS="-C target-feature=+crt-static -C relocation-model=static" \
     && cargo chef cook --release --target "$MUSL_TARGET" \
-        --no-default-features --features server --recipe-path recipe.json \
-    && cargo chef cook --no-default-features --features server --recipe-path recipe.json
-# 注:host target 的依赖也 cook 一次(dev profile)——cargo doc 走 host(非 musl)
+        --no-default-features --features server --recipe-path recipe.json
+# 不再 cook host(dev) target: 下方 cargo doc 用 --no-deps(不编依赖),host cook 无服务对象;
+# 且 cargo-chef 0.1.77 在 host cook 的 skeleton 模式下对 archmage-macros 等 proc-macro
+# 报 "target does not support these crate types"(0.8.2 CI 实证,amd64/arm64 runner 均挂此)。
+# server 依赖已由上方 musl release cook 完整预热;cargo doc 走正常 cargo 流程按需自编
+# proc-macro(host),不触发 cargo-chef 该 bug。
 
 # Copy the rest of the source tree and build everything. 依赖已由 cooker 编好,
 # 此后的 cargo build/doc 只增量编译 app 代码。
