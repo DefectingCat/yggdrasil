@@ -131,7 +131,8 @@ lint:
 	@cd libs && pnpm exec biome check . && pnpm typecheck
 	@echo "==> Cargo clippy (Rust)"
 	@cargo clippy --all-targets --all-features -- -D warnings
-
+	@echo "==> Cargo fmt check (Rust)"
+	@cargo fmt -- --check
 # JS + Rust 自动修复（直接写入文件）。
 # 顺序：Biome → cargo fix（应用编译器建议，重写代码）→ cargo fmt（格式化 Rust）
 # → dx fmt（格式化 RSX 宏）。两道格式化收尾，保证最终文件状态整洁。
