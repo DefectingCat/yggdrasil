@@ -189,10 +189,10 @@ pub(super) fn PostsTrashPanel() -> Element {
                                                 }
                                             }
                                             th { class: "px-4 py-3 font-medium", "标题" }
-                                            th { class: "px-4 py-3 font-medium", "原状态" }
-                                            th { class: "px-4 py-3 font-medium w-28", "删除时间" }
-                                            th { class: "px-4 py-3 font-medium w-24 text-center", "剩余" }
-                                            th { class: "px-4 py-3 font-medium w-32 text-right", "操作" }
+                                            th { class: "px-4 py-3 font-medium whitespace-nowrap", "原状态" }
+                                            th { class: "px-4 py-3 font-medium w-32 whitespace-nowrap", "删除时间" }
+                                            th { class: "px-4 py-3 font-medium w-24 text-center whitespace-nowrap", "剩余" }
+                                            th { class: "px-4 py-3 font-medium w-32 text-right whitespace-nowrap", "操作" }
                                         }
                                     }
                                     tbody {
@@ -615,17 +615,17 @@ fn TrashRow(
                     "{post.title}"
                 }
             }
-            td { class: "px-4 py-3",
+            td { class: "px-4 py-3 whitespace-nowrap",
                 StatusBadge {
                     color_class: post.status_badge_class(),
                     label: post.status_label().to_string(),
                 }
             }
-            td { class: "px-4 py-3 text-sm text-paper-secondary", "{deleted_str}" }
-            td { class: "px-4 py-3 text-center",
+            td { class: "px-4 py-3 text-sm text-paper-secondary whitespace-nowrap", "{deleted_str}" }
+            td { class: "px-4 py-3 text-center whitespace-nowrap",
                 StatusBadge { color_class: badge_class, label: badge_text }
             }
-            td { class: "px-4 py-3 text-right",
+            td { class: "px-4 py-3 text-right whitespace-nowrap",
                 div { class: "flex justify-end gap-2",
                     button {
                         class: "{BTN_TEXT_ACCENT}",

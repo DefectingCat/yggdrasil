@@ -250,9 +250,9 @@ fn AllPostsList() -> Element {
                     thead {
                         tr { class: "border-b border-paper-border text-left text-paper-secondary",
                             th { class: "px-4 py-3 font-medium", "标题" }
-                            th { class: "px-4 py-3 font-medium w-24 text-center", "状态" }
-                            th { class: "px-4 py-3 font-medium w-32", "日期" }
-                            th { class: "px-4 py-3 font-medium w-44 text-right", "操作" }
+                            th { class: "px-4 py-3 font-medium w-24 text-center whitespace-nowrap", "状态" }
+                            th { class: "px-4 py-3 font-medium w-32 whitespace-nowrap", "日期" }
+                            th { class: "px-4 py-3 font-medium w-44 text-right whitespace-nowrap", "操作" }
                         }
                     }
                     tbody {
@@ -437,14 +437,14 @@ fn PostRow(
                     "{post.title}"
                 }
             }
-            td { class: "px-4 py-3 text-center",
+            td { class: "px-4 py-3 text-center whitespace-nowrap",
                 StatusBadge {
                     color_class: post.status_badge_class(),
                     label: post.status_label().to_string(),
                 }
             }
-            td { class: "px-4 py-3 text-paper-secondary", "{date_str}" }
-            td { class: "px-4 py-3 text-right",
+            td { class: "px-4 py-3 text-paper-secondary whitespace-nowrap", "{date_str}" }
+            td { class: "px-4 py-3 text-right whitespace-nowrap",
                 div { class: "flex justify-end items-center gap-3",
                     Link {
                         class: "text-xs text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer",

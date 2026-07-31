@@ -279,10 +279,10 @@ fn TokenList() -> Element {
                             tr { class: "bg-[var(--color-paper-theme)]/50 text-left text-[var(--color-paper-secondary)]",
                                 th { class: "px-4 py-3 font-medium", "名称" }
                                 th { class: "px-4 py-3 font-medium", "作用域" }
-                                th { class: "px-4 py-3 font-medium", "创建" }
-                                th { class: "px-4 py-3 font-medium", "过期" }
-                                th { class: "px-4 py-3 font-medium", "最近使用" }
-                                th { class: "px-4 py-3 font-medium", "状态" }
+                                th { class: "px-4 py-3 font-medium whitespace-nowrap", "创建" }
+                                th { class: "px-4 py-3 font-medium whitespace-nowrap", "过期" }
+                                th { class: "px-4 py-3 font-medium whitespace-nowrap", "最近使用" }
+                                th { class: "px-4 py-3 font-medium whitespace-nowrap", "状态" }
                                 th { class: "px-4 py-3 font-medium text-right", "操作" }
                             }
                         }
@@ -344,10 +344,10 @@ fn TokenRow(token: McpTokenSummary, state: McpPageState) -> Element {
         tr { class: "border-b border-[var(--color-paper-border)] last:border-b-0 hover:bg-[var(--color-paper-theme)]/30 transition-colors",
             td { class: "px-4 py-3 font-medium text-[var(--color-paper-primary)]", "{token.name}" }
             td { class: "px-4 py-3", "{token.scope.as_str()}" }
-            td { class: "px-4 py-3 text-[var(--color-paper-secondary)]", "{created}" }
-            td { class: "px-4 py-3 text-[var(--color-paper-secondary)]", "{expires}" }
-            td { class: "px-4 py-3 text-[var(--color-paper-secondary)]", "{last_used}" }
-            td { class: "px-4 py-3",
+            td { class: "px-4 py-3 text-[var(--color-paper-secondary)] whitespace-nowrap", "{created}" }
+            td { class: "px-4 py-3 text-[var(--color-paper-secondary)] whitespace-nowrap", "{expires}" }
+            td { class: "px-4 py-3 text-[var(--color-paper-secondary)] whitespace-nowrap", "{last_used}" }
+            td { class: "px-4 py-3 whitespace-nowrap",
                 span { class: "{BADGE_BASE} {status_class}", "{status_label}" }
             }
             td { class: "px-4 py-3 text-right whitespace-nowrap",
