@@ -96,7 +96,11 @@ export async function renderMermaid(
     });
     const id = `tiptap-mermaid-${++renderCounter}`;
     const { svg } = await mermaid.render(id, source);
-    return { svg };
+    // 同前台 mermaid.ts：foreignObject 默认 overflow:hidden 裁切零余量多行标签的
+    // descender（CJK 字体 sub-pixel 差异触发）。注入 overflow="visible" SVG 属性修复
+    // （CSS 对 foreignObject overflow 不生效，只能写 SVG 属性）。
+    const patched = svg.replace(/<foreignObject(?=[\s>])/g, '<foreignObject overflow="visible"');
+    return { svg: patched };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { error: msg };
