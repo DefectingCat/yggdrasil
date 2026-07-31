@@ -260,6 +260,113 @@ jobs:
             /tmp/release/yggdrasil-arm64.tar.gz \
             /tmp/release/yggdrasil-x86_64-musl.tar.gz
 
+  # ── publish-ghcr：合并 amd64 + arm64 为多架构 manifest 推 GHCR（版本归档）──
+  # GHCR 作只读镜像仓库：每次发版(tag)或手动触发时归档一个多架构 manifest，
+  # tag 命名 latest(最新) / vX.Y.Z(git tag) / sha-xxxxxxx(可追溯某次构建)。
+  # 服务器部署仍走下方 deploy job 的 scp(对 xun 中国网络最可靠)，GHCR 不参与部署链路——
+  # 它的价值在于多架构归档、版本可追溯、未来可无缝切换为 pull 部署。
+  # 流程：下载两个单架构 artifact → load → retag → push 单架构(带 sha 后缀) →
+  # docker manifest create 合并(从 registry 引用) → push manifest list。
+  publish-ghcr:
+    runs-on: ubuntu-latest
+    needs: [build-amd64, build-arm64]
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
+      || github.event_name == 'workflow_dispatch'
+    permissions:
+      packages: write
+    steps:
+      - name: Download image artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: yggdrasil-*-image
+          path: /tmp/img
+
+      # amd64 artifact 内 tag 为 localhost/yggdrasil:latest(对齐 xun.fish 的 load 名)，
+      # arm64 artifact 内 tag 为 yggdrasil:arm64。load 后统一 retag 成 yggdrasil:<arch>，
+      # 便于后续 manifest create 引用。
+      - name: Load and retag per-arch images
+        run: |
+          docker load --input /tmp/img/yggdrasil-amd64-image/yggdrasil-amd64.tar.gz
+          docker load --input /tmp/img/yggdrasil-arm64-image/yggdrasil-arm64.tar.gz
+          docker tag localhost/yggdrasil:latest yggdrasil:amd64
+          echo "--- loaded images ---"
+          docker image ls --format 'table {{.Repository}}\t{{.Tag}}\t{{.Architecture}}'
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # GHCR 镜像名必须全小写(owner DefectingCat → defectingcat)，否则 push 被拒。
+      # 推送顺序：先 push 两个单架构(sha 后缀唯一可追溯) → manifest create 合并 → push。
+      - name: Push multi-arch manifest to GHCR
+        env:
+          OWNER: ${{ github.repository_owner }}
+          DOCKER_CLI_EXPERIMENTAL: enabled
+        run: |
+          OWNER="$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')"
+          IMAGE="ghcr.io/${OWNER}/yggdrasil"
+          SHA="$(echo '${{ github.sha }}' | cut -c1-7)"
+          docker tag yggdrasil:amd64 "${IMAGE}:sha-${SHA}-amd64"
+          docker tag yggdrasil:arm64 "${IMAGE}:sha-${SHA}-arm64"
+          docker push "${IMAGE}:sha-${SHA}-amd64"
+          docker push "${IMAGE}:sha-${SHA}-arm64"
+          TAGS="latest sha-${SHA}"
+          [ "${GITHUB_REF_TYPE}" = "tag" ] && TAGS="${TAGS} ${GITHUB_REF_NAME}"
+          for t in $TAGS; do
+            docker manifest create "${IMAGE}:${t}" \
+              "${IMAGE}:sha-${SHA}-amd64" "${IMAGE}:sha-${SHA}-arm64"
+            docker manifest push "${IMAGE}:${t}"
+            echo "==> pushed ${IMAGE}:${t}"
+          done
+
+  # ── publish-runners：构建 6 个 Code Runner 沙箱镜像推 GHCR（归档）──
+  # runner 与宿主架构强绑定(代码执行环境)，xun 是 x86_64，故只构建/推 amd64。
+  # 构建顺序：base 必须先(其余 5 个 FROM yggdrasil-runner-base:latest)。
+  # 用普通 `docker build` 而非 buildx：docker-container driver 的 buildx 实例与本地
+  # daemon 隔离，本地 load 的 base 在 buildx 里不可见，子镜像 FROM 会失败；普通
+  # docker build 走本地 daemon，base 先进 daemon，子镜像 FROM 即可解析。
+  # 服务器部署仍走 scripts/xun.fish 本地构建 scp，GHCR 仅作归档/未来 pull 切换基础。
+  publish-runners:
+    runs-on: ubuntu-latest
+    needs: test
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
+      || github.event_name == 'workflow_dispatch'
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push runner images
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          OWNER="$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')"
+          REG="ghcr.io/${OWNER}"
+          SHA="$(echo '${{ github.sha }}' | cut -c1-7)"
+          TAGS="latest sha-${SHA}"
+          [ "${GITHUB_REF_TYPE}" = "tag" ] && TAGS="${TAGS} ${GITHUB_REF_NAME}"
+          docker build --platform linux/amd64 -t yggdrasil-runner-base docker/runner-base
+          for img in base python node go rust bun; do
+            [ "$img" != "base" ] && docker build --platform linux/amd64 -t "yggdrasil-runner-${img}" "docker/runner-${img}"
+            for t in $TAGS; do
+              docker tag "yggdrasil-runner-${img}" "${REG}/yggdrasil-runner-${img}:${t}"
+              docker push "${REG}/yggdrasil-runner-${img}:${t}"
+            done
+            echo "==> pushed ${REG}/yggdrasil-runner-${img} ← ${TAGS}"
+          done
+
   # ── deploy：scp 镜像到 xun，docker load + compose up，健康检查 ──
   # 仅 push 新 tag（v*）或手动触发时运行（分支推送/PR 不部署）。
   deploy:
