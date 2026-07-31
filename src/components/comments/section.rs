@@ -62,23 +62,24 @@ pub fn CommentSection(post_id: i32) -> Element {
 
     // 轮询待审核评论状态：只要本地还有待审核评论，就定期查询其审核状态。
     //
-    // 旧实现把 pending_comments 快照进闭包、use_future 仅在信号变化时跑一次——
-    // 用户提交评论后立即查（此时仍是 pending），之后管理员通过审核时信号未变，
-    // future 不再重跑，导致「审核中」徽章永久残留（issue #9）。这与 backup.rs 的
-    // 进度轮询属同类 bug，沿用「长生命周期 loop + 循环内读信号」的模式修复：
-    // 一旦某条评论变为非 pending（通常为已通过），就从本地移除并刷新已审核列表，
-    // 使其以正式状态进入评论树，而非一直挂着「审核中」占位。
-    use_future(move || {
-        // 同步段读取建立响应式依赖：pending_comments 变化（新评论提交 / 本轮移除）
-        // 时 use_future 自动重启，确保循环 return 退出后仍能重新进入轮询。
-        let _ = ctx.pending_comments.read();
+    // 必须用 use_resource 而非 use_future：use_future 不跟踪响应式依赖——闭包仅运行
+    // 一次，async 结束后即便依赖信号变化也不会重启（Dioxus 0.7.9 use_future 源码
+    // 证实其无 ReactiveContext）。上一版修复（8268546）误以为在同步段读取
+    // pending_comments 能让 use_future 自动重启，实际并不能：页面刷新时 use_effect
+    // 异步载入 localStorage 的 pending，而此时已 return 退出的 future 永不重启，
+    // 轮询彻底失效，「审核中」徽章永久残留（issue #9 回归）。use_resource 内置
+    // ReactiveContext，pending_comments 变化（提交 / 载入 / 本轮移除）时自动取消旧
+    // 任务并重启；无待审核评论时 return 退出，不给访客留常驻定时器。一旦某条评论
+    // 变为非 pending（通常已通过），就从本地移除并刷新已审核列表，使其以正式状态
+    // 进入评论树。
+    let _pending_poll = use_resource(move || {
         let mut pending_comments = ctx.pending_comments;
         let mut refresh_trigger = ctx.refresh_trigger;
         async move {
             loop {
                 let ids: Vec<i64> = pending_comments.read().iter().map(|c| c.id).collect();
                 if ids.is_empty() {
-                    // 无待审核评论：停止轮询，等待响应式重启（新评论提交时触发）。
+                    // 无待审核评论：停止轮询。pending_comments 再变化时 use_resource 自动重启。
                     return;
                 }
 
@@ -90,9 +91,8 @@ pub fn CommentSection(post_id: i32) -> Element {
                         .collect();
                     if !to_remove.is_empty() {
                         comment_storage::remove_pending_ids(post_id, &to_remove);
-                        // 评论状态已变化（多为已通过）：刷新已审核列表，使其以正式
-                        // 状态进入评论树。peek 不订阅信号，避免给本 future 引入
-                        // 额外响应式依赖；先取出值再 set，规避 peek 守卫与 set 的借用冲突。
+                        // 评论状态已变化（多为已通过）：刷新已审核列表。peek 不订阅信号，
+                        // 避免给本 resource 引入额外依赖；先取值再 set，规避借用冲突。
                         let next = !*refresh_trigger.peek();
                         refresh_trigger.set(next);
                         pending_comments
@@ -111,6 +111,31 @@ pub fn CommentSection(post_id: i32) -> Element {
     let comments_resource = use_resource(move || {
         let _ = (ctx.refresh_trigger)();
         async move { get_comments(post_id).await }
+    });
+
+    // 本地去重兜底：已审核评论列表加载后，凡 id 已出现在已审核集合中的 pending
+    // 占位项立即移除。这是独立于上方轮询的确定性清理——不依赖 check_pending_status
+    // 远程调用成功（限流 / 网络失败时轮询无法移除占位项），只要 get_comments 返回了
+    // 已通过的评论，对应占位项就会被清除，根治「审核中」徽章残留（issue #9）。
+    use_effect(move || {
+        let data = comments_resource.read();
+        if let Some(Ok(CommentTreeResponse { comments, .. })) = &*data {
+            let approved_ids: std::collections::HashSet<i64> =
+                comments.iter().map(|c| c.id).collect();
+            let to_remove: Vec<i64> = ctx
+                .pending_comments
+                .read()
+                .iter()
+                .filter(|p| approved_ids.contains(&p.id))
+                .map(|p| p.id)
+                .collect();
+            if !to_remove.is_empty() {
+                comment_storage::remove_pending_ids(post_id, &to_remove);
+                ctx.pending_comments
+                    .write()
+                    .retain(|p| !to_remove.contains(&p.id));
+            }
+        }
     });
 
     let data = comments_resource.read();
