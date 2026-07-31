@@ -185,7 +185,7 @@ fn post_url(slug: &str) -> String {
 /// 与 `src/api/posts/search.rs` 一致的 pg_trgm word_similarity 查询。
 ///
 /// 仅返回 `status='published' AND deleted_at IS NULL` 的文章。
-/// SQL 通配符 `%`/`_`/`\` 被转义，避免用户输入导致全表扫描。
+/// SQL 通配符 `%`/`_`/`\` 被转义，防止用户输入注入通配符扩大匹配范围（匹配走 search_text 上的 trigram GIN 索引）。
 pub async fn search_published(query: &str, limit: u32) -> Result<Vec<SearchHit>, String> {
     let q = query.trim();
     if q.is_empty() || q.chars().count() > 200 {

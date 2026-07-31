@@ -1,8 +1,9 @@
 //! 文章全文搜索接口。
 //!
-//! 通过 `ILIKE` 对 search_text 做子串模糊匹配（两侧 `%`），无法利用 trgm GIN
-//! 索引（仅前缀模式命中），走全表扫描，靠 LIMIT 50 与搜索限流兜底。
-//! 结果按 pg_trgm 的 `word_similarity` 相似度与发布时间降序返回最多 50 篇已发布文章。
+//! 通过 `ILIKE` 对 search_text 做子串模糊匹配（两侧 `%`），由 posts.search_text 上的
+//! trigram GIN 索引（gin_trgm_ops，见 migrations/019）加速；<3 字符的查询 trigram 不足，
+//! 可能退回顺序扫，靠 LIMIT 50 与搜索限流兜底。结果按 pg_trgm 的 `word_similarity`
+//! 相似度与发布时间降序返回最多 50 篇已发布文章。
 //! Dioxus server function，注册在 `/api` 路径下。
 //! 仅在 `feature = "server"` 启用的服务端构建中查询数据库。
 
@@ -59,9 +60,8 @@ pub async fn search_posts(query: String) -> Result<PostListResponse, ServerFnErr
         // 转义 SQL LIKE 通配符，避免用户输入 % / _ 导致全表扫描。
         let escaped = crate::utils::server::escape_like_pattern(q);
 
-        // 使用 ILIKE 做子串模糊匹配（双侧 %）。注意：此查询无法利用 trgm GIN
-        // 索引（仅前缀模式命中），走全表扫，靠 LIMIT 50 + search 限流兜底。
-        // 后续可升级为 tsvector 全文检索（独立大改动）。
+        // 使用 ILIKE 做子串模糊匹配（双侧 %），走 posts.search_text 上的 trigram GIN 索引
+        // （见 migrations/019）。<3 字符查询 trigram 不足时可能退回顺序扫，由 LIMIT 50 + 限流兜底。
         let rows = client
             .query(
                 "SELECT

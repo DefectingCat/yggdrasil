@@ -67,6 +67,7 @@ const MIGRATIONS: &[(&str, &str)] = &[
     ),
     ("017", include_str!("../../migrations/017_mcp_tokens.sql")),
     ("018", include_str!("../../migrations/018_session_generation_trigger.sql")),
+    ("019", include_str!("../../migrations/019_restore_search_trgm_index.sql")),
     // 新增迁移在此追加，同时在 migrations/ 下创建对应 .sql 文件。
 ];
 
