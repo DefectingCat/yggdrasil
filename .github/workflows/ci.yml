@@ -24,10 +24,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
 
@@ -51,7 +51,7 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
 
       - name: Cache cargo registry & target
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -83,10 +83,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build amd64 image
         run: make docker-amd64
@@ -106,7 +106,7 @@ jobs:
           ls -lh /tmp/out/yggdrasil-amd64.tar.gz
 
       - name: Upload amd64 image artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: yggdrasil-amd64-image
           path: /tmp/out/yggdrasil-amd64.tar.gz
@@ -128,7 +128,7 @@ jobs:
 
       - name: Upload musl binary artifact
         if: startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: yggdrasil-x86_64-musl
           path: /tmp/musl/yggdrasil-x86_64-musl.tar.gz
@@ -146,10 +146,10 @@ jobs:
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
       || github.event_name == 'workflow_dispatch'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # 直接调 docker buildx（无 make docker-arm64 target），原生 Dockerfile 原生编译。
       # git 信息透传与 Makefile 的 GIT_BUILD_ARGS 一致。
@@ -177,7 +177,7 @@ jobs:
           ls -lh /tmp/out/yggdrasil-arm64.tar.gz
 
       - name: Upload arm64 image artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: yggdrasil-arm64-image
           path: /tmp/out/yggdrasil-arm64.tar.gz
@@ -196,10 +196,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: /tmp/assets
 
@@ -251,10 +251,10 @@ jobs:
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
       || github.event_name == 'workflow_dispatch'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Download amd64 image artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: yggdrasil-amd64-image
           path: /tmp
