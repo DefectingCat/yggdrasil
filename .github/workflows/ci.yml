@@ -1,0 +1,204 @@
+name: CI
+
+# 三段式流水线：test(单测+lint) → build(amd64 镜像) → deploy(SSH 到 xun 滚动重启)
+# - push/PR 到 master|main：跑 test + build（PR 不部署）
+# - push 到 master|main 或手动触发：额外跑 deploy（持续部署到 xun）
+# 部署逻辑与 scripts/xun.fish 一致（仅主应用镜像；runner 镜像变更极少，单独手动部署）。
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+# 同分支后一次推送取消前一次，避免并发部署；deploy 若被取消最多在服务器留个 .tar.gz，下次清理。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── test：纯 Rust + JS 检查，无需 dx CLI（WASM 在 build 阶段由容器内 dx 全量构建覆盖）──
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # package.json 的 packageManager 锁定 pnpm@11.8.0，corepack 按它激活。
+      - name: Enable pnpm via corepack
+        run: corepack enable pnpm
+        env:
+          COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+
+      - name: Configure Cargo mirror (rsproxy)
+        run: |
+          mkdir -p ~/.cargo
+          printf '[source.crates-io]\nreplace-with = "rsproxy-sparse"\n\n[source.rsproxy-sparse]\nregistry = "sparse+https://rsproxy.cn/index/"\n' > ~/.cargo/config.toml
+
+      - name: Install Rust (stable, minimal)
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Add wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Cache cargo registry & target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+      - name: Clippy (all targets, all features)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      # wasm32 目标单独 check，覆盖 web 特性的编译（无需 dx，由 build 阶段容器内 dx 全量构建兜底）。
+      - name: WASM target check
+        run: cargo check --target wasm32-unknown-unknown --no-default-features --features web
+
+      - name: Biome lint (libs)
+        run: cd libs && pnpm install --frozen-lockfile && pnpm exec biome check .
+
+      - name: Run tests
+        run: cargo test --all-features
+
+  # ── build：Docker in-container 全量构建（libs/WASM/rustdoc/静态 musl server）──
+  # GitHub runner 是 x86_64，make docker-amd64 走原生 Dockerfile（非 Dockerfile.cross），
+  # 宿主无需任何工具链，只需 Docker。
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build amd64 image
+        run: make docker-amd64
+
+      - name: Verify image architecture
+        run: |
+          arch=$(docker image inspect yggdrasil:amd64 --format '{{.Architecture}}')
+          echo "image arch: $arch"
+          [ "$arch" = "amd64" ] || { echo "expected amd64"; exit 1; }
+
+      # 对齐 scripts/xun.fish：tag 成 localhost/yggdrasil:latest 后导出（服务器 load 后即此名）。
+      - name: Save image artifact
+        run: |
+          docker tag yggdrasil:amd64 localhost/yggdrasil:latest
+          mkdir -p /tmp/out
+          docker save localhost/yggdrasil:latest | gzip > /tmp/out/yggdrasil-app.tar.gz
+          ls -lh /tmp/out/yggdrasil-app.tar.gz
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yggdrasil-app-image
+          path: /tmp/out/yggdrasil-app.tar.gz
+          retention-days: 3
+          if-no-files-found: error
+
+  # ── deploy：scp 镜像到 xun，docker load + compose up，健康检查 ──
+  # 仅 master/main 推送或手动触发时运行（PR 不部署）。
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: >-
+      (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'))
+      || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: yggdrasil-app-image
+          path: /tmp
+
+      # 写私钥 + known_hosts。优先用 XUN_KNOWN_HOSTS secret（pin 服务器指纹，更安全）；
+      # 未提供则 ssh-keyscan 兜底（TOFU，存在中间人风险，生产建议设置该 secret）。
+      - name: Configure SSH
+        env:
+          XUN_SSH_KEY: ${{ secrets.XUN_SSH_KEY }}
+          XUN_HOST: ${{ secrets.XUN_HOST }}
+          XUN_KNOWN_HOSTS: ${{ secrets.XUN_KNOWN_HOSTS }}
+        run: |
+          : "${XUN_SSH_KEY:?secret XUN_SSH_KEY 未设置}"
+          : "${XUN_HOST:?secret XUN_HOST 未设置}"
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$XUN_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          if [ -n "$XUN_KNOWN_HOSTS" ]; then
+            printf '%s\n' "$XUN_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            echo "::warning::XUN_KNOWN_HOSTS 未设置，改用 ssh-keyscan（TOFU，建议改为 pin 指纹）"
+            ssh-keyscan -H "$XUN_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          fi
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Transfer image to xun
+        env:
+          XUN_USER: ${{ secrets.XUN_USER }}
+          XUN_HOST: ${{ secrets.XUN_HOST }}
+          XUN_PORT: ${{ secrets.XUN_PORT }}
+          XUN_DEPLOY_DIR: ${{ secrets.XUN_DEPLOY_DIR }}
+        run: |
+          : "${XUN_USER:?secret XUN_USER 未设置}"
+          port="${XUN_PORT:-22}"
+          dir="${XUN_DEPLOY_DIR:-/root/docker/yggdrasil}"
+          scp -P "$port" -o BatchMode=yes /tmp/yggdrasil-app.tar.gz "${XUN_USER}@${XUN_HOST}:${dir}/"
+
+      # 单条 ssh 串行执行：解压 → load → 滚动重启 app（postgres 与数据卷不动）→ 清理。
+      # 路径变量在本地（runner）展开后拼进单引号远程命令，避免远程 shell 二次展开。
+      - name: Load image and restart app
+        env:
+          XUN_USER: ${{ secrets.XUN_USER }}
+          XUN_HOST: ${{ secrets.XUN_HOST }}
+          XUN_PORT: ${{ secrets.XUN_PORT }}
+          XUN_DEPLOY_DIR: ${{ secrets.XUN_DEPLOY_DIR }}
+        run: |
+          : "${XUN_USER:?secret XUN_USER 未设置}"
+          port="${XUN_PORT:-22}"
+          dir="${XUN_DEPLOY_DIR:-/root/docker/yggdrasil}"
+          ssh -p "$port" -o BatchMode=yes "${XUN_USER}@${XUN_HOST}" \
+            "set -euo pipefail && cd '${dir}' && gunzip -kf yggdrasil-app.tar.gz && docker load -i yggdrasil-app.tar && docker compose --env-file .env up -d app && rm -f yggdrasil-app.tar yggdrasil-app.tar.gz"
+
+      # 轮询内部健康端点（经 nginx-proxy 容器访问 app:3000），最多等 ~60s。
+      - name: Health check
+        env:
+          XUN_USER: ${{ secrets.XUN_USER }}
+          XUN_HOST: ${{ secrets.XUN_HOST }}
+          XUN_PORT: ${{ secrets.XUN_PORT }}
+        run: |
+          : "${XUN_USER:?secret XUN_USER 未设置}"
+          port="${XUN_PORT:-22}"
+          ok=0
+          for i in $(seq 1 12); do
+            echo "health probe #$i ..."
+            if ssh -p "$port" -o BatchMode=yes "${XUN_USER}@${XUN_HOST}" \
+                 'docker exec nginx-proxy curl -sf http://yggdrasil-app:3000/readyz' >/dev/null 2>&1; then
+              ok=1
+              echo "readyz OK"
+              break
+            fi
+            sleep 5
+          done
+          [ "$ok" = "1" ] || { echo "::error::app /readyz 在 60s 内未就绪"; exit 1; }
+          # 容器状态快照（postgres healthy + app up）
+          ssh -p "$port" -o BatchMode=yes "${XUN_USER}@${XUN_HOST}" \
+            'docker ps --filter name=yggdrasil --format "{{.Names}}\t{{.Status}}"'
