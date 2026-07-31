@@ -83,6 +83,16 @@ jobs:
   build-amd64:
     runs-on: ubuntu-latest
     needs: test
+    # 仅主干分支(main/master) push、tag 推送、手动触发时构建完整镜像。
+    # 其他分支/PR 的 push 仅靠 test job(fmt/clippy/wasm32/单测)做门槛，
+    # 省下完整 Docker 构建的 CI 分钟与 GHA 缓存配额(多分支并发会快速吃满 10GB)。
+    # tag/手动时此 job 是 release/publish-ghcr/deploy 的必需前置，一定运行。
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'push'
+          && (startsWith(github.ref, 'refs/tags/')
+              || github.ref == 'refs/heads/main'
+              || github.ref == 'refs/heads/master'))
     steps:
       - uses: actions/checkout@v7
 
@@ -111,6 +121,29 @@ jobs:
           arch=$(docker image inspect yggdrasil:amd64 --format '{{.Architecture}}')
           echo "image arch: $arch"
           [ "$arch" = "amd64" ] || { echo "expected amd64"; exit 1; }
+
+      # 镜像启动冒烟测试：编译只证明"能 build"，这里验证容器真的能启动。
+      # scratch 镜像无 Postgres，容器会在 ensure_database() 阶段失败(预期)。
+      # 设 MIGRATE_STARTUP_TIMEOUT_SECS=2 让它 ~2s 内快速失败(而非默认 30s 重试)。
+      # 验证两点：(1) 启动横幅 "running database migrations" → 二进制可执行、
+      #   tracing/build_info 初始化正常、镜像架构匹配；(2) "failed to ensure target
+      #   database exists" → 启动流程完整走到 DB 连接阶段(非更早的 config panic)。
+      - name: Smoke test (container boot)
+        run: |
+          docker run -d --name smoke -e MIGRATE_STARTUP_TIMEOUT_SECS=2 yggdrasil:amd64
+          # 轮询容器退出(已设 2s 超时，最多再等 10s 兜底网络/调度延迟)
+          for i in $(seq 1 10); do
+            [ "$(docker inspect -f '{{.State.Status}}' smoke 2>/dev/null)" = "exited" ] && break
+            sleep 1
+          done
+          docker logs smoke 2>&1 | tee /tmp/smoke.log
+          echo "container exit code: $(docker inspect -f '{{.State.ExitCode}}' smoke)"
+          docker rm -f smoke >/dev/null
+          grep -q "running database migrations" /tmp/smoke.log \
+            || { echo "::error::启动横幅缺失，二进制可能无法启动或架构不匹配"; exit 1; }
+          grep -q "failed to ensure target database exists" /tmp/smoke.log \
+            || { echo "::error::未到达 DB 连接阶段，可能存在更早的配置 panic"; exit 1; }
+          echo "smoke: 镜像可启动，初始化流程完整(无 Postgres 时 exit 1 属预期)"
 
       # 对齐 scripts/xun.fish：tag 成 localhost/yggdrasil:latest 后导出（服务器 load 后即此名）。
       - name: Save amd64 image artifact
@@ -339,9 +372,31 @@ jobs:
     permissions:
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          # 需要 tag 历史做与前一个 tag 的 docker/ diff；浅克隆拿不到祖先 tag。
+          fetch-depth: 0
 
+      # 变更检测：tag push 时比较与前一个 tag 的 docker/ 变更，无变更则跳过 6 个镜像构建。
+      # workflow_dispatch(手动触发)通常是有意重建，总是运行。fetch-depth: 0 提供祖先 tag。
+      - name: Detect docker/ changes since last tag
+        id: changes
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" != "push" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          PREV_TAG="$(git describe --tags --abbrev=0 "${GITHUB_SHA}^" 2>/dev/null || true)"
+          if [ -z "$PREV_TAG" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "${PREV_TAG}..${GITHUB_SHA}" -- docker/ | grep -q .; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::docker/ 自 ${PREV_TAG} 起无变更，跳过沙箱镜像构建"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Login to GHCR
+        if: steps.changes.outputs.changed == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -349,6 +404,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push runner images
+        if: steps.changes.outputs.changed == 'true'
         env:
           OWNER: ${{ github.repository_owner }}
         run: |
