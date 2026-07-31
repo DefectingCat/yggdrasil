@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _暂无未发布改动。_
 
+## [0.8.2] - 2026-07-31
+
+### Security
+
+- **session_generation 自动失效旧会话**：`users.session_generation` 版本化机制此前只有读侧（`get_user_by_token` 命中缓存后回查版本号，不匹配即逐出），但写侧无任何自动 bump——降级/封禁用户后已签发会话仍长期有效。新增 BEFORE UPDATE 触发器（migration 018）：仅在 `role` 真正变化（`IS DISTINCT FROM`）时 bump 世代号，其它列更新不误伤，触发器内修改 `NEW` 不递归。端到端语义由既有读侧逐出逻辑承接。
+
+### Fixed
+
+- **评论「审核中」徽章永久残留（issue #9 回归）**：评论审核通过后前端轮询从一次性 `use_future` 改为 `use_resource`（依赖 pending 列表自动重启），并加去重 `use_effect` 兜底，根治 pending 占位项残留。
+- **mermaid 多行节点标签 descender 裁切**：`foreignObject` 默认 `overflow:hidden` 在部分浏览器 sub-pixel 渲染下裁切多行节点下沉笔画（g/p/y）。注入 SVG `overflow="visible"` presentation attribute 修复（CSS `overflow` 对 foreignObject 无效，须写属性）。
+- **全文搜索 trigram 索引**：恢复 `posts.search_text` 的 trigram GIN 索引（migration 014 以错误理由删除——`gin_trgm_ops` 本就是为 `%pat%` 包含匹配设计的；migration 019 按 004 原定义重建）。`search_posts` 与 MCP `search_published` 的 ILIKE 不再全表扫。
+- **后台表格列换行**：日期/状态/操作列加固定宽度与 `whitespace-nowrap`，避免窄屏换行。
+- **线上容器无法创建备份**：scratch 镜像缺 `backups/` 目录且属主为 root、进程以 nobody 运行不可写。修复 `.dockerignore` 放行 `backups/.gitkeep`、Dockerfile 预建目录；备份写入失败改为携带真实 `io::Error`。
+- **rustdoc 线上 404**：镜像内生成 rustdoc 修复 `/doc` 路由 404；订正 rustdoc intra-doc 断链与无效 HTML 标签。
+- **Docker 构建**：cargo-chef tarball 解压去子目录层；docker-tests 缺少 alpine 镜像时跳过而非 panic。
+- **release 后 changelog 测试失败**：修复发布后遗留的测试断言失败。
+
+### Changed
+
+- **CI 迁移到 GitHub Actions**：从 Gitea Actions 迁移到 GitHub Actions，新增 SSH 部署到 xun；`test` + `build-amd64` 改为每次推送触发，`build-arm64`/`release`/`deploy` 改为仅 tag 推送（`v*`）或 `workflow_dispatch` 触发。
+- **arm64 原生构建 + GitHub Release 自动发布**：新增 arm64 原生构建（`ubuntu-24.04-arm` runner），GitHub Release 自动发布三件产物（amd64 镜像 / arm64 镜像 / x86_64 musl 静态二进制 + public 资源）。
+- **CI 缓存优化**：cargo-chef 依赖分层 + BuildKit GHA 层缓存；升级所有 actions 到 node24 兼容版本。
+- **lint 增强**：Makefile `lint` 目标增加 `cargo fmt -- --check`；全仓库 cargo fmt 统一格式。
+
+### Internal
+
+- 订正 `.cargo/config.toml` 过时的 cross build 叙事；修正 CHANGELOG 代码围栏 Markdown 转义。
+
 ## [0.8.1] - 2026-07-30
 
 ### Added
