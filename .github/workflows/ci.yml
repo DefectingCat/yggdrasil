@@ -310,8 +310,10 @@ jobs:
           dir="${XUN_DEPLOY_DIR:-/root/docker/yggdrasil}"
           scp -P "$port" -o BatchMode=yes /tmp/yggdrasil-amd64.tar.gz "${XUN_USER}@${XUN_HOST}:${dir}/yggdrasil-app.tar.gz"
 
-      # 单条 ssh 串行执行：解压 → load → 滚动重启 app（postgres 与数据卷不动）→ 清理。
-      # 路径变量在本地（runner）展开后拼进单引号远程命令，避免远程 shell 二次展开。
+# 单条 ssh 串行执行：解压 → load → 滚动重启 app（postgres 与数据卷不动）→ 清理。
+# 显式 bash -lc 执行脚本：xun 默认 login shell 是 fish，set -euo pipefail 等 POSIX
+# 语法 fish 不认（曾报 "set: -euo: unknown option"），bash -lc 绕过 fish。dir 仍在本地
+# （runner）展开后拼进脚本，避免远程二次展开。
       - name: Load image and restart app
         env:
           XUN_USER: ${{ secrets.XUN_USER }}
@@ -323,7 +325,7 @@ jobs:
           port="${XUN_PORT:-22}"
           dir="${XUN_DEPLOY_DIR:-/root/docker/yggdrasil}"
           ssh -p "$port" -o BatchMode=yes "${XUN_USER}@${XUN_HOST}" \
-            "set -euo pipefail && cd '${dir}' && gunzip -kf yggdrasil-app.tar.gz && docker load -i yggdrasil-app.tar && docker compose --env-file .env up -d app && rm -f yggdrasil-app.tar yggdrasil-app.tar.gz"
+            "bash -lc 'set -euo pipefail && cd \"${dir}\" && gunzip -kf yggdrasil-app.tar.gz && docker load -i yggdrasil-app.tar && docker compose --env-file .env up -d app && rm -f yggdrasil-app.tar yggdrasil-app.tar.gz'"
 
       # 轮询内部健康端点（经 nginx-proxy 容器访问 app:3000），最多等 ~60s。
       - name: Health check
