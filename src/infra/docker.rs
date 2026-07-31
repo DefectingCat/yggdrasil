@@ -717,25 +717,32 @@ mod tests {
         assert_eq!(host_config.memory_swap, Some(512 * 1024 * 1024));
     }
 
-    /// 探测 Docker daemon 是否可用：socket 缺失（`DOCKER_CLIENT == None`）或
-    /// daemon 无响应时返回 `None`。集成测试用它做动态守卫——daemon 在则跑，
-    /// 不在则显式跳过（eprintln + 提前 return），而非 panic 失败。
+    /// 探测 Docker daemon 是否可用：socket 缺失（`DOCKER_CLIENT == None`）、
+    /// daemon 无响应、或所需镜像不在本地时返回 `None`。集成测试用它做动态
+    /// 守卫——daemon 与镜像都在则跑，否则显式跳过（eprintln + 提前 return），
+    /// 而非 panic 失败。
     ///
     /// 这比 `#[ignore]` 更合适：`#[ignore]` 会在所有环境（含有 Docker 的开发机）
     /// 一律跳过、且需 `cargo test --ignored` 显式触发；探测守卫让这些测试在
-    /// 有 Docker 时自动运行、在无 Docker 的 CI 上静默放行。
-    async fn require_docker() -> Option<&'static Docker> {
+    /// 有 Docker 时自动运行、在无 Docker 或缺镜像的 CI 上静默放行。
+    ///
+    /// 镜像探测：GitHub runner 有 daemon 但默认不带 alpine:latest，创建容器
+    /// 时会 404。这里用 inspect_image 只读检查本地是否已有镜像，缺失即跳过，
+    /// 不在此 pull（CI 不应依赖外网拉镜像——慢且脆弱）。
+    async fn require_docker_with_image(image: &str) -> Option<&'static Docker> {
         let docker = DOCKER_CLIENT.as_ref()?;
         // socket 在但 daemon 挂了的情况靠这一步轻量只读调用兜住。
         docker.version().await.ok()?;
+        // 镜像不在本地 → 视为环境不可用，跳过而非 panic。
+        docker.inspect_image(image).await.ok()?;
         Some(docker)
     }
 
     #[tokio::test]
     #[serial_test::serial]
     async fn test_run_in_container_success() {
-        if require_docker().await.is_none() {
-            eprintln!("skip: Docker daemon 不可用（未安装或未运行）");
+        if require_docker_with_image("alpine:latest").await.is_none() {
+            eprintln!("skip: Docker daemon 不可用或缺少 alpine:latest");
             return;
         }
         let limits = ResourceLimits {
@@ -764,8 +771,8 @@ mod tests {
     #[tokio::test]
     #[serial_test::serial]
     async fn test_run_in_container_output_truncation() {
-        if require_docker().await.is_none() {
-            eprintln!("skip: Docker daemon 不可用（未安装或未运行）");
+        if require_docker_with_image("alpine:latest").await.is_none() {
+            eprintln!("skip: Docker daemon 不可用或缺少 alpine:latest");
             return;
         }
         let limits = ResourceLimits {
@@ -794,8 +801,8 @@ mod tests {
     #[tokio::test]
     #[serial_test::serial]
     async fn test_run_in_container_timeout() {
-        if require_docker().await.is_none() {
-            eprintln!("skip: Docker daemon 不可用（未安装或未运行）");
+        if require_docker_with_image("alpine:latest").await.is_none() {
+            eprintln!("skip: Docker daemon 不可用或缺少 alpine:latest");
             return;
         }
         let limits = ResourceLimits {
@@ -821,10 +828,10 @@ mod tests {
     #[serial_test::serial]
     async fn test_run_in_container_cancellation() {
         use bollard::query_parameters::ListContainersOptions;
-        let docker = match require_docker().await {
+        let docker = match require_docker_with_image("alpine:latest").await {
             Some(d) => d,
             None => {
-                eprintln!("skip: Docker daemon 不可用（未安装或未运行）");
+                eprintln!("skip: Docker daemon 不可用或缺少 alpine:latest");
                 return;
             }
         };
