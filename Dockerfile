@@ -149,6 +149,7 @@ RUN ARCH="$(dpkg --print-architecture)" \
         *) echo "unsupported arch: $ARCH" >&2; exit 1; \
     esac \
     && CHEF_URL="${GH_PROXY:+${GH_PROXY}/}https://github.com/LukeMathWalker/cargo-chef/releases/download/v${CHEF_VERSION}/cargo-chef-${CHEF_TRIPLET}.tar.xz" \
+    && curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors "${CHEF_URL}" -o /tmp/chef.tar.xz \
     && tar -xJf /tmp/chef.tar.xz -C /usr/local/bin --strip-components=1 \
     && rm /tmp/chef.tar.xz \
     && cargo-chef --version
