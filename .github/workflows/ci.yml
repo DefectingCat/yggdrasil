@@ -1,9 +1,11 @@
 name: CI
 
-# 流水线：
-# - 每次 push（任意分支/tag）和 PR：跑 test（单测+lint）→ build（amd64 镜像）
-# - 仅 push 新 tag（v*）或手动触发时：额外跑 deploy（SSH 到 xun 滚动重启）
-# 部署逻辑与 scripts/xun.fish 一致（仅主应用镜像；runner 镜像变更极少，单独手动部署）。
+# 流水线（2026 最佳实践：原生多 runner 构建，零 QEMU）：
+# - 每次 push（任意分支/tag）和 PR：跑 test（单测+lint）→ build-amd64
+# - 仅 push 新 tag（v*）或手动触发时：
+#     build-arm64（原生 ubuntu-24.04-arm runner）
+#     release（amd64 镜像 + arm64 镜像 + x86_64 musl 二进制 发布到 GitHub Release）
+#     deploy（SSH 到 xun 滚动重启）
 on:
   push:
   pull_request:
@@ -74,10 +76,10 @@ jobs:
       - name: Run tests
         run: cargo test --all-features
 
-  # ── build：Docker in-container 全量构建（libs/WASM/rustdoc/静态 musl server）──
-  # GitHub runner 是 x86_64，make docker-amd64 走原生 Dockerfile（非 Dockerfile.cross），
-  # 宿主无需任何工具链，只需 Docker。
-  build:
+  # ── build-amd64：Docker in-container 全量构建（libs/WASM/rustdoc/静态 musl server）──
+  # GitHub x86_64 runner，make docker-amd64 走原生 Dockerfile（非 Dockerfile.cross），
+  # 宿主无需任何工具链，只需 Docker。每次推送都跑（= 编译验证）。
+  build-amd64:
     runs-on: ubuntu-latest
     needs: test
     steps:
@@ -96,36 +98,165 @@ jobs:
           [ "$arch" = "amd64" ] || { echo "expected amd64"; exit 1; }
 
       # 对齐 scripts/xun.fish：tag 成 localhost/yggdrasil:latest 后导出（服务器 load 后即此名）。
-      - name: Save image artifact
+      - name: Save amd64 image artifact
         run: |
           docker tag yggdrasil:amd64 localhost/yggdrasil:latest
           mkdir -p /tmp/out
-          docker save localhost/yggdrasil:latest | gzip > /tmp/out/yggdrasil-app.tar.gz
-          ls -lh /tmp/out/yggdrasil-app.tar.gz
+          docker save localhost/yggdrasil:latest | gzip > /tmp/out/yggdrasil-amd64.tar.gz
+          ls -lh /tmp/out/yggdrasil-amd64.tar.gz
 
-      - name: Upload image artifact
+      - name: Upload amd64 image artifact
         uses: actions/upload-artifact@v4
         with:
-          name: yggdrasil-app-image
-          path: /tmp/out/yggdrasil-app.tar.gz
+          name: yggdrasil-amd64-image
+          path: /tmp/out/yggdrasil-amd64.tar.gz
           retention-days: 3
           if-no-files-found: error
 
-  # ── deploy：scp 镜像到 xun，docker load + compose up，健康检查 ──
-  # 仅 push 新 tag（v*）或手动触发时运行（分支推送/PR 不部署）。
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
+      # tag 推送时额外提取 x86_64 musl 静态二进制 + public/ 静态资源（供 release 发布）。
+      # scratch 镜像无 shell，docker create + docker cp 只读拷贝层文件即可。
+      - name: Extract x86_64 musl binary
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          mkdir -p /tmp/musl
+          id=$(docker create yggdrasil:amd64)
+          docker cp "$id:/app/server" /tmp/musl/yggdrasil
+          docker cp "$id:/app/public" /tmp/musl/public
+          docker rm "$id"
+          tar czf /tmp/musl/yggdrasil-x86_64-musl.tar.gz -C /tmp/musl yggdrasil public
+          ls -lh /tmp/musl/yggdrasil-x86_64-musl.tar.gz
+
+      - name: Upload musl binary artifact
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: yggdrasil-x86_64-musl
+          path: /tmp/musl/yggdrasil-x86_64-musl.tar.gz
+          retention-days: 3
+          if-no-files-found: error
+
+  # ── build-arm64：原生 ARM64 runner 构建（2026 最佳实践，零 QEMU）──
+  # ubuntu-24.04-arm 是 GitHub 免费提供的原生 ARM64 runner（4 vCPU）。
+  # 在上面跑原生 Dockerfile（dpkg --print-architecture=arm64 → aarch64-musl 原生编译），
+  # 比 QEMU 交叉编译快 4-8 倍。仅 tag 推送时运行（省 CI 分钟）。
+  build-arm64:
+    runs-on: ubuntu-24.04-arm
+    needs: test
     if: >-
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
       || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download image artifact
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 直接调 docker buildx（无 make docker-arm64 target），原生 Dockerfile 原生编译。
+      # git 信息透传与 Makefile 的 GIT_BUILD_ARGS 一致。
+      - name: Build arm64 image
+        run: |
+          GIT_DESCRIBE="$(git describe --tags --always --dirty 2>/dev/null || echo '')"
+          GIT_HASH="$(git rev-parse HEAD 2>/dev/null || echo '')"
+          GIT_DATE="$(git log -1 --format=%cd --date=iso-strict 2>/dev/null || echo '')"
+          docker buildx build --platform linux/arm64 --load \
+            --build-arg YGG_BUILD_GIT_DESCRIBE="$GIT_DESCRIBE" \
+            --build-arg YGG_BUILD_GIT_HASH="$GIT_HASH" \
+            --build-arg YGG_BUILD_GIT_COMMIT_DATE="$GIT_DATE" \
+            -t yggdrasil:arm64 .
+
+      - name: Verify image architecture
+        run: |
+          arch=$(docker image inspect yggdrasil:arm64 --format '{{.Architecture}}')
+          echo "image arch: $arch"
+          [ "$arch" = "arm64" ] || { echo "expected arm64"; exit 1; }
+
+      - name: Save arm64 image artifact
+        run: |
+          mkdir -p /tmp/out
+          docker save yggdrasil:arm64 | gzip > /tmp/out/yggdrasil-arm64.tar.gz
+          ls -lh /tmp/out/yggdrasil-arm64.tar.gz
+
+      - name: Upload arm64 image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yggdrasil-arm64-image
+          path: /tmp/out/yggdrasil-arm64.tar.gz
+          retention-days: 3
+          if-no-files-found: error
+
+  # ── release：收集三件产物创建 GitHub Release（仅 tag 推送）──
+  # 产物：amd64 docker 镜像 + arm64 docker 镜像 + x86_64 musl 二进制（含 public/ 资源）
+  # body 取 CHANGELOG.md 对应版本段，与手动创建的 release 格式一致。
+  release:
+    runs-on: ubuntu-latest
+    needs: [build-amd64, build-arm64]
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
+      || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: yggdrasil-app-image
+          path: /tmp/assets
+
+      # 整理产物到统一目录 + 打印清单。
+      - name: Stage release assets
+        run: |
+          mkdir -p /tmp/release
+          cp /tmp/assets/yggdrasil-amd64-image/yggdrasil-amd64.tar.gz     /tmp/release/
+          cp /tmp/assets/yggdrasil-arm64-image/yggdrasil-arm64.tar.gz     /tmp/release/
+          cp /tmp/assets/yggdrasil-x86_64-musl/yggdrasil-x86_64-musl.tar.gz /tmp/release/
+          echo "=== release assets ==="
+          ls -lh /tmp/release/
+
+      # 从 CHANGELOG.md 提取对应版本段（## [x.y.z] ... 下一个 ## 之前）作为 release body。
+      - name: Extract changelog section
+        id: changelog
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"  # v0.8.2 → 0.8.2
+          python3 -c "
+          import re, sys
+          version = sys.argv[1]
+          text = open('CHANGELOG.md').read()
+          pattern = re.compile(rf'(## \[{re.escape(version)}\][^\n]*\n.*?)(?=\n## |\Z)', re.DOTALL)
+          m = pattern.search(text)
+          body = m.group(1).strip() if m else f'Release {version}'
+          open('/tmp/release-body.md', 'w').write(body + '\n')
+          " "$VERSION"
+          echo "--- body preview ---"
+          head -5 /tmp/release-body.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file /tmp/release-body.md \
+            /tmp/release/yggdrasil-amd64.tar.gz \
+            /tmp/release/yggdrasil-arm64.tar.gz \
+            /tmp/release/yggdrasil-x86_64-musl.tar.gz
+
+  # ── deploy：scp 镜像到 xun，docker load + compose up，健康检查 ──
+  # 仅 push 新 tag（v*）或手动触发时运行（分支推送/PR 不部署）。
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-amd64
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
+      || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download amd64 image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: yggdrasil-amd64-image
           path: /tmp
 
       # 写私钥 + known_hosts。优先用 XUN_KNOWN_HOSTS secret（pin 服务器指纹，更安全）；
@@ -159,7 +290,7 @@ jobs:
           : "${XUN_USER:?secret XUN_USER 未设置}"
           port="${XUN_PORT:-22}"
           dir="${XUN_DEPLOY_DIR:-/root/docker/yggdrasil}"
-          scp -P "$port" -o BatchMode=yes /tmp/yggdrasil-app.tar.gz "${XUN_USER}@${XUN_HOST}:${dir}/"
+          scp -P "$port" -o BatchMode=yes /tmp/yggdrasil-amd64.tar.gz "${XUN_USER}@${XUN_HOST}:${dir}/yggdrasil-app.tar.gz"
 
       # 单条 ssh 串行执行：解压 → load → 滚动重启 app（postgres 与数据卷不动）→ 清理。
       # 路径变量在本地（runner）展开后拼进单引号远程命令，避免远程 shell 二次展开。
