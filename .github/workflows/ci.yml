@@ -1,20 +1,18 @@
 name: CI
 
-# 三段式流水线：test(单测+lint) → build(amd64 镜像) → deploy(SSH 到 xun 滚动重启)
-# - push/PR 到 master|main：跑 test + build（PR 不部署）
-# - push 到 master|main 或手动触发：额外跑 deploy（持续部署到 xun）
+# 流水线：
+# - 每次 push（任意分支/tag）和 PR：跑 test（单测+lint）→ build（amd64 镜像）
+# - 仅 push 新 tag（v*）或手动触发时：额外跑 deploy（SSH 到 xun 滚动重启）
 # 部署逻辑与 scripts/xun.fish 一致（仅主应用镜像；runner 镜像变更极少，单独手动部署）。
 on:
   push:
-    branches: [master, main]
   pull_request:
-    branches: [master, main]
   workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
 
-# 同分支后一次推送取消前一次，避免并发部署；deploy 若被取消最多在服务器留个 .tar.gz，下次清理。
+# 同 ref 后一次推送取消前一次（tag 与分支互不影响，各自的 group）。
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -114,12 +112,12 @@ jobs:
           if-no-files-found: error
 
   # ── deploy：scp 镜像到 xun，docker load + compose up，健康检查 ──
-  # 仅 master/main 推送或手动触发时运行（PR 不部署）。
+  # 仅 push 新 tag（v*）或手动触发时运行（分支推送/PR 不部署）。
   deploy:
     runs-on: ubuntu-latest
     needs: build
     if: >-
-      (github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'))
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/'))
       || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
