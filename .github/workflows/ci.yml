@@ -77,8 +77,9 @@ jobs:
         run: cargo test --all-features
 
   # ── build-amd64：Docker in-container 全量构建（libs/WASM/rustdoc/静态 musl server）──
-  # GitHub x86_64 runner，make docker-amd64 走原生 Dockerfile（非 Dockerfile.cross），
-  # 宿主无需任何工具链，只需 Docker。每次推送都跑（= 编译验证）。
+  # GitHub x86_64 runner，原生 Dockerfile（非 Dockerfile.cross），宿主仅需 Docker。
+  # 每次推送都跑（= 编译验证）。用 cargo-chef + GHA 层缓存：依赖不变时
+  # cooker 层 cache-hit(秒级),cargo build 只编 app(~2min)。
   build-amd64:
     runs-on: ubuntu-latest
     needs: test
@@ -88,8 +89,22 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      # 直调 docker buildx（不走 make docker-amd64）以加 GHA 层缓存。
+      # cache-to/from type=gha：BuildKit 层经 GitHub Actions cache 服务跨 run 持久化。
+      # mode=max：缓存所有中间层（含 cargo-chef cooker 层），不只是最终镜像层。
+      # scope=amd64：与 arm64 的 GHA cache 隔离（同仓 10GB 上限内各自一份）。
       - name: Build amd64 image
-        run: make docker-amd64
+        run: |
+          GIT_DESCRIBE="$(git describe --tags --always --dirty 2>/dev/null || echo '')"
+          GIT_HASH="$(git rev-parse HEAD 2>/dev/null || echo '')"
+          GIT_DATE="$(git log -1 --format=%cd --date=iso-strict 2>/dev/null || echo '')"
+          docker buildx build --platform linux/amd64 --load \
+            --build-arg YGG_BUILD_GIT_DESCRIBE="$GIT_DESCRIBE" \
+            --build-arg YGG_BUILD_GIT_HASH="$GIT_HASH" \
+            --build-arg YGG_BUILD_GIT_COMMIT_DATE="$GIT_DATE" \
+            --cache-from type=gha,scope=amd64 \
+            --cache-to type=gha,scope=amd64,mode=max \
+            -t yggdrasil:amd64 .
 
       - name: Verify image architecture
         run: |
@@ -153,6 +168,7 @@ jobs:
 
       # 直接调 docker buildx（无 make docker-arm64 target），原生 Dockerfile 原生编译。
       # git 信息透传与 Makefile 的 GIT_BUILD_ARGS 一致。
+      # GHA 层缓存(scope=arm64 与 amd64 隔离)：cargo-chef cooker 层跨 run 复用。
       - name: Build arm64 image
         run: |
           GIT_DESCRIBE="$(git describe --tags --always --dirty 2>/dev/null || echo '')"
@@ -162,6 +178,8 @@ jobs:
             --build-arg YGG_BUILD_GIT_DESCRIBE="$GIT_DESCRIBE" \
             --build-arg YGG_BUILD_GIT_HASH="$GIT_HASH" \
             --build-arg YGG_BUILD_GIT_COMMIT_DATE="$GIT_DATE" \
+            --cache-from type=gha,scope=arm64 \
+            --cache-to type=gha,scope=arm64,mode=max \
             -t yggdrasil:arm64 .
 
       - name: Verify image architecture

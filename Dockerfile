@@ -56,7 +56,7 @@ RUN apt-get update \
         ca-certificates \
         curl \
         gnupg \
-        git \
+        xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Node.js 22 + pnpm: install from the npmmirror binary mirror instead of
@@ -136,6 +136,25 @@ RUN ARCH="$(dpkg --print-architecture)" \
     && curl -fsSL -o /usr/local/bin/tailwindcss "${GH_URL}" \
     && chmod +x /usr/local/bin/tailwindcss
 
+# --- cargo-chef: 用于把 Rust 依赖编译与源码编译分离成独立的 Docker 层。
+# 改一行 .rs 不再触发 576 个依赖的全量重编。CI 端用 GHA cache (type=gha)
+# 跨 run 持久化 cooker 层,依赖不变时该层 cache-hit(秒级),只编 app。
+# 用 GitHub Releases 预编译二进制(不 cargo install:后者编译 cargo-chef 自身
+# 依赖要 2-3min,且在 QEMU 下 SIGSEGV)。与 dx/tailwind 同模式:按架构选 tarball。
+ARG CHEF_VERSION=0.1.77
+RUN ARCH="$(dpkg --print-architecture)" \
+    && case "$ARCH" in \
+        amd64) CHEF_TRIPLET=x86_64-unknown-linux-musl   ;; \
+        arm64) CHEF_TRIPLET=aarch64-unknown-linux-musl ;; \
+        *) echo "unsupported arch: $ARCH" >&2; exit 1; \
+    esac \
+    && CHEF_URL="${GH_PROXY:+${GH_PROXY}/}https://github.com/LukeMathWalker/cargo-chef/releases/download/v${CHEF_VERSION}/cargo-chef-${CHEF_TRIPLET}.tar.xz" \
+    && curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors "${CHEF_URL}" -o /tmp/chef.tar.xz \
+    && tar -xJf /tmp/chef.tar.xz -C /usr/local/bin \
+    && rm /tmp/chef.tar.xz \
+    && cargo-chef --version
+
+
 WORKDIR /build
 
 # Cache the pnpm workspace node_modules by copying only package manifests first.
@@ -177,7 +196,36 @@ ENV YGG_BUILD_GIT_DESCRIBE=${YGG_BUILD_GIT_DESCRIBE}
 ENV YGG_BUILD_GIT_HASH=${YGG_BUILD_GIT_HASH}
 ENV YGG_BUILD_GIT_COMMIT_DATE=${YGG_BUILD_GIT_COMMIT_DATE}
 
-# Copy the rest of the source tree and build everything.
+# ──────────────────────────────────────────────────────────────────────────
+# cargo-chef 依赖分层:把 576 个 Rust 依赖的编译与 app 源码分离。
+# planner 只需 Cargo.toml + Cargo.lock 生成 recipe.json(无源码),所以只要
+# 依赖清单不变,recipe.json 不变,cooker 层就 cache-hit。CI 用 GHA cache
+# (type=gha, mode=max) 跨 run 持久化 cooker 层——改一行 .rs 时,依赖编译
+# 从 ~10min 降到 ~0s,只编 app(~2min)。
+#
+# cook 必须用与最终 cargo build 完全相同的 target/features/rustflags,
+# 否则产物目录不匹配、缓存形同虚设。这里镜像后端(server musl release),
+# WASM 前端走 dx 不经 cargo-chef(它另走 wasm32 target)。
+COPY Cargo.toml Cargo.lock ./
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    ARCH="$(dpkg --print-architecture)" \
+    && case "$ARCH" in \
+        amd64) MUSL_TARGET=x86_64-unknown-linux-musl  ;; \
+        arm64) MUSL_TARGET=aarch64-unknown-linux-musl ;; \
+        *) echo "unsupported arch: $ARCH" >&2; exit 1; \
+    esac \
+    && cargo chef prepare --recipe-path recipe.json \
+    && export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
+    && export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
+    && export RUSTFLAGS="-C target-feature=+crt-static -C relocation-model=static" \
+    && cargo chef cook --release --target "$MUSL_TARGET" \
+        --no-default-features --features server --recipe-path recipe.json \
+    && cargo chef cook --no-default-features --features server --recipe-path recipe.json
+# 注:host target 的依赖也 cook 一次(dev profile)——cargo doc 走 host(非 musl)
+
+# Copy the rest of the source tree and build everything. 依赖已由 cooker 编好,
+# 此后的 cargo build/doc 只增量编译 app 代码。
 COPY . .
 
 # Build all 4 JS libs, syntax-highlight CSS, KaTeX CSS + fonts and Tailwind
@@ -205,7 +253,9 @@ RUN dx build @client --release --debug-symbols=false --wasm-js-cfg false && \
 # index.html redirects bare /doc to the real crate entry yggdrasil/.
 # NOTE: .dockerignore excludes host-side public/doc/, so this RUN is the ONLY
 # channel that puts the docs into the image — without it /doc is a 404 online.
-RUN RUSTDOCFLAGS="--default-theme=ayu" cargo doc --no-deps --document-private-items && \
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    RUSTDOCFLAGS="--default-theme=ayu" cargo doc --no-deps --document-private-items && \
     rm -rf dist/public/doc && \
     cp -r target/doc dist/public/doc && \
     printf '<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=yggdrasil/index.html"><title>Redirecting…</title></head><body><script>location.replace("yggdrasil/index.html")</script></body></html>' > dist/public/doc/index.html
@@ -216,7 +266,9 @@ RUN RUSTDOCFLAGS="--default-theme=ayu" cargo doc --no-deps --document-private-it
 # no QEMU. Cross-compiling here (e.g. building the x86_64 musl target from an
 # arm64 leg) breaks ring: cc-rs emits -m64 for the x86_64 target and hands it to
 # the arm64 musl-gcc, whose cc1 has no -m64 → "unrecognized command-line option".
-RUN ARCH="$(dpkg --print-architecture)" \
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    ARCH="$(dpkg --print-architecture)" \
     && case "$ARCH" in \
         amd64) MUSL_TARGET=x86_64-unknown-linux-musl  ;; \
         arm64) MUSL_TARGET=aarch64-unknown-linux-musl ;; \
