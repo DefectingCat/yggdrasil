@@ -422,10 +422,7 @@ mod tests {
         // C2 回归：旧的 `out.push(bytes[i] as char)` 按单字节 Latin-1 转 char，
         // 含 `\ce`/`\pu` 且含非 ASCII（如中文 `\text{浓度}`）的公式会被破坏成乱码。
         let out = expand_chem(r"\text{浓度} \ce{H2O}");
-        assert!(
-            out.contains("浓度"),
-            "中文应原样保留, got: {out}"
-        );
+        assert!(out.contains("浓度"), "中文应原样保留, got: {out}");
         assert!(
             !out.contains(r"\ce{"),
             "化学公式应被转译、不残留 \\ce{{ 命令, got: {out}"

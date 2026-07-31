@@ -30,9 +30,8 @@ static IMAGE_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
 });
 
 /// 匹配任意空白字符的正则，用于把多个空白合并为单个空格。
-static WHITESPACE_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-    regex::Regex::new(r"\s+").expect("WHITESPACE_RE 正则模式应在编译期通过校验")
-});
+static WHITESPACE_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"\s+").expect("WHITESPACE_RE 正则模式应在编译期通过校验"));
 
 /// 去除 Markdown 标记，返回近似纯文本。
 ///

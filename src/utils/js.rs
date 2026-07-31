@@ -12,7 +12,11 @@
 ///
 /// 用于调用各 IIFE 库暴露的 `window.__init*` 入口（lightbox / mermaid / 锚点拦截等），
 /// 这些库由 `Dioxus.toml` 全局 `<script src>` 注入，加载时机不保证早于调用点。
-pub fn invoke_optional_global(window: &web_sys::Window, name: &str, args: &[wasm_bindgen::JsValue]) {
+pub fn invoke_optional_global(
+    window: &web_sys::Window,
+    name: &str,
+    args: &[wasm_bindgen::JsValue],
+) {
     use wasm_bindgen::JsCast;
     if let Ok(fn_val) = js_sys::Reflect::get(window, &name.into()) {
         if !fn_val.is_undefined() && !fn_val.is_null() {

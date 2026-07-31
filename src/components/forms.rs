@@ -25,7 +25,12 @@ pub const FORM_SELECT_COMPACT_CLASS: &str = "inline-flex w-auto cursor-pointer s
 ///
 /// 纯函数便于单测；`panel_height` 由调用方按选项数估算（见 `measure_flip`）。
 #[allow(dead_code)] // server 构建下仅被 dead 的组件体引用（wasm 与单测为真实调用方）
-fn should_flip(trigger_top: f64, trigger_bottom: f64, viewport_height: f64, panel_height: f64) -> bool {
+fn should_flip(
+    trigger_top: f64,
+    trigger_bottom: f64,
+    viewport_height: f64,
+    panel_height: f64,
+) -> bool {
     /// 面板与触发器的间隙（mt-1.5）加视口边缘留白。
     const MARGIN: f64 = 14.0;
     let below = viewport_height - trigger_bottom;
@@ -330,15 +335,11 @@ pub fn FormInput(
     r#type: &'static str,
     placeholder: &'static str,
     value: String,
-    #[props(default)]
-    disabled: bool,
+    #[props(default)] disabled: bool,
     oninput: EventHandler<String>,
-    #[props(default)]
-    onkeydown: Option<EventHandler<KeyboardEvent>>,
-    #[props(default)]
-    class: Option<&'static str>,
-    #[props(default)]
-    mono: bool,
+    #[props(default)] onkeydown: Option<EventHandler<KeyboardEvent>>,
+    #[props(default)] class: Option<&'static str>,
+    #[props(default)] mono: bool,
 ) -> Element {
     let base = class.unwrap_or(INPUT_CLASS);
     let mono_class = if mono { " font-mono" } else { "" };

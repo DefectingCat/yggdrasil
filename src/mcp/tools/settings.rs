@@ -16,14 +16,12 @@ use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{CallToolResult, ContentBlock, TextContent};
 use rmcp::{schemars, tool, tool_router, ErrorData as McpError};
 
-use serde::Deserialize;
 use super::common::require_admin;
+use serde::Deserialize;
 
 use crate::api::error::AppError;
 use crate::db::pool::get_conn;
-use crate::models::settings::{
-    TrashSettings, DEFAULT_AUTO_PURGE_ENABLED, DEFAULT_RETENTION_DAYS,
-};
+use crate::models::settings::{TrashSettings, DEFAULT_AUTO_PURGE_ENABLED, DEFAULT_RETENTION_DAYS};
 
 /// `get_settings` 入参（无字段——预留扩展点，未来可按子域过滤）。
 #[derive(Debug, Deserialize, schemars::JsonSchema, Default)]
@@ -61,7 +59,9 @@ impl crate::mcp::server::YggMcpServer {
     }
 
     /// 更新站点回收站设置。要求 admin 作用域。retention_days 会 clamp 到 [1, 365]。
-    #[tool(description = "更新站点回收站配置（自动清理开关 + 保留天数）。retention_days 会被钳制到 1..=365。需要 admin 作用域。")]
+    #[tool(
+        description = "更新站点回收站配置（自动清理开关 + 保留天数）。retention_days 会被钳制到 1..=365。需要 admin 作用域。"
+    )]
     async fn update_settings(
         &self,
         Parameters(UpdateSettingsParams {
@@ -85,7 +85,6 @@ impl crate::mcp::server::YggMcpServer {
         )]))
     }
 }
-
 
 /// 读取回收站配置（与 `get_trash_settings` 的 SQL 一致）。
 ///

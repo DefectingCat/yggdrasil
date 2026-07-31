@@ -10,10 +10,10 @@
 use std::sync::LazyLock;
 use std::time::Duration;
 
+use crate::utils::server::parse_migrate_startup_timeout;
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod, Runtime};
 use tokio_postgres::config::Host;
 use tokio_postgres::{Config, NoTls};
-use crate::utils::server::parse_migrate_startup_timeout;
 
 /// 解析 `DATABASE_URL` 并注入 `statement_timeout`，返回配置好的 `tokio_postgres::Config`。
 ///

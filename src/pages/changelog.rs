@@ -10,7 +10,7 @@
 
 use dioxus::prelude::*;
 
-use crate::api::changelog::{ChangelogResponse, get_changelog};
+use crate::api::changelog::{get_changelog, ChangelogResponse};
 use crate::components::post::post_toc::PostToc;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::skeletons::post_detail_skeleton::PostDetailSkeleton;

@@ -244,7 +244,11 @@ fn CountUp(target: i64, class: String) -> Element {
         #[cfg(target_arch = "wasm32")]
         spawn(async move {
             let reduced = web_sys::window()
-                .and_then(|w| w.match_media("(prefers-reduced-motion: reduce)").ok().flatten())
+                .and_then(|w| {
+                    w.match_media("(prefers-reduced-motion: reduce)")
+                        .ok()
+                        .flatten()
+                })
                 .map(|m| m.matches())
                 .unwrap_or(false);
             if reduced || target <= 0 {

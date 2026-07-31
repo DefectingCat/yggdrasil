@@ -189,12 +189,7 @@ async fn run_pg_dump_backup(task_id: &str, timestamp: &str) {
         },
     )
     .await
-    .unwrap_or_else(|join_e| {
-        Err((
-            false,
-            std::io::Error::other(join_e.to_string()),
-        ))
-    });
+    .unwrap_or_else(|join_e| Err((false, std::io::Error::other(join_e.to_string()))));
     match dump_result {
         Ok(o) if o.status.success() => {
             tasks::update(
@@ -478,9 +473,7 @@ async fn run_restore(task_id: &str, filename: &str) {
             .output()
     })
     .await
-    .unwrap_or_else(|join_e| {
-        Err(std::io::Error::other(join_e.to_string()))
-    });
+    .unwrap_or_else(|join_e| Err(std::io::Error::other(join_e.to_string())));
     match restore_result {
         Ok(o) if o.status.success() => {
             // 恢复用备份时刻的数据重建了 posts 等表，必须冲刷全部文章相关缓存

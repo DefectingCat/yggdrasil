@@ -87,8 +87,8 @@ pub async fn create_mcp_token(
         rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut bytes);
         let plaintext = format!("{TOKEN_PREFIX}{}", hex::encode(bytes));
         let hash = hash_token(&plaintext);
-        let enc = encrypt_token(&plaintext)
-            .ok_or(AppError::Internal("MCP_TOKEN_ENC_KEY 未设置"))?;
+        let enc =
+            encrypt_token(&plaintext).ok_or(AppError::Internal("MCP_TOKEN_ENC_KEY 未设置"))?;
         let id = uuid::Uuid::new_v4();
         let expires_at = lifetime.expires_at();
         let scope_str = scope.as_str();
@@ -102,15 +102,7 @@ pub async fn create_mcp_token(
                  VALUES ($1::uuid, $2, $3, $4, $5, $6, $7) \
                  RETURNING id::text, user_id, name, scope, created_at, expires_at, \
                            last_used_at, revoked_at",
-                &[
-                    &id,
-                    &admin.id,
-                    &name,
-                    &scope_str,
-                    &enc,
-                    &hash,
-                    &expires_at,
-                ],
+                &[&id, &admin.id, &name, &scope_str, &enc, &hash, &expires_at],
             )
             .await
             .map_err(AppError::query)?;
@@ -306,9 +298,21 @@ pub async fn get_mcp_client_configs(token: String) -> Result<McpClientConfigs, S
         );
         // (标题, 内容, 语言)：JSON 配置用 json 语法高亮，CLI 一行命令用 bash。
         let entries: [(&str, String, &str); 7] = [
-            ("Oh-My-Pi（项目根 .mcp.json / ~/.omp/agent/mcp.json 或 ~/.mcp.json）", c.omp_json, "json"),
-            ("OpenCode（~/.config/opencode/opencode.json 或项目根 opencode.json）", c.opencode_json, "json"),
-            ("Claude Code（.mcp.json / ~/.claude.json）", c.claude_code_json, "json"),
+            (
+                "Oh-My-Pi（项目根 .mcp.json / ~/.omp/agent/mcp.json 或 ~/.mcp.json）",
+                c.omp_json,
+                "json",
+            ),
+            (
+                "OpenCode（~/.config/opencode/opencode.json 或项目根 opencode.json）",
+                c.opencode_json,
+                "json",
+            ),
+            (
+                "Claude Code（.mcp.json / ~/.claude.json）",
+                c.claude_code_json,
+                "json",
+            ),
             ("Cursor（~/.cursor/mcp.json）", c.cursor_json, "json"),
             ("Cline（cline_mcp_settings.json）", c.cline_json, "json"),
             ("通用（单 server entry）", c.generic_json, "json"),

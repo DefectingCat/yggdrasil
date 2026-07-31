@@ -24,7 +24,9 @@ use crate::models::mcp_token::TokenScope;
 #[tool_router(router = read_router, vis = "pub")]
 impl crate::mcp::server::YggMcpServer {
     /// 全文搜索已发布文章（知识库）。返回标题/slug/摘要/标签。
-    #[tool(description = "全文搜索已发布文章，作为知识库。返回标题/slug/摘要/标签与匹配 URL。要求 read 作用域。")]
+    #[tool(
+        description = "全文搜索已发布文章，作为知识库。返回标题/slug/摘要/标签与匹配 URL。要求 read 作用域。"
+    )]
     async fn search_posts(
         &self,
         Parameters(SearchPostsParams { query, limit }): Parameters<SearchPostsParams>,
@@ -44,7 +46,9 @@ impl crate::mcp::server::YggMcpServer {
     }
 
     /// 按 slug 取单篇已发布文章（草稿对 read 不可见）。
-    #[tool(description = "按 slug 读取单篇已发布文章全文（标题/摘要/Markdown 正文/标签/时间）。草稿不可见。要求 read 作用域。")]
+    #[tool(
+        description = "按 slug 读取单篇已发布文章全文（标题/摘要/Markdown 正文/标签/时间）。草稿不可见。要求 read 作用域。"
+    )]
     async fn get_post(
         &self,
         Parameters(GetPostParams { slug }): Parameters<GetPostParams>,
@@ -86,10 +90,7 @@ impl crate::mcp::server::YggMcpServer {
 // ── 鉴权辅助 ───────────────────────────────────────────────────────────────
 
 /// 从 request extensions 取 principal 并校验 read 作用域；不足返回 insufficient_scope。
-fn require_read(
-    parts: &http::request::Parts,
-    tool: &str,
-) -> Result<McpPrincipal, McpError> {
+fn require_read(parts: &http::request::Parts, tool: &str) -> Result<McpPrincipal, McpError> {
     let principal = parts
         .extensions
         .get::<McpPrincipal>()
@@ -171,9 +172,7 @@ pub struct TagCount {
 
 /// 把行内的标签数组原地清洗（过滤空串），避免二次 Vec 分配。
 fn clean_tags(row: &tokio_postgres::Row) -> Vec<String> {
-    let mut tags: Vec<String> = row
-        .try_get::<_, Vec<String>>("tags")
-        .unwrap_or_default();
+    let mut tags: Vec<String> = row.try_get::<_, Vec<String>>("tags").unwrap_or_default();
     tags.retain(|t| !t.is_empty());
     tags
 }

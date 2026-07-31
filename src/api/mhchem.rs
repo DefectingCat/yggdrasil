@@ -234,8 +234,7 @@ impl CompiledPat {
 /// 惰性编译字面量正则，编译失败降级为 [`CompiledPat`]（None）。
 macro_rules! re {
     ($pat:literal) => {{
-        static RE: LazyLock<CompiledPat> =
-            LazyLock::new(|| CompiledPat(compile_or_log($pat)));
+        static RE: LazyLock<CompiledPat> = LazyLock::new(|| CompiledPat(compile_or_log($pat)));
         &*RE
     }};
 }
@@ -876,7 +875,9 @@ fn generic_action(buf: &mut Buffer, m: &MVal, opt: &Option<String>, type_: &str)
             }
             // 坏正则（编译失败）时 captures_head 返回 None，直接结束 1/2 动作
             // （产出已累积的前缀符号）。
-            if let Some(caps) = re!("^([0-9]+|\\$[a-z]\\$|[a-z])\\/([0-9]+)(\\$[a-z]\\$|[a-z])?$").captures_head(&s) {
+            if let Some(caps) =
+                re!("^([0-9]+|\\$[a-z]\\$|[a-z])\\/([0-9]+)(\\$[a-z]\\$|[a-z])?$").captures_head(&s)
+            {
                 let mut n1 = caps
                     .get(1)
                     .map(|x| x.as_str().to_string())
@@ -1332,7 +1333,18 @@ mod tests {
     /// 这些输入会强制该 LazyLock 正则编译，必须产出非空且不 panic。
     #[test]
     fn ce_dot_bullet_bond_inputs_dont_panic() {
-        for s in [".", "·", "•", "⋅", "*", ". ", "••", "·  ", "H·OH", "CaCO3 · H2O"] {
+        for s in [
+            ".",
+            "·",
+            "•",
+            "⋅",
+            "*",
+            ". ",
+            "••",
+            "·  ",
+            "H·OH",
+            "CaCO3 · H2O",
+        ] {
             let tex = ce(s);
             assert!(!tex.is_empty(), "ce({s:?}) 不应为空");
         }
@@ -1361,7 +1373,14 @@ mod tests {
     /// 修复改为按 `char_indices` 字符边界步进。这些输入必须不 panic。
     #[test]
     fn ce_multibyte_char_in_braces_does_not_panic() {
-        for s in ["{浓}", "浓H2SO4", "{中文}", "H{浓}O", "\\frac{浓}{稀}", "[浓]"] {
+        for s in [
+            "{浓}",
+            "浓H2SO4",
+            "{中文}",
+            "H{浓}O",
+            "\\frac{浓}{稀}",
+            "[浓]",
+        ] {
             // catch_unwind 仅 dev/test 护栏；release panic=abort 下由本修复保证。
             let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| ce(s)));
             assert!(r.is_ok(), "ce({s:?}) PANICKED (char boundary)");
@@ -1373,9 +1392,25 @@ mod tests {
     #[test]
     fn ce_arbitrary_multibyte_does_not_panic() {
         let inputs = [
-            "🔥", "café", "naïve", "Σ", "αβγ", "ΔH", "你好世界", "안녕", "こんにちは",
-            "{🧪}", "H₂O", "[α]", "\\frac{β}{γ}", "${日本}$", "A·B•C⋅D",
-            "naïve H2O", "{β-Gal}", "😀😂", "\u{1F9EA}", // test tube emoji
+            "🔥",
+            "café",
+            "naïve",
+            "Σ",
+            "αβγ",
+            "ΔH",
+            "你好世界",
+            "안녕",
+            "こんにちは",
+            "{🧪}",
+            "H₂O",
+            "[α]",
+            "\\frac{β}{γ}",
+            "${日本}$",
+            "A·B•C⋅D",
+            "naïve H2O",
+            "{β-Gal}",
+            "😀😂",
+            "\u{1F9EA}", // test tube emoji
         ];
         for s in inputs {
             let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| ce(s)));
@@ -1391,15 +1426,68 @@ mod tests {
     #[test]
     fn all_match_patterns_compile() {
         for name in [
-            "empty", "else", "else2", "space", "space A", "space$", "a-z", "x", "x$", "i$",
-            "letters", "\\greek", "one lowercase latin letter $",
-            "$one lowercase latin letter$ $", "one lowercase greek letter $", "digits",
-            "-9.,9", "-9.,9 no missing 0", "(-)(9)^(-9)", "_{(state of aggregation)}$",
-            "{[(", ")]}", ", ", ",", ".", ". __* ", "...", "^a", "^\\x", "^(-1)", "'", "_9",
-            "_\\x", "^_", "{}^", "{}", "=<>", "#", "+", "-$", "-9", "- orbital overlap", "-",
-            "pm-operator", "operator", "arrowUpDown", "->", "CMT", "1st-level escape", "\\,",
-            "\\ca", "\\x", "orbital", "others", "oxidation$", "d-oxidation$", "1/2$",
-            "(KV letters),", "uprightEntities", "/", "//", "*",
+            "empty",
+            "else",
+            "else2",
+            "space",
+            "space A",
+            "space$",
+            "a-z",
+            "x",
+            "x$",
+            "i$",
+            "letters",
+            "\\greek",
+            "one lowercase latin letter $",
+            "$one lowercase latin letter$ $",
+            "one lowercase greek letter $",
+            "digits",
+            "-9.,9",
+            "-9.,9 no missing 0",
+            "(-)(9)^(-9)",
+            "_{(state of aggregation)}$",
+            "{[(",
+            ")]}",
+            ", ",
+            ",",
+            ".",
+            ". __* ",
+            "...",
+            "^a",
+            "^\\x",
+            "^(-1)",
+            "'",
+            "_9",
+            "_\\x",
+            "^_",
+            "{}^",
+            "{}",
+            "=<>",
+            "#",
+            "+",
+            "-$",
+            "-9",
+            "- orbital overlap",
+            "-",
+            "pm-operator",
+            "operator",
+            "arrowUpDown",
+            "->",
+            "CMT",
+            "1st-level escape",
+            "\\,",
+            "\\ca",
+            "\\x",
+            "orbital",
+            "others",
+            "oxidation$",
+            "d-oxidation$",
+            "1/2$",
+            "(KV letters),",
+            "uprightEntities",
+            "/",
+            "//",
+            "*",
         ] {
             // 返回值不重要，只要不 panic（regex 编译成功）即可。
             let _ = match_pattern(name, "");

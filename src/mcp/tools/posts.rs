@@ -16,12 +16,12 @@ use rmcp::model::CallToolResult;
 use rmcp::{schemars, tool, tool_router, ErrorData as McpError};
 use serde::Deserialize;
 
+use super::common::{internal, ok_json, require_scope};
 use crate::cache;
 use crate::db::pool::get_conn;
 use crate::models::mcp_token::TokenScope;
 use crate::models::post::PostStatus;
 use crate::ssr_cache;
-use super::common::{internal, ok_json, require_scope};
 
 // ---------------------------------------------------------------------------
 // 结构体
@@ -34,7 +34,9 @@ use super::common::{internal, ok_json, require_scope};
 #[tool_router(router = posts_router, vis = "pub")]
 impl crate::mcp::server::YggMcpServer {
     /// 创建一篇新文章（草稿或直接发布）。要求 write 作用域。
-    #[tool(description = "创建一篇新文章。渲染 Markdown 为 HTML，同步标签与素材引用。返回 post_id/slug。")]
+    #[tool(
+        description = "创建一篇新文章。渲染 Markdown 为 HTML，同步标签与素材引用。返回 post_id/slug。"
+    )]
     async fn create_post(
         &self,
         Parameters(p): Parameters<CreatePostParams>,
@@ -46,7 +48,10 @@ impl crate::mcp::server::YggMcpServer {
             return Err(McpError::invalid_request("title must not be empty", None));
         }
         if p.content_md.trim().is_empty() {
-            return Err(McpError::invalid_request("content_md must not be empty", None));
+            return Err(McpError::invalid_request(
+                "content_md must not be empty",
+                None,
+            ));
         }
 
         // 确定基础 slug。
@@ -91,10 +96,9 @@ impl crate::mcp::server::YggMcpServer {
             .await
             .map_err(|e| internal(e, "begin txn"))?;
 
-        let final_slug =
-            crate::api::slug::ensure_unique_slug(&tx, &base_slug, None)
-                .await
-                .map_err(|e| internal(e, "ensure_unique_slug"))?;
+        let final_slug = crate::api::slug::ensure_unique_slug(&tx, &base_slug, None)
+            .await
+            .map_err(|e| internal(e, "ensure_unique_slug"))?;
 
         let row = tx
             .query_one(
@@ -124,9 +128,14 @@ impl crate::mcp::server::YggMcpServer {
         crate::api::posts::helpers::sync_tags(&tx, post_id, &tags_cleaned)
             .await
             .map_err(|_| internal("tag sync", "sync_tags"))?;
-        crate::api::posts::helpers::sync_asset_refs(&tx, post_id, &fields.content_html, fields.cover_image.as_deref())
-            .await
-            .map_err(|_| internal("asset_refs sync", "sync_asset_refs"))?;
+        crate::api::posts::helpers::sync_asset_refs(
+            &tx,
+            post_id,
+            &fields.content_html,
+            fields.cover_image.as_deref(),
+        )
+        .await
+        .map_err(|_| internal("asset_refs sync", "sync_asset_refs"))?;
 
         tx.commit().await.map_err(|e| internal(e, "commit"))?;
 
@@ -143,7 +152,9 @@ impl crate::mcp::server::YggMcpServer {
 
     /// 更新指定文章（PATCH 语义：仅更新提供的字段）。要求 write 作用域。
     /// 仅文章原作者可更新。
-    #[tool(description = "部分更新一篇已有文章（PATCH 语义）。仅更新提供的字段：未提供 content_md 时跳过重新渲染；未提供 summary 时随 content_md 联动（自动提取或保留旧值）。仅文章原作者可更新。")]
+    #[tool(
+        description = "部分更新一篇已有文章（PATCH 语义）。仅更新提供的字段：未提供 content_md 时跳过重新渲染；未提供 summary 时随 content_md 联动（自动提取或保留旧值）。仅文章原作者可更新。"
+    )]
     async fn update_post(
         &self,
         Parameters(p): Parameters<UpdatePostParams>,
@@ -169,7 +180,10 @@ impl crate::mcp::server::YggMcpServer {
             return Err(McpError::invalid_request("title must not be empty", None));
         }
         if matches!(&p.content_md, Some(c) if c.trim().is_empty()) {
-            return Err(McpError::invalid_request("content_md must not be empty", None));
+            return Err(McpError::invalid_request(
+                "content_md must not be empty",
+                None,
+            ));
         }
 
         let mut client = get_conn().await.map_err(|e| internal(e, "db connection"))?;
@@ -262,13 +276,11 @@ impl crate::mcp::server::YggMcpServer {
             .as_deref()
             .map(|s| PostStatus::from_str(s).unwrap_or(PostStatus::Draft));
         let published_at: Option<Option<chrono::DateTime<chrono::Utc>>> = match &new_status {
-            Some(PostStatus::Published) => {
-                Some(if old_status == "published" {
-                    old_published_at
-                } else {
-                    Some(chrono::Utc::now())
-                })
-            }
+            Some(PostStatus::Published) => Some(if old_status == "published" {
+                old_published_at
+            } else {
+                Some(chrono::Utc::now())
+            }),
             Some(PostStatus::Draft) => Some(old_published_at),
             None => None,
         };
@@ -324,8 +336,10 @@ impl crate::mcp::server::YggMcpServer {
 
         let sql = format!("UPDATE posts SET {} WHERE id = ${}", sets.join(", "), idx);
         params.push(Box::new(p.post_id));
-        let refs: Vec<&(dyn ToSql + Sync)> =
-            params.iter().map(|b| b.as_ref() as &(dyn ToSql + Sync)).collect();
+        let refs: Vec<&(dyn ToSql + Sync)> = params
+            .iter()
+            .map(|b| b.as_ref() as &(dyn ToSql + Sync))
+            .collect();
         let updated = tx
             .execute(&sql, &refs)
             .await
@@ -341,8 +355,7 @@ impl crate::mcp::server::YggMcpServer {
             old_tags = crate::api::posts::helpers::fetch_post_tags(&tx, p.post_id)
                 .await
                 .map_err(|_| internal("select old tags", "fetch_post_tags"))?;
-            let tags_cleaned =
-                crate::api::posts::helpers::clean_tags(p.tags.as_ref().unwrap());
+            let tags_cleaned = crate::api::posts::helpers::clean_tags(p.tags.as_ref().unwrap());
             tx.execute("DELETE FROM post_tags WHERE post_id = $1", &[&p.post_id])
                 .await
                 .map_err(|e| internal(e, "delete old post_tags"))?;
@@ -356,15 +369,23 @@ impl crate::mcp::server::YggMcpServer {
             let content_html: String = match &rendered {
                 Some(f) => f.content_html.clone(),
                 None => tx
-                    .query_one("SELECT content_html FROM posts WHERE id = $1", &[&p.post_id])
+                    .query_one(
+                        "SELECT content_html FROM posts WHERE id = $1",
+                        &[&p.post_id],
+                    )
                     .await
                     .map_err(|e| internal(e, "select content_html"))?
                     .get::<_, String>(0),
             };
             let cover_for_sync = new_cover.as_deref().or(old_cover.as_deref());
-            crate::api::posts::helpers::sync_asset_refs(&tx, p.post_id, &content_html, cover_for_sync)
-                .await
-                .map_err(|_| internal("asset_refs sync", "sync_asset_refs"))?;
+            crate::api::posts::helpers::sync_asset_refs(
+                &tx,
+                p.post_id,
+                &content_html,
+                cover_for_sync,
+            )
+            .await
+            .map_err(|_| internal("asset_refs sync", "sync_asset_refs"))?;
         }
 
         tx.commit().await.map_err(|e| internal(e, "commit"))?;
@@ -402,7 +423,9 @@ impl crate::mcp::server::YggMcpServer {
     }
 
     /// 发布指定文章（设置 status=published 与 published_at）。要求 write 作用域。
-    #[tool(description = "发布一篇草稿文章。设置 status=published，若首次发布则填充 published_at。")]
+    #[tool(
+        description = "发布一篇草稿文章。设置 status=published，若首次发布则填充 published_at。"
+    )]
     async fn publish_post(
         &self,
         Parameters(p): Parameters<PostIdParams>,
@@ -423,10 +446,7 @@ impl crate::mcp::server::YggMcpServer {
         let slug: String = match row {
             Some(r) => r.get(0),
             None => {
-                return Err(McpError::invalid_request(
-                    "文章不存在或无权限",
-                    None,
-                ));
+                return Err(McpError::invalid_request("文章不存在或无权限", None));
             }
         };
 
@@ -516,7 +536,9 @@ impl crate::mcp::server::YggMcpServer {
     }
 
     /// 彻底删除指定文章（物理删除，不可恢复）。要求 write 作用域。
-    #[tool(description = "彻底删除文章（物理删除，不可恢复）。post_tags 关联因外键 CASCADE 自动清理。")]
+    #[tool(
+        description = "彻底删除文章（物理删除，不可恢复）。post_tags 关联因外键 CASCADE 自动清理。"
+    )]
     async fn delete_post(
         &self,
         Parameters(p): Parameters<PostIdParams>,
@@ -639,4 +661,3 @@ struct PostResult {
 fn default_status() -> String {
     "draft".to_string()
 }
-

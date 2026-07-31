@@ -16,9 +16,9 @@ use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{CallToolResult, ContentBlock, TextContent};
 use rmcp::{schemars, tool, tool_router, ErrorData as McpError};
 
+use super::common::require_admin;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use super::common::require_admin;
 
 use crate::api::code_runner::execute::RUNNER_SEMAPHORE;
 use crate::api::code_runner::languages::{is_supported_lang, normalize_lang, LANGUAGES};
@@ -55,7 +55,9 @@ struct RunResult {
 #[tool_router(router = runner_router, vis = "pub")]
 impl crate::mcp::server::YggMcpServer {
     /// 在容器沙箱内执行代码并返回输出。要求 admin 作用域。
-    #[tool(description = "在 Docker 沙箱内执行代码（支持 python/node/go/rust/bun），返回 stdout/stderr。需要 admin 作用域。")]
+    #[tool(
+        description = "在 Docker 沙箱内执行代码（支持 python/node/go/rust/bun），返回 stdout/stderr。需要 admin 作用域。"
+    )]
     async fn run_code(
         &self,
         Parameters(RunCodeParams { language, source }): Parameters<RunCodeParams>,
@@ -94,7 +96,6 @@ impl crate::mcp::server::YggMcpServer {
         )]))
     }
 }
-
 
 /// 执行一次容器内代码运行（同步收集输出）。
 ///

@@ -162,18 +162,18 @@ fn spawn_exec_task(
             .map(|(exit_code, stdout, stderr, oom_killed, _)| {
                 (exit_code, stdout, stderr, oom_killed)
             }),
-            None => run_in_container(
-                &lang_def.image,
-                &lang_def.run_cmd,
-                &req.source,
-                &lang_def.extension,
-                final_limits,
-            )
-            .await,
+            None => {
+                run_in_container(
+                    &lang_def.image,
+                    &lang_def.run_cmd,
+                    &req.source,
+                    &lang_def.extension,
+                    final_limits,
+                )
+                .await
+            }
         };
-        let duration_ms = (chrono::Utc::now() - start_time)
-            .num_milliseconds()
-            .max(0) as u64;
+        let duration_ms = (chrono::Utc::now() - start_time).num_milliseconds().max(0) as u64;
 
         drop(ticket); // 显式释放信号量
 

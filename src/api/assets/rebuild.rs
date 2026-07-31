@@ -149,10 +149,7 @@ pub async fn rebuild_assets_index() -> Result<RebuildAssetsResponse, ServerFnErr
         // 2. 删除文件已消失的 DB 行（refs 级联删）。
         let paths: Vec<String> = scanned.iter().map(|f| f.rel_path.clone()).collect();
         let removed = tx
-            .execute(
-                "DELETE FROM assets WHERE NOT (path = ANY($1))",
-                &[&paths],
-            )
+            .execute("DELETE FROM assets WHERE NOT (path = ANY($1))", &[&paths])
             .await
             .map_err(AppError::tx)?;
 

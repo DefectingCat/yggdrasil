@@ -303,7 +303,10 @@ fn TokenList() -> Element {
 #[component]
 fn TokenRow(token: McpTokenSummary, state: McpPageState) -> Element {
     let is_revoked = token.revoked_at.is_some();
-    let is_expired = token.expires_at.map(|e| e < chrono::Utc::now()).unwrap_or(false);
+    let is_expired = token
+        .expires_at
+        .map(|e| e < chrono::Utc::now())
+        .unwrap_or(false);
     let active = !is_revoked && !is_expired;
     let created = token.created_at.format("%Y-%m-%d").to_string();
     let expires = token
@@ -502,7 +505,9 @@ fn ConfigCard() -> Element {
     // 当 config_token 变化时，请求服务端生成配置。
     use_effect(move || {
         let token = config_token();
-        let Some(t) = token else { return; };
+        let Some(t) = token else {
+            return;
+        };
         loading.set(true);
         manual_token.set(t.clone());
         spawn(async move {
@@ -521,7 +526,9 @@ fn ConfigCard() -> Element {
             configs.set(None);
             return;
         }
-        if loading() { return; }
+        if loading() {
+            return;
+        }
         loading.set(true);
         spawn(async move {
             match get_mcp_client_configs(val).await {
@@ -688,7 +695,9 @@ fn PlaintextModal(
 async fn copy_clipboard_wasm(text: &str) {
     use wasm_bindgen_futures::JsFuture;
 
-    let Some(window) = web_sys::window() else { return };
+    let Some(window) = web_sys::window() else {
+        return;
+    };
     // web-sys 的 Navigator::clipboard() 直接返回 Clipboard（非 Option）。
     let clipboard = window.navigator().clipboard();
     // write_text 返回 Promise<void>；忽略 reject（如非 HTTPS / 无焦点）。

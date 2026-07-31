@@ -377,7 +377,12 @@ pub(crate) async fn render_post_fields_minimal(
     let word_count = count_words(content_md);
     let reading_time = reading_time(word_count);
 
-    Ok((rendered.html, toc_html, word_count as i32, reading_time as i32))
+    Ok((
+        rendered.html,
+        toc_html,
+        word_count as i32,
+        reading_time as i32,
+    ))
 }
 
 #[cfg(all(test, feature = "server"))]

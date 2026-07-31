@@ -34,7 +34,10 @@ pub struct McpPrincipal {
 /// 从 Authorization 头解析 bearer 明文（去前缀后返回完整 token 字符串）。
 /// 非 bearer、缺前缀、解码失败统一返回 None。
 pub fn extract_bearer(headers: &HeaderMap) -> Option<String> {
-    let raw = headers.get(axum::http::header::AUTHORIZATION)?.to_str().ok()?;
+    let raw = headers
+        .get(axum::http::header::AUTHORIZATION)?
+        .to_str()
+        .ok()?;
     let scheme = raw.strip_prefix("Bearer ")?.trim();
     if scheme.starts_with(TOKEN_PREFIX) {
         Some(scheme.to_string())
@@ -61,8 +64,7 @@ pub fn hash_token(token: &str) -> String {
 static MCP_LIMITER: std::sync::LazyLock<governor::DefaultKeyedRateLimiter<String>> =
     std::sync::LazyLock::new(|| {
         governor::RateLimiter::keyed(
-            governor::Quota::per_second(mcp_rate_per_sec())
-                .allow_burst(mcp_rate_burst()),
+            governor::Quota::per_second(mcp_rate_per_sec()).allow_burst(mcp_rate_burst()),
         )
     });
 

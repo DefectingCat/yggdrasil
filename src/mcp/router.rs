@@ -40,8 +40,7 @@ pub fn mcp_route() -> Router {
     // 生产反代（nginx `proxy_set_header Host $host`）会把真实域名转发进来，若不把
     // APP_BASE_URL 的 host 也加入，所有 MCP 请求会被 rmcp 以 403 拒绝。保留默认值，
     // 确保本地直连（localhost）仍可用；只取 host（不含 port），rmcp 对无 port 条目匹配任意 port。
-    let mut allowed_hosts: Vec<String> =
-        vec!["localhost".into(), "127.0.0.1".into(), "::1".into()];
+    let mut allowed_hosts: Vec<String> = vec!["localhost".into(), "127.0.0.1".into(), "::1".into()];
     if let Some(base) = &base_url {
         if let Ok(uri) = http::Uri::try_from(base.as_str()) {
             if let Some(authority) = uri.authority() {

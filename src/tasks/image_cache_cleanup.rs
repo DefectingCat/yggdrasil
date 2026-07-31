@@ -66,9 +66,7 @@ pub async fn cleanup_image_cache_at(
     let max_age_hours = max_age_hours.min(MAX_AGE_HOURS_CAP);
     let max_age = Duration::from_secs(max_age_hours.saturating_mul(SECS_PER_HOUR));
     let now = SystemTime::now();
-    let cutoff = now
-        .checked_sub(max_age)
-        .unwrap_or(SystemTime::UNIX_EPOCH);
+    let cutoff = now.checked_sub(max_age).unwrap_or(SystemTime::UNIX_EPOCH);
 
     let mut entries: Vec<(PathBuf, u64, SystemTime)> = Vec::new();
     collect_files(base, &mut entries).await?;
@@ -266,7 +264,10 @@ mod tests {
         // u64::MAX 小时：未加防护时会溢出/下溢；加防护后被 clamp 到 10 年上限，
         // recent 文件（刚写入）应保留。
         let (deleted, _freed) = cleanup_image_cache_at(&dir, 1024, u64::MAX).await.unwrap();
-        assert!(deleted.is_empty(), "巨大 max_age 不应删除任何文件, got: {deleted:?}");
+        assert!(
+            deleted.is_empty(),
+            "巨大 max_age 不应删除任何文件, got: {deleted:?}"
+        );
         assert!(recent.exists());
 
         tokio::fs::remove_dir_all(&dir).await.unwrap();

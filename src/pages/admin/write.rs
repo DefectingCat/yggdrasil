@@ -403,7 +403,6 @@ fn write_editor(post_id: Option<i32>) -> Element {
         }
     };
 
-
     rsx! {
         // 根容器:flex 分区布局。layout 给 write 的 main 是 flex 容器(无 padding/不滚动),
         // 这里拆成 [内容区 flex-1 overflow-y-auto] + [底栏 flex-shrink-0] 两块。

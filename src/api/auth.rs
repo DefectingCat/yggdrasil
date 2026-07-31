@@ -34,7 +34,6 @@ fn validate_username(username: &str) -> Result<(), String> {
     Ok(())
 }
 
-
 #[cfg(feature = "server")]
 fn validate_email(email: &str) -> Result<(), String> {
     if !crate::utils::server::EMAIL_REGEX.is_match(email) {

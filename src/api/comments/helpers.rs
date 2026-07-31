@@ -91,7 +91,6 @@ pub fn validate_comment_name(name: &str) -> Result<(), String> {
     Ok(())
 }
 
-
 /// 校验评论作者邮箱格式。
 #[cfg(feature = "server")]
 pub fn validate_comment_email(email: &str) -> Result<(), String> {

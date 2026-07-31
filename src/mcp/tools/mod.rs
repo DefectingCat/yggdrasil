@@ -9,9 +9,9 @@
 //! 把它们组合成单一 `ServerHandler`（Main 负责 wire-up）。
 
 #[cfg(feature = "server")]
-pub(super) mod common;
-#[cfg(feature = "server")]
 pub mod comments;
+#[cfg(feature = "server")]
+pub(super) mod common;
 #[cfg(feature = "server")]
 pub mod media;
 #[cfg(feature = "server")]

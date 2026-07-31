@@ -13,7 +13,10 @@ use dioxus::prelude::*;
 ///
 /// 通过 `dangerous_inner_html` 注入目录结构，快捷键 `Alt + C` 可聚焦。
 #[component]
-pub fn PostToc(toc_html: String, #[props(default = "Table of Contents")] title: &'static str) -> Element {
+pub fn PostToc(
+    toc_html: String,
+    #[props(default = "Table of Contents")] title: &'static str,
+) -> Element {
     rsx! {
         details { class: "toc",
             summary { accesskey: "c", title: "(Alt + C)",

@@ -280,15 +280,12 @@ pub async fn list_deleted_posts(
 /// 获取指定标签下的全部已发布文章（上限 200），用于无分页 UI 的标签详情页。
 /// 结果缓存于按标签的键空间。
 #[server(GetPostsByTag, "/api")]
-pub async fn get_posts_by_tag(
-    tag_name: String,
-) -> Result<PostListResponse, ServerFnError> {
+pub async fn get_posts_by_tag(tag_name: String) -> Result<PostListResponse, ServerFnError> {
     #[cfg(feature = "server")]
     {
         let client = get_conn().await.map_err(AppError::db_conn)?;
 
-        if let Some((cached_posts, cached_total)) =
-            crate::cache::get_posts_by_tag(&tag_name).await
+        if let Some((cached_posts, cached_total)) = crate::cache::get_posts_by_tag(&tag_name).await
         {
             return Ok(PostListResponse {
                 posts: cached_posts,

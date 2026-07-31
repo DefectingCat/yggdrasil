@@ -14,10 +14,10 @@ use rmcp::model::CallToolResult;
 use rmcp::{schemars, tool, tool_router, ErrorData as McpError};
 use serde::Deserialize;
 
+use super::common::{internal, ok_json, require_scope};
 use crate::cache;
 use crate::db::pool::get_conn;
 use crate::models::mcp_token::TokenScope;
-use super::common::{internal, ok_json, require_scope};
 
 #[tool_router(router = tags_router, vis = "pub")]
 impl crate::mcp::server::YggMcpServer {
@@ -148,4 +148,3 @@ struct TagResult {
     tag_id: Option<i32>,
     name: String,
 }
-

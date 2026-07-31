@@ -59,7 +59,6 @@ pub struct PublicUser {
     pub created_at: DateTime<Utc>,
 }
 
-
 impl From<SessionUser> for PublicUser {
     /// 将 SessionUser 转换为 PublicUser。
     fn from(u: SessionUser) -> Self {

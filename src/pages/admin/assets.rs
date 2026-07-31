@@ -12,21 +12,21 @@
 use dioxus::prelude::*;
 
 // server fn 仅在 WASM 前端调用（全部包在 cfg(wasm32) 块内），server SSR 只编译类型。
+use crate::api::assets::AssetListResponse;
 #[cfg(target_arch = "wasm32")]
 use crate::api::assets::{
     batch_delete_assets, delete_asset, list_assets, purge_orphan_assets, rebuild_assets_index,
     update_asset_alt,
 };
-use crate::api::assets::AssetListResponse;
 #[cfg(target_arch = "wasm32")]
 use crate::api::assets::{BatchDeleteAssetsResponse, PurgeOrphansResponse, RebuildAssetsResponse};
 use crate::components::empty_state::EmptyState;
-use crate::components::ui::{FilterTabs, Pagination};
 use crate::components::forms::FormInput;
-#[cfg(target_arch = "wasm32")]
-use crate::utils::js::invoke_optional_global;
+use crate::components::ui::{FilterTabs, Pagination};
 #[cfg(target_arch = "wasm32")]
 use crate::models::asset::{AssetFilter, AssetSort};
+#[cfg(target_arch = "wasm32")]
+use crate::utils::js::invoke_optional_global;
 use std::collections::HashSet;
 
 /// 每页素材数，与服务端 list.rs 的 PER_PAGE 对齐。

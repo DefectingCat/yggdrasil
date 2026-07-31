@@ -2,7 +2,7 @@
 
 use dioxus::prelude::*;
 
-use crate::components::forms::{FORM_SELECT_COMPACT_CLASS, FormSelect};
+use crate::components::forms::{FormSelect, FORM_SELECT_COMPACT_CLASS};
 use crate::components::skeletons::atoms::SkeletonBox;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::ui::LoadingButton;

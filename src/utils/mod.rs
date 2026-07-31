@@ -13,11 +13,11 @@ pub mod html;
 /// WASM 端 JS 全局函数调用工具（仅 wasm32 编译）。
 #[cfg(target_arch = "wasm32")]
 pub mod js;
+/// 服务端共享常量与工具（hash、正则、上限）。
+#[cfg(feature = "server")]
+pub mod server;
 /// Markdown / 纯文本处理工具。
 #[cfg(feature = "server")]
 pub mod text;
 /// 跨平台时间/睡眠工具。
 pub mod time;
-/// 服务端共享常量与工具（hash、正则、上限）。
-#[cfg(feature = "server")]
-pub mod server;

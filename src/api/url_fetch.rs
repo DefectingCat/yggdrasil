@@ -55,16 +55,18 @@ impl FetchError {
 /// 抓取 URL → 图片字节 → 走共享入库流水线 → 返回 `/uploads/...` 结果。
 ///
 /// `original_filename` 从 URL 路径末段推导（无则 None）。见模块头部的 SSRF 防护说明。
-pub(crate) async fn fetch_and_ingest(
-    url: &str,
-) -> Result<UploadOutcome, FetchError> {
+pub(crate) async fn fetch_and_ingest(url: &str) -> Result<UploadOutcome, FetchError> {
     // 1. 解析 URL：强制 https。
-    let uri: Uri = url.parse().map_err(|e| FetchError::invalid(e, "URL 格式"))?;
+    let uri: Uri = url
+        .parse()
+        .map_err(|e| FetchError::invalid(e, "URL 格式"))?;
     let scheme = uri.scheme_str().unwrap_or("");
     if scheme != "https" {
         return Err(FetchError::Invalid("仅支持 https:// 图片 URL".into()));
     }
-    let host = uri.host().ok_or_else(|| FetchError::Invalid("URL 缺少主机名".into()))?;
+    let host = uri
+        .host()
+        .ok_or_else(|| FetchError::Invalid("URL 缺少主机名".into()))?;
     if host.is_empty() {
         return Err(FetchError::Invalid("URL 缺少主机名".into()));
     }
@@ -75,7 +77,9 @@ pub(crate) async fn fetch_and_ingest(
     let port = uri.port_u16().unwrap_or(443);
     let resolve_target = format!("{host_owned}:{port}");
     let addrs = tokio::task::spawn_blocking(move || {
-        resolve_target.to_socket_addrs().map(|i| i.collect::<Vec<SocketAddr>>())
+        resolve_target
+            .to_socket_addrs()
+            .map(|i| i.collect::<Vec<SocketAddr>>())
     })
     .await
     .map_err(|e| FetchError::invalid(e, "解析任务失败"))?
@@ -116,10 +120,7 @@ pub(crate) async fn fetch_and_ingest(
     })?;
 
     if !resp.status().is_success() {
-        return Err(FetchError::BadStatus(format!(
-            "远端返回 {}",
-            resp.status()
-        )));
+        return Err(FetchError::BadStatus(format!("远端返回 {}", resp.status())));
     }
 
     // 5. 流式读取，累计字节超 MAX_FILE_SIZE 立即中止。
@@ -212,7 +213,9 @@ mod tests {
         assert!(is_forbidden_ip(&IpAddr::V4(Ipv4Addr::new(169, 254, 1, 1))));
         assert!(is_forbidden_ip(&IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))));
         assert!(is_forbidden_ip(&IpAddr::V4(Ipv4Addr::new(100, 64, 0, 1)))); // CGNAT
-        assert!(is_forbidden_ip(&IpAddr::V4(Ipv4Addr::new(100, 127, 255, 255)))); // CGNAT 末
+        assert!(is_forbidden_ip(&IpAddr::V4(Ipv4Addr::new(
+            100, 127, 255, 255
+        )))); // CGNAT 末
         assert!(is_forbidden_ip(&IpAddr::V4(Ipv4Addr::new(192, 0, 2, 1)))); // 文档段
     }
 
@@ -221,9 +224,13 @@ mod tests {
         assert!(!is_forbidden_ip(&IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8))));
         assert!(!is_forbidden_ip(&IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1))));
         assert!(!is_forbidden_ip(&IpAddr::V4(Ipv4Addr::new(99, 63, 0, 1)))); // CGNAT 前
-        assert!(!is_forbidden_ip(&IpAddr::V4(Ipv4Addr::new(100, 63, 255, 255)))); // CGNAT 前
+        assert!(!is_forbidden_ip(&IpAddr::V4(Ipv4Addr::new(
+            100, 63, 255, 255
+        )))); // CGNAT 前
         assert!(!is_forbidden_ip(&IpAddr::V4(Ipv4Addr::new(100, 128, 0, 1)))); // CGNAT 后
-        assert!(!is_forbidden_ip(&IpAddr::V4(Ipv4Addr::new(172, 15, 255, 255)))); // 172.16 前
+        assert!(!is_forbidden_ip(&IpAddr::V4(Ipv4Addr::new(
+            172, 15, 255, 255
+        )))); // 172.16 前
         assert!(!is_forbidden_ip(&IpAddr::V4(Ipv4Addr::new(172, 32, 0, 1)))); // 172.16/12 后
     }
 
@@ -239,7 +246,11 @@ mod tests {
 
     #[test]
     fn allowed_ipv6_ranges() {
-        assert!(!is_forbidden_ip(&IpAddr::V6("2606:4700::1".parse().unwrap()))); // Cloudflare 公网
-        assert!(!is_forbidden_ip(&IpAddr::V6("2001:4860:4860::8888".parse().unwrap()))); // Google DNS
+        assert!(!is_forbidden_ip(&IpAddr::V6(
+            "2606:4700::1".parse().unwrap()
+        ))); // Cloudflare 公网
+        assert!(!is_forbidden_ip(&IpAddr::V6(
+            "2001:4860:4860::8888".parse().unwrap()
+        ))); // Google DNS
     }
 }

@@ -21,8 +21,8 @@ use rmcp::model::CallToolResult;
 use rmcp::{schemars, tool, tool_router, ErrorData as McpError};
 use serde::Deserialize;
 
-use crate::models::mcp_token::TokenScope;
 use super::common::{internal, ok_json, require_scope};
+use crate::models::mcp_token::TokenScope;
 
 #[tool_router(router = media_router, vis = "pub")]
 impl crate::mcp::server::YggMcpServer {
@@ -31,7 +31,9 @@ impl crate::mcp::server::YggMcpServer {
     ///
     /// 仅接受 `https://` URL；服务端做 SSRF 防护（私网/回环/保留段拒绝、
     /// DNS 锁定防 rebinding、禁重定向、体积上限）。二进制不经 JSON-RPC。
-    #[tool(description = "从图片 URL 抓取并入库（服务端转 WebP 若更小），返回 /uploads/... URL（可直接用于 Markdown 正文 img）。仅接受 https:// URL，支持 JPEG/PNG/GIF/WebP。二进制不经 JSON-RPC。")]
+    #[tool(
+        description = "从图片 URL 抓取并入库（服务端转 WebP 若更小），返回 /uploads/... URL（可直接用于 Markdown 正文 img）。仅接受 https:// URL，支持 JPEG/PNG/GIF/WebP。二进制不经 JSON-RPC。"
+    )]
     async fn upload_media(
         &self,
         Parameters(p): Parameters<UploadMediaParams>,
@@ -48,7 +50,10 @@ impl crate::mcp::server::YggMcpServer {
                     McpError::invalid_request(msg, None)
                 }
                 crate::api::url_fetch::FetchError::TooLarge => McpError::invalid_request(
-                    format!("文件超过大小限制（{} bytes）", crate::utils::server::MAX_FILE_SIZE),
+                    format!(
+                        "文件超过大小限制（{} bytes）",
+                        crate::utils::server::MAX_FILE_SIZE
+                    ),
                     None,
                 ),
                 crate::api::url_fetch::FetchError::Fetch(ctx) => internal(ctx, "url fetch"),

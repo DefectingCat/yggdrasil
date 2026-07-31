@@ -25,7 +25,7 @@ use axum::http::{HeaderMap, StatusCode};
 #[cfg(feature = "server")]
 use axum::response::Response;
 #[cfg(feature = "server")]
-use axum::{Json, response::IntoResponse};
+use axum::{response::IntoResponse, Json};
 #[cfg(feature = "server")]
 use serde_json::{json, Value};
 #[cfg(feature = "server")]
@@ -166,16 +166,16 @@ fn mcp_upload_error<T: serde::Serialize>(status: StatusCode, msg: T) -> Response
 /// 二进制不经 JSON-RPC，绕开 rmcp 4MiB 请求体上限。返回可直接嵌入 Markdown 的
 /// `/uploads/...` URL。
 #[cfg(feature = "server")]
-pub async fn mcp_upload_image(
-    headers: HeaderMap,
-    mut multipart: Multipart,
-) -> Response {
+pub async fn mcp_upload_image(headers: HeaderMap, mut multipart: Multipart) -> Response {
     // 1. bearer → principal（含 scope 校验：media 需要 write）。
     let principal = match crate::mcp::auth::resolve_bearer_principal(&headers).await {
         Ok(p) => p,
         Err(status) => return mcp_upload_error(status, "未授权或令牌无效"),
     };
-    if !principal.scope.grants(crate::models::mcp_token::TokenScope::Write) {
+    if !principal
+        .scope
+        .grants(crate::models::mcp_token::TokenScope::Write)
+    {
         return mcp_upload_error(StatusCode::FORBIDDEN, "权限不足：需要 write 作用域");
     }
 
@@ -305,8 +305,8 @@ pub(crate) async fn process_image_upload(
 
     // 2. 仅读 header 校验尺寸/像素上限，并拿回 (w,h) 供 assets 登记，避免二次解析。
     //    超限直接拒绝，避免大图 decode 后被静默降级（原 fallback 存原图）。
-    let (img_width, img_height) = crate::api::image::upload_dimensions(&data, mime_type)
-        .map_err(|msg| {
+    let (img_width, img_height) =
+        crate::api::image::upload_dimensions(&data, mime_type).map_err(|msg| {
             tracing::warn!("upload dimensions check failed: {msg}");
             UploadError::Oversized
         })?;
@@ -337,7 +337,11 @@ pub(crate) async fn process_image_upload(
             .map_err(|e| UploadError::internal(e, "dedup check"))?;
         if let Some(row) = reused {
             let path: String = row.get("path");
-            tracing::info!("Image deduped: reuse {} (hash {})", path, &content_hash[..12]);
+            tracing::info!(
+                "Image deduped: reuse {} (hash {})",
+                path,
+                &content_hash[..12]
+            );
             return Ok(UploadOutcome {
                 url: format!("/uploads/{}", path),
                 reused: true,
@@ -468,9 +472,7 @@ pub(crate) async fn process_image_upload(
 pub(crate) fn detect_mime(data: &[u8]) -> Option<&'static str> {
     if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
         Some("image/jpeg")
-    } else if data.starts_with(&[
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-    ]) {
+    } else if data.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
         Some("image/png")
     } else if data.starts_with(b"GIF87a") || data.starts_with(b"GIF89a") {
         Some("image/gif")
@@ -579,8 +581,10 @@ async fn transcode(
     is_webp: bool,
 ) -> (Vec<u8>, String) {
     let for_task = data.clone();
-    match tokio::task::spawn_blocking(move || transcode_image_blocking(&for_task, mime, is_gif, is_webp))
-        .await
+    match tokio::task::spawn_blocking(move || {
+        transcode_image_blocking(&for_task, mime, is_gif, is_webp)
+    })
+    .await
     {
         Ok(result) => result,
         Err(e) => {

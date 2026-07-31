@@ -25,10 +25,7 @@ pub async fn sleep_ms(ms: u32) {
         let delay = ms.min(i32::MAX as u32) as i32;
         let window = web_sys::window().expect("sleep_ms 必须在浏览器上下文中调用：无 window");
         window
-            .set_timeout_with_callback_and_timeout_and_arguments_0(
-                &resolve.unchecked_into(),
-                delay,
-            )
+            .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve.unchecked_into(), delay)
             .expect("setTimeout with a number delay cannot fail per WebIDL");
     });
     let _ = JsFuture::from(promise).await;

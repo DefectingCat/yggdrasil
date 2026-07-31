@@ -4,10 +4,10 @@
 //! - Dioxus server function（`#[server(Name, "/api")]`），如 `auth`、`posts`；
 //! - Axum 手动路由处理器，如 `upload`、`image`。
 
-/// 认证相关的 Dioxus server function。
-pub mod auth;
 /// 素材管理（assets/asset_refs）的 Dioxus server function。
 pub mod assets;
+/// 认证相关的 Dioxus server function。
+pub mod auth;
 /// 更新日志（内嵌 CHANGELOG.md 渲染）的 Dioxus server function。
 pub mod changelog;
 /// 代码运行接口与数据结构。
@@ -27,10 +27,10 @@ pub mod image;
 /// KaTeX 服务端数学公式渲染（server-only）。
 #[cfg(feature = "server")]
 pub mod katex;
-/// MCP 访问令牌管理（签发 / 列表 / 重查 / 撤销）的 Dioxus server function。
-pub mod mcp_tokens;
 /// Markdown 渲染与 HTML 清理。
 pub mod markdown;
+/// MCP 访问令牌管理（签发 / 列表 / 重查 / 撤销）的 Dioxus server function。
+pub mod mcp_tokens;
 /// mhchem 化学公式转译器（\ce/\pu → LaTeX，server-only）。
 #[cfg(feature = "server")]
 pub mod mhchem;

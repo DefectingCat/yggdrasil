@@ -127,13 +127,10 @@ async fn export_csv(
 
     let header_clause = if include_columns { "HEADER" } else { "" };
     let copy_stmt = format!("COPY ({}) TO STDOUT WITH CSV {}", source_sql, header_clause);
-    let stream = client
-        .copy_out(&copy_stmt)
-        .await
-        .map_err(|e| {
-            tracing::error!("Export COPY failed: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, "COPY 失败".to_string())
-        })?;
+    let stream = client.copy_out(&copy_stmt).await.map_err(|e| {
+        tracing::error!("Export COPY failed: {}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, "COPY 失败".to_string())
+    })?;
 
     // tokio_postgres 的 copy_out 流产出 Bytes，直接转 axum Body。
     let mapped = stream.map(|res| res.map_err(std::io::Error::other));
@@ -151,13 +148,10 @@ async fn export_sql(
         .await
         .map_err(|_| (StatusCode::SERVICE_UNAVAILABLE, "数据库不可用".to_string()))?;
 
-    let rows = client
-        .query(&source_sql, &[])
-        .await
-        .map_err(|e| {
-            tracing::error!("Export query failed: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, "查询失败".to_string())
-        })?;
+    let rows = client.query(&source_sql, &[]).await.map_err(|e| {
+        tracing::error!("Export query failed: {}", e);
+        (StatusCode::INTERNAL_SERVER_ERROR, "查询失败".to_string())
+    })?;
 
     let columns: Vec<String> = rows
         .first()

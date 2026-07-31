@@ -14,15 +14,17 @@ use rmcp::model::CallToolResult;
 use rmcp::{schemars, tool, tool_router, ErrorData as McpError};
 use serde::Deserialize;
 
+use super::common::{internal, ok_json, require_scope};
 use crate::cache;
 use crate::db::pool::get_conn;
 use crate::models::mcp_token::TokenScope;
-use super::common::{internal, ok_json, require_scope};
 
 #[tool_router(router = comments_router, vis = "pub")]
 impl crate::mcp::server::YggMcpServer {
     /// 列出评论（分页，可按状态筛选）。要求 write 作用域。
-    #[tool(description = "列出全部评论（分页，每页 20 条）。可按状态筛选：pending/approved/spam/trash。")]
+    #[tool(
+        description = "列出全部评论（分页，每页 20 条）。可按状态筛选：pending/approved/spam/trash。"
+    )]
     async fn list_comments(
         &self,
         Parameters(p): Parameters<ListCommentsParams>,
@@ -98,7 +100,9 @@ impl crate::mcp::server::YggMcpServer {
                 author_url: r.get("author_url"),
                 content_md: r.get("content_md"),
                 status: r.get("status"),
-                created_at: r.get::<_, chrono::DateTime<chrono::Utc>>("created_at").to_rfc3339(),
+                created_at: r
+                    .get::<_, chrono::DateTime<chrono::Utc>>("created_at")
+                    .to_rfc3339(),
             })
             .collect();
 
@@ -341,4 +345,3 @@ struct CommentResult {
     success: bool,
     message: String,
 }
-

@@ -201,17 +201,17 @@ mod tests {
         assert_eq!(entry["type"], "streamableHttp"); // 驼峰，非 streamable-http
         assert_eq!(entry["disabled"], false);
         assert_eq!(entry["autoApprove"], serde_json::json!([]));
-        assert_eq!(
-            entry["headers"]["Authorization"],
-            format!("Bearer {TOKEN}")
-        );
+        assert_eq!(entry["headers"]["Authorization"], format!("Bearer {TOKEN}"));
     }
 
     #[test]
     fn generic_json_is_bare_entry() {
         let cfg = generate_client_configs(BASE, TOKEN);
         let v: serde_json::Value = serde_json::from_str(&cfg.generic_json).unwrap();
-        assert!(v.get("mcpServers").is_none(), "generic 应是单个 entry，无 mcpServers 外层");
+        assert!(
+            v.get("mcpServers").is_none(),
+            "generic 应是单个 entry，无 mcpServers 外层"
+        );
         assert_eq!(v["type"], "streamable-http");
         assert_eq!(v["url"], "https://rua.plus/mcp");
     }
@@ -224,7 +224,10 @@ mod tests {
         // omp 协议字段是 type: "http"（与 Claude Code 同形）。
         assert_eq!(entry["type"], "http");
         // 不应含 transport 字段——会让 omp 退化为 stdio 报错。
-        assert!(entry.get("transport").is_none(), "omp 配置不应含 transport 字段");
+        assert!(
+            entry.get("transport").is_none(),
+            "omp 配置不应含 transport 字段"
+        );
         assert_eq!(entry["url"], "https://rua.plus/mcp");
         assert_eq!(entry["headers"]["Authorization"], format!("Bearer {TOKEN}"));
     }
@@ -234,7 +237,10 @@ mod tests {
         let cfg = generate_client_configs(BASE, TOKEN);
         let v: serde_json::Value = serde_json::from_str(&cfg.opencode_json).unwrap();
         // 关键差异：根键是 mcp（非 mcpServers）。
-        assert!(v.get("mcpServers").is_none(), "opencode 配置不应含 mcpServers 键");
+        assert!(
+            v.get("mcpServers").is_none(),
+            "opencode 配置不应含 mcpServers 键"
+        );
         let entry = &v["mcp"]["yggdrasil"];
         // 远程端点用 type: "remote"（非 streamable-http）。
         assert_eq!(entry["type"], "remote");
@@ -255,7 +261,14 @@ mod tests {
     #[test]
     fn all_json_is_pretty_indented() {
         let cfg = generate_client_configs(BASE, TOKEN);
-        for s in [&cfg.claude_code_json, &cfg.cursor_json, &cfg.cline_json, &cfg.omp_json, &cfg.opencode_json, &cfg.generic_json] {
+        for s in [
+            &cfg.claude_code_json,
+            &cfg.cursor_json,
+            &cfg.cline_json,
+            &cfg.omp_json,
+            &cfg.opencode_json,
+            &cfg.generic_json,
+        ] {
             assert!(s.contains('\n'), "JSON 应是 pretty-printed: {s}");
             assert!(s.contains("  "), "JSON 应含 2 空格缩进: {s}");
         }
