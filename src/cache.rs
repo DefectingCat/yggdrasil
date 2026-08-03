@@ -14,7 +14,7 @@ use std::time::Duration;
 #[cfg(feature = "server")]
 use crate::models::comment::PublicComment;
 #[cfg(feature = "server")]
-use crate::models::post::{Post, PostListItem, PostStats, Tag};
+use crate::models::post::{FeedItem, Post, PostListItem, PostStats, Tag};
 #[cfg(feature = "server")]
 use crate::models::user::SessionUser;
 
@@ -82,6 +82,8 @@ pub enum CacheKey {
     CommentsByPost { post_id: i32 },
     /// 待审核评论总数。
     PendingCommentCount,
+    /// Feed 条目列表（RSS / JSON Feed 共用单键）。
+    Feed,
 }
 
 // ============================================================================
@@ -103,6 +105,10 @@ pub type SinglePostCache = Cache<CacheKey, Option<Post>>;
 /// 文章统计缓存类型。
 #[cfg(feature = "server")]
 pub type PostStatsCache = Cache<CacheKey, PostStats>;
+
+/// Feed 条目列表缓存类型（RSS / JSON Feed 共用）。
+#[cfg(feature = "server")]
+pub type FeedCache = Cache<CacheKey, Vec<FeedItem>>;
 
 /// 全局文章列表缓存实例，最大容量 100。
 #[cfg(feature = "server")]
@@ -137,6 +143,15 @@ static POST_STATS_CACHE: LazyLock<PostStatsCache> = LazyLock::new(|| {
     Cache::builder()
         .max_capacity(10)
         .time_to_live(TTL_POST_STATS)
+        .build()
+});
+
+/// 全局 Feed 条目缓存实例，最大容量 10（单键，20 篇全文条目）。
+#[cfg(feature = "server")]
+static FEED_CACHE: LazyLock<FeedCache> = LazyLock::new(|| {
+    Cache::builder()
+        .max_capacity(10)
+        .time_to_live(TTL_SINGLE_POST)
         .build()
 });
 
@@ -246,6 +261,8 @@ static PENDING_COUNT_STATS: CacheStats = CacheStats::new("待审评论数");
 static SESSION_STATS: CacheStats = CacheStats::new("会话用户");
 #[cfg(feature = "server")]
 static SEARCH_STATS: CacheStats = CacheStats::new("搜索");
+#[cfg(feature = "server")]
+static FEED_STATS: CacheStats = CacheStats::new("Feed");
 
 /// 缓存统计快照项（序列化给前端展示）。
 #[cfg(feature = "server")]
@@ -288,6 +305,7 @@ pub fn cache_stats() -> Vec<CacheStatSnapshot> {
         snap(&PENDING_COUNT_STATS, PENDING_COUNT_CACHE.entry_count()),
         snap(&SESSION_STATS, SESSION_CACHE.entry_count()),
         snap(&SEARCH_STATS, SEARCH_CACHE.entry_count()),
+        snap(&FEED_STATS, FEED_CACHE.entry_count()),
     ]
 }
 
@@ -416,6 +434,24 @@ pub async fn set_post_stats(stats: PostStats) {
     let _ = POST_STATS_CACHE.insert(CacheKey::PostStats, stats).await;
 }
 
+/// 读取 Feed 条目列表缓存。
+#[cfg(feature = "server")]
+pub async fn get_feed() -> Option<Vec<FeedItem>> {
+    let v = FEED_CACHE.get(&CacheKey::Feed).await;
+    if v.is_some() {
+        FEED_STATS.record_hit();
+    } else {
+        FEED_STATS.record_miss();
+    }
+    v
+}
+
+/// 写入 Feed 条目列表缓存。
+#[cfg(feature = "server")]
+pub async fn set_feed(items: Vec<FeedItem>) {
+    let _ = FEED_CACHE.insert(CacheKey::Feed, items).await;
+}
+
 // ============================================================================
 // 缓存失效
 // ============================================================================
@@ -477,11 +513,21 @@ pub fn invalidate_all_post_caches() {
     SINGLE_POST_CACHE.invalidate_all();
     POST_STATS_CACHE.invalidate_all();
     TAG_POSTS_CACHE.invalidate_all();
+    invalidate_feed();
 }
 
-/// 失效文章「元数据」类缓存：列表、标签、统计、搜索结果。
+/// 清空 Feed 条目缓存。
 ///
-/// 这四项在每次文章写操作（创建/更新/删除/恢复/清空回收站）后都需要一起失效。
+/// 使用同步签名是因为 `moka::Cache::invalidate_all` 为同步操作，
+/// 与 `invalidate_post_stats` 等元数据失效保持一致。
+#[cfg(feature = "server")]
+pub fn invalidate_feed() {
+    FEED_CACHE.invalidate_all();
+}
+
+/// 失效文章「元数据」类缓存：列表、标签、统计、搜索结果、Feed。
+///
+/// 这些在每次文章写操作（创建/更新/删除/恢复/清空回收站）后都需要一起失效。
 /// 单篇正文与标签下文章列表是定向失效（按 slug / tag），不在此处处理，由调用方
 /// 根据实际涉及的 slug/tags 额外调用 `invalidate_post_by_slug` / `invalidate_tag_posts_for`。
 #[cfg(feature = "server")]
@@ -490,6 +536,7 @@ pub fn invalidate_post_metadata() {
     invalidate_all_tags();
     invalidate_post_stats();
     invalidate_search_results();
+    invalidate_feed();
 }
 
 /// 文章写操作（创建/更新/删除/恢复/清空回收站）后的统一缓存失效序列。

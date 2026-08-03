@@ -161,6 +161,28 @@ impl PostListItem {
     }
 }
 
+/// Feed 条目 DTO（RSS 2.0 / JSON Feed 共享）。
+///
+/// 与 `PostListItem` 不同，这里携带已渲染的 `content_html` 全文，
+/// 供订阅端点直接输出；缓存单键 `CacheKey::Feed` 存 `Vec<FeedItem>`。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FeedItem {
+    /// 文章标题。
+    pub title: String,
+    /// URL slug，用于生成文章链接。
+    pub slug: String,
+    /// 摘要，可选。
+    pub summary: Option<String>,
+    /// 渲染后的 HTML 内容，可选（历史文章可能为空）。
+    pub content_html: Option<String>,
+    /// 正式发布时间（已发布文章必有值，行映射时回退 updated_at）。
+    pub published_at: DateTime<Utc>,
+    /// 最后更新时间。
+    pub updated_at: DateTime<Utc>,
+    /// 关联标签列表。
+    pub tags: Vec<String>,
+}
+
 /// 前后文章导航结构体。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PostNav {

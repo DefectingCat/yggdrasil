@@ -345,6 +345,11 @@ fn main() {
                 .route(
                     "/uploads",
                     axum::routing::get(|| async { StatusCode::NOT_FOUND }),
+                )
+                .route("/feed.xml", axum::routing::get(crate::api::feed::rss_feed))
+                .route(
+                    "/feed.json",
+                    axum::routing::get(crate::api::feed::json_feed),
                 );
 
             let router = upload_route

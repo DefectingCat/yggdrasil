@@ -20,6 +20,8 @@ pub mod csrf;
 pub mod database;
 /// 应用错误类型与转换。
 pub mod error;
+/// RSS 2.0 与 JSON Feed 1.1 订阅端点（server-only）。
+pub mod feed;
 /// 健康检查端点（liveness / readiness）。
 pub mod health;
 /// 图片服务的 Axum 处理器。
