@@ -1,8 +1,8 @@
 /**
  * Mermaid 流程图懒加载渲染。
  *
- * 扫描 `pre > code.language-mermaid` 代码块，在进入视口时动态加载独立 IIFE bundle
- * `public/mermaid/mermaid.js`（~1MB，只在有图且可见时加载，不影响无图文章首屏），
+ * 扫描 `pre > code.language-mermaid` 代码块，扫描到块后在浏览器空闲期预拉
+ * 独立 IIFE bundle `public/mermaid/mermaid.js`（~1MB，进视口时渲染，不影响无图文章首屏），
  * 把 mermaid 源码渲染成 SVG 注入到父 <pre>。
  *
  * bundle 是 IIFE 格式（与项目其他前端库一致），挂全局变量 `window.MermaidRenderer`。
@@ -96,6 +96,24 @@ function loadMermaid(): Promise<MermaidApi> {
 }
 
 /**
+ * 页面含 mermaid 块时，在浏览器空闲期预拉 bundle（3.2MB，传输是首图延迟主导项）。
+ * 等 IntersectionObserver 触发才拉会把网络时间暴露给用户；页面加载后的空闲期足够拉完。
+ * requestIdleCallback 无原生支持的环境（Firefox / 旧 Safari）回退 setTimeout。
+ * 失败静默：loadMermaid 失败会清空 mermaidPromise，observer 触发 render 时自然重试
+ * 并走正常错误回退；预拉本身不产生额外副作用。
+ */
+function preloadMermaidOnIdle(): void {
+  const preload = () => {
+    void loadMermaid().catch(() => {});
+  };
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(preload, { timeout: 3000 });
+  } else {
+    setTimeout(preload, 200);
+  }
+}
+
+/**
  * 把 mermaid 源码渲染成 SVG 并注入父 <pre>。
  *
  * - render 用全局自增 id（`mermaid-svg-${++renderCounter}`），避免同页多次 render
@@ -107,7 +125,22 @@ function loadMermaid(): Promise<MermaidApi> {
  *   SVG 替换，textContent 不再可用）。
  */
 async function renderBlock(pre: HTMLPreElement, source: string, theme: ThemeName): Promise<void> {
-  const mermaid = await loadMermaid();
+  // 加载角标：仅初次渲染（源码仍可见）挂；主题重渲染时旧 SVG 在原位，不加噪。
+  // :scope > 守卫幂等（异常重复触发不叠第二个）。角标 absolute 定位，不影响布局。
+  let badge: HTMLSpanElement | null = null;
+  if (!pre.dataset.mermaidRendered && !pre.querySelector(':scope > .mermaid-loading')) {
+    badge = document.createElement('span');
+    badge.className = 'mermaid-loading';
+    badge.textContent = '图表渲染中';
+    pre.appendChild(badge);
+  }
+  let mermaid: MermaidApi;
+  try {
+    mermaid = await loadMermaid();
+  } catch (err) {
+    badge?.remove();
+    throw err;
+  }
   mermaid.initialize({
     startOnLoad: false,
     // base 主题不硬编码颜色，让 themeVariables 完全控制 Catppuccin 调色板。
@@ -144,6 +177,7 @@ async function renderBlock(pre: HTMLPreElement, source: string, theme: ThemeName
     // mermaid.render 失败时会在 document.body 残留临时渲染容器 div#d${id}
     // （内含「Syntax error in text」错误 SVG）。不清除则这些错误块泄漏到页面底部。
     document.getElementById(`d${id}`)?.remove();
+    badge?.remove();
     throw err;
   }
 }
@@ -190,6 +224,10 @@ export function initMermaid(selector: string, theme: ThemeName): Promise<void> {
 
   // 路径 1：未渲染的块（<code> 还在）。
   const blocks = root.querySelectorAll<HTMLPreElement>('pre > code.language-mermaid');
+  // 有未渲染块 → 空闲期预拉 bundle，observer 触发时传输已完成。
+  // loadMermaid 单例 promise 去重：initMermaid 多次调用（主题切换 effect 重跑）
+  // 只产生多个 rIC/setTimeout 回调，全部命中同一缓存 promise，无重复请求。
+  if (blocks.length > 0) preloadMermaidOnIdle();
   blocks.forEach((code) => {
     const pre = code.parentElement as HTMLPreElement | null;
     if (!pre) return;

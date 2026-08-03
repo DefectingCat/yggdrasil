@@ -219,6 +219,151 @@ describe('initMermaid', () => {
     // 两次 render 的 id 必须不同，否则撞上 mermaid 内部残留的 d-前缀节点（#357）
     expect(secondId).not.toBe(firstId);
   });
+
+  it('有 mermaid 块时在空闲期预拉 bundle', () => {
+    const ricSpy = vi.fn((cb: () => void) => {
+      cb();
+      return 1;
+    });
+    const originalRic = window.requestIdleCallback;
+    window.requestIdleCallback = ricSpy as unknown as typeof window.requestIdleCallback;
+    try {
+      const root = document.createElement('div');
+      root.className = 'post-content';
+      root.innerHTML = '<pre><code class="language-mermaid">graph TD; A--&gt;B</code></pre>';
+      document.body.appendChild(root);
+
+      window.__initMermaid('.post-content', 'light');
+
+      expect(ricSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      if (originalRic) {
+        window.requestIdleCallback = originalRic;
+      } else {
+        Reflect.deleteProperty(window, 'requestIdleCallback');
+      }
+    }
+  });
+
+  it('无 mermaid 块时不调度空闲预拉', () => {
+    const ricSpy = vi.fn((cb: () => void) => {
+      cb();
+      return 1;
+    });
+    const originalRic = window.requestIdleCallback;
+    window.requestIdleCallback = ricSpy as unknown as typeof window.requestIdleCallback;
+    try {
+      const root = document.createElement('div');
+      root.className = 'post-content';
+      root.innerHTML = '<pre><code class="language-rust">fn main() {}</code></pre>';
+      document.body.appendChild(root);
+
+      window.__initMermaid('.post-content', 'light');
+
+      expect(ricSpy).not.toHaveBeenCalled();
+    } finally {
+      if (originalRic) {
+        window.requestIdleCallback = originalRic;
+      } else {
+        Reflect.deleteProperty(window, 'requestIdleCallback');
+      }
+    }
+  });
+
+  it('无 requestIdleCallback 时回退 setTimeout 预拉', () => {
+    const originalRic = window.requestIdleCallback;
+    Reflect.deleteProperty(window, 'requestIdleCallback');
+    const timeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    try {
+      const root = document.createElement('div');
+      root.className = 'post-content';
+      root.innerHTML = '<pre><code class="language-mermaid">graph TD; A--&gt;B</code></pre>';
+      document.body.appendChild(root);
+
+      window.__initMermaid('.post-content', 'light');
+
+      expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 200);
+    } finally {
+      timeoutSpy.mockRestore();
+      if (originalRic) window.requestIdleCallback = originalRic;
+    }
+  });
+
+  it('渲染期间显示加载角标，成功后随 SVG 替换消失', async () => {
+    let resolveRender: ((v: { svg: string }) => void) | undefined;
+    mockRender.mockImplementation(
+      () =>
+        new Promise<{ svg: string }>((res) => {
+          resolveRender = res;
+        }),
+    );
+    const root = document.createElement('div');
+    root.className = 'post-content';
+    root.innerHTML = '<pre><code class="language-mermaid">graph TD; A--&gt;B</code></pre>';
+    document.body.appendChild(root);
+
+    window.__initMermaid('.post-content', 'light');
+
+    // IO mock 同步触发 render，角标在 renderBlock 首个 await 前同步挂上
+    const badge = root.querySelector('.mermaid-loading');
+    expect(badge).not.toBeNull();
+    expect(badge?.textContent).toBe('图表渲染中');
+
+    // mermaid.render 在 await loadMermaid() 之后才调用（微任务后），先等它被调再放行
+    await vi.waitFor(() => expect(mockRender).toHaveBeenCalled());
+    resolveRender?.({ svg: '<svg>diagram</svg>' });
+    await vi.waitFor(() => {
+      expect(root.querySelector('pre')?.innerHTML).toContain('<svg>diagram</svg>');
+    });
+    expect(root.querySelector('.mermaid-loading')).toBeNull();
+  });
+
+  it('渲染失败时移除角标（源码与 mermaid-error 回退不变）', async () => {
+    mockRender.mockRejectedValue(new Error('syntax error'));
+    const root = document.createElement('div');
+    root.className = 'post-content';
+    root.innerHTML = '<pre><code class="language-mermaid">bad syntax</code></pre>';
+    document.body.appendChild(root);
+
+    window.__initMermaid('.post-content', 'light');
+
+    await vi.waitFor(() => {
+      expect(root.querySelector('pre')?.classList.contains('mermaid-error')).toBe(true);
+    });
+    expect(root.querySelector('.mermaid-loading')).toBeNull();
+    expect(root.querySelector('pre code.language-mermaid')).not.toBeNull();
+  });
+
+  it('主题切换重渲染不挂加载角标', async () => {
+    const root = document.createElement('div');
+    root.className = 'post-content';
+    root.innerHTML = '<pre><code class="language-mermaid">graph TD; A--&gt;B</code></pre>';
+    document.body.appendChild(root);
+
+    window.__initMermaid('.post-content', 'light');
+    await vi.waitFor(() => {
+      expect(root.querySelector('pre')?.dataset.mermaidRendered).toBe('true');
+    });
+    let resolveRender: ((v: { svg: string }) => void) | undefined;
+    mockRender.mockImplementation(
+      () =>
+        new Promise<{ svg: string }>((res) => {
+          resolveRender = res;
+        }),
+    );
+    const callsBefore = mockRender.mock.calls.length;
+
+    window.__initMermaid('.post-content', 'dark');
+
+    // rerenderExistingBlocks 同步走到 renderBlock 起点：dataset.mermaidRendered 已设 → 不挂角标
+    expect(root.querySelector('.mermaid-loading')).toBeNull();
+    // 同上：先等 mermaid.render 被调（微任务后）再放行
+    await vi.waitFor(() => expect(mockRender.mock.calls.length).toBeGreaterThan(callsBefore));
+    resolveRender?.({ svg: '<svg>dark</svg>' });
+    await vi.waitFor(() => {
+      expect(root.querySelector('pre')?.dataset.mermaidTheme).toBe('dark');
+    });
+  });
 });
 
 describe('mermaid 放大浮层', () => {
