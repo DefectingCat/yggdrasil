@@ -21,8 +21,8 @@
 
 import type { ThemeName } from '@yggdrasil/shared';
 import { mermaidThemeVarsFor } from '@yggdrasil/shared';
-import { onThemeChange } from './theme-transition';
 import { attachOverlayTrigger } from './mermaid-overlay';
+import { onThemeChange } from './theme-transition';
 
 /** 文章正文容器选择器（与 post_content.rs 的 __initMermaid 调用一致）。 */
 const POST_CONTENT_SELECTOR = '.post-content';
