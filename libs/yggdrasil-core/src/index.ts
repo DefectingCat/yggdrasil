@@ -4,6 +4,7 @@ import { scrollToHash } from './hash-scroll';
 import { initMermaid } from './mermaid';
 import { initPostContent } from './post-content';
 import { applyResolvedTheme, startThemeTransition } from './theme-transition';
+import { initTocSidebar } from './toc-sidebar';
 import './style.css';
 
 declare global {
@@ -14,6 +15,7 @@ declare global {
     __scrollToHash: () => void;
     __startThemeTransition: (x: number, y: number) => void;
     __applyResolvedTheme: (isDark: boolean) => void;
+    __initTocSidebar: () => void;
   }
 }
 
@@ -23,3 +25,4 @@ window.__initAnchorClick = initAnchorClick;
 window.__scrollToHash = scrollToHash;
 window.__startThemeTransition = startThemeTransition;
 window.__applyResolvedTheme = applyResolvedTheme;
+window.__initTocSidebar = initTocSidebar;
