@@ -7,6 +7,8 @@
 pub mod asset;
 /// 评论模型及其状态枚举。
 pub mod comment;
+/// 友链模型。
+pub mod friend_link;
 /// MCP 服务器访问令牌模型与作用域枚举。
 /// allow(dead_code)：T1 仅定义类型；T2 的 token 管理服务端函数才构造这些 DTO。
 #[allow(dead_code)]

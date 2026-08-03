@@ -10,6 +10,8 @@ pub mod assets;
 pub mod comments;
 /// 管理后台仪表盘页面模块。
 pub mod dashboard;
+/// 友链管理页面模块。
+pub mod friends;
 /// MCP 令牌管理 + 客户端配置生成页面模块。
 pub mod mcp;
 /// 文章管理列表页面模块。
@@ -29,6 +31,8 @@ pub use assets::Assets;
 pub use comments::{AdminComments, AdminCommentsPage};
 /// 管理后台仪表盘组件。
 pub use dashboard::Admin;
+/// 友链管理页面组件。
+pub use friends::FriendsAdmin;
 /// MCP 令牌管理 + 客户端配置生成页面组件。
 pub use mcp::Mcp;
 /// 文章管理入口组件（列表 + 回收站，单路由 + 客户端 tab）。

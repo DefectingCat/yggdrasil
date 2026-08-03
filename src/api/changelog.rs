@@ -218,7 +218,10 @@ fn parse_changelog(full_md: &str) -> ChangelogData {
 
 /// 将 `current_cat` 中的累积内容存入当前版本的 categories 列表。
 #[cfg(feature = "server")]
-fn flush_category(current: &mut Option<RawVersion>, current_cat: &mut Option<(ChangeCategory, String)>) {
+fn flush_category(
+    current: &mut Option<RawVersion>,
+    current_cat: &mut Option<(ChangeCategory, String)>,
+) {
     if let Some((cat, md)) = current_cat.take() {
         if let Some(v) = current.as_mut() {
             v.categories.push((cat, md));
@@ -405,14 +408,8 @@ _暂无未发布改动。_
 ";
         let data = parse_changelog(md);
         let added = &data.versions[0].groups[0];
-        assert!(
-            added.items_html.contains("父条目"),
-            "应包含父条目"
-        );
-        assert!(
-            added.items_html.contains("子条目 A"),
-            "应包含嵌套子条目"
-        );
+        assert!(added.items_html.contains("父条目"), "应包含父条目");
+        assert!(added.items_html.contains("子条目 A"), "应包含嵌套子条目");
     }
 
     #[test]
@@ -435,10 +432,7 @@ _暂无未发布改动。_
     #[test]
     fn parse_changelog_empty_input() {
         let data = parse_changelog("# Changelog\n\n没有版本段。\n");
-        assert!(
-            data.versions.is_empty(),
-            "无版本段时应返回空版本列表"
-        );
+        assert!(data.versions.is_empty(), "无版本段时应返回空版本列表");
     }
 
     /// 端到端守护：include_str! 路径有效 + 真实 CHANGELOG.md 解析成功。
@@ -455,10 +449,7 @@ _暂无未发布改动。_
         );
         // 最新版标记
         let latest_count = data.versions.iter().filter(|v| v.is_latest).count();
-        assert_eq!(
-            latest_count, 1,
-            "应恰好有一个版本标记为最新"
-        );
+        assert_eq!(latest_count, 1, "应恰好有一个版本标记为最新");
         // 每个正式版至少有一个组或有 intro
         for v in &data.versions {
             if v.version != "Unreleased" {

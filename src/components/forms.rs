@@ -233,7 +233,7 @@ pub fn FormSelect<T: Clone + PartialEq + 'static>(
                     if key == Key::ArrowDown {
                         e.prevent_default();
                         active.set(wrap_index(active(), 1, len));
-                        } else if key == Key::ArrowUp {
+                    } else if key == Key::ArrowUp {
                         e.prevent_default();
                         active.set(wrap_index(active(), -1, len));
                     } else if key == Key::Home { // 不拦截：关闭后焦点自然流转到下一个控件。

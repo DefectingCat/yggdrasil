@@ -22,6 +22,8 @@ pub mod database;
 pub mod error;
 /// RSS 2.0 与 JSON Feed 1.1 订阅端点（server-only）。
 pub mod feed;
+/// 友链 CRUD 与前台列表的 Dioxus server function。
+pub mod friends;
 /// 健康检查端点（liveness / readiness）。
 pub mod health;
 /// 图片服务的 Axum 处理器。

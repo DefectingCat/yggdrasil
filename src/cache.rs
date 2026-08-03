@@ -14,6 +14,8 @@ use std::time::Duration;
 #[cfg(feature = "server")]
 use crate::models::comment::PublicComment;
 #[cfg(feature = "server")]
+use crate::models::friend_link::FriendLink;
+#[cfg(feature = "server")]
 use crate::models::post::{FeedItem, Post, PostListItem, PostStats, Tag};
 #[cfg(feature = "server")]
 use crate::models::user::SessionUser;
@@ -84,6 +86,8 @@ pub enum CacheKey {
     PendingCommentCount,
     /// Feed 条目列表（RSS / JSON Feed 共用单键）。
     Feed,
+    /// 全部友链（前台可见集）。
+    FriendLinks,
 }
 
 // ============================================================================
@@ -122,6 +126,19 @@ static POST_LIST_CACHE: LazyLock<PostListCache> = LazyLock::new(|| {
 /// 全局标签列表缓存实例，最大容量 50。
 #[cfg(feature = "server")]
 static TAG_LIST_CACHE: LazyLock<TagListCache> = LazyLock::new(|| {
+    Cache::builder()
+        .max_capacity(50)
+        .time_to_live(TTL_TAG_LIST)
+        .build()
+});
+
+/// 友链列表缓存类型。
+#[cfg(feature = "server")]
+pub type FriendLinksCache = Cache<CacheKey, Vec<FriendLink>>;
+
+/// 全局友链列表缓存实例，最大容量 50，TTL 与标签列表一致。
+#[cfg(feature = "server")]
+static FRIEND_LINKS_CACHE: LazyLock<FriendLinksCache> = LazyLock::new(|| {
     Cache::builder()
         .max_capacity(50)
         .time_to_live(TTL_TAG_LIST)
@@ -263,6 +280,8 @@ static SESSION_STATS: CacheStats = CacheStats::new("会话用户");
 static SEARCH_STATS: CacheStats = CacheStats::new("搜索");
 #[cfg(feature = "server")]
 static FEED_STATS: CacheStats = CacheStats::new("Feed");
+#[cfg(feature = "server")]
+static FRIEND_STATS: CacheStats = CacheStats::new("友链");
 
 /// 缓存统计快照项（序列化给前端展示）。
 #[cfg(feature = "server")]
@@ -306,6 +325,7 @@ pub fn cache_stats() -> Vec<CacheStatSnapshot> {
         snap(&SESSION_STATS, SESSION_CACHE.entry_count()),
         snap(&SEARCH_STATS, SEARCH_CACHE.entry_count()),
         snap(&FEED_STATS, FEED_CACHE.entry_count()),
+        snap(&FRIEND_STATS, FRIEND_LINKS_CACHE.entry_count()),
     ]
 }
 
@@ -370,6 +390,26 @@ pub async fn get_tag_list() -> Option<Vec<Tag>> {
 #[cfg(feature = "server")]
 pub async fn set_tag_list(tags: Vec<Tag>) {
     let _ = TAG_LIST_CACHE.insert(CacheKey::AllTags, tags).await;
+}
+
+/// 读取全部友链缓存（前台可见集）。
+#[cfg(feature = "server")]
+pub async fn get_friend_links() -> Option<Vec<FriendLink>> {
+    let v = FRIEND_LINKS_CACHE.get(&CacheKey::FriendLinks).await;
+    if v.is_some() {
+        FRIEND_STATS.record_hit();
+    } else {
+        FRIEND_STATS.record_miss();
+    }
+    v
+}
+
+/// 写入全部友链缓存。
+#[cfg(feature = "server")]
+pub async fn set_friend_links(links: Vec<FriendLink>) {
+    let _ = FRIEND_LINKS_CACHE
+        .insert(CacheKey::FriendLinks, links)
+        .await;
 }
 
 /// 按 slug 读取单篇文章缓存。
@@ -466,6 +506,12 @@ pub fn invalidate_post_lists() {
 #[cfg(feature = "server")]
 pub fn invalidate_all_tags() {
     TAG_LIST_CACHE.invalidate_all();
+}
+
+/// 清空友链缓存。
+#[cfg(feature = "server")]
+pub fn invalidate_friend_links() {
+    FRIEND_LINKS_CACHE.invalidate_all();
 }
 
 /// 按 slug 失效单篇文章缓存。

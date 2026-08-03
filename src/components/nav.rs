@@ -30,6 +30,11 @@ pub fn use_nav_items(route: Route) -> Vec<NavItemConfig> {
             is_active: matches!(route, Route::Tags {}) || matches!(route, Route::TagDetail { .. }),
         },
         NavItemConfig {
+            route: Route::Friends {},
+            label: "友链",
+            is_active: matches!(route, Route::Friends {}),
+        },
+        NavItemConfig {
             route: Route::About {},
             label: "关于",
             is_active: matches!(route, Route::About {}),

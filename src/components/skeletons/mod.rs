@@ -10,6 +10,8 @@ pub mod atoms;
 pub mod comment_skeleton;
 /// 延迟显示骨架屏组件。
 pub mod delayed_skeleton;
+/// 友链页骨架屏组件。
+pub mod friends_skeleton;
 /// 首页骨架屏组件。
 pub mod home_skeleton;
 /// 文章卡片骨架屏组件。

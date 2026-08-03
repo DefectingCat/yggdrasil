@@ -45,6 +45,7 @@ pub fn AdminLayout() -> Element {
         (Route::Write {}, "写文章"),
         (Route::Posts {}, "管理文章"),
         (Route::Assets {}, "素材"),
+        (Route::FriendsAdmin {}, "友链"),
         (Route::Runner {}, "试运行"),
         (Route::Mcp {}, "MCP"),
         (Route::System {}, "系统"),

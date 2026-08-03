@@ -12,10 +12,12 @@ use crate::components::frontend_layout::FrontendLayout;
 use crate::context::UserContext;
 use crate::pages::about::About;
 use crate::pages::admin::{
-    Admin, AdminComments, AdminCommentsPage, Assets, Mcp, Posts, Runner, System, Write, WriteEdit,
+    Admin, AdminComments, AdminCommentsPage, Assets, FriendsAdmin, Mcp, Posts, Runner, System,
+    Write, WriteEdit,
 };
 use crate::pages::archives::Archives;
 use crate::pages::changelog::Changelog;
+use crate::pages::friends::Friends;
 use crate::pages::home::{Home, HomePage};
 use crate::pages::login::Login;
 use crate::pages::not_found::NotFound;
@@ -56,6 +58,9 @@ pub enum Route {
             /// 关于页面
             #[route("/about")]
             About {},
+            /// 友链页
+            #[route("/friends")]
+            Friends {},
             /// 更新日志页
             #[route("/changelog")]
             Changelog {},
@@ -84,6 +89,9 @@ pub enum Route {
         /// 素材管理（上传图片注册表：浏览/搜索/删除/孤儿清理）
         #[route("/assets")]
         Assets {},
+        /// 友链管理
+        #[route("/friends")]
+        FriendsAdmin {},
         /// 评论管理
         #[route("/comments")]
         AdminComments {},

@@ -10,6 +10,7 @@ use crate::components::header::{Header, SearchIconLink};
 use crate::components::nav::use_nav_items;
 use crate::components::skeletons::archive_skeleton::ArchiveSkeleton;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
+use crate::components::skeletons::friends_skeleton::FriendsSkeleton;
 use crate::components::skeletons::home_skeleton::HomeSkeleton;
 use crate::components::skeletons::post_detail_skeleton::PostDetailSkeleton;
 use crate::components::skeletons::search_skeleton::SearchSkeleton;
@@ -25,6 +26,9 @@ fn route_skeleton(route: &Route) -> Element {
         },
         Route::Tags {} | Route::TagDetail { .. } => rsx! {
             DelayedSkeleton { TagsSkeleton {} }
+        },
+        Route::Friends {} => rsx! {
+            DelayedSkeleton { FriendsSkeleton {} }
         },
         Route::Search {} => rsx! {
             DelayedSkeleton { SearchSkeleton {} }

@@ -120,8 +120,12 @@ fn VersionNav(versions: Vec<VersionEntry>) -> Element {
 
         // effect 体内不读任何 signal（compute 里只有 peek/set），无依赖 → 只跑一次。
         use_effect(move || {
-            let Some(window) = web_sys::window() else { return };
-            let Some(document) = window.document() else { return };
+            let Some(window) = web_sys::window() else {
+                return;
+            };
+            let Some(document) = window.document() else {
+                return;
+            };
             let Ok(list) = document.query_selector_all("article.changelog-version") else {
                 return;
             };
@@ -156,7 +160,9 @@ fn VersionNav(versions: Vec<VersionEntry>) -> Element {
                 }
                 // 页面顶端没有任何卡片越过判定线 → 回退首项（最新版本）。
                 let mut ver = current.or_else(|| {
-                    cards.first().and_then(|e| e.id().strip_prefix('v').map(str::to_owned))
+                    cards
+                        .first()
+                        .and_then(|e| e.id().strip_prefix('v').map(str::to_owned))
                 });
 
                 // 滚到页面底部 → 强制末项：末卡片内容短时永远到不了判定线。
@@ -188,8 +194,8 @@ fn VersionNav(versions: Vec<VersionEntry>) -> Element {
 
             let closure =
                 wasm_bindgen::prelude::Closure::wrap(Box::new(compute) as Box<dyn FnMut()>);
-            let _ = window
-                .add_event_listener_with_callback("scroll", closure.as_ref().unchecked_ref());
+            let _ =
+                window.add_event_listener_with_callback("scroll", closure.as_ref().unchecked_ref());
             *state_for_effect.borrow_mut() = Some(closure);
         });
 
@@ -242,9 +248,7 @@ fn VersionNavItem(version: String, active: bool) -> Element {
     };
 
     rsx! {
-        a {
-            href: "#v{version}",
-            class: "{base}",
+        a { href: "#v{version}", class: "{base}",
             span { class: "w-1.5 h-1.5 rounded-full shrink-0 {dot_class}" }
             span { class: "{text_class}", "{version}" }
         }
@@ -306,7 +310,10 @@ fn VersionCard(version: VersionEntry) -> Element {
 /// 单个分类组视图：badge + 条目列表。
 #[component]
 fn ChangeGroupView(group: ChangeGroup) -> Element {
-    let ChangeGroup { category, items_html } = group;
+    let ChangeGroup {
+        category,
+        items_html,
+    } = group;
     let badge_class = format!("changelog-badge changelog-badge--{}", category.css_class());
 
     rsx! {

@@ -528,7 +528,7 @@ pub fn Assets() -> Element {
                                                 class: "text-[10px] truncate text-[var(--color-paper-secondary)] mt-0.5",
                                                 title: "{alt_text}",
                                                 "alt: {alt_text}"
-                                            } // 行已不在 DB（refs 为空的业务拒绝 = 素材不存在）
+                                            } // 行已不在 DB（refs 为空的业务拒绝 = 素材不存在） // 行已不在 DB（refs 为空的业务拒绝 = 素材不存在） // 行已不在 DB（refs 为空的业务拒绝 = 素材不存在）  行已不在 DB（refs 为空的业务拒绝 = 素材不存在）
                                         }
 
                                         // 操作区：确认删除 / alt 编辑 / 常规三按钮 三态互斥
