@@ -1093,6 +1093,107 @@
       transform: scale(1) rotate(0deg);
     }
   }
+  /* ========== 更新日志页面 ==========
+     版本卡片 + 分类色标 badge + 条目列表样式。
+     配色遵循 Catppuccin 双强调色约束：accent(绿) = 新增/安全/最新，
+     accent-2(teal) = 修复，其余用中性色阶 + 透明度区分层级。 */
+
+  .changelog-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 10px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.5;
+    white-space: nowrap;
+  }
+
+  .changelog-badge--added {
+    color: var(--color-paper-accent);
+    background: color-mix(in srgb, var(--color-paper-accent) 12%, transparent);
+  }
+
+  .changelog-badge--fixed {
+    color: var(--color-paper-accent-2);
+    background: color-mix(in srgb, var(--color-paper-accent-2) 12%, transparent);
+  }
+
+  .changelog-badge--security {
+    color: var(--color-paper-accent);
+    background: color-mix(in srgb, var(--color-paper-accent) 15%, transparent);
+    font-weight: 700;
+  }
+
+  .changelog-badge--changed {
+    color: var(--color-paper-secondary);
+    background: color-mix(in srgb, var(--color-paper-secondary) 10%, transparent);
+  }
+
+  .changelog-badge--removed,
+  .changelog-badge--deprecated {
+    color: var(--color-paper-tertiary);
+    background: color-mix(in srgb, var(--color-paper-tertiary) 10%, transparent);
+  }
+
+  .changelog-badge--internal {
+    color: var(--color-paper-tertiary);
+    background: color-mix(in srgb, var(--color-paper-tertiary) 6%, transparent);
+    font-weight: 500;
+  }
+
+  .changelog-badge--latest {
+    color: var(--color-paper-accent);
+    background: color-mix(in srgb, var(--color-paper-accent) 12%, transparent);
+  }
+
+  /* 条目列表：覆盖 md-content 的默认列表样式，用自定义小圆点。
+     嵌套子列表用更小更淡的点。 */
+  .changelog-items ul {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+  }
+
+  .changelog-items > ul > li {
+    position: relative;
+    padding-left: 1.25rem;
+    margin: 0.5rem 0;
+  }
+
+  .changelog-items > ul > li::before {
+    content: "";
+    position: absolute;
+    left: 0.3rem;
+    top: 0.65em;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--color-paper-tertiary);
+    flex-shrink: 0;
+  }
+
+  .changelog-items li ul {
+    margin-top: 0.4rem;
+  }
+
+  .changelog-items li ul > li {
+    position: relative;
+    padding-left: 1rem;
+    margin: 0.35rem 0;
+    font-size: 0.95em;
+  }
+
+  .changelog-items li ul > li::before {
+    content: "";
+    position: absolute;
+    left: 0.2rem;
+    top: 0.65em;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--color-paper-border);
+  }
 
 }
 
