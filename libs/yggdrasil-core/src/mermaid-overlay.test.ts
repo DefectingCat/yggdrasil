@@ -254,6 +254,58 @@ describe('mermaid-overlay 灯箱统一交互', () => {
     expect(content.style.top).toBe('262px');
   });
 
+  it('工具栏 + 按钮：缩放带 200ms 过渡，结束后清回 none', async () => {
+    const pre = makePre();
+    pre.click();
+    await waitFitTransform();
+
+    const zoomIn = document.querySelectorAll('.mermaid-overlay-btn')[2] as HTMLButtonElement;
+    zoomIn.click();
+
+    // 离散指令：带 transform 过渡，目标 scale = 1×1.3
+    const content = contentEl();
+    expect(content.style.transition).toContain('transform 200ms ease-out');
+    expect(content.style.transform).toContain('scale(1.3)');
+
+    // 过渡结束（happy-dom 无 CSS transition，走 230ms 兜底）后清回 none，
+    // 交还拖拽/滚轮的即时响应
+    await vi.waitFor(() => {
+      expect(content.style.transition).toBe('none');
+    });
+  });
+
+  it('双击：带过渡放大到 100% 原始尺寸', async () => {
+    // 用宽图让 fitScale<1（0.488），双击放大到 1
+    const pre = document.createElement('pre');
+    pre.innerHTML = '<svg viewBox="0 0 2000 500"><rect width="2000" height="500"/></svg>';
+    document.body.appendChild(pre);
+    const svg = pre.querySelector('svg');
+    if (!svg) throw new Error('测试夹具缺 svg');
+    vi.spyOn(svg, 'getBoundingClientRect').mockReturnValue(SVG_RECT);
+    attachOverlayTrigger(pre);
+
+    pre.click();
+    await vi.waitFor(() => {
+      expect(contentEl().style.transform).toBe('translate(0px, 0px) scale(0.488)');
+    });
+
+    contentEl().dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    const content = contentEl();
+    expect(content.style.transition).toContain('transform 200ms ease-out');
+    expect(content.style.transform).toContain('scale(1)');
+  });
+
+  it('reduced-motion：工具栏缩放即时生效无过渡', () => {
+    mockReducedMotion(true);
+    const pre = makePre();
+    pre.click();
+    const zoomIn = document.querySelectorAll('.mermaid-overlay-btn')[2] as HTMLButtonElement;
+    zoomIn.click();
+    const content = contentEl();
+    expect(content.style.transform).toContain('scale(1.3)');
+    expect(content.style.transition).not.toContain('transform');
+  });
+
   it('reduced-motion：打开无飞行（内容直接 fit 态，无 transform transition）', () => {
     mockReducedMotion(true);
     const pre = makePre();

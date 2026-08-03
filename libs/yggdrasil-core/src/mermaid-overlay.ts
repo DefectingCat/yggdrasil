@@ -171,6 +171,36 @@ function zoomAt(px: number, py: number, newScale: number): void {
   applyTransform();
 }
 
+/** 离散缩放指令的过渡时长（工具栏按钮/双击）。 */
+const ZOOM_ANIM_MS = 200;
+/** 缩放过渡的 transition 清理兜底定时器（连续快速点击时复用同一个）。 */
+let zoomAnimTimer: number | undefined;
+
+/**
+ * 离散缩放指令（工具栏/双击）播 200ms 过渡，结束后清回 'none'
+ * 交还直接操作的即时响应。快速连点：前一段过渡被取消（transitioncancel，
+ * 不触发 end），后一段从当前渲染位置续接，不会跳变。
+ * 直接操作（拖拽/滚轮/捏合）不走这里——逐帧事件流必须即时。
+ */
+function animateZoomTo(apply: () => void): void {
+  if (!content) return;
+  if (reduced) {
+    apply();
+    return;
+  }
+  content.style.transition = `transform ${ZOOM_ANIM_MS}ms ease-out`;
+  apply();
+  const clear = (): void => {
+    if (content) content.style.transition = 'none';
+  };
+  content.addEventListener('transitionend', clear, { once: true });
+  clearTimeout(zoomAnimTimer);
+  zoomAnimTimer = setTimeout(() => {
+    zoomAnimTimer = undefined;
+    clear();
+  }, ZOOM_ANIM_MS + 30);
+}
+
 // ── 浮层 DOM 构建 ──
 
 function buildOverlay(svg: SVGElement, pre: HTMLElement): void {
@@ -238,15 +268,15 @@ function buildOverlay(svg: SVGElement, pre: HTMLElement): void {
 
   zoomIn.addEventListener('click', (e) => {
     e.stopPropagation();
-    zoomAt(window.innerWidth / 2, window.innerHeight / 2, scale * 1.3);
+    animateZoomTo(() => zoomAt(window.innerWidth / 2, window.innerHeight / 2, scale * 1.3));
   });
   zoomOut.addEventListener('click', (e) => {
     e.stopPropagation();
-    zoomAt(window.innerWidth / 2, window.innerHeight / 2, scale / 1.3);
+    animateZoomTo(() => zoomAt(window.innerWidth / 2, window.innerHeight / 2, scale / 1.3));
   });
   zoomReset.addEventListener('click', (e) => {
     e.stopPropagation();
-    fitToScreen();
+    animateZoomTo(() => fitToScreen());
   });
 
   toolbar.append(zoomOut, zoomReset, zoomIn);
@@ -383,9 +413,9 @@ function bindInteractions(closeBtn: HTMLButtonElement): void {
     const py = e.clientY;
     if (scale < 0.99) {
       // 当前是适配模式 → 放大到 100%（原始尺寸），锚定双击点
-      zoomAt(px, py, 1);
+      animateZoomTo(() => zoomAt(px, py, 1));
     } else {
-      fitToScreen();
+      animateZoomTo(() => fitToScreen());
     }
   });
 
@@ -496,6 +526,8 @@ function destroyOverlay(): void {
     clearTimeout(openAnimTimer);
     openAnimTimer = null;
   }
+  clearTimeout(zoomAnimTimer);
+  zoomAnimTimer = undefined;
   if (overlay) overlay.remove();
   overlay = null;
   content = null;
@@ -529,6 +561,9 @@ function closeOverlay(): void {
     clearTimeout(openAnimTimer);
     openAnimTimer = null;
   }
+  // 缩放过渡的清理兜底也不能留，否则会误清下面关闭动画的 transition
+  clearTimeout(zoomAnimTimer);
+  zoomAnimTimer = undefined;
 
   const liveSvg = originPre?.querySelector('svg');
   if (reduced || !originPre || !originPre.isConnected) {
