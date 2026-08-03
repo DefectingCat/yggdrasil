@@ -59,6 +59,11 @@ html.is-theme-transitioning .animate-page-enter {
 
 /* ========== Mermaid 流程图放大浮层 ========== */
 
+/* 已渲染的流程图可点击放大，给出与图片一致的 zoom-in 光标提示 */
+pre[data-mermaid-rendered] {
+  cursor: zoom-in;
+}
+
 .mermaid-overlay {
   position: fixed;
   inset: 0;
@@ -67,11 +72,11 @@ html.is-theme-transitioning .animate-page-enter {
   background: rgba(0, 0, 0, 0.92);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  animation: mermaid-overlay-fade-in 0.2s ease-out;
+  animation: mermaid-overlay-fade-in 0.25s ease-out;
 }
 
 .mermaid-overlay-closing {
-  animation: mermaid-overlay-fade-out 0.2s ease-out forwards;
+  animation: mermaid-overlay-fade-out 0.25s ease-out forwards;
 }
 
 @keyframes mermaid-overlay-fade-in {

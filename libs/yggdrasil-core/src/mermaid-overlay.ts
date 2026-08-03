@@ -2,25 +2,43 @@
  * Mermaid 流程图点击放大浮层。
  *
  * 问题：复杂流程图（多 subgraph / 宽 LR 布局）在小屏被 useMaxWidth + max-width:100%
- * 压缩到无法阅读。本模块提供一个全屏浮层：点击图 → 克隆 SVG 按原始尺寸渲染 →
- * 支持拖拽平移、滚轮/双指缩放、双击切换适配/原始大小。
+ * 压缩到无法阅读。本模块提供全屏浮层：点击图 → 克隆 SVG 按原始尺寸渲染 →
+ * 支持拖拽平移、双击/工具栏/双指捏合/Ctrl+滚轮缩放。
+ *
+ * 交互与图片灯箱（libs/lightbox）统一：
+ * - 打开：FLIP 飞行动画——从 <pre> 里 SVG 的屏幕位置 250ms ease-out 连续缩放到
+ *   居中适配位（double-rAF + 强制 reflow 提交首帧）。SVG 矢量，放大无损。
+ * - 关闭：飞回 SVG 实时位置（打开期间页面可能滚动过）。
+ * - 滚动驱动关闭：body 滚动不锁定，任何滚动按 |scrollY − openScrollY| / 120 插值
+ *   「居中态 ↔ 原位态」并同步淡出，progress ≥ 1 直接移除浮层，文章停在滚动位置。
+ * - Esc / 点背景 / ✕ 按钮：播 250ms 飞回动画后移除。
+ * - reduced-motion：打开纯淡入，滚动/关闭立即移除，无飞行。
+ *
+ * 与灯箱的有意差异：保留缩放/平移能力（流程图需要细读），但滚轮不缩放——
+ * 普通滚轮 = 页面滚动 = 滚动关闭；缩放走双击、工具栏按钮、双指捏合、
+ * Ctrl/⌘+滚轮（触控板捏合手势上报为 ctrlKey wheel）。
  *
  * 设计要点：
- * - SVG 是矢量，放大无损。克隆后剥离 max-width 约束，按 viewBox 原始尺寸渲染。
+ * - 克隆 SVG 剥离 max-width 约束，按 viewBox 原始尺寸渲染。
  * - pan/zoom 用 CSS transform（translate + scale），transform-origin: 0 0，
  *   数学用「屏幕坐标 ↔ 内容坐标」映射，缩放锚定光标/捏合中心点。
+ *   飞行首帧/末帧与滚动插值复用同一 transform 模型（flyStateFor 纯函数）。
  * - Pointer Events 统一鼠标 + 触摸：1 指 = 平移，2 指 = 捏合缩放。
  * - 每页同时只允许一个浮层（单例 state）。
- * - 关闭：ESC / 点击背景 / 点击 ✕ 按钮。
  */
+
+import { prefersReducedMotion } from '@yggdrasil/shared';
 
 // ── 单例状态 ──
 
 let overlay: HTMLDivElement | null = null;
-let content: HTMLDivElement | null;
-let svgClone: SVGSVGElement | null;
+let content: HTMLDivElement | null = null;
+let svgClone: SVGSVGElement | null = null;
 
-/** 内容原始尺寸（viewBox 像素），用于 fit-to-screen 计算。 */
+/** 打开浮层的 <pre>：关闭时飞回其内部 SVG 的实时位置，并归还焦点。 */
+let originPre: HTMLElement | null = null;
+
+/** 内容原始尺寸（viewBox 像素），用于 fit-to-screen 与飞行 scale 计算。 */
 let naturalW = 0;
 let naturalH = 0;
 
@@ -33,22 +51,73 @@ let scale = 1;
 let tx = 0;
 let ty = 0;
 
+/** fit 态的 scale（fit 态 tx/ty 恒为 0），滚动关闭插值的起点。 */
+let fitScale = 1;
+
 // 缩放上下限
 const MIN_SCALE = 0.1;
 const MAX_SCALE = 5;
 
+/** 开/关飞行动画时长（与图片灯箱一致）。 */
+const ANIM_MS = 250;
+/** 滚动关闭：滚动多少 px 完成飞回（与图片灯箱一致）。 */
+const SCROLL_CLOSE_PX = 120;
+
 // pointer 跟踪
 const pointers = new Map<number, { x: number; y: number }>();
 let panStart: { x: number; y: number; tx: number; ty: number } | null = null;
-let pinchStart: { dist: number; cx: number; cy: number; scale: number; tx: number; ty: number } | null = null;
+let pinchStart: {
+  dist: number;
+  cx: number;
+  cy: number;
+  scale: number;
+  tx: number;
+  ty: number;
+} | null = null;
 
-// body 滚动锁
-let prevBodyOverflow = '';
+// 开/关与滚动关闭状态
+let closing = false;
+let reduced = false;
+let openScrollY = 0;
+let scrollHandler: (() => void) | null = null;
+let keyHandler: ((e: KeyboardEvent) => void) | null = null;
+/** 打开动画的 transition 清理兜底定时器（关闭前必须清掉，防止误清关闭动画的 transition）。 */
+let openAnimTimer: number | null = null;
 
 // ── 工具函数 ──
 
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 function clamp(v: number, min: number, max: number): number {
   return Math.min(Math.max(v, min), max);
+}
+
+/** 读取元素当前在视口里的 rect（飞行起点/终点；关闭时实时读，处理期间滚动过的情况）。 */
+function rectOf(el: Element): Rect {
+  const r = el.getBoundingClientRect();
+  return { x: r.left, y: r.top, w: r.width, h: r.height };
+}
+
+/**
+ * 把 <pre> 里 SVG 的屏幕 rect 映射成浮层 transform 态（飞行动画的原位帧）。
+ *
+ * content 锚定在 (originX, originY)，transform-origin 0 0：
+ *   屏幕位置 = origin + translate，显示宽度 = naturalW × scale。
+ * 让内容左上角落在 rect.(x,y)、宽度等于 rect.w 即可。
+ */
+export function flyStateFor(
+  rect: Rect,
+  originX: number,
+  originY: number,
+  naturalW: number,
+): { scale: number; tx: number; ty: number } {
+  const s = naturalW > 0 ? rect.w / naturalW : 1;
+  return { scale: s, tx: rect.x - originX, ty: rect.y - originY };
 }
 
 function applyTransform(): void {
@@ -59,6 +128,7 @@ function applyTransform(): void {
 /**
  * 计算让 SVG 居中且完整可见的初始 transform。
  * 基准 origin 让 SVG 自然左上角对齐视口居中：origin = viewportCenter - naturalSize/2。
+ * fit 态 tx/ty 恒为 0，scale 存进 fitScale 供滚动关闭插值。
  */
 function fitToScreen(): void {
   const pad = 48;
@@ -66,6 +136,7 @@ function fitToScreen(): void {
   const vh = window.innerHeight - pad;
   // 适配缩放：不放大超出原始尺寸（除非图比视口还小）
   scale = clamp(Math.min(vw / naturalW, vh / naturalH), MIN_SCALE, 1);
+  fitScale = scale;
   originX = (window.innerWidth - naturalW) / 2;
   originY = (window.innerHeight - naturalH) / 2;
   tx = 0;
@@ -100,12 +171,18 @@ function zoomAt(px: number, py: number, newScale: number): void {
 
 // ── 浮层 DOM 构建 ──
 
-function buildOverlay(svg: SVGElement): void {
+function buildOverlay(svg: SVGElement, pre: HTMLElement): void {
+  reduced = prefersReducedMotion();
+  originPre = pre;
+  openScrollY = window.scrollY;
+  closing = false;
+
   overlay = document.createElement('div');
   overlay.className = 'mermaid-overlay';
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-label', '流程图放大查看');
+  overlay.setAttribute('tabindex', '-1');
 
   // 关闭按钮
   const closeBtn = document.createElement('button');
@@ -175,17 +252,69 @@ function buildOverlay(svg: SVGElement): void {
   // 底部提示
   const hint = document.createElement('div');
   hint.className = 'mermaid-overlay-hint';
-  hint.textContent = '拖拽移动 · 滚轮缩放 · ESC 关闭';
+  hint.textContent = '拖拽移动 · 双击缩放 · 滚动或 ESC 关闭';
 
   overlay.append(closeBtn, content, toolbar, hint);
   document.body.appendChild(overlay);
 
-  // 锁定 body 滚动
-  prevBodyOverflow = document.body.style.overflow;
-  document.body.style.overflow = 'hidden';
-
-  // 初始适配
+  // 初始适配（fitScale / originX / originY 在此确定，飞行数学依赖它们）
   fitToScreen();
+
+  // ── 打开动画（与图片灯箱一致的 FLIP 飞行）──
+  if (reduced) {
+    // reduced-motion：内容直接 fit 态，整体纯淡入。
+    // overlay 的 CSS 关键帧动画被 media query 关掉，用 inline transition 淡入。
+    content.style.opacity = '0';
+    overlay.style.opacity = '0';
+    requestAnimationFrame(() => {
+      if (!overlay || !content) return;
+      overlay.style.transition = 'opacity 200ms ease-out';
+      content.style.transition = 'opacity 200ms ease-out';
+      overlay.style.opacity = '1';
+      content.style.opacity = '1';
+    });
+  } else {
+    // 首帧：<pre> 里 SVG 的屏幕位置（无 transition），透明
+    const fly = flyStateFor(rectOf(svg), originX, originY, naturalW);
+    content.style.transition = 'none';
+    content.style.opacity = '0';
+    scale = fly.scale;
+    tx = fly.tx;
+    ty = fly.ty;
+    applyTransform();
+    // 强制 reflow，确保首帧 transform 已提交到渲染层，
+    // 否则浏览器可能合并首帧与目标帧，动画从错误位置起跳。
+    void content.offsetHeight;
+
+    // double-rAF：第一帧绘制首帧（无动画），第二帧才启动 transition 飞到居中。
+    requestAnimationFrame(() => {
+      if (!content) return;
+      requestAnimationFrame(() => {
+        if (!content) return;
+        content.style.transition = `transform ${ANIM_MS}ms ease-out, opacity ${ANIM_MS}ms ease-out`;
+        content.style.opacity = '1';
+        scale = fitScale;
+        tx = 0;
+        ty = 0;
+        applyTransform();
+      });
+    });
+
+    // 动画结束后清掉 transition，交还 pan/zoom 的即时响应；300ms 兜底防
+    // transitionend 不触发（如动画被滚动关闭打断）。关闭动画开始前必须清掉
+    // 这个兜底定时器，否则会误清关闭动画的 transition。
+    const clearTransition = (): void => {
+      if (content) content.style.transition = 'none';
+    };
+    content.addEventListener('transitionend', clearTransition, { once: true });
+    openAnimTimer = setTimeout(() => {
+      openAnimTimer = null;
+      if (!closing) clearTransition();
+    }, ANIM_MS + 50);
+  }
+
+  // 焦点移入浮层
+  overlay.focus();
 
   // 绑定交互
   bindInteractions(closeBtn);
@@ -204,14 +333,47 @@ function bindInteractions(closeBtn: HTMLButtonElement): void {
     if (e.target === overlay) closeOverlay();
   });
 
-  // ESC 关闭
-  const onKey = (e: KeyboardEvent): void => {
+  // ESC 关闭。持久监听、destroy 时移除——不能用 { once: true }，
+  // 否则用户按任意键一次后 Esc 永久失效。
+  keyHandler = (e: KeyboardEvent): void => {
     if (e.key === 'Escape' && overlay) {
       e.preventDefault();
       closeOverlay();
     }
   };
-  document.addEventListener('keydown', onKey, { once: true });
+  document.addEventListener('keydown', keyHandler);
+
+  // 滚动驱动关闭（与图片灯箱一致）：body 滚动不锁定，任何滚动按进度插值
+  // 「居中态 ↔ 原位态」，逐帧读 SVG 实时 rect——文章滚多少图就回多少。
+  scrollHandler = (): void => {
+    if (!overlay || !content || closing) return;
+    if (reduced) {
+      // reduced-motion：立即关
+      closing = true;
+      destroyOverlay();
+      return;
+    }
+    if (!originPre) return;
+    const liveSvg = originPre.querySelector('svg');
+    const originRect = liveSvg ? rectOf(liveSvg) : rectOf(originPre);
+    const fly = flyStateFor(originRect, originX, originY, naturalW);
+    const dy = Math.abs(window.scrollY - openScrollY);
+    const progress = Math.min(dy / SCROLL_CLOSE_PX, 1);
+    // 在 fit 态与原位态之间按 progress 线性插值（fit 态 tx/ty 恒为 0）
+    content.style.transition = 'none';
+    scale = fitScale + (fly.scale - fitScale) * progress;
+    tx = fly.tx * progress;
+    ty = fly.ty * progress;
+    applyTransform();
+    content.style.opacity = String(1 - progress);
+    overlay.style.opacity = String(1 - progress);
+    if (progress >= 1) {
+      // 已飞回原位：文章停在当前滚动位置，移除浮层
+      closing = true;
+      destroyOverlay();
+    }
+  };
+  window.addEventListener('scroll', scrollHandler, { passive: true });
 
   // 双击：切换适配 / 原始大小
   content.addEventListener('dblclick', (e) => {
@@ -233,11 +395,25 @@ function bindInteractions(closeBtn: HTMLButtonElement): void {
   // 阻止浏览器默认触摸手势（滚动 / 捏合缩放页面）
   content.style.touchAction = 'none';
 
-  // 滚轮缩放
+  // 滚轮：只响应 Ctrl/⌘+滚轮（触控板捏合手势上报为 ctrlKey wheel）做缩放。
+  // 普通滚轮不拦截——留给页面滚动，由滚动关闭接管（与图片灯箱统一）。
   content.addEventListener('wheel', onWheel, { passive: false });
 
   // 窗口尺寸变化时重新适配
   window.addEventListener('resize', onResize);
+}
+
+/** 移除 document/window 级监听（浮层 DOM 上的监听随元素移除自然失效）。 */
+function cleanupInteractions(): void {
+  if (scrollHandler) {
+    window.removeEventListener('scroll', scrollHandler);
+    scrollHandler = null;
+  }
+  if (keyHandler) {
+    document.removeEventListener('keydown', keyHandler);
+    keyHandler = null;
+  }
+  window.removeEventListener('resize', onResize);
 }
 
 function onPointerDown(e: PointerEvent): void {
@@ -298,6 +474,8 @@ function onPointerUp(e: PointerEvent): void {
 }
 
 function onWheel(e: WheelEvent): void {
+  // 触控板捏合 / Ctrl+滚轮 = 缩放；普通滚轮不拦截，留给页面滚动触发滚动关闭。
+  if (!e.ctrlKey && !e.metaKey) return;
   e.preventDefault();
   const factor = e.deltaY > 0 ? 1 / 1.15 : 1.15;
   zoomAt(e.clientX, e.clientY, scale * factor);
@@ -311,6 +489,11 @@ function onResize(): void {
 
 /** 同步关闭浮层并清理全部状态（无动画延迟）。 */
 function destroyOverlay(): void {
+  cleanupInteractions();
+  if (openAnimTimer) {
+    clearTimeout(openAnimTimer);
+    openAnimTimer = null;
+  }
   if (overlay) overlay.remove();
   overlay = null;
   content = null;
@@ -318,31 +501,66 @@ function destroyOverlay(): void {
   pointers.clear();
   panStart = null;
   pinchStart = null;
-  document.body.style.overflow = prevBodyOverflow;
-  window.removeEventListener('resize', onResize);
+  closing = false;
+
+  // 焦点归还：pre 默认不可聚焦，补 tabindex 后用 preventScroll 抑制
+  // focus() 默认的 scrollIntoView（否则关闭后页面自动滚动把图纳入视口）。
+  const pre = originPre;
+  originPre = null;
+  if (pre?.isConnected) {
+    pre.setAttribute('tabindex', '-1');
+    pre.focus({ preventScroll: true });
+  }
 }
 
 /**
- * 关闭浮层（带淡出动画）。
- * 动画结束后 CSS 自然移除元素；状态立即清空避免重复打开。
+ * 关闭浮层（带飞回动画，与图片灯箱一致）。
+ * 内容 250ms 飞回 <pre> 里 SVG 的实时位置并淡出，overlay 同步 CSS 淡出；
+ * 状态在动画结束后统一清理。
  */
 function closeOverlay(): void {
-  if (!overlay) return;
-  overlay.classList.add('mermaid-overlay-closing');
-  const el = overlay;
-  // 动画结束后移除；fallback 兜底防 animationend 不触发
-  el.addEventListener('animationend', () => el.remove(), { once: true });
-  setTimeout(() => el.remove(), 250);
+  if (!overlay || closing) return;
+  closing = true;
+  // 停止滚动监听，防止飞回动画与滚动插值互相打架
+  cleanupInteractions();
+  if (openAnimTimer) {
+    clearTimeout(openAnimTimer);
+    openAnimTimer = null;
+  }
 
-  // 立即清理状态
-  overlay = null;
-  content = null;
-  svgClone = null;
-  pointers.clear();
-  panStart = null;
-  pinchStart = null;
-  document.body.style.overflow = prevBodyOverflow;
-  window.removeEventListener('resize', onResize);
+  const liveSvg = originPre?.querySelector('svg');
+  if (reduced || !originPre || !originPre.isConnected) {
+    // reduced-motion 或原始节点已离开 DOM：直接移除
+    destroyOverlay();
+    return;
+  }
+
+  const originRect = liveSvg ? rectOf(liveSvg) : rectOf(originPre);
+  const fly = flyStateFor(originRect, originX, originY, naturalW);
+  if (content) {
+    content.style.transition = `transform ${ANIM_MS}ms ease-out, opacity ${ANIM_MS}ms ease-out`;
+    content.style.opacity = '0';
+    scale = fly.scale;
+    tx = fly.tx;
+    ty = fly.ty;
+    applyTransform();
+  }
+  overlay.classList.add('mermaid-overlay-closing');
+
+  const el = overlay;
+  const done = (): void => {
+    if (overlay === el) destroyOverlay();
+  };
+  // 兜底定时器防 transitionend 不触发
+  const timer = setTimeout(done, ANIM_MS + 30);
+  content?.addEventListener(
+    'transitionend',
+    (): void => {
+      clearTimeout(timer);
+      done();
+    },
+    { once: true },
+  );
 }
 
 // ── 对外接口 ──
@@ -361,7 +579,7 @@ export function attachOverlayTrigger(pre: HTMLPreElement): void {
     if (overlay) return; // 已有浮层打开，忽略
     const svg = pre.querySelector('svg');
     if (!svg) return;
-    buildOverlay(svg);
+    buildOverlay(svg, pre);
   });
 }
 

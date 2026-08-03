@@ -273,7 +273,7 @@ describe('mermaid 放大浮层', () => {
     pre.click();
     expect(document.querySelector('.mermaid-overlay')).not.toBeNull();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    // closeOverlay 有 200ms 淡出动画延迟才 remove()，用 waitFor 等移除。
+    // closeOverlay 有 250ms 飞回动画 + 280ms 兜底定时器才 remove()，用 waitFor 等移除。
     await vi.waitFor(() => {
       expect(document.querySelector('.mermaid-overlay')).toBeNull();
     });
