@@ -46,15 +46,15 @@ pub fn About() -> Element {
                 blockquote { class: "text-2xl md:text-4xl font-medium text-paper-primary leading-relaxed tracking-wide",
                     "世界……遗忘我……"
                 }
-                p { class: "mt-6 text-sm text-paper-tertiary",
-                    "—— 大慈树王"
-                }
+                p { class: "mt-6 text-sm text-paper-tertiary", "—— 大慈树王" }
                 div { class: "w-12 h-px bg-paper-border mx-auto mt-10" }
             }
 
             // 短文：对引文的回应，「树记得」落回站名
             div { class: "max-w-xl mx-auto text-center space-y-4 text-paper-secondary leading-loose",
-                p { "Yggdrasil，北欧神话中的世界树。根须贯穿九界，枝叶承载记忆。" }
+                p {
+                    "Yggdrasil，北欧神话中的世界树。根须贯穿九界，枝叶承载记忆。"
+                }
                 p {
                     "人会遗忘，也终将被遗忘——而写下的不会。"
                     span { class: "text-paper-primary", "世界遗忘的，树记得。" }
@@ -89,12 +89,14 @@ pub fn About() -> Element {
                                 path { d: "M5 12h14M13 6l6 6-6 6" }
                             }
                         }
-                        span { class: "text-sm text-paper-secondary", "每一圈年轮，都是一次生长" }
+                        span { class: "text-sm text-paper-secondary",
+                            "每一圈年轮，都是一次生长"
+                        }
                     }
                     for (href, name, desc) in LINKS.iter().copied() {
                         a {
                             key: "{href}",
-                            href: href,
+                            href,
                             target: "_blank",
                             rel: "noopener noreferrer",
                             class: "group flex items-baseline justify-between gap-4 py-3 border-b border-paper-border/50",

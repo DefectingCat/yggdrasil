@@ -113,7 +113,10 @@ pub fn Mcp() -> Element {
     #[cfg(not(target_arch = "wasm32"))]
     {
         // server 构建下页面无前端交互；路由实际只在 WASM 渲染。
-        rsx! { p { class: "text-paper-secondary", "此页面仅在浏览器中可用。" } }
+        rsx! {
+            p { class: "text-paper-secondary", "此页面仅在浏览器中可用。" }
+            // server 构建下页面无前端交互；路由实际只在 WASM 渲染。
+        }
     }
 }
 
@@ -187,7 +190,9 @@ fn TokenList() -> Element {
     rsx! {
         div { class: "{ADMIN_CARD_CLASS} p-8 flex flex-col gap-6",
             div { class: "flex items-center justify-between",
-                h2 { class: "text-xl font-bold text-[var(--color-paper-primary)]", "令牌列表" }
+                h2 { class: "text-xl font-bold text-[var(--color-paper-primary)]",
+                    "令牌列表"
+                }
                 button {
                     class: "text-xs text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors cursor-pointer",
                     onclick: move |_| {
@@ -243,25 +248,53 @@ fn TokenList() -> Element {
                         table { class: "w-full text-sm",
                             thead {
                                 tr { class: "bg-[var(--color-paper-theme)]/50",
-                                    th { class: "px-4 py-3", SkeletonBox { class: "h-3 w-10" } }
-                                    th { class: "px-4 py-3", SkeletonBox { class: "h-3 w-8" } }
-                                    th { class: "px-4 py-3", SkeletonBox { class: "h-3 w-8" } }
-                                    th { class: "px-4 py-3", SkeletonBox { class: "h-3 w-8" } }
-                                    th { class: "px-4 py-3", SkeletonBox { class: "h-3 w-12" } }
-                                    th { class: "px-4 py-3", SkeletonBox { class: "h-3 w-8" } }
-                                    th { class: "px-4 py-3", SkeletonBox { class: "h-3 w-10 ml-auto" } }
+                                    th { class: "px-4 py-3",
+                                        SkeletonBox { class: "h-3 w-10" }
+                                    }
+                                    th { class: "px-4 py-3",
+                                        SkeletonBox { class: "h-3 w-8" }
+                                    }
+                                    th { class: "px-4 py-3",
+                                        SkeletonBox { class: "h-3 w-8" }
+                                    }
+                                    th { class: "px-4 py-3",
+                                        SkeletonBox { class: "h-3 w-8" }
+                                    }
+                                    th { class: "px-4 py-3",
+                                        SkeletonBox { class: "h-3 w-12" }
+                                    }
+                                    th { class: "px-4 py-3",
+                                        SkeletonBox { class: "h-3 w-8" }
+                                    }
+                                    th { class: "px-4 py-3",
+                                        SkeletonBox { class: "h-3 w-10 ml-auto" }
+                                    }
                                 }
                             }
                             tbody {
                                 for _ in 0..4 {
                                     tr { class: "border-b border-[var(--color-paper-border)] last:border-b-0",
-                                        td { class: "px-4 py-3", SkeletonBox { class: "h-4 w-28" } }
-                                        td { class: "px-4 py-3", SkeletonBox { class: "h-4 w-12" } }
-                                        td { class: "px-4 py-3", SkeletonBox { class: "h-4 w-16" } }
-                                        td { class: "px-4 py-3", SkeletonBox { class: "h-4 w-16" } }
-                                        td { class: "px-4 py-3", SkeletonBox { class: "h-4 w-20" } }
-                                        td { class: "px-4 py-3", SkeletonBox { class: "h-5 w-10 rounded-full" } }
-                                        td { class: "px-4 py-3", SkeletonBox { class: "h-4 w-24 ml-auto" } }
+                                        td { class: "px-4 py-3",
+                                            SkeletonBox { class: "h-4 w-28" }
+                                        }
+                                        td { class: "px-4 py-3",
+                                            SkeletonBox { class: "h-4 w-12" }
+                                        }
+                                        td { class: "px-4 py-3",
+                                            SkeletonBox { class: "h-4 w-16" }
+                                        }
+                                        td { class: "px-4 py-3",
+                                            SkeletonBox { class: "h-4 w-16" }
+                                        }
+                                        td { class: "px-4 py-3",
+                                            SkeletonBox { class: "h-4 w-20" }
+                                        }
+                                        td { class: "px-4 py-3",
+                                            SkeletonBox { class: "h-5 w-10 rounded-full" }
+                                        }
+                                        td { class: "px-4 py-3",
+                                            SkeletonBox { class: "h-4 w-24 ml-auto" }
+                                        }
                                     }
                                 }
                             }
@@ -279,16 +312,28 @@ fn TokenList() -> Element {
                             tr { class: "bg-[var(--color-paper-theme)]/50 text-left text-[var(--color-paper-secondary)]",
                                 th { class: "px-4 py-3 font-medium", "名称" }
                                 th { class: "px-4 py-3 font-medium", "作用域" }
-                                th { class: "px-4 py-3 font-medium whitespace-nowrap", "创建" }
-                                th { class: "px-4 py-3 font-medium whitespace-nowrap", "过期" }
-                                th { class: "px-4 py-3 font-medium whitespace-nowrap", "最近使用" }
-                                th { class: "px-4 py-3 font-medium whitespace-nowrap", "状态" }
+                                th { class: "px-4 py-3 font-medium whitespace-nowrap",
+                                    "创建"
+                                }
+                                th { class: "px-4 py-3 font-medium whitespace-nowrap",
+                                    "过期"
+                                }
+                                th { class: "px-4 py-3 font-medium whitespace-nowrap",
+                                    "最近使用"
+                                }
+                                th { class: "px-4 py-3 font-medium whitespace-nowrap",
+                                    "状态"
+                                }
                                 th { class: "px-4 py-3 font-medium text-right", "操作" }
                             }
                         }
                         tbody {
                             for t in tokens().iter() {
-                                TokenRow { key: "{t.id}", token: t.clone(), state }
+                                TokenRow {
+                                    key: "{t.id}",
+                                    token: t.clone(),
+                                    state,
+                                }
                             }
                         }
                     }
@@ -342,11 +387,19 @@ fn TokenRow(token: McpTokenSummary, state: McpPageState) -> Element {
 
     rsx! {
         tr { class: "border-b border-[var(--color-paper-border)] last:border-b-0 hover:bg-[var(--color-paper-theme)]/30 transition-colors",
-            td { class: "px-4 py-3 font-medium text-[var(--color-paper-primary)]", "{token.name}" }
+            td { class: "px-4 py-3 font-medium text-[var(--color-paper-primary)]",
+                "{token.name}"
+            }
             td { class: "px-4 py-3", "{token.scope.as_str()}" }
-            td { class: "px-4 py-3 text-[var(--color-paper-secondary)] whitespace-nowrap", "{created}" }
-            td { class: "px-4 py-3 text-[var(--color-paper-secondary)] whitespace-nowrap", "{expires}" }
-            td { class: "px-4 py-3 text-[var(--color-paper-secondary)] whitespace-nowrap", "{last_used}" }
+            td { class: "px-4 py-3 text-[var(--color-paper-secondary)] whitespace-nowrap",
+                "{created}"
+            }
+            td { class: "px-4 py-3 text-[var(--color-paper-secondary)] whitespace-nowrap",
+                "{expires}"
+            }
+            td { class: "px-4 py-3 text-[var(--color-paper-secondary)] whitespace-nowrap",
+                "{last_used}"
+            }
             td { class: "px-4 py-3 whitespace-nowrap",
                 span { class: "{BADGE_BASE} {status_class}", "{status_label}" }
             }
@@ -429,7 +482,9 @@ fn CreateTokenCard() -> Element {
             div { class: "grid grid-cols-1 md:grid-cols-3 gap-4",
                 // 名称
                 div { class: "flex flex-col gap-2",
-                    label { class: "text-sm font-medium text-[var(--color-paper-secondary)]", "名称" }
+                    label { class: "text-sm font-medium text-[var(--color-paper-secondary)]",
+                        "名称"
+                    }
                     FormInput {
                         r#type: "text",
                         placeholder: "如 claude-code-macbook",
@@ -439,7 +494,9 @@ fn CreateTokenCard() -> Element {
                 }
                 // 作用域
                 div { class: "flex flex-col gap-2",
-                    label { class: "text-sm font-medium text-[var(--color-paper-secondary)]", "作用域" }
+                    label { class: "text-sm font-medium text-[var(--color-paper-secondary)]",
+                        "作用域"
+                    }
                     FormSelect {
                         value: scope(),
                         options: SCOPE_OPTIONS.to_vec(),
@@ -448,7 +505,9 @@ fn CreateTokenCard() -> Element {
                 }
                 // 有效期
                 div { class: "flex flex-col gap-2",
-                    label { class: "text-sm font-medium text-[var(--color-paper-secondary)]", "有效期" }
+                    label { class: "text-sm font-medium text-[var(--color-paper-secondary)]",
+                        "有效期"
+                    }
                     FormSelect {
                         value: lifetime(),
                         options: LIFETIME_OPTIONS.to_vec(),
@@ -462,9 +521,13 @@ fn CreateTokenCard() -> Element {
                     class: "{BTN_PRIMARY}",
                     disabled: "{busy() || name().trim().is_empty()}",
                     onclick: move |_| {
-                        if busy() { return; }
+                        if busy() {
+                            return;
+                        }
                         let n = name().trim().to_string();
-                        if n.is_empty() { return; }
+                        if n.is_empty() {
+                            return;
+                        }
                         let sc = scope();
                         let lt = lifetime();
                         busy.set(true);
@@ -483,7 +546,11 @@ fn CreateTokenCard() -> Element {
                             busy.set(false);
                         });
                     },
-                    if busy() { "创建中…" } else { "创建令牌" }
+                    if busy() {
+                        "创建中…"
+                    } else {
+                        "创建令牌"
+                    }
                 }
             }
         }
@@ -547,7 +614,9 @@ fn ConfigCard() -> Element {
             }
 
             div { class: "flex flex-col gap-2",
-                label { class: "text-sm font-medium text-[var(--color-paper-secondary)]", "令牌明文" }
+                label { class: "text-sm font-medium text-[var(--color-paper-secondary)]",
+                    "令牌明文"
+                }
                 FormInput {
                     r#type: "text",
                     placeholder: "ygg_...",
@@ -563,13 +632,13 @@ fn ConfigCard() -> Element {
                             div { class: "flex items-center justify-between",
                                 SkeletonBox {
                                     class: "h-4 rounded",
-                                    style: CONFIG_SKELETON_SHAPES[i].0
+                                    style: CONFIG_SKELETON_SHAPES[i].0,
                                 }
                                 SkeletonBox { class: "h-7 w-14 rounded-full" }
                             }
                             SkeletonBox {
                                 class: "rounded-lg",
-                                style: CONFIG_SKELETON_SHAPES[i].1
+                                style: CONFIG_SKELETON_SHAPES[i].1,
                             }
                         }
                     }
@@ -611,7 +680,9 @@ fn ConfigSnippet(snippet: McpConfigSnippet) -> Element {
     rsx! {
         div { class: "flex flex-col gap-2",
             div { class: "flex items-center justify-between",
-                span { class: "text-sm font-medium text-[var(--color-paper-primary)]", "{snippet.title}" }
+                span { class: "text-sm font-medium text-[var(--color-paper-primary)]",
+                    "{snippet.title}"
+                }
                 button {
                     class: "{btn_class}",
                     onclick: move |_| {
@@ -631,8 +702,7 @@ fn ConfigSnippet(snippet: McpConfigSnippet) -> Element {
             // .md-content 是 highlight.css 的作用域钩子（.md-content pre code …）；
             // 仅包裹 pre，不触及标题/按钮，避免 prose 排式泄漏。
             div { class: "md-content",
-                pre {
-                    class: "bg-[var(--color-paper-code-bg)] text-[var(--color-paper-primary)] rounded-lg p-3 text-xs overflow-x-auto font-mono",
+                pre { class: "bg-[var(--color-paper-code-bg)] text-[var(--color-paper-primary)] rounded-lg p-3 text-xs overflow-x-auto font-mono",
                     code { dangerous_inner_html: "{snippet.content_html}" }
                 }
             }
@@ -656,9 +726,10 @@ fn PlaintextModal(
             div {
                 class: "{ADMIN_CARD_CLASS} p-8 max-w-2xl w-full flex flex-col gap-4",
                 onclick: move |e| e.stop_propagation(),
-                h3 { class: "text-lg font-bold text-[var(--color-paper-primary)]", "{title}" }
-                pre {
-                    class: "bg-[var(--color-paper-code-bg)] text-[var(--color-paper-primary)] rounded-lg p-3 text-sm overflow-x-auto font-mono break-all",
+                h3 { class: "text-lg font-bold text-[var(--color-paper-primary)]",
+                    "{title}"
+                }
+                pre { class: "bg-[var(--color-paper-code-bg)] text-[var(--color-paper-primary)] rounded-lg p-3 text-sm overflow-x-auto font-mono break-all",
                     code { "{plaintext}" }
                 }
                 div { class: "flex flex-wrap gap-3 justify-end",

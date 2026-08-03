@@ -178,7 +178,7 @@ pub fn Admin() -> Element {
                         rsx! {
                             div { class: "{ADMIN_TABLE_CLASS}",
                                 div { class: "divide-y divide-paper-border",
-                                    for (i , post) in posts.iter().take(5).enumerate() {
+                                    for (i, post) in posts.iter().take(5).enumerate() {
                                         RecentPostItem {
                                             key: "{post.id}",
                                             post: post.clone(),
@@ -226,7 +226,8 @@ fn StatCard(value: i64, label: String, trend: String, delay_ms: i32) -> Element 
             }
             CountUp {
                 target: value,
-                class: "text-4xl font-light tracking-tight text-[var(--color-paper-primary)] mt-4".to_string(),
+                class: "text-4xl font-light tracking-tight text-[var(--color-paper-primary)] mt-4"
+                    .to_string(),
             }
         }
     }

@@ -51,7 +51,10 @@ pub fn Changelog() -> Element {
                 PostToc { toc_html, title: "版本索引" }
             }
 
-            div { class: "post-content md-content", dangerous_inner_html: "{html}" }
+            div {
+                class: "post-content md-content",
+                dangerous_inner_html: "{html}",
+            }
         }
     }
 }

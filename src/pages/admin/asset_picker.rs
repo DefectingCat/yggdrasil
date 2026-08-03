@@ -59,10 +59,12 @@ pub fn AssetPickerModal(
 
     rsx! {
         // 遮罩：点击关闭
-        div { class: "fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-6",
+        div {
+            class: "fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-6",
             onclick: move |_| visible.set(false),
             // 面板：阻止点击穿透到遮罩
-            div { class: "w-full max-w-3xl max-h-[80vh] flex flex-col rounded-[2rem] bg-[var(--color-paper-entry)] border border-[var(--color-paper-border)] shadow-xl overflow-hidden",
+            div {
+                class: "w-full max-w-3xl max-h-[80vh] flex flex-col rounded-[2rem] bg-[var(--color-paper-entry)] border border-[var(--color-paper-border)] shadow-xl overflow-hidden",
                 onclick: move |evt| evt.stop_propagation(),
 
                 // 头部：标题 + 搜索 + 上传 + 关闭
@@ -93,11 +95,7 @@ pub fn AssetPickerModal(
                                         if let Some(web_file) = file.get_web_file() {
                                             cover_uploading.set(true);
                                             spawn(async move {
-                                                match crate::tiptap_bridge::upload_image_file(
-                                                    web_file,
-                                                )
-                                                .await
-                                                {
+                                                match crate::tiptap_bridge::upload_image_file(web_file).await {
                                                     Ok(url) => {
                                                         on_select.call(url);
                                                         visible.set(false);
@@ -154,9 +152,7 @@ pub fn AssetPickerModal(
                                             img {
                                                 class: "w-full h-full object-cover",
                                                 src: "{thumb}",
-                                                alt: asset.asset.alt.clone().unwrap_or_else(|| {
-                                                    asset.asset.filename.clone()
-                                                }),
+                                                alt: asset.asset.alt.clone().unwrap_or_else(|| { asset.asset.filename.clone() }),
                                                 loading: "lazy",
                                             }
                                         }

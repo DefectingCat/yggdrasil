@@ -281,9 +281,13 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                                             th { class: "px-4 py-3 font-medium", "作者" }
                                             th { class: "px-4 py-3 font-medium", "内容" }
                                             th { class: "px-4 py-3 font-medium", "文章" }
-                                            th { class: "px-4 py-3 font-medium text-center w-24 whitespace-nowrap", "状态" }
+                                            th { class: "px-4 py-3 font-medium text-center w-24 whitespace-nowrap",
+                                                "状态"
+                                            }
                                             th { class: "px-4 py-3 font-medium w-32 whitespace-nowrap", "日期" }
-                                            th { class: "px-4 py-3 font-medium w-32 text-right whitespace-nowrap", "操作" }
+                                            th { class: "px-4 py-3 font-medium w-32 text-right whitespace-nowrap",
+                                                "操作"
+                                            }
                                         }
                                     }
                                     tbody {
@@ -450,7 +454,9 @@ fn CommentRow(
                     label: status_label,
                 }
             }
-            td { class: "px-4 py-3 text-sm text-paper-secondary whitespace-nowrap", "{date_str}" }
+            td { class: "px-4 py-3 text-sm text-paper-secondary whitespace-nowrap",
+                "{date_str}"
+            }
             td { class: "px-4 py-3 text-right whitespace-nowrap",
                 div { class: "flex justify-end gap-2",
                     if !matches!(comment.status, CommentStatus::Approved) {

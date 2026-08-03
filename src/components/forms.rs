@@ -219,7 +219,9 @@ pub fn FormSelect<T: Clone + PartialEq + 'static>(
                     let key = e.key();
                     let is_space = matches!(&key, Key::Character(s) if s == " ");
                     if !open() {
-                        if key == Key::ArrowDown || key == Key::ArrowUp || key == Key::Enter || is_space {
+                        if key == Key::ArrowDown || key == Key::ArrowUp || key == Key::Enter
+                            || is_space
+                        {
                             e.prevent_default();
                             #[cfg(target_arch = "wasm32")]
                             flip_up.set(measure_flip(&trigger_id_keys, len));
@@ -231,10 +233,10 @@ pub fn FormSelect<T: Clone + PartialEq + 'static>(
                     if key == Key::ArrowDown {
                         e.prevent_default();
                         active.set(wrap_index(active(), 1, len));
-                    } else if key == Key::ArrowUp {
+                        } else if key == Key::ArrowUp {
                         e.prevent_default();
                         active.set(wrap_index(active(), -1, len));
-                    } else if key == Key::Home {
+                    } else if key == Key::Home { // 不拦截：关闭后焦点自然流转到下一个控件。
                         e.prevent_default();
                         active.set(0);
                     } else if key == Key::End {
@@ -250,7 +252,6 @@ pub fn FormSelect<T: Clone + PartialEq + 'static>(
                         e.prevent_default();
                         open.set(false);
                     } else if key == Key::Tab {
-                        // 不拦截：关闭后焦点自然流转到下一个控件。
                         open.set(false);
                     }
                 },

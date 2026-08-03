@@ -203,11 +203,7 @@ fn AllPostsList() -> Element {
                     }
                 },
             }
-            button {
-                class: "{BTN_PRIMARY}",
-                onclick: move |_| submit_search(),
-                "搜索"
-            }
+            button { class: "{BTN_PRIMARY}", onclick: move |_| submit_search(), "搜索" }
             if is_searching() {
                 button {
                     class: "{BTN_OUTLINE}",
@@ -250,9 +246,15 @@ fn AllPostsList() -> Element {
                     thead {
                         tr { class: "border-b border-paper-border text-left text-paper-secondary",
                             th { class: "px-4 py-3 font-medium", "标题" }
-                            th { class: "px-4 py-3 font-medium w-24 text-center whitespace-nowrap", "状态" }
-                            th { class: "px-4 py-3 font-medium w-32 whitespace-nowrap", "日期" }
-                            th { class: "px-4 py-3 font-medium w-44 text-right whitespace-nowrap", "操作" }
+                            th { class: "px-4 py-3 font-medium w-24 text-center whitespace-nowrap",
+                                "状态"
+                            }
+                            th { class: "px-4 py-3 font-medium w-32 whitespace-nowrap",
+                                "日期"
+                            }
+                            th { class: "px-4 py-3 font-medium w-44 text-right whitespace-nowrap",
+                                "操作"
+                            }
                         }
                     }
                     tbody {

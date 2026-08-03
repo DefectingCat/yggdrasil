@@ -369,7 +369,9 @@ pub fn ThemeToggle() -> Element {
                         let x = coords.x;
                         let y = coords.y;
                         let window = web_sys::window()
-                            .expect("主题切换回调仅在 WASM 浏览器上下文执行：无 window");
+                            .expect(
+                                "主题切换回调仅在 WASM 浏览器上下文执行：无 window",
+                            );
                         let key = "__startThemeTransition".into();
                         if let Ok(fn_val) = js_sys::Reflect::get(&window, &key) {
                             if !fn_val.is_undefined() && !fn_val.is_null() {
@@ -378,9 +380,6 @@ pub fn ThemeToggle() -> Element {
                             }
                         }
                     }
-                    // 立即切换图标：theme.set 触发重渲染换 SVG，配合 key 触发 CSS 进入动画。
-                    // VT 的伪元素快照在 __startThemeTransition 内已同步拍好，不受后续真实
-                    // DOM 变化影响，故无需推迟 theme.set。
                     theme.set(next);
                 }
                 #[cfg(not(target_arch = "wasm32"))]

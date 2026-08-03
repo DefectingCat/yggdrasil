@@ -545,7 +545,9 @@ fn write_editor(post_id: Option<i32>) -> Element {
                 div { class: "w-px h-5 bg-[var(--color-paper-border)]" }
                 // 文章状态下拉（胶囊触发器；贴底栏，面板自动向上展开）
                 FormSelect {
-                    trigger_class: Some("inline-flex w-auto cursor-pointer select-none text-left text-sm font-medium pl-4 pr-8 py-2 rounded-full border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] hover:bg-[var(--color-paper-theme)] focus:outline-none focus:border-paper-accent focus:ring-1 focus:ring-paper-accent/30 transition-colors duration-200"),
+                    trigger_class: Some(
+                        "inline-flex w-auto cursor-pointer select-none text-left text-sm font-medium pl-4 pr-8 py-2 rounded-full border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] text-[var(--color-paper-primary)] hover:bg-[var(--color-paper-theme)] focus:outline-none focus:border-paper-accent focus:ring-1 focus:ring-paper-accent/30 transition-colors duration-200",
+                    ),
                     value: status(),
                     options: vec![
                         ("draft".to_string(), "存为草稿"),

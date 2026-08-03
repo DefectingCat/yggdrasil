@@ -235,9 +235,7 @@ pub fn Assets() -> Element {
                                         op_message.set(Some(message));
                                         reload.set(reload() + 1);
                                     }
-                                    Err(e) => {
-                                        op_message.set(Some(format!("重建失败：{e}")))
-                                    }
+                                    Err(e) => op_message.set(Some(format!("重建失败：{e}"))),
                                 }
                                 rebuilding.set(false);
                             });
@@ -281,29 +279,23 @@ pub fn Assets() -> Element {
                                     #[cfg(target_arch = "wasm32")]
                                     spawn(async move {
                                         match purge_orphan_assets().await {
-                                            Ok(PurgeOrphansResponse {
-                                                deleted_count,
-                                                freed_bytes,
-                                                failures,
-                                                ..
-                                            }) => {
+                                            Ok(
+                                                PurgeOrphansResponse { deleted_count, freed_bytes, failures, .. },
+                                            ) => {
                                                 let mut msg = format!(
                                                     "已清理 {} 张未引用素材，释放 {}",
                                                     deleted_count,
-                                                    format_bytes(freed_bytes)
+                                                    format_bytes(freed_bytes),
                                                 );
                                                 if failures > 0 {
-                                                    msg.push_str(&format!(
-                                                        "（{} 个文件删除失败）",
-                                                        failures
-                                                    ));
+                                                    msg.push_str(
+                                                        &format!("（{} 个文件删除失败）", failures),
+                                                    );
                                                 }
                                                 op_message.set(Some(msg));
                                                 reload.set(reload() + 1);
                                             }
-                                            Err(e) => {
-                                                op_message.set(Some(format!("清理失败：{e}")))
-                                            }
+                                            Err(e) => op_message.set(Some(format!("清理失败：{e}"))),
                                         }
                                     });
                                 },
@@ -395,7 +387,9 @@ pub fn Assets() -> Element {
                                             } = resp;
                                             let mut msg = message;
                                             if freed_bytes > 0 {
-                                                msg.push_str(&format!("，释放 {}", format_bytes(freed_bytes)));
+                                                msg.push_str(
+                                                    &format!("，释放 {}", format_bytes(freed_bytes)),
+                                                );
                                             }
                                             if failures > 0 {
                                                 msg.push_str(&format!("（{failures} 项失败）"));
@@ -406,9 +400,7 @@ pub fn Assets() -> Element {
                                                 reload.set(reload() + 1);
                                             }
                                         }
-                                        Err(e) => {
-                                            op_message.set(Some(format!("批量删除失败：{e}")))
-                                        }
+                                        Err(e) => op_message.set(Some(format!("批量删除失败：{e}"))),
                                     }
                                 });
                             },
@@ -492,7 +484,7 @@ pub fn Assets() -> Element {
                                     }
                                     // 引用徽标
                                     span {
-                                        class: "{badge_class}",
+                                    class: "{badge_class}",
                                         if is_orphan {
                                             "未引用"
                                         } else {
@@ -523,7 +515,8 @@ pub fn Assets() -> Element {
                                         }
                                     }
                                     div { class: "p-3",
-                                        p { class: "text-xs font-medium truncate text-[var(--color-paper-primary)]",
+                                        p {
+                                            class: "text-xs font-medium truncate text-[var(--color-paper-primary)]",
                                             title: "{a.filename}",
                                             "{a.filename}"
                                         }
@@ -531,10 +524,11 @@ pub fn Assets() -> Element {
                                             "{a.width}×{a.height} · {format_bytes(a.size_bytes)}"
                                         }
                                         if let Some(alt_text) = &a.alt {
-                                            p { class: "text-[10px] truncate text-[var(--color-paper-secondary)] mt-0.5",
+                                            p {
+                                                class: "text-[10px] truncate text-[var(--color-paper-secondary)] mt-0.5",
                                                 title: "{alt_text}",
                                                 "alt: {alt_text}"
-                                            }
+                                            } // 行已不在 DB（refs 为空的业务拒绝 = 素材不存在）
                                         }
 
                                         // 操作区：确认删除 / alt 编辑 / 常规三按钮 三态互斥

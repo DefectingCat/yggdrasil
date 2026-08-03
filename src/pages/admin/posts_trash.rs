@@ -191,8 +191,12 @@ pub(super) fn PostsTrashPanel() -> Element {
                                             th { class: "px-4 py-3 font-medium", "标题" }
                                             th { class: "px-4 py-3 font-medium whitespace-nowrap", "原状态" }
                                             th { class: "px-4 py-3 font-medium w-32 whitespace-nowrap", "删除时间" }
-                                            th { class: "px-4 py-3 font-medium w-24 text-center whitespace-nowrap", "剩余" }
-                                            th { class: "px-4 py-3 font-medium w-32 text-right whitespace-nowrap", "操作" }
+                                            th { class: "px-4 py-3 font-medium w-24 text-center whitespace-nowrap",
+                                                "剩余"
+                                            }
+                                            th { class: "px-4 py-3 font-medium w-32 text-right whitespace-nowrap",
+                                                "操作"
+                                            }
                                         }
                                     }
                                     tbody {
@@ -621,7 +625,9 @@ fn TrashRow(
                     label: post.status_label().to_string(),
                 }
             }
-            td { class: "px-4 py-3 text-sm text-paper-secondary whitespace-nowrap", "{deleted_str}" }
+            td { class: "px-4 py-3 text-sm text-paper-secondary whitespace-nowrap",
+                "{deleted_str}"
+            }
             td { class: "px-4 py-3 text-center whitespace-nowrap",
                 StatusBadge { color_class: badge_class, label: badge_text }
             }
