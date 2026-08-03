@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import './index';
 import { _resetMermaidLoader } from './mermaid';
+import { _resetOverlay } from './mermaid-overlay';
 
 // mock IntersectionObserver：observe 时立即异步触发 isIntersecting 回调，模拟块进视口。
 const disconnect = vi.fn();
@@ -217,5 +218,101 @@ describe('initMermaid', () => {
 
     // 两次 render 的 id 必须不同，否则撞上 mermaid 内部残留的 d-前缀节点（#357）
     expect(secondId).not.toBe(firstId);
+  });
+});
+
+describe('mermaid 放大浮层', () => {
+  const mockInitialize = vi.fn();
+  const mockRender = vi.fn();
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    mockRender.mockClear();
+    mockInitialize.mockClear();
+    _resetMermaidLoader(async () => ({ initialize: mockInitialize, render: mockRender }));
+  });
+  afterEach(() => {
+    _resetOverlay();
+    document.body.innerHTML = '';
+  });
+
+  /** 渲染一个 mermaid 块并返回 <pre>，等待 SVG 注入完成。 */
+  async function renderBlock(): Promise<HTMLPreElement> {
+    mockRender.mockResolvedValue({
+      svg: '<svg viewBox="0 0 400 200"><rect width="400" height="200"/></svg>',
+    });
+    const root = document.createElement('div');
+    root.className = 'post-content';
+    root.innerHTML = '<pre><code class="language-mermaid">graph TD; A--&gt;B</code></pre>';
+    document.body.appendChild(root);
+    window.__initMermaid('.post-content', 'light');
+    await vi.waitFor(() => {
+      expect(root.querySelector('pre')?.dataset.mermaidRendered).toBe('true');
+    });
+    return root.querySelector('pre')!;
+  }
+
+  it('点击渲染后的 pre 打开浮层', async () => {
+    const pre = await renderBlock();
+    expect(document.querySelector('.mermaid-overlay')).toBeNull();
+    pre.click();
+    expect(document.querySelector('.mermaid-overlay')).not.toBeNull();
+  });
+
+  it('浮层包含 SVG 克隆', async () => {
+    const pre = await renderBlock();
+    pre.click();
+    const svg = document.querySelector('.mermaid-overlay-content svg');
+    expect(svg).not.toBeNull();
+    // 剥离了 max-width 约束，按 viewBox 原始尺寸渲染
+    expect(svg?.getAttribute('viewBox')).toBe('0 0 400 200');
+  });
+
+  it('ESC 关闭浮层', async () => {
+    const pre = await renderBlock();
+    pre.click();
+    expect(document.querySelector('.mermaid-overlay')).not.toBeNull();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    // closeOverlay 有 200ms 淡出动画延迟才 remove()，用 waitFor 等移除。
+    await vi.waitFor(() => {
+      expect(document.querySelector('.mermaid-overlay')).toBeNull();
+    });
+  });
+
+  it('✕ 按钮关闭浮层', async () => {
+    const pre = await renderBlock();
+    pre.click();
+    const closeBtn = document.querySelector('.mermaid-overlay-close') as HTMLButtonElement;
+    expect(closeBtn).not.toBeNull();
+    closeBtn.click();
+    await vi.waitFor(() => {
+      expect(document.querySelector('.mermaid-overlay')).toBeNull();
+    });
+  });
+
+  it('点击背景关闭浮层', async () => {
+    const pre = await renderBlock();
+    pre.click();
+    const overlay = document.querySelector('.mermaid-overlay') as HTMLDivElement;
+    // 模拟点击背景（target === overlay）
+    overlay.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await vi.waitFor(() => {
+      expect(document.querySelector('.mermaid-overlay')).toBeNull();
+    });
+  });
+
+  it('主题切换重渲染后点击仍可打开浮层', async () => {
+    const pre = await renderBlock();
+    // 模拟主题切换重渲染
+    mockRender.mockResolvedValue({
+      svg: '<svg viewBox="0 0 400 200"><rect width="400" height="200"/></svg>',
+    });
+    window.__initMermaid('.post-content', 'dark');
+    await vi.waitFor(() => {
+      expect(pre.dataset.mermaidTheme).toBe('dark');
+    });
+    // overlay 绑定是幂等的——重渲染后仍可点击打开
+    pre.click();
+    expect(document.querySelector('.mermaid-overlay')).not.toBeNull();
   });
 });

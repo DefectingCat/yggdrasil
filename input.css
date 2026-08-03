@@ -786,12 +786,30 @@
     align-items: center;
     padding: 24px 16px;
     overflow-x: auto;
+    cursor: zoom-in;
   }
 
   .md-content pre[data-mermaid-rendered] > svg {
     max-width: 100%;
     height: auto;
     display: block;
+  }
+
+  /* 点击放大提示图标：hover 时显示在右上角 */
+  .md-content pre[data-mermaid-rendered]::after {
+    content: '⤢';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 1.1rem;
+    color: var(--color-text-secondary);
+    opacity: 0;
+    transition: opacity 0.2s ease-out;
+    pointer-events: none;
+  }
+
+  .md-content pre[data-mermaid-rendered]:hover::after {
+    opacity: 0.5;
   }
 
   /* 渲染失败：保留原始源码，加 accent 色左边条提示（站点 accent 为绿，沿用配色体系） */

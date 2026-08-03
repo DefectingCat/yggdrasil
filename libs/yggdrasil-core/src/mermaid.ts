@@ -22,6 +22,7 @@
 import type { ThemeName } from '@yggdrasil/shared';
 import { mermaidThemeVarsFor } from '@yggdrasil/shared';
 import { onThemeChange } from './theme-transition';
+import { attachOverlayTrigger } from './mermaid-overlay';
 
 /** 文章正文容器选择器（与 post_content.rs 的 __initMermaid 调用一致）。 */
 const POST_CONTENT_SELECTOR = '.post-content';
@@ -137,6 +138,8 @@ async function renderBlock(pre: HTMLPreElement, source: string, theme: ThemeName
     pre.dataset.mermaidRendered = 'true';
     pre.dataset.mermaidSource = source;
     pre.dataset.mermaidTheme = theme;
+    // 绑定点击放大浮层（dataset 守卫幂等，主题切换重渲染不重复绑定）。
+    attachOverlayTrigger(pre);
   } catch (err) {
     // mermaid.render 失败时会在 document.body 残留临时渲染容器 div#d${id}
     // （内含「Syntax error in text」错误 SVG）。不清除则这些错误块泄漏到页面底部。
