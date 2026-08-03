@@ -41,6 +41,22 @@ pub fn Header(
     // D12：对常量字符串做 use_memo 是无谓的 memo+String 分配，改用 &'static str。
     let menu_id: &str = "mobile-nav-menu";
 
+    let is_open = mobile_open();
+    let burger_icon_class = if is_open {
+        "w-6 h-6 absolute transition-all duration-300 transform rotate-90 opacity-0 scale-75"
+    } else {
+        "w-6 h-6 absolute transition-all duration-300 transform rotate-0 opacity-100 scale-100"
+    };
+    let close_icon_class = if is_open {
+        "w-6 h-6 absolute transition-all duration-300 transform rotate-0 opacity-100 scale-100"
+    } else {
+        "w-6 h-6 absolute transition-all duration-300 transform -rotate-90 opacity-0 scale-75"
+    };
+    let panel_class = if is_open {
+        "mobile-nav-panel md:hidden bg-paper-theme/95 backdrop-blur-sm is-open"
+    } else {
+        "mobile-nav-panel md:hidden bg-paper-theme/95 backdrop-blur-sm"
+    };
     rsx! {
         header { class: "sticky top-0 z-40 w-full bg-[var(--color-paper-theme)]/70 backdrop-blur-md transition-all duration-300",
             nav { class: "{max_width} mx-auto px-6 h-16 flex items-center justify-between",
@@ -66,52 +82,52 @@ pub fn Header(
 
                     // 移动端汉堡菜单按钮
                     button {
-                        class: "md:hidden p-2 rounded-lg text-paper-secondary hover:text-paper-primary hover:bg-paper-entry transition-colors",
+                        class: "md:hidden p-2 rounded-lg text-paper-secondary hover:text-paper-primary hover:bg-paper-entry transition-colors relative flex items-center justify-center w-10 h-10 overflow-hidden",
                         r#type: "button",
-                        aria_label: "切换导航菜单",
+                        aria_label: if is_open { "关闭导航菜单" } else { "打开导航菜单" },
+                        aria_expanded: is_open,
                         aria_controls: menu_id,
                         onclick: move |_| mobile_open.set(!mobile_open()),
-                        if mobile_open() {
-                            // 关闭图标（X）
-                            svg {
-                                class: "w-6 h-6",
-                                fill: "none",
-                                stroke: "currentColor",
-                                view_box: "0 0 24 24",
-                                path {
-                                    stroke_linecap: "round",
-                                    stroke_linejoin: "round",
-                                    stroke_width: "2",
-                                    d: "M6 18L18 6M6 6l12 12",
-                                }
+                        // 汉堡图标
+                        svg {
+                            class: "{burger_icon_class}",
+                            fill: "none",
+                            stroke: "currentColor",
+                            view_box: "0 0 24 24",
+                            path {
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                stroke_width: "2",
+                                d: "M4 6h16M4 12h16M4 18h16",
                             }
-                        } else {
-                            // 汉堡图标
-                            svg {
-                                class: "w-6 h-6",
-                                fill: "none",
-                                stroke: "currentColor",
-                                view_box: "0 0 24 24",
-                                path {
-                                    stroke_linecap: "round",
-                                    stroke_linejoin: "round",
-                                    stroke_width: "2",
-                                    d: "M4 6h16M4 12h16M4 18h16",
-                                }
+                        }
+                        // 关闭图标（X）
+                        svg {
+                            class: "{close_icon_class}",
+                            fill: "none",
+                            stroke: "currentColor",
+                            view_box: "0 0 24 24",
+                            path {
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                stroke_width: "2",
+                                d: "M6 18L18 6M6 6l12 12",
                             }
                         }
                     }
                 }
             }
 
-            // 移动端导航面板
-            if mobile_open() {
-                div {
-                    id: menu_id,
-                    class: "md:hidden border-t border-paper-border bg-paper-theme/95 backdrop-blur-sm",
+            // 移动端导航面板（常驻 DOM 以支持展开/折叠双向平滑动画）
+            div {
+                id: menu_id,
+                class: "{panel_class}",
+                div { class: "mobile-nav-content",
                     ul { class: "py-2 px-6 space-y-1",
                         for item in nav_items.iter().cloned() {
-                            li { key: "{item.label}",
+                            li {
+                                key: "{item.label}",
+                                class: "mobile-nav-item",
                                 MobileNavItem {
                                     route: item.route,
                                     label: item.label,
@@ -156,7 +172,7 @@ fn MobileNavItem(
     on_navigate: EventHandler<()>,
 ) -> Element {
     let class_str = if is_active {
-        "block w-full px-3 py-2 text-base font-medium text-paper-accent rounded-lg bg-paper-entry"
+        "block w-full px-3 py-2 text-base font-medium text-paper-accent rounded-lg bg-paper-entry transition-colors"
     } else {
         "block w-full px-3 py-2 text-base text-paper-secondary hover:text-paper-primary hover:bg-paper-entry rounded-lg transition-colors"
     };
