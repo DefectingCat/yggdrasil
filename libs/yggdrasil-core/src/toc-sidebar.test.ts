@@ -28,7 +28,12 @@ function stubIo(): void {
   );
 }
 
-function setupDom(): { h2a: HTMLElement; h2b: HTMLElement; linkA: HTMLAnchorElement; linkB: HTMLAnchorElement } {
+function setupDom(): {
+  h2a: HTMLElement;
+  h2b: HTMLElement;
+  linkA: HTMLAnchorElement;
+  linkB: HTMLAnchorElement;
+} {
   document.body.innerHTML = `
     <nav class="toc-sidebar">
       <div class="toc-sidebar-body">
@@ -53,7 +58,17 @@ function setupDom(): { h2a: HTMLElement; h2b: HTMLElement; linkA: HTMLAnchorElem
 /** 钉住元素的视口顶距（happy-dom 不做布局，rect 全零需手动给）。 */
 function mockTop(el: HTMLElement, top: number): void {
   el.getBoundingClientRect = () =>
-    ({ top, bottom: top, left: 0, right: 0, width: 0, height: 0, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+    ({
+      top,
+      bottom: top,
+      left: 0,
+      right: 0,
+      width: 0,
+      height: 0,
+      x: 0,
+      y: top,
+      toJSON: () => ({}),
+    }) as DOMRect;
 }
 
 describe('initTocSidebar', () => {

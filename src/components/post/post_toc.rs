@@ -36,8 +36,8 @@ pub fn PostToc(
     // __initTocSidebar 内部幂等（先 dispose 上一次的 observer 与激活态）。
     #[cfg(target_arch = "wasm32")]
     use_effect(move || {
-        let window = web_sys::window()
-            .expect("post_toc use_effect 仅在 WASM 浏览器上下文执行：无 window");
+        let window =
+            web_sys::window().expect("post_toc use_effect 仅在 WASM 浏览器上下文执行：无 window");
         invoke_optional_global(&window, "__initTocSidebar", &[]);
     });
 
@@ -77,7 +77,10 @@ pub fn PostToc(
                         }
                     }
                 }
-                div { class: "toc-sidebar-body", dangerous_inner_html: "{toc_html}" }
+                div {
+                    class: "toc-sidebar-body",
+                    dangerous_inner_html: "{toc_html}",
+                }
             }
         }
     }

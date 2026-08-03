@@ -119,15 +119,11 @@ pub fn Header(
             }
 
             // 移动端导航面板（常驻 DOM 以支持展开/折叠双向平滑动画）
-            div {
-                id: menu_id,
-                class: "{panel_class}",
+            div { id: menu_id, class: "{panel_class}",
                 div { class: "mobile-nav-content",
                     ul { class: "py-2 px-6 space-y-1",
                         for item in nav_items.iter().cloned() {
-                            li {
-                                key: "{item.label}",
-                                class: "mobile-nav-item",
+                            li { key: "{item.label}", class: "mobile-nav-item",
                                 MobileNavItem {
                                     route: item.route,
                                     label: item.label,
