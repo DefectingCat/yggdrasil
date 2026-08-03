@@ -324,7 +324,12 @@ jobs:
           docker load --input /tmp/img/yggdrasil-arm64-image/yggdrasil-arm64.tar.gz
           docker tag localhost/yggdrasil:latest yggdrasil:amd64
           echo "--- loaded images ---"
-          docker image ls --format 'table {{.Repository}}\t{{.Tag}}\t{{.Architecture}}'
+          docker image ls --format 'table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}'
+          # .Architecture 属镜像 config 字段，docker image ls 的 imageContext 无此字段，
+          # 必须用 docker image inspect 取（与 build job 的 Verify image architecture 一致）。
+          echo "--- arch verification ---"
+          docker image inspect yggdrasil:amd64 --format 'yggdrasil:amd64 -> {{.Architecture}}'
+          docker image inspect yggdrasil:arm64 --format 'yggdrasil:arm64 -> {{.Architecture}}'
 
       - name: Login to GHCR
         uses: docker/login-action@v3
