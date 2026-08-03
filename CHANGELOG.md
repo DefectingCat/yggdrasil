@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _暂无未发布改动。_
 
+## [0.9.0] - 2026-08-03
+
+### Added
+
+- **桌面端悬浮目录（TOC）**：文章页新增少数派风格悬浮目录，支持滚动监听（scroll-spy）、悬浮展开与固定（pin）模式。
+- **移动端导航动画**：为移动端顶部导航菜单添加双向平滑展开/折叠与图标微动动画。
+- **友链管理功能**：新增后台友链 CRUD 管理、前台 `/friends` 列表展示及 moka 高效缓存。
+- **订阅 Feed 端点**：新增 RSS 2.0 (`/feed.xml` / `/rss.xml`) 与 JSON Feed 1.1 (`/feed.json`) 订阅生成与输出端点。
+- **Changelog 结构化时间线**：版本变更日志升级为结构化解析 + 时间线卡片 UI。
+
+### Fixed
+
+- **Changelog 导航高亮**：修复 CHANGELOG 侧栏版本导航高亮未能精准跟随当前阅读位置的问题。
+- **友链删除回调**：修复后台友链删除确认框弹窗回调语法错误。
+- **CI 多架构构建**：修复 GHCR 镜像构建脚本中 `docker image inspect` 获取 Architecture 标识的问题。
+
 ## [0.8.3] - 2026-08-03
 
 ### Added
