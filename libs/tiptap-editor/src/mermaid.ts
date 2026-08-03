@@ -95,12 +95,18 @@ export async function renderMermaid(
       themeVariables: mermaidThemeVarsFor(theme),
     });
     const id = `tiptap-mermaid-${++renderCounter}`;
-    const { svg } = await mermaid.render(id, source);
-    // 同前台 mermaid.ts：foreignObject 默认 overflow:hidden 裁切零余量多行标签的
-    // descender（CJK 字体 sub-pixel 差异触发）。注入 overflow="visible" SVG 属性修复
-    // （CSS 对 foreignObject overflow 不生效，只能写 SVG 属性）。
-    const patched = svg.replace(/<foreignObject(?=[\s>])/g, '<foreignObject overflow="visible"');
-    return { svg: patched };
+    try {
+      const { svg } = await mermaid.render(id, source);
+      // 同前台 mermaid.ts：foreignObject 默认 overflow:hidden 裁切零余量多行标签的
+      // descender（CJK 字体 sub-pixel 差异触发）。注入 overflow="visible" SVG 属性修复
+      // （CSS 对 foreignObject overflow 不生效，只能写 SVG 属性）。
+      const patched = svg.replace(/<foreignObject(?=[\s>])/g, '<foreignObject overflow="visible"');
+      return { svg: patched };
+    } catch (renderErr) {
+      // mermaid.render 失败时残留临时容器 div#d${id}（含错误 SVG），必须清理。
+      document.getElementById(`d${id}`)?.remove();
+      throw renderErr;
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { error: msg };

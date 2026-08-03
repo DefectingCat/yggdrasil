@@ -123,19 +123,26 @@ async function renderBlock(pre: HTMLPreElement, source: string, theme: ThemeName
     themeVariables: mermaidThemeVarsFor(theme),
   });
   const id = `mermaid-svg-${++renderCounter}`;
-  const { svg } = await mermaid.render(id, source);
-  // mermaid 给每个节点 <foreignObject> 设的高度恰好等于文字测量高度（零余量），
-  // foreignObject 默认 overflow:hidden（SVG 规范），跨浏览器/字体的 sub-pixel 渲染
-  // 差异让实际行高略大于测量值，多行节点第二行的 descender 被 foreignObject 裁切。
-  // 注入 overflow="visible" SVG 属性让 descender 显示——node rect 比 foreignObject
-  // 高约 30px，文字仍在节点框内。必须写 SVG 属性（CSS 对 foreignObject overflow
-  // 不生效，Chrome 实现差异）。
-  const patched = svg.replace(/<foreignObject(?=[\s>])/g, '<foreignObject overflow="visible"');
-  // 清空 pre 旧内容（旧 SVG + mermaid 残留的 `d` 辅助节点），再注入新 SVG。
-  pre.innerHTML = patched;
-  pre.dataset.mermaidRendered = 'true';
-  pre.dataset.mermaidSource = source;
-  pre.dataset.mermaidTheme = theme;
+  try {
+    const { svg } = await mermaid.render(id, source);
+    // mermaid 给每个节点 <foreignObject> 设的高度恰好等于文字测量高度（零余量），
+    // foreignObject 默认 overflow:hidden（SVG 规范），跨浏览器/字体的 sub-pixel 渲染
+    // 差异让实际行高略大于测量值，多行节点第二行的 descender 被 foreignObject 裁切。
+    // 注入 overflow="visible" SVG 属性让 descender 显示——node rect 比 foreignObject
+    // 高约 30px，文字仍在节点框内。必须写 SVG 属性（CSS 对 foreignObject overflow
+    // 不生效，Chrome 实现差异）。
+    const patched = svg.replace(/<foreignObject(?=[\s>])/g, '<foreignObject overflow="visible"');
+    // 清空 pre 旧内容（旧 SVG + mermaid 残留的 `d` 辅助节点），再注入新 SVG。
+    pre.innerHTML = patched;
+    pre.dataset.mermaidRendered = 'true';
+    pre.dataset.mermaidSource = source;
+    pre.dataset.mermaidTheme = theme;
+  } catch (err) {
+    // mermaid.render 失败时会在 document.body 残留临时渲染容器 div#d${id}
+    // （内含「Syntax error in text」错误 SVG）。不清除则这些错误块泄漏到页面底部。
+    document.getElementById(`d${id}`)?.remove();
+    throw err;
+  }
 }
 
 /**
