@@ -233,6 +233,27 @@ describe('mermaid-overlay 灯箱统一交互', () => {
     expect(contentEl().style.transform).toContain('scale(1.15)');
   });
 
+  it('宽图（fitScale<1）fit 态居中：origin 乘 scale，不偏左/偏高', async () => {
+    // viewBox 2000×500，fitScale = min(976/2000, 720/500, 1) = 0.488。
+    // 正确居中：originX = (1024 − 2000×0.488)/2 = 24，originY = (768 − 500×0.488)/2 = 262。
+    // 回归：旧公式用未缩放尺寸得 originX = −488，宽图左侧被裁出视口。
+    const pre = document.createElement('pre');
+    pre.innerHTML = '<svg viewBox="0 0 2000 500"><rect width="2000" height="500"/></svg>';
+    document.body.appendChild(pre);
+    const svg = pre.querySelector('svg');
+    if (!svg) throw new Error('测试夹具缺 svg');
+    vi.spyOn(svg, 'getBoundingClientRect').mockReturnValue(SVG_RECT);
+    attachOverlayTrigger(pre);
+
+    pre.click();
+    await vi.waitFor(() => {
+      expect(contentEl().style.transform).toBe('translate(0px, 0px) scale(0.488)');
+    });
+    const content = contentEl();
+    expect(content.style.left).toBe('24px');
+    expect(content.style.top).toBe('262px');
+  });
+
   it('reduced-motion：打开无飞行（内容直接 fit 态，无 transform transition）', () => {
     mockReducedMotion(true);
     const pre = makePre();

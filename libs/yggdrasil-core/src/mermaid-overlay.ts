@@ -127,8 +127,10 @@ function applyTransform(): void {
 
 /**
  * 计算让 SVG 居中且完整可见的初始 transform。
- * 基准 origin 让 SVG 自然左上角对齐视口居中：origin = viewportCenter - naturalSize/2。
  * fit 态 tx/ty 恒为 0，scale 存进 fitScale 供滚动关闭插值。
+ *
+ * 居中必须乘 scale：transform-origin 0 0 让缩放向左上角收缩，显示尺寸是
+ * natural × scale（宽图 fitScale<1 时差了 naturalW(1−s)/2，左侧会被裁出视口）。
  */
 function fitToScreen(): void {
   const pad = 48;
@@ -137,8 +139,8 @@ function fitToScreen(): void {
   // 适配缩放：不放大超出原始尺寸（除非图比视口还小）
   scale = clamp(Math.min(vw / naturalW, vh / naturalH), MIN_SCALE, 1);
   fitScale = scale;
-  originX = (window.innerWidth - naturalW) / 2;
-  originY = (window.innerHeight - naturalH) / 2;
+  originX = (window.innerWidth - naturalW * scale) / 2;
+  originY = (window.innerHeight - naturalH * scale) / 2;
   tx = 0;
   ty = 0;
   if (content) {
