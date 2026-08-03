@@ -1454,6 +1454,25 @@ console.log(1)
     }
 
     #[test]
+    fn render_markdown_inline_math_text_mode_middle_dot() {
+        // issue #13 端到端：完整段落经 pulldown-cmark → katex → sanitizer，
+        // `\text{m·K}` 的 `·` 不应渲染成红字 `\cdotp`（katex-rs 错误输出为
+        // 逐字母 span 的 color node，故断言 `#cc0000` 不存在）。
+        let md = "给定温度 $T$（开尔文），峰值波长由维恩位移定律 $\\lambda_{\\max} = b/T$ 决定（$b \\approx 2.898\\times10^{-3}\\,\\text{m·K}$）。";
+        let result = render_markdown_enhanced(md);
+        assert!(
+            !result.html.contains("#cc0000"),
+            "issue #13 段落不应有 KaTeX 红字错误, got: {}",
+            result.html
+        );
+        assert!(
+            result.html.contains('⋅'),
+            "应渲染 U+22C5 middle dot glyph, got: {}",
+            result.html
+        );
+    }
+
+    #[test]
     fn render_markdown_display_math() {
         // $$...$$ 块级公式：应产出 <p class="math-display"> + katex-display。
         let result = render_markdown_enhanced("$$\\frac{a}{b}$$");
