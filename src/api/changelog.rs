@@ -101,7 +101,7 @@ mod tests {
     fn changelog_renders_anchored_versions() {
         let rendered = &*CHANGELOG_RENDERED;
         assert!(rendered.html.contains("<h2"), "应渲染出版本 h2 标题");
-        assert!(rendered.html.contains("0.8.2"), "正文应包含当前最新版本号");
+        assert!(rendered.html.contains("0.8.3"), "正文应包含当前最新版本号");
         assert!(
             rendered.html.contains("Unreleased"),
             "应保留 [Unreleased] 段"

@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _暂无未发布改动。_
 
+## [0.8.3] - 2026-08-03
+
+### Added
+
+- **Mermaid 流程图全屏放大浮层**：复杂/宽流程图支持全屏点击放大查看，离散缩放支持 200ms 平滑过渡，交互与图片灯箱统一（支持 FLIP 飞行开关动画、滚动驱动关闭、拖拽平移、滚轮/捏合/双击缩放与 Esc/✕ 关闭）。
+- **CI GHCR 镜像归档**：GitHub Actions 新增主应用多架构（amd64/arm64）Manifest 镜像及 6 个 Code Runner 沙箱镜像向 GHCR (`ghcr.io`) 自动推送与归档。
+
+### Fixed
+
+- **Mermaid 异常容器清理**：修复 `mermaid.render` 解析失败时在 `document.body` 遗留临时 `#d${id}` 容器导致页面底部出现错误块的视觉问题。
+- **Mermaid 宽图放大居中偏位**：修复 `fitToScreen` 居中计算未乘以 `fitScale` 导致宽图放大浮层整体向左上偏位的问题。
+
+### Changed
+
+- **Mermaid 预加载与渲染体验**：在浏览器空闲期（`requestIdleCallback`）自动预加载 mermaid bundle 模块，并在图像渲染过程中增加转圈角标提示。
+- **CI 构建流程优化**：限定 `build-amd64` 触发条件（仅主干分支、tag 及手动触发），增加镜像无 DB 启动冒烟测试与 Runner 目录变更检测，提升 CI 执行效率。
+- **后台管理 UI 细节优化**：优化后台管理页面 UI 布局结构与风格样式。
+
 ## [0.8.2] - 2026-07-31
 
 ### Security
