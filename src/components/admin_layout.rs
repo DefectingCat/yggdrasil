@@ -52,9 +52,6 @@ pub fn AdminLayout() -> Element {
     let nav_items_bottom = vec![
         (Route::Assets {}, "素材"),
         (Route::FriendsAdmin {}, "友链"),
-        (Route::Runner {}, "试运行"),
-        (Route::Mcp {}, "MCP"),
-        (Route::System {}, "系统"),
     ];
 
     let is_write_route =
@@ -120,6 +117,7 @@ pub fn AdminLayout() -> Element {
                         }
                     }
                 }
+                ToolsNavGroup {}
             }
             // Bottom Tools
             div { class: "mt-auto pt-6 border-t border-[var(--color-paper-border)] flex items-center justify-between px-4",
@@ -289,6 +287,89 @@ fn ContentNavGroup() -> Element {
                                 "评论管理",
                                 matches!(route, Route::AdminComments {} | Route::AdminCommentsPage { .. }),
                             ),
+                        ]
+                        {
+                            Link {
+                                key: "{label}",
+                                class: if active { "flex items-center px-3 py-2 rounded-xl text-sm font-medium transition-all bg-[var(--color-paper-theme)] text-[var(--color-paper-primary)] shadow-sm border border-[var(--color-paper-border)]" } else { "flex items-center px-3 py-2 rounded-xl text-sm font-medium transition-all text-[var(--color-paper-secondary)] hover:bg-[var(--color-paper-theme)]/50 hover:text-[var(--color-paper-primary)] border border-transparent" },
+                                to: dest,
+                                "{label}"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// 「工具」子菜单组：试运行 / MCP / 系统（issue #26）。
+///
+/// 父项整行点击仅切换展开/收起（不跳转），chevron 旋转 + grid-template-rows
+/// 0fr↔1fr 过渡动画（复用 posts_trash.rs AutoPurgeSettings 的既有模式）。
+/// 当前路由落在组内时自动展开，保证激活子项始终可见；用户手动收起后，
+/// 仅当再次从组外导航进入组内路由时才重新展开。
+#[component]
+fn ToolsNavGroup() -> Element {
+    let route = use_route::<Route>();
+    // 判断路由是否属于本组。
+    fn in_group(route: &Route) -> bool {
+        matches!(
+            route,
+            Route::Runner {} | Route::Mcp {} | Route::System {}
+        )
+    }
+    let group_active = in_group(&route);
+    let mut expanded = use_signal(|| group_active);
+
+    // 路由从组外进入组内时自动展开。闭包内读 router().current 建立
+    // ReactiveContext 订阅（仓库约定 #5），路由变化时本 effect 重跑。
+    use_effect(move || {
+        let current = router().current::<Route>();
+        if in_group(&current) {
+            expanded.set(true);
+        }
+    });
+
+    let chevron_rotate = if expanded() { "rotate-180" } else { "" };
+    // 父项样式：与顶层导航项同盒模型；组内路由激活时仅提为 primary 文字色，
+    // 不给自己加 pill（pill 高亮由激活子项承担，避免双层高亮竞争）。
+    let parent_text_class = if group_active {
+        "text-[var(--color-paper-primary)] border border-transparent"
+    } else {
+        "text-[var(--color-paper-secondary)] hover:bg-[var(--color-paper-theme)]/50 hover:text-[var(--color-paper-primary)] border border-transparent"
+    };
+
+    rsx! {
+        div { class: "flex flex-col gap-1",
+            button {
+                class: "flex items-center justify-between w-full px-4 py-3 rounded-2xl text-sm font-medium transition-all cursor-pointer {parent_text_class}",
+                onclick: move |_| expanded.set(!expanded()),
+                span { "工具" }
+                svg {
+                    class: "w-4 h-4 transition-transform duration-200 flex-shrink-0 {chevron_rotate}",
+                    view_box: "0 0 24 24",
+                    fill: "none",
+                    stroke: "currentColor",
+                    stroke_width: "2",
+                    path {
+                        stroke_linecap: "round",
+                        stroke_linejoin: "round",
+                        d: "M19 9l-7 7-7-7",
+                    }
+                }
+            }
+            // 展开动画容器：与 AutoPurgeSettings 完全同款（grid 0fr↔1fr + 内层 overflow-hidden）。
+            div {
+                class: "grid transition-all duration-300 ease-in-out",
+                style: if expanded() { "grid-template-rows: 1fr; opacity: 1; pointer-events: auto;" } else { "grid-template-rows: 0fr; opacity: 0; pointer-events: none;" },
+                div { class: "overflow-hidden min-h-0",
+                    // 左侧竖线引导 + 缩进表示层级。
+                    div { class: "ml-4 pl-3 border-l border-[var(--color-paper-border)] flex flex-col gap-1",
+                        for (dest, label, active) in [
+                            (Route::Runner {}, "试运行", matches!(route, Route::Runner {})),
+                            (Route::Mcp {}, "MCP", matches!(route, Route::Mcp {})),
+                            (Route::System {}, "系统", matches!(route, Route::System {})),
                         ]
                         {
                             Link {
