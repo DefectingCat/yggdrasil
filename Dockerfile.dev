@@ -3,12 +3,13 @@
 # Dockerfile.dev — 开发镜像（dx serve 热重载）
 #
 # 与生产 Dockerfile 共享相同的镜像源（TUNA/rsproxy/npmmirror/gh-proxy）和工具链
-# 安装逻辑，但去掉所有构建步骤（源码通过 bind mount 挂载，不 COPY 进镜像）。
+# 安装逻辑。源码通过 COPY 快照 + compose watch 增量 sync 进容器（见
+# docker-compose.dev.yml 的 develop.watch 与文件头注释）。
 #
 # 用法：docker compose -f docker-compose.dev.yml up --build
 #
 # 容器内布局：
-#   /build         ← bind mount 宿主源码（编辑即时可见）
+#   /build         ← 镜像内源码快照, 运行时被 compose watch sync 增量覆盖
 #   target/        ← named volume（cargo 编译产物，跨重启缓存）
 #   libs/node_modules ← named volume（pnpm 虚拟存储，跨重启缓存）
 
@@ -113,6 +114,13 @@ RUN ARCH="$(dpkg --print-architecture)" \
     && chmod +x /usr/local/bin/tailwindcss
 
 WORKDIR /build
+
+# ── 源码快照 ────────────────────────────────────────────────────
+# compose watch 模式：镜像内含构建时的源码快照（容器启动即有完整源码,
+# 无 bind mount 竞态），运行时由 `docker compose watch` 增量 sync 覆盖。
+# .dockerignore 排除 .git → 容器内 build.rs 的 git describe 回退 "unknown",
+# 以及 docs/tests/scripts/（容器内无集成测试源码, cargo test 会跳过）。
+COPY . /build
 
 # 启动开发服务器：make dev 内含 pnpm install → build-libs → highlight-css
 # → katex-css → tailwindcss → dx serve --interactive false。

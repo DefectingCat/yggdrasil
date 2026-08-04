@@ -1,42 +1,53 @@
 # docker-compose.dev.yml — Docker 开发环境
 #
 # 用法：
-#   make docker-dev          # 构建并启动（前台日志）
+#   make docker-dev          # 构建并启动（compose watch 前台, 热重载）
 #   make docker-dev-down     # 停止并移除容器
 #   make docker-dev-shell    # 进入 dev 容器交互式 shell
 #
 # 或直接：
-#   docker compose -f docker-compose.dev.yml up --build
+#   docker compose -f docker-compose.dev.yml up --build -d
+#   docker compose -f docker-compose.dev.yml watch
 #
 # 架构：
 #   ┌─────────────────────────────────────────────────────┐
 #   │ Host (macOS)                                        │
 #   │   PostgreSQL :5432 (宿主原生, 不由 compose 管理)      │
-#   │   IDE 编辑源码 ──bind mount──▶ /build (dev container)│
-#   │   浏览器 ◀── :8080 ────────── dx serve (:8080)       │
+#   │   IDE 编辑源码 ──compose watch sync──▶ /build        │
+#   │  浏览器 ◀── :8080 ────────── dx serve (:8080)       │
 #   └─────────────────────────────────────────────────────┘
+#
+# 文件同步（2026 最佳实践, 替代 bind mount）：
+#   Dockerfile.dev 构建时 COPY 源码快照进镜像（容器启动即有完整源码）;
+#   compose watch 把宿主变更增量 sync 进容器 —— 容器内 inotify 原生生效,
+#   源码 stat 不再走 VirtioFS 桥, cargo/git 操作更快更可靠。
+#   宿主 public/ 下的生成物（style.css/tiptap/ 等）不 sync —— 容器内 make dev 自行生成。
+#   依赖清单（Cargo.lock/pnpm-lock 等）变化 → watch 自动 rebuild 镜像。
 #
 # 数据库：dev 容器通过 host.docker.internal 连接宿主 PostgreSQL。
 # 前提：宿主已运行 PostgreSQL 且 DATABASE_URL 指向它（见 .env）。
 #
 # Volume 策略：
-#   .:/build                      bind mount 源码（IDE 编辑即时可见）
 #   target/ → named volume        cargo 编译缓存（避免 VirtioFS 性能瓶颈）
 #   libs/node_modules → volume    pnpm 依赖（与宿主隔离）
 #   cargo registry → named volume crate 下载缓存
+#
+# env_file: .env 注入宿主密钥（MCP_TOKEN_ENC_KEY 等，等价 bind mount 时代
+# dotenvy 读 /build/.env 的行为）; environment 优先级更高，显式 DATABASE_URL
+# 覆盖 .env 里指向 localhost 的值。
 
 services:
   dev:
     build:
       context: .
       dockerfile: Dockerfile.dev
+    # PID 1 信号/僵尸处理（make dev 作为入口, 否则 Ctrl+C 会残留 dx serve 子进程）
+    init: true
     # host.docker.internal 在 Docker Desktop 上自动解析到宿主 IP，
     # 让容器内的 server 能连接宿主原生 PostgreSQL（:5432）。
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      # 源码 bind mount — 宿主编辑即时可见，dx serve inotify 热重载
-      - .:/build
       # cargo 编译产物 — named volume 避免 VirtioFS 小文件性能瓶颈
       - yggdrasil-dev-target:/build/target
       # pnpm 依赖 — 与宿主 node_modules 隔离
@@ -46,22 +57,80 @@ services:
       # cargo registry + git 缓存 — named volume 避免 crate 重复下载
       - yggdrasil-dev-cargo-registry:/usr/local/cargo/registry
       - yggdrasil-dev-cargo-git:/usr/local/cargo/git
-      # 防止 pnpm 在项目根目录创建 .pnpm-store/ 泄漏到宿主 bind mount
+      # 防止 pnpm 在项目根目录创建 .pnpm-store/ 残留进容器层
       - /build/.pnpm-store
-      # Code runner: 挂载 Docker socket（取消注释以启用代码沙箱功能）
-      # 注意: 需先构建 runner 镜像 (bash docker/build-runners.sh)
+      # Code runner: 挂载 Docker socket（代码沙箱默认启用, 需先构建 runner 镜像
+      # bash docker/build-runners.sh）。docker.sock 是宿主 root 级边界, 仅限本地开发。
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "8080:8080"
+    env_file:
+      - .env
     environment:
-      # 连接宿主 PostgreSQL。端口/密码/库名按 .env 调整。
+      # 连接宿主 PostgreSQL。优先级高于 env_file（.env 里是 localhost 直连串）。
       DATABASE_URL: postgres://postgres:postgres@host.docker.internal:5432/yggdrasil
       RUST_LOG: info
       SSR_CACHE_SECS: "0"
       APP_BASE_URL: http://localhost:8080
-      # Code runner（取消 Docker socket 挂载后启用）
+      # Code runner（socket 已挂载）
       DOCKER_SOCKET_PATH: /var/run/docker.sock
-    # dx serve --interactive false 前台运行，日志直接输出到 docker compose
+    # compose watch：源码增量 sync 进容器（dx serve inotify 热重载原生生效），
+    # 依赖/构建文件变化自动 rebuild 镜像。ignore 排除生成物与缓存。
+    develop:
+      watch:
+        - path: ./src
+          target: /build/src
+          action: sync
+        - path: ./libs
+          target: /build/libs
+          action: sync
+          ignore:
+            - node_modules/
+            - "*/node_modules/"
+        - path: ./migrations
+          target: /build/migrations
+          action: sync
+        - path: ./themes
+          target: /build/themes
+          action: sync
+        - path: ./public
+          target: /build/public
+          action: sync
+          ignore:
+            - style.css
+            - highlight.css
+            - katex/
+            - tiptap/
+            - codemirror/
+            - lightbox/
+            - yggdrasil-core/
+            - xterm/
+            - doc/
+        - path: ./input.css
+          target: /build/input.css
+          action: sync
+        - path: ./Makefile
+          target: /build/Makefile
+          action: sync
+        - path: ./Dioxus.toml
+          target: /build/Dioxus.toml
+          action: sync
+        # .cargo/config.toml: SERVER_FN_OVERRIDE_KEY + wasm cfg workaround,
+        # 容器内 dx 编译必需
+        - path: ./.cargo
+          target: /build/.cargo
+          action: sync
+        # 依赖清单变化 → 重建镜像（COPY 新源码快照 + 重跑 make dev）
+        - path: ./Cargo.toml
+          action: rebuild
+        - path: ./Cargo.lock
+          action: rebuild
+        - path: ./libs/package.json
+          action: rebuild
+        - path: ./libs/pnpm-lock.yaml
+          action: rebuild
+        - path: ./Dockerfile.dev
+          action: rebuild
 
 volumes:
   yggdrasil-dev-target:
