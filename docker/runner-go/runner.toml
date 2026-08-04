@@ -1,4 +1,6 @@
 # Go runner 镜像的运行时默认值（参考用）。
+# GOCACHE 指向共享卷 /go-cache（docker.rs 挂载 yggdrasil-gocache，跨运行持久化 +
+# 镜像构建期预热），GOPATH / GOTMPDIR 在 /tmp tmpfs（见 Dockerfile）。
 # 实际生效配置由 Rust 侧 LANGUAGES 注册表 + CODE_RUNNER_* 环境变量决定（见
 # src/api/code_runner/languages.rs、src/infra/runner_config.rs），本文件仅作为
 # 镜像构建产物的自描述，便于运维核对镜像与代码的契约一致。

@@ -156,6 +156,7 @@ fn spawn_exec_task(
                 &req.source,
                 &lang_def.extension,
                 final_limits,
+                lang_def.cache_volume.as_ref(),
                 tx.clone(),
             )
             .await
@@ -169,6 +170,7 @@ fn spawn_exec_task(
                     &req.source,
                     &lang_def.extension,
                     final_limits,
+                    lang_def.cache_volume.as_ref(),
                 )
                 .await
             }

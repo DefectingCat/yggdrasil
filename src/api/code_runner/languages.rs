@@ -16,6 +16,7 @@
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
+use crate::infra::docker::CacheVolume;
 use crate::infra::runner_config::{ResourceLimits, RUNNER_CONFIG};
 
 /// 单个语言的运行定义。语言名即 [`LANGUAGES`] 的 key，不再冗余存字段。
@@ -28,6 +29,9 @@ pub struct LanguageDef {
     pub default_limits: ResourceLimits,
     /// 该语言本身是否允许网络（与全局/请求级 allow_network 取与）。
     pub allow_network: bool,
+    /// 跨运行持久化的编译缓存卷：docker.rs 把该 named volume 挂载到 mount_path，
+    /// 使每次运行复用上次编译产物（仅编译型语言使用；解释型为 None）。
+    pub cache_volume: Option<CacheVolume>,
 }
 
 /// 内置语言注册表。新增语言时在此 `insert` 即可默认启用；
@@ -53,6 +57,7 @@ pub static LANGUAGES: LazyLock<HashMap<String, LanguageDef>> = LazyLock::new(|| 
                 allow_network: false,
             },
             allow_network: false,
+            cache_volume: None, // 解释型，无编译缓存
         },
     );
 
@@ -70,12 +75,15 @@ pub static LANGUAGES: LazyLock<HashMap<String, LanguageDef>> = LazyLock::new(|| 
                 allow_network: false,
             },
             allow_network: false,
+            cache_volume: None, // 解释型，无编译缓存
         },
     );
 
     // 编译型语言：go run 是单条命令（内部编译 + 运行），可直接作为 run_cmd。
-    // 只读根文件系统下 $HOME/.cache 不可写，镜像已把 GOCACHE/GOTMPDIR/GOPATH
-    // 重定向到可写的 /tmp tmpfs。编译冷启动比解释型慢，timeout 提到 10s。
+    // 只读根文件系统下 $HOME/.cache 不可写。GOCACHE 指向共享卷 /go-cache
+    // （cache_volume 由 docker.rs 挂载，跨运行持久化 + 镜像构建期预热，见
+    // docker/runner-go/Dockerfile）；GOTMPDIR/GOPATH 仍指向 /tmp tmpfs。
+    // Go ≥1.20 不分发预编译 stdlib，无缓存时每次冷编译，timeout 提到 10s。
     m.insert(
         "go".to_string(),
         LanguageDef {
@@ -90,6 +98,10 @@ pub static LANGUAGES: LazyLock<HashMap<String, LanguageDef>> = LazyLock::new(|| 
                 allow_network: false,
             },
             allow_network: false,
+            cache_volume: Some(CacheVolume {
+                name: "yggdrasil-gocache".to_string(),
+                mount_path: "/go-cache".to_string(),
+            }),
         },
     );
 
@@ -110,6 +122,7 @@ pub static LANGUAGES: LazyLock<HashMap<String, LanguageDef>> = LazyLock::new(|| 
                 allow_network: false,
             },
             allow_network: false,
+            cache_volume: None, // std 预编译随工具链分发，冷编译仅 ~1s，无需缓存卷
         },
     );
 
@@ -131,6 +144,7 @@ pub static LANGUAGES: LazyLock<HashMap<String, LanguageDef>> = LazyLock::new(|| 
                 allow_network: false,
             },
             allow_network: false,
+            cache_volume: None, // 解释型，无编译缓存
         },
     );
 

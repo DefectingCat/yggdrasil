@@ -56,7 +56,20 @@ fn get_docker() -> Result<&'static Docker, bollard::errors::Error> {
         })
 }
 
-pub fn build_host_config(limits: &ResourceLimits) -> HostConfig {
+/// 跨运行持久化的编译缓存（Docker named volume）。
+///
+/// 语言镜像把编译缓存目录（如 Go 的 GOCACHE）指到 `mount_path`，docker.rs 把
+/// 共享 named volume 挂载到该路径，使每次运行复用上次编译产物。仅编译型语言使用。
+#[derive(Clone, Debug, PartialEq)]
+pub struct CacheVolume {
+    pub name: String,
+    pub mount_path: String,
+}
+
+pub fn build_host_config(
+    limits: &ResourceLimits,
+    cache_volume: Option<&CacheVolume>,
+) -> HostConfig {
     let mut tmpfs = HashMap::new();
     // /code 用 mode=1777（sticky + all-rwx）让容器内 1000:1000 用户可写。
     // 不用 `uid=1000,gid=1000`：那是 Docker 的 tmpfs 扩展选项，Podman 报
@@ -83,6 +96,10 @@ pub fn build_host_config(limits: &ResourceLimits) -> HostConfig {
         }),
         readonly_rootfs: Some(true),
         tmpfs: Some(tmpfs),
+        // 编译缓存 named volume：裸卷名 `name:/path` 即命名卷挂载，Docker/Podman
+        // 都会自动创建卷。binds 不受 readonly_rootfs 影响，挂载点仍可写；
+        // mount_path（如 /go-cache）是镜像内新路径，与 tmpfs 挂载无叠加。
+        binds: cache_volume.map(|cv| vec![format!("{}:{}", cv.name, cv.mount_path)]),
         pids_limit: Some(64),
         // 只保留 nofile（fd 数上限，语义正常）。
         // 不设 nproc：RLIMIT_NPROC 在 setrlimit 时按 UID 计数，配合 non-root 用户会让
@@ -155,9 +172,10 @@ pub async fn run_in_container(
     source: &str,
     ext: &str,
     limits: ResourceLimits,
+    cache_volume: Option<&CacheVolume>,
 ) -> Result<(Option<i64>, String, String, bool), bollard::errors::Error> {
     let docker = get_docker()?;
-    let host_config = build_host_config(&limits);
+    let host_config = build_host_config(&limits, cache_volume);
 
     // Source injection script: use sh -c to first receive stdin and write to file, then exec the actual command
     let setup_cmd = format!("cat > /code/main.{} && exec {}", ext, run_cmd);
@@ -351,10 +369,11 @@ pub async fn run_in_container_stream(
     source: &str,
     ext: &str,
     limits: ResourceLimits,
+    cache_volume: Option<&CacheVolume>,
     tx: tokio::sync::mpsc::Sender<OutputChunk>,
 ) -> Result<(Option<i64>, String, String, bool, bool), bollard::errors::Error> {
     let docker = get_docker()?;
-    let host_config = build_host_config(&limits);
+    let host_config = build_host_config(&limits, cache_volume);
 
     // 与 run_in_container 相同的 stdin 注入脚本。
     let setup_cmd = format!("cat > /code/main.{} && exec {}", ext, run_cmd);
@@ -622,7 +641,7 @@ mod tests {
             output_bytes: 1024,
             allow_network: false,
         };
-        let host_config = build_host_config(&limits);
+        let host_config = build_host_config(&limits, None);
         assert_eq!(host_config.cpu_quota, Some(150_000));
         assert_eq!(host_config.memory, Some(256 * 1024 * 1024));
         assert_eq!(host_config.readonly_rootfs, Some(true));
@@ -645,6 +664,29 @@ mod tests {
     }
 
     #[test]
+    fn host_config_cache_volume_binds() {
+        // 编译缓存 named volume：None 时不挂载任何 binds；Some 时以裸卷名
+        // `name:/path` 挂载（Docker/Podman 自动创建卷，不受 readonly_rootfs 影响）。
+        let limits = ResourceLimits {
+            cpu_cores: 1.0,
+            memory_mb: 128,
+            timeout_secs: 5,
+            output_bytes: 1024,
+            allow_network: false,
+        };
+        assert_eq!(build_host_config(&limits, None).binds, None);
+
+        let cache = CacheVolume {
+            name: "yggdrasil-gocache".to_string(),
+            mount_path: "/go-cache".to_string(),
+        };
+        assert_eq!(
+            build_host_config(&limits, Some(&cache)).binds,
+            Some(vec!["yggdrasil-gocache:/go-cache".to_string()])
+        );
+    }
+
+    #[test]
     fn host_config_ulimits_drops_only_nofile() {
         // nproc 在容器内对 non-root 用户有害（初始 exec /bin/sh 直接 EAGAIN），
         // 只保留 nofile=64。若有人加回 nproc，这里会失败。
@@ -655,7 +697,7 @@ mod tests {
             output_bytes: 1024,
             allow_network: false,
         };
-        let host_config = build_host_config(&limits);
+        let host_config = build_host_config(&limits, None);
         let ulimits = host_config.ulimits.expect("ulimits must be set");
         assert_eq!(ulimits.len(), 1, "only nofile, no nproc");
         let nf = &ulimits[0];
@@ -675,7 +717,7 @@ mod tests {
             output_bytes: 1024,
             allow_network: false,
         };
-        let host_config = build_host_config(&limits);
+        let host_config = build_host_config(&limits, None);
         let tmpfs = host_config.tmpfs.expect("tmpfs must be set");
         assert_eq!(tmpfs.len(), 3);
         assert!(tmpfs["/tmp"].contains("exec"));
@@ -693,13 +735,13 @@ mod tests {
             allow_network: false,
         };
         assert_eq!(
-            build_host_config(&base).network_mode.as_deref(),
+            build_host_config(&base, None).network_mode.as_deref(),
             Some("none")
         );
         let mut net = base;
         net.allow_network = true;
         assert_eq!(
-            build_host_config(&net).network_mode.as_deref(),
+            build_host_config(&net, None).network_mode.as_deref(),
             Some("bridge")
         );
     }
@@ -714,7 +756,7 @@ mod tests {
             output_bytes: 1024,
             allow_network: false,
         };
-        let host_config = build_host_config(&limits);
+        let host_config = build_host_config(&limits, None);
         assert_eq!(host_config.cpu_quota, Some(200_000));
         assert_eq!(host_config.cpu_period, Some(100_000));
         assert_eq!(host_config.memory, Some(512 * 1024 * 1024));
@@ -762,6 +804,7 @@ mod tests {
             "hello world",
             "txt",
             limits,
+            None,
         )
         .await
         .unwrap();
@@ -792,6 +835,7 @@ mod tests {
             "hello world",
             "txt",
             limits,
+            None,
         )
         .await
         .unwrap();
@@ -816,7 +860,8 @@ mod tests {
             output_bytes: 1024,
             allow_network: false,
         };
-        let res = run_in_container("alpine:latest", "sleep 10", "", "txt", limits).await;
+        let res =
+            run_in_container("alpine:latest", "sleep 10", "", "txt", limits, None).await;
 
         assert!(res.is_err());
         let err = res.unwrap_err();
@@ -858,7 +903,7 @@ mod tests {
             allow_network: false,
         };
 
-        let run_fut = run_in_container("alpine:latest", "sleep 100", "", "txt", limits);
+        let run_fut = run_in_container("alpine:latest", "sleep 100", "", "txt", limits, None);
 
         tokio::select! {
             _ = run_fut => {

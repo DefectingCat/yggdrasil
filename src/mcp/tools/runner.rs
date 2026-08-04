@@ -126,6 +126,7 @@ async fn execute_in_container(language: &str, source: &str) -> Result<RunResult,
         source,
         &lang_def.extension,
         final_limits,
+        lang_def.cache_volume.as_ref(),
     )
     .await;
     let duration_ms = (chrono::Utc::now() - start_time).num_milliseconds().max(0) as u64;
