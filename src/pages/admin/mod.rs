@@ -16,7 +16,7 @@ pub mod friends;
 pub mod mcp;
 /// 文章管理列表页面模块。
 pub mod posts;
-/// 回收站页面模块（文章管理下的 tab）。
+/// 回收站页面模块（/admin/posts/trash 独立路由）。
 pub mod posts_trash;
 /// 代码试运行沙箱页面模块。
 pub mod runner;
@@ -35,8 +35,10 @@ pub use dashboard::Admin;
 pub use friends::FriendsAdmin;
 /// MCP 令牌管理 + 客户端配置生成页面组件。
 pub use mcp::Mcp;
-/// 文章管理入口组件（列表 + 回收站，单路由 + 客户端 tab）。
+/// 文章管理入口组件（全部文章列表）。
 pub use posts::Posts;
+/// 回收站页面组件。
+pub use posts_trash::PostsTrash;
 /// 代码试运行沙箱组件。
 pub use runner::Runner;
 /// 系统管理入口组件。

@@ -12,8 +12,8 @@ use crate::components::frontend_layout::FrontendLayout;
 use crate::context::UserContext;
 use crate::pages::about::About;
 use crate::pages::admin::{
-    Admin, AdminComments, AdminCommentsPage, Assets, FriendsAdmin, Mcp, Posts, Runner, System,
-    Write, WriteEdit,
+    Admin, AdminComments, AdminCommentsPage, Assets, FriendsAdmin, Mcp, Posts, PostsTrash, Runner,
+    System, Write, WriteEdit,
 };
 use crate::pages::archives::Archives;
 use crate::pages::changelog::Changelog;
@@ -83,9 +83,12 @@ pub enum Route {
         /// 编辑文章页
         #[route("/write/:id")]
         WriteEdit { id: i32 },
-        /// 文章管理（列表 + 回收站，客户端 tab 切换，单一路由）
+        /// 文章管理（全部文章列表）
         #[route("/posts")]
         Posts {},
+        /// 回收站（已软删除文章；原 /admin/posts 的客户端 tab，独立路由后归「内容管理」子菜单）
+        #[route("/posts/trash")]
+        PostsTrash {},
         /// 素材管理（上传图片注册表：浏览/搜索/删除/孤儿清理）
         #[route("/assets")]
         Assets {},

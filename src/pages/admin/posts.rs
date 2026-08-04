@@ -1,8 +1,8 @@
-//! 文章管理页面（列表 + 回收站，单一路由 + 客户端 tab 切换）。
+//! 文章管理页面（全部文章列表，`/admin/posts`）。
 //!
-//! 「全部文章」与「回收站」合并为单一 `/admin/posts` 路由，用顶部 tab 在二者间
-//! 切换。tab 状态与翻页均由客户端 signal 驱动（不走路由、不深链），与 `system.rs`
-//! 的 tab 模式一致：admin 内部页，刷新回到「全部文章」第 1 页即可。
+//! 本页只承载「全部文章」列表；回收站已拆分为独立路由 `/admin/posts/trash`
+//! （见 `posts_trash.rs`），二者与评论管理共同组成侧边栏「内容管理」子菜单
+//! （issue #17）。翻页由客户端 signal 驱动（不走路由参数）。
 //! 数据加载与写操作仅在 WASM 前端通过 Dioxus server functions 完成。
 
 use dioxus::prelude::*;
@@ -11,12 +11,12 @@ use dioxus::router::components::Link;
 // 分页数据接口：list_posts 是 server function，两端都生成（wasm 端为 client stub，
 // server 端为真实实现），故无需 cfg。实际请求只在 use_paginated 的 wasm 分支发出。
 use crate::api::posts::{list_posts, PostListResponse};
-// get_post_stats / PostStatsResponse 仅在 Posts 容器的 wasm 加载路径使用，
-// SSR 下对应 use_effect 分支被裁剪，故允许 unused imports。
+// 操作类 server function 仅在 WASM 代码路径调用，SSR 下触发 unused imports，
+// 按项目惯例放行。
 #[allow(unused_imports)]
 use crate::api::posts::{
-    delete_post, get_post_stats, rebuild_content_html, rebuild_post_content_html,
-    CreatePostResponse, PostStatsResponse, RebuildResult,
+    delete_post, rebuild_content_html, rebuild_post_content_html, CreatePostResponse,
+    RebuildResult,
 };
 use crate::components::empty_state::{EmptyState, EmptyStateAction};
 use crate::components::forms::{FormInput, INPUT_INLINE_CLASS};
@@ -29,107 +29,29 @@ use crate::components::ui::{
 use crate::hooks::query::use_paginated;
 use crate::models::post::PostListItem;
 use crate::router::Route;
-// 回收站 tab 内容（本容器 match 渲染）。
-use super::posts_trash::PostsTrashPanel;
 
 /// 每页展示的文章数量。
 const POSTS_PER_PAGE: i32 = 20;
 
-/// 文章管理顶部 tab：全部文章 / 回收站。
+/// 文章管理入口组件：全部文章列表页。
 ///
-/// 用枚举而非裸字符串，保证 tab 切换的类型安全；`as_str()` 提供稳定 key 供
-/// `key` 化重挂载（隔离各 tab 的 `use_paginated` 状态）。
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub(super) enum PostsTab {
-    /// 全部文章（含草稿）。
-    All,
-    /// 回收站（已软删除）。
-    Trash,
-}
-
-impl PostsTab {
-    fn as_str(&self) -> &'static str {
-        match self {
-            PostsTab::All => "all",
-            PostsTab::Trash => "trash",
-        }
-    }
-}
-
-/// 文章管理入口组件：单一路由 + 客户端 tab 切换。
-///
-/// 持有 `active_tab` signal 与回收站数量 `trash_count`（供 header 文案 + tab 角标），
-/// 用 `key` 化 `match` 切换 `AllPostsList` / `PostsTrashPanel`：切 tab 完全卸载旧
-/// 组件、重挂新组件，各 tab 的 `use_paginated` / 选中态等本地 signal 天然隔离，
-/// 无需手动重置。参照 `system.rs` 的 tab 模式。
+/// 纯壳组件：header（标题 + 重建缓存 + 发布文章入口）+ `AllPostsList`。
+/// 回收站已拆至独立路由 `/admin/posts/trash`（见 `posts_trash.rs::PostsTrash`）。
 #[component]
-#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
 pub fn Posts() -> Element {
-    let mut active_tab = use_signal(|| PostsTab::All);
-    // 回收站数量：仅 WASM 异步拉取一次，供 header 文案「已删除文章 (N)」与 tab 角标。
-    // 回收站 panel 内部维护自己的精确 total（分页计数用），二者解耦——角标是粗略提示。
-    let mut trash_count = use_signal(|| Option::<i64>::None);
-
-    use_effect(move || {
-        #[cfg(target_arch = "wasm32")]
-        spawn(async move {
-            if let Ok(PostStatsResponse { stats }) = get_post_stats().await {
-                trash_count.set(Some(stats.trash));
-            }
-        });
-    });
-
     rsx! {
         div { class: "w-full max-w-7xl mx-auto space-y-6",
-            // 共享 header：标题/副标题随 tab 切换文案；右侧操作区仅「全部文章」tab 显示。
             div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-paper-border mb-6",
                 div {
-                    h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]",
-                        if active_tab() == PostsTab::All {
-                            "管理文章"
-                        } else {
-                            "回收站"
-                        }
-                    }
-                    p { class: "text-base text-[var(--color-paper-secondary)] mt-2",
-                        if active_tab() == PostsTab::All {
-                            "所有文章及草稿"
-                        } else {
-                            if let Some(count) = trash_count() {
-                                "已删除文章 ({count})"
-                            } else {
-                                "已删除文章"
-                            }
-                        }
-                    }
+                    h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]", "全部文章" }
+                    p { class: "text-base text-[var(--color-paper-secondary)] mt-2", "所有文章及草稿" }
                 }
-                // 发布文章 + 重建缓存仅在「全部文章」tab 显示。
-                if active_tab() == PostsTab::All {
-                    div { class: "flex items-center gap-3",
-                        RebuildCacheBar {}
-                        Link { class: "{BTN_PRIMARY}", to: Route::Write {}, "发布文章" }
-                    }
+                div { class: "flex items-center gap-3",
+                    RebuildCacheBar {}
+                    Link { class: "{BTN_PRIMARY}", to: Route::Write {}, "发布文章" }
                 }
             }
-
-            // tab 栏：全部文章 / 回收站。signal 驱动（点击切 active_tab，非路由）。
-            PostsTabs {
-                active: active_tab,
-                trash_count,
-                on_change: move |t: PostsTab| active_tab.set(t),
-            }
-
-            // key 化条件渲染：切 tab 完全卸载/重挂，隔离各自 use_paginated 状态。
-            div { key: "{active_tab().as_str()}",
-                match active_tab() {
-                    PostsTab::All => rsx! {
-                        AllPostsList {}
-                    },
-                    PostsTab::Trash => rsx! {
-                        PostsTrashPanel {}
-                    },
-                }
-            }
+            AllPostsList {}
         }
     }
 }
@@ -485,90 +407,3 @@ fn PostRow(
     }
 }
 
-/// tab 组 id 自增计数器：给每处 PostsTabs 实例一个唯一前缀，用于 DOM 测量滑块位置。
-/// （ui.rs 的 FilterTabs 有同款 TAB_GROUP_ID，此处为避免跨模块可见性污染，本地自建。）
-static POSTS_TAB_GROUP_ID: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-
-/// 文章管理 tab 栏：「全部文章」与「回收站」。
-///
-/// tab 状态由父组件传入的 `active` signal 驱动（非路由），点击即调用 `on_change`
-/// 切换。回收站 tab 带 `trash_count` 数量角标，便于发现待清理文章。
-///
-/// 底部带**平滑滑动指示器**（绝对定位的滑块 + transition），切换 tab 时滑块从
-/// 一个 tab 平滑滑到另一个，与 FilterTabs（system/comments 页）视觉一致。滑块
-/// 位置通过 WASM 端测量目标 button 的 offsetLeft/offsetWidth 动态计算。
-///
-/// 两个 tab 均用 `inline-flex items-center` 同盒模型，外层容器加 `items-center`，
-/// 根除原先「全部文章」(inline 文本) 与「回收站」(inline-flex 带角标) 盒模型
-/// 不一致导致的垂直错位。
-#[component]
-#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
-pub(super) fn PostsTabs(
-    active: Signal<PostsTab>,
-    trash_count: Signal<Option<i64>>,
-    on_change: EventHandler<PostsTab>,
-) -> Element {
-    let is_trash = active() == PostsTab::Trash;
-    // 滑块样式（left/width/opacity）：WASM 端测量目标 button 定位后写入。
-    let mut indicator_style = use_signal(|| "left: 0px; width: 0px; opacity: 0;".to_string());
-    let id_prefix =
-        use_hook(|| POSTS_TAB_GROUP_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
-
-    // 测量目标 tab 的 offsetLeft/offsetWidth，更新滑块定位。WASM 端异步等待 DOM
-    // 更新后读取；server 端空操作（SSR 不渲染动画）。
-    let update_indicator = move |active_key: &str| {
-        let active_key = active_key.to_string();
-        spawn(async move {
-            #[cfg(target_arch = "wasm32")]
-            {
-                use wasm_bindgen::JsCast;
-                crate::utils::time::sleep_ms(50).await;
-                if let Some(el) = web_sys::window().and_then(|w| w.document()).and_then(|d| {
-                    d.get_element_by_id(&format!("posts-tab-{id_prefix}-{active_key}"))
-                }) {
-                    if let Ok(html_el) = el.dyn_into::<web_sys::HtmlElement>() {
-                        indicator_style.set(format!(
-                            "left: {}px; width: {}px; opacity: 1;",
-                            html_el.offset_left(),
-                            html_el.offset_width()
-                        ));
-                    }
-                }
-            }
-        });
-    };
-
-    // active 变化时（含首次挂载）触发滑块定位。
-    use_effect(move || {
-        update_indicator(active().as_str());
-    });
-
-    rsx! {
-        // relative 容器：承载绝对定位滑块；items-center 让两个 tab 垂直居中对齐。
-        div { class: "relative flex items-center gap-4 border-b border-paper-border",
-            button {
-                id: "posts-tab-{id_prefix}-all",
-                class: if !is_trash { "inline-flex items-center px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-primary transition-colors cursor-pointer" } else { "inline-flex items-center px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer" },
-                onclick: move |_| on_change.call(PostsTab::All),
-                "全部文章"
-            }
-            button {
-                id: "posts-tab-{id_prefix}-trash",
-                class: if is_trash { "inline-flex items-center gap-1.5 px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-primary transition-colors cursor-pointer" } else { "inline-flex items-center gap-1.5 px-2 py-3 text-xs font-mono tracking-widest uppercase text-paper-secondary hover:text-paper-primary transition-colors cursor-pointer" },
-                onclick: move |_| on_change.call(PostsTab::Trash),
-                "回收站"
-                // 数量角标：有数据才显示。0 显示中性灰，>0 用主题强调色提醒。
-                if let Some(count) = trash_count() {
-                    span { class: if count > 0 { "inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[0.625rem] font-semibold normal-case tracking-normal bg-paper-accent-soft text-paper-accent" } else { "inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[0.625rem] font-semibold normal-case tracking-normal bg-paper-tertiary text-paper-secondary" },
-                        "{count}"
-                    }
-                }
-            }
-            // 绝对定位的滑动指示器：贴底边（-1px 盖住外层 border-b），transition 驱动滑动动画。
-            div {
-                class: "absolute bottom-[-1px] h-[2px] bg-paper-primary transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] pointer-events-none",
-                style: "{indicator_style}",
-            }
-        }
-    }
-}

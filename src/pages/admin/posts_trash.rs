@@ -1,13 +1,12 @@
-//! 回收站（文章管理下的 tab，由 `posts.rs::Posts` 容器渲染）。
+//! 回收站页面（`/admin/posts/trash` 独立路由，属侧边栏「内容管理」子菜单）。
 //!
 //! 展示已软删除文章，支持恢复、彻底删除、批量操作、一键清空，
 //! 以及自动清理配置（启用开关 + 保留天数）。
 //! 数据加载与操作仅在 WASM 前端通过 Dioxus server functions 交互。
 //!
-//! 本组件作为 `PostsTrashPanel` 被 `/admin/posts` 单路由下的 tab 容器（见
-//! `posts.rs::Posts`）渲染：header 与 tab 栏由容器统一提供，本组件只负责
-//! 回收站列表内容（自动清理配置 + 批量栏 + 列表 + 分页）。翻页走客户端 signal，
-//! 与全部文章 tab 状态通过容器层的 key 化挂载隔离。
+//! 原为 `/admin/posts` 单路由下的客户端 tab（由 `posts.rs::Posts` 容器渲染），
+//! issue #17 起提升为独立路由：页面 header 由本组件自带（标题 + 删除计数副标题，
+//! 计数取自 `use_paginated` 的 `total`），翻页仍走客户端 signal。
 
 use std::collections::HashSet;
 
@@ -37,14 +36,15 @@ use crate::models::settings::TrashSettings;
 /// 每页展示的回收站文章数量。
 const TRASH_PER_PAGE: i32 = 20;
 
-/// 回收站 tab 内容：列表 + 批量操作 + 自动清理配置。
+/// 回收站页面：列表 + 批量操作 + 自动清理配置。
 ///
-/// 作为 `PostsTrashPanel` 被 `posts.rs::Posts` 容器的 tab match 渲染。翻页用客户端
-/// signal 驱动（`current_page` signal + `use_paginated` 闭包内读取建立依赖），
-/// 不走路由。支持单条/批量恢复与彻底删除、一键清空，以及内联自动清理配置。
+/// 独立路由 `/admin/posts/trash` 的页面组件（原 `posts.rs::Posts` 的回收站 tab
+/// 提升而来）。翻页用客户端 signal 驱动（`current_page` signal + `use_paginated`
+/// 闭包内读取建立依赖），不走路由参数。支持单条/批量恢复与彻底删除、一键清空，
+/// 以及内联自动清理配置。header 副标题的删除计数取自 `use_paginated` 的 `total`。
 #[allow(unused_mut, unused_variables)]
 #[component]
-pub(super) fn PostsTrashPanel() -> Element {
+pub fn PostsTrash() -> Element {
     let current_page = use_signal(|| 1);
     let mut selected_ids: Signal<HashSet<i32>> = use_signal(HashSet::new);
 
@@ -77,8 +77,23 @@ pub(super) fn PostsTrashPanel() -> Element {
         });
     };
 
+    // 首次加载完成前不显示数量，避免「(0)」闪烁；翻页重载时 total 仍为上页值，计数保留。
+    let subtitle = if total() > 0 || !loading() {
+        format!("已删除文章 ({})", total())
+    } else {
+        "已删除文章".to_string()
+    };
+
     rsx! {
-        div { class: "space-y-6",
+        div { class: "w-full max-w-7xl mx-auto space-y-6",
+            // 页面 header：计数取自本组件 use_paginated 的 total（比旧 get_post_stats 角标更准）。
+            div { class: "pb-6 border-b border-paper-border mb-6",
+                div {
+                    h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]", "回收站" }
+                    p { class: "text-base text-[var(--color-paper-secondary)] mt-2", "{subtitle}" }
+                }
+            }
+            div { class: "space-y-6",
             // 自动清理配置卡片（抽取为子组件 AutoPurgeSettings，见文件末尾）。
             AutoPurgeSettings { settings }
 
@@ -311,6 +326,7 @@ pub(super) fn PostsTrashPanel() -> Element {
                         }
                     }
                 }
+            }
             }
         }
     }
