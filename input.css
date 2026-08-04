@@ -1590,20 +1590,24 @@
   /* ========== 批量操作栏展开/收起过渡 ==========
      选中评论/文章时批量操作栏展开，取消时收起。使用 grid-template-rows 0fr↔1fr
      技术实现 auto-height 过渡（现代浏览器原生支持）。
-     margin-top: 0 !important 覆盖父级 space-y 的间距，收起时不留白。 */
+     Tailwind v4 space-y 用 margin-block-start（逻辑属性），与 margin-top（物理属性）
+     在级联中是不同属性，必须同时覆盖。 */
   .batch-bar {
     display: grid;
     grid-template-rows: 1fr;
     opacity: 1;
     transition: grid-template-rows 0.2s cubic-bezier(0.22, 1, 0.36, 1),
                 opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1),
-                margin-top 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+                margin 0.2s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .batch-bar.is-collapsed {
     grid-template-rows: 0fr;
     opacity: 0;
     margin-top: 0 !important;
+    margin-block-start: 0 !important;
+    margin-bottom: 0 !important;
+    margin-block-end: 0 !important;
   }
 
   .batch-bar > * {
