@@ -173,6 +173,7 @@ The blog is also a **Model Context Protocol server** (single `/mcp` endpoint, St
 - 提交粒度按"功能点"而非"文件":相关联的多文件改动合并为一个提交,不相关的改动拆成多个提交。
 - 提交信息遵循现有风格:`type(scope): 简述`,正文(可选)说明动机与关键改动。常见 type:`feat` / `fix` / `docs` / `refactor` / `chore` / `perf`。
 - 只在用户明确要求时才 `git push`。提交到本地即可,不主动推送。
+- **修改完成后通知用户验证**：每次修改完代码后，AI 不要自己去验证，直接通知用户去验证。
 
 ## Testing & QA
 
