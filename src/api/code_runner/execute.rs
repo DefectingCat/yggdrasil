@@ -197,23 +197,13 @@ fn spawn_exec_task(
                 update_task_result(&task_id, status, exec_res);
             }
             Err(e) => {
-                // 系统内部异常脱敏：日志记详情，前端只见通用消息。
-                let s = e.to_string();
-                let is_timeout = s.contains("TimedOut");
+                // 系统内部异常脱敏：日志记完整 error，前端只见分类后的可操作消息。
                 tracing::error!(error = ?e, task_id = %task_id, "container execution failed{}", stream_suffix);
-                let status = if is_timeout {
-                    ExecStatus::Timeout
-                } else {
-                    ExecStatus::Failed
-                };
+                let (status, stderr_msg) = classify_runner_error(&e, &lang_def.image);
                 let exec_res = ExecResult {
                     status: status.clone(),
                     stdout: String::new(),
-                    stderr: if is_timeout {
-                        "执行超时".to_string()
-                    } else {
-                        "系统暂时不可用".to_string()
-                    },
+                    stderr: stderr_msg,
                     exit_code: None,
                     duration_ms,
                     language: lang_key.clone(),
@@ -222,6 +212,44 @@ fn spawn_exec_task(
             }
         }
     });
+}
+
+/// 把容器执行错误分类为前端可读的状态与脱敏消息。
+///
+/// issue #20 的核心诉求：让「镜像未构建」「daemon 不可达」从笼统的「系统暂时不可用」
+/// 中区分出来，给出可操作的修复指引。
+///
+/// 判定策略：
+/// - 超时：`docker.rs` 用 `Error::IOError { kind: TimedOut }` 上报（`docker.rs:223-227`、
+///   `:305-309`）。`io::Error` 的 Display **只渲染自定义消息**（如 "Execution timed
+///   out"），不含 kind 名——故靠字符串 `contains("TimedOut")` 永远命中不了真实超时路径。
+///   这里按**变体 + kind** 判定，是最可靠的信号。
+/// - 镜像缺失：Docker Engine API 稳定文本 "No such image"，走 Display 字符串匹配。
+/// - daemon 不可达：来自 `get_docker()` 构造的 io::Error 消息（`docker.rs:54`），走字符串匹配。
+/// - 其余：兜底「系统暂时不可用」。
+#[cfg(feature = "server")]
+fn classify_runner_error(e: &bollard::errors::Error, image: &str) -> (ExecStatus, String) {
+    // 超时必须按变体 + kind 判定：io::Error 的 Display 不含 kind 名。
+    if let bollard::errors::Error::IOError { err } = e {
+        if err.kind() == std::io::ErrorKind::TimedOut {
+            return (ExecStatus::Timeout, "执行超时".to_string());
+        }
+    }
+
+    let s = e.to_string();
+    if s.contains("No such image") {
+        (
+            ExecStatus::Failed,
+            format!("运行器镜像未构建：{image}。请在宿主执行：bash docker/build-runners.sh"),
+        )
+    } else if s.contains("Docker daemon 不可用") {
+        (
+            ExecStatus::Failed,
+            "Docker 未运行或 socket 未挂载，代码运行不可用".to_string(),
+        )
+    } else {
+        (ExecStatus::Failed, "系统暂时不可用".to_string())
+    }
 }
 
 /// 提交一次代码执行请求。
@@ -396,5 +424,60 @@ mod tests {
         let huge = "a".repeat((RUNNER_CONFIG.max_source_bytes as usize) + 100);
         let err = validate_exec_request(&req("brainfuck", &huge)).unwrap_err();
         assert!(err.to_string().contains("语言"), "应先报语言错误: {err}");
+    }
+
+    #[test]
+    fn classify_runner_error_image_missing() {
+        // issue #20 的核心场景：404 + "No such image" 应给出可操作的构建指引，
+        // 而非笼统的「系统暂时不可用」。
+        let e = bollard::errors::Error::DockerResponseServerError {
+            status_code: 404,
+            message: "No such image: yggdrasil-runner-python:latest".to_string(),
+        };
+        let (status, stderr) = classify_runner_error(&e, "yggdrasil-runner-python:latest");
+        assert_eq!(status, ExecStatus::Failed);
+        assert_eq!(
+            stderr,
+            "运行器镜像未构建：yggdrasil-runner-python:latest。请在宿主执行：bash docker/build-runners.sh"
+        );
+    }
+
+    #[test]
+    fn classify_runner_error_daemon_unavailable() {
+        // get_docker() 在 DOCKER_CLIENT 为 None 时构造的 IOError（NotFound）。
+        let e = bollard::errors::Error::IOError {
+            err: std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Docker daemon 不可用（未安装或未运行）",
+            ),
+        };
+        let (status, stderr) = classify_runner_error(&e, "yggdrasil-runner-python:latest");
+        assert_eq!(status, ExecStatus::Failed);
+        assert_eq!(stderr, "Docker 未运行或 socket 未挂载，代码运行不可用");
+    }
+
+    #[test]
+    fn classify_runner_error_timeout() {
+        // docker.rs 超时路径：IOError { kind: TimedOut }。
+        // 注意：io::Error Display 只渲染自定义消息 "Execution timed out"，
+        // 不含 kind 名 "TimedOut"——锁定按变体 + kind 判定（而非字符串匹配）。
+        let e = bollard::errors::Error::IOError {
+            err: std::io::Error::new(std::io::ErrorKind::TimedOut, "Execution timed out"),
+        };
+        let (status, stderr) = classify_runner_error(&e, "yggdrasil-runner-python:latest");
+        assert_eq!(status, ExecStatus::Timeout);
+        assert_eq!(stderr, "执行超时");
+    }
+
+    #[test]
+    fn classify_runner_error_generic_fallback() {
+        // 其它服务端错误（如 500）兜底为「系统暂时不可用」。
+        let e = bollard::errors::Error::DockerResponseServerError {
+            status_code: 500,
+            message: "boom".to_string(),
+        };
+        let (status, stderr) = classify_runner_error(&e, "yggdrasil-runner-python:latest");
+        assert_eq!(status, ExecStatus::Failed);
+        assert_eq!(stderr, "系统暂时不可用");
     }
 }

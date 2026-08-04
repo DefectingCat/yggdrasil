@@ -211,6 +211,12 @@ fn main() {
             // 启动后台采样任务：sysinfo 主机指标（CPU/内存/磁盘），server function 只读快照。
             sysinfo_sampler::spawn_sampler();
 
+            // 启动期探测代码运行器就绪度（Docker daemon + runner 镜像），缺失时打印可操作日志。
+            // 不阻塞启动、不 exit——代码运行是可选功能（博客本身不依赖 Docker）。
+            tokio::spawn(async {
+                crate::api::code_runner::readiness::log_runner_readiness().await;
+            });
+
             // 配置增量渲染缓存，默认缓存 3600 秒，可通过 SSR_CACHE_SECS 覆盖。
             // 注意：src/ssr_cache.rs 中的世代号是未来就绪基础设施，当前并不会使
             // Dioxus 0.7 的 SSR 缓存实际失效（Dioxus 未暴露相应 API）。在 API 可用

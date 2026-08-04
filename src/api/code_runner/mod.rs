@@ -82,4 +82,6 @@ pub mod languages;
 #[cfg(feature = "server")]
 pub mod progress;
 #[cfg(feature = "server")]
+pub mod readiness;
+#[cfg(feature = "server")]
 pub mod sse;
