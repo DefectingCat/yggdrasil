@@ -74,22 +74,30 @@ pub fn now_millis() -> i64 {
 /// - `delta_millis`：目标时间与"现在"的差值（毫秒）。正值表示过去，负值表示未来（兜底按刚刚处理）。
 /// - `created_iso`：评论的 RFC3339 创建时间，用于兜底生成绝对日期。
 pub fn relative_label_from_millis(delta_millis: i64, created_iso: &str) -> (String, String) {
-    let seconds = delta_millis / 1000;
+    let dt = DateTime::parse_from_rfc3339(created_iso).ok();
+    relative_label_inner(delta_millis, dt.as_ref())
+}
 
+/// 桶化相对时间标签 + 绝对日期，复用已解析的 DateTime 避免二次 ISO 解析。
+fn relative_label_inner(
+    delta_millis: i64,
+    dt: Option<&chrono::DateTime<chrono::FixedOffset>>,
+) -> (String, String) {
+    let seconds = delta_millis / 1000;
     let label = if seconds < 60 {
         "刚刚".to_string()
     } else {
         let minutes = seconds / 60;
         if minutes < 60 {
-            format!("{} 分钟前", minutes)
+            format!("{minutes} 分钟前")
         } else {
             let hours = minutes / 60;
             if hours < 24 {
-                format!("{} 小时前", hours)
+                format!("{hours} 小时前")
             } else {
                 let days = hours / 24;
                 if days < 30 {
-                    format!("{} 天前", days)
+                    format!("{days} 天前")
                 } else {
                     // 超过 30 天直接显示日期，下方 absolute 复用
                     String::new()
@@ -99,8 +107,8 @@ pub fn relative_label_from_millis(delta_millis: i64, created_iso: &str) -> (Stri
     };
 
     // 绝对日期：优先解析 ISO；解析失败时退化为空串，避免组件报错。
-    let absolute = DateTime::parse_from_rfc3339(created_iso)
-        .map(|dt| dt.format("%Y-%m-%d").to_string())
+    let absolute = dt
+        .map(|d| d.format("%Y-%m-%d").to_string())
         .unwrap_or_default();
 
     let label = if label.is_empty() {
@@ -115,12 +123,12 @@ pub fn relative_label_from_millis(delta_millis: i64, created_iso: &str) -> (Stri
 ///
 /// 这是 `relative_label_from_millis` 的薄封装，仅返回相对文本。
 pub fn format_relative_time_iso(created_iso: &str) -> String {
-    // 解析失败时退化为 "刚刚"，避免组件崩溃。
-    let Ok(dt) = DateTime::parse_from_rfc3339(created_iso) else {
-        return "刚刚".to_string();
+    let dt = DateTime::parse_from_rfc3339(created_iso).ok();
+    let delta_millis = match &dt {
+        Some(d) => now_millis() - d.timestamp_millis(),
+        None => return "刚刚".to_string(),
     };
-    let delta_millis = now_millis() - dt.timestamp_millis();
-    relative_label_from_millis(delta_millis, created_iso).0
+    relative_label_inner(delta_millis, dt.as_ref()).0
 }
 
 #[cfg(test)]

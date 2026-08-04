@@ -333,16 +333,23 @@ pub fn cache_stats() -> Vec<CacheStatSnapshot> {
 // 公共缓存 API
 // ============================================================================
 
+/// 记录缓存命中/未命中统计，返回原值。
+macro_rules! record_hit_miss {
+    ($v:expr, $stats:expr) => {{
+        let v = $v;
+        if v.is_some() {
+            $stats.record_hit();
+        } else {
+            $stats.record_miss();
+        }
+        v
+    }};
+}
+
 /// 读取文章分页列表缓存。
 #[cfg(feature = "server")]
 pub async fn get_post_list(key: &CacheKey) -> Option<(Vec<PostListItem>, i64)> {
-    let v = POST_LIST_CACHE.get(key).await;
-    if v.is_some() {
-        POST_LIST_STATS.record_hit();
-    } else {
-        POST_LIST_STATS.record_miss();
-    }
-    v
+    record_hit_miss!(POST_LIST_CACHE.get(key).await, POST_LIST_STATS)
 }
 
 /// 写入文章分页列表缓存。
@@ -354,16 +361,13 @@ pub async fn set_post_list(key: &CacheKey, posts: Vec<PostListItem>, total: i64)
 /// 读取已发布文章总数缓存。
 #[cfg(feature = "server")]
 pub async fn get_total_published_posts() -> Option<i64> {
-    let v = POST_LIST_CACHE
-        .get(&CacheKey::TotalPublishedPosts)
-        .await
-        .map(|(_, total)| total);
-    if v.is_some() {
-        POST_LIST_STATS.record_hit();
-    } else {
-        POST_LIST_STATS.record_miss();
-    }
-    v
+    record_hit_miss!(
+        POST_LIST_CACHE
+            .get(&CacheKey::TotalPublishedPosts)
+            .await
+            .map(|(_, total)| total),
+        POST_LIST_STATS
+    )
 }
 
 /// 写入已发布文章总数缓存，文章列表部分置空以节省内存。
@@ -377,13 +381,7 @@ pub async fn set_total_published_posts(total: i64) {
 /// 读取全部标签缓存。
 #[cfg(feature = "server")]
 pub async fn get_tag_list() -> Option<Vec<Tag>> {
-    let v = TAG_LIST_CACHE.get(&CacheKey::AllTags).await;
-    if v.is_some() {
-        TAG_STATS.record_hit();
-    } else {
-        TAG_STATS.record_miss();
-    }
-    v
+    record_hit_miss!(TAG_LIST_CACHE.get(&CacheKey::AllTags).await, TAG_STATS)
 }
 
 /// 写入全部标签缓存。
@@ -395,13 +393,10 @@ pub async fn set_tag_list(tags: Vec<Tag>) {
 /// 读取全部友链缓存（前台可见集）。
 #[cfg(feature = "server")]
 pub async fn get_friend_links() -> Option<Vec<FriendLink>> {
-    let v = FRIEND_LINKS_CACHE.get(&CacheKey::FriendLinks).await;
-    if v.is_some() {
-        FRIEND_STATS.record_hit();
-    } else {
-        FRIEND_STATS.record_miss();
-    }
-    v
+    record_hit_miss!(
+        FRIEND_LINKS_CACHE.get(&CacheKey::FriendLinks).await,
+        FRIEND_STATS
+    )
 }
 
 /// 写入全部友链缓存。
@@ -415,15 +410,12 @@ pub async fn set_friend_links(links: Vec<FriendLink>) {
 /// 按 slug 读取单篇文章缓存。
 #[cfg(feature = "server")]
 pub async fn get_post_by_slug(slug: &str) -> Option<Option<Post>> {
-    let v = SINGLE_POST_CACHE
-        .get(&CacheKey::PostBySlug(slug.to_string()))
-        .await;
-    if v.is_some() {
-        SINGLE_POST_STATS.record_hit();
-    } else {
-        SINGLE_POST_STATS.record_miss();
-    }
-    v
+    record_hit_miss!(
+        SINGLE_POST_CACHE
+            .get(&CacheKey::PostBySlug(slug.to_string()))
+            .await,
+        SINGLE_POST_STATS
+    )
 }
 
 /// 按 slug 写入单篇文章缓存，None 表示文章不存在。
@@ -437,15 +429,12 @@ pub async fn set_post_by_slug(slug: &str, post: Option<Post>) {
 /// 按标签读取文章列表缓存。
 #[cfg(feature = "server")]
 pub async fn get_posts_by_tag(tag: &str) -> Option<(Vec<PostListItem>, i64)> {
-    let v = TAG_POSTS_CACHE
-        .get(&CacheKey::PostsByTag(tag.to_string()))
-        .await;
-    if v.is_some() {
-        TAG_POSTS_STATS.record_hit();
-    } else {
-        TAG_POSTS_STATS.record_miss();
-    }
-    v
+    record_hit_miss!(
+        TAG_POSTS_CACHE
+            .get(&CacheKey::PostsByTag(tag.to_string()))
+            .await,
+        TAG_POSTS_STATS
+    )
 }
 
 /// 按标签写入文章列表缓存。
@@ -459,13 +448,10 @@ pub async fn set_posts_by_tag(tag: &str, posts: Vec<PostListItem>, total: i64) {
 /// 读取文章统计缓存。
 #[cfg(feature = "server")]
 pub async fn get_post_stats() -> Option<PostStats> {
-    let v = POST_STATS_CACHE.get(&CacheKey::PostStats).await;
-    if v.is_some() {
-        POST_STATS_STATS.record_hit();
-    } else {
-        POST_STATS_STATS.record_miss();
-    }
-    v
+    record_hit_miss!(
+        POST_STATS_CACHE.get(&CacheKey::PostStats).await,
+        POST_STATS_STATS
+    )
 }
 
 /// 写入文章统计缓存。
@@ -477,13 +463,7 @@ pub async fn set_post_stats(stats: PostStats) {
 /// 读取 Feed 条目列表缓存。
 #[cfg(feature = "server")]
 pub async fn get_feed() -> Option<Vec<FeedItem>> {
-    let v = FEED_CACHE.get(&CacheKey::Feed).await;
-    if v.is_some() {
-        FEED_STATS.record_hit();
-    } else {
-        FEED_STATS.record_miss();
-    }
-    v
+    record_hit_miss!(FEED_CACHE.get(&CacheKey::Feed).await, FEED_STATS)
 }
 
 /// 写入 Feed 条目列表缓存。
@@ -615,15 +595,12 @@ pub async fn invalidate_for_post_write(slugs: &[String], tags: &[String]) {
 /// 按文章主键读取评论列表缓存。
 #[cfg(feature = "server")]
 pub async fn get_comments_by_post(post_id: i32) -> Option<Vec<PublicComment>> {
-    let v = COMMENT_CACHE
-        .get(&CacheKey::CommentsByPost { post_id })
-        .await;
-    if v.is_some() {
-        COMMENT_STATS.record_hit();
-    } else {
-        COMMENT_STATS.record_miss();
-    }
-    v
+    record_hit_miss!(
+        COMMENT_CACHE
+            .get(&CacheKey::CommentsByPost { post_id })
+            .await,
+        COMMENT_STATS
+    )
 }
 
 /// 按文章主键写入评论列表缓存。
@@ -637,15 +614,12 @@ pub async fn set_comments_by_post(post_id: i32, comments: Vec<PublicComment>) {
 /// 读取待审核评论总数缓存。
 #[cfg(feature = "server")]
 pub async fn get_pending_count() -> Option<i64> {
-    let v = PENDING_COUNT_CACHE
-        .get(&CacheKey::PendingCommentCount)
-        .await;
-    if v.is_some() {
-        PENDING_COUNT_STATS.record_hit();
-    } else {
-        PENDING_COUNT_STATS.record_miss();
-    }
-    v
+    record_hit_miss!(
+        PENDING_COUNT_CACHE
+            .get(&CacheKey::PendingCommentCount)
+            .await,
+        PENDING_COUNT_STATS
+    )
 }
 
 /// 写入待审核评论总数缓存。
@@ -665,13 +639,7 @@ pub fn normalize_search_key(query: &str) -> String {
 /// 读取会话用户缓存。
 #[cfg(feature = "server")]
 pub async fn get_session_user(token_hash: &str) -> Option<SessionUser> {
-    let v = SESSION_CACHE.get(token_hash).await;
-    if v.is_some() {
-        SESSION_STATS.record_hit();
-    } else {
-        SESSION_STATS.record_miss();
-    }
-    v
+    record_hit_miss!(SESSION_CACHE.get(token_hash).await, SESSION_STATS)
 }
 
 /// 写入会话用户缓存。
@@ -689,13 +657,10 @@ pub async fn invalidate_session_user(token_hash: &str) {
 /// 读取搜索结果缓存。
 #[cfg(feature = "server")]
 pub async fn get_search_results(query: &str) -> Option<(Vec<PostListItem>, i64)> {
-    let v = SEARCH_CACHE.get(&normalize_search_key(query)).await;
-    if v.is_some() {
-        SEARCH_STATS.record_hit();
-    } else {
-        SEARCH_STATS.record_miss();
-    }
-    v
+    record_hit_miss!(
+        SEARCH_CACHE.get(&normalize_search_key(query)).await,
+        SEARCH_STATS
+    )
 }
 
 /// 写入搜索结果缓存。
