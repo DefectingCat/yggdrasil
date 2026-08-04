@@ -2,7 +2,7 @@
 
 use dioxus::prelude::*;
 
-use crate::components::ui::LoadingButton;
+use crate::components::ui::{LoadingButton, CHECKBOX_CLASS, CHECKBOX_DANGER_CLASS};
 
 /// SQL 控制台 tab：CodeMirror 编辑器（SQL 高亮/补全/Vim）+ 4 道护栏 + 结果表 + EXPLAIN。
 ///
@@ -277,7 +277,7 @@ pub(super) fn SqlConsoleTab() -> Element {
                 label { class: "flex items-center gap-1.5 text-sm text-[var(--color-paper-secondary)] cursor-pointer",
                     input {
                         r#type: "checkbox",
-                        class: "rounded border-[var(--color-paper-border)]",
+                        class: "{CHECKBOX_CLASS}",
                         checked: with_explain(),
                         onchange: move |e| with_explain.set(e.checked()),
                     }
@@ -286,7 +286,7 @@ pub(super) fn SqlConsoleTab() -> Element {
                 label { class: "flex items-center gap-1.5 text-sm text-[var(--color-paper-secondary)] cursor-pointer",
                     input {
                         r#type: "checkbox",
-                        class: "rounded border-[var(--color-paper-border)]",
+                        class: "{CHECKBOX_CLASS}",
                         checked: allow_multi(),
                         onchange: move |e| allow_multi.set(e.checked()),
                     }
@@ -297,7 +297,7 @@ pub(super) fn SqlConsoleTab() -> Element {
                 label { class: "flex items-center gap-1.5 text-sm text-red-600 dark:text-red-400 cursor-pointer",
                     input {
                         r#type: "checkbox",
-                        class: "rounded border-red-300 dark:border-red-700",
+                        class: "{CHECKBOX_DANGER_CLASS}",
                         checked: confirm_dangerous(),
                         onchange: move |e| confirm_dangerous.set(e.checked()),
                     }

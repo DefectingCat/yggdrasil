@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 
 use crate::components::forms::{FormInput, FormSelect, FORM_SELECT_COMPACT_CLASS};
-use crate::components::ui::BTN_PRIMARY_SM;
+use crate::components::ui::{BTN_PRIMARY_SM, CHECKBOX_CLASS};
 
 /// 数据导出 tab：按表/按查询导出 SQL/CSV，走 Axum 流式下载。
 #[allow(non_snake_case)]
@@ -110,7 +110,7 @@ pub(super) fn ExportTab() -> Element {
                     label { class: "flex items-center gap-1 text-sm text-paper-secondary",
                         input {
                             r#type: "checkbox",
-                            class: "mr-1",
+                            class: "{CHECKBOX_CLASS}",
                             checked: include_columns(),
                             onchange: move |e| include_columns.set(e.checked()),
                         }

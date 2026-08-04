@@ -25,8 +25,13 @@ pub const ADMIN_TABLE_CLASS: &str = "bg-[var(--color-paper-entry)] rounded-2xl s
 pub const ADMIN_ROW_HOVER: &str =
     "border-b border-paper-border last:border-b-0 hover:bg-[var(--color-paper-accent-soft)] transition-colors";
 
-/// 列表复选框统一样式（全选表头 + 行内）。
-pub const CHECKBOX_CLASS: &str = "rounded border-paper-border";
+/// 列表复选框统一样式（全选表头 + 行内 + 表单选项）。
+/// `.ygg-checkbox`：appearance:none 全自定义，与文章内 checkbox 视觉一致，
+/// 带 cursor / hover / focus-visible 交互态。CSS 定义在 input.css。
+pub const CHECKBOX_CLASS: &str = "ygg-checkbox";
+
+/// 危险态复选框（SQL 控制台「我了解后果」）：红色语义。叠加在 .ygg-checkbox 上。
+pub const CHECKBOX_DANGER_CLASS: &str = "ygg-checkbox ygg-checkbox-danger";
 
 /// 行内加载 spinner：环形渐变 + 自旋动画，用 currentColor 继承文字色。
 ///
