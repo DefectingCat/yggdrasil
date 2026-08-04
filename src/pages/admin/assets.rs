@@ -22,6 +22,8 @@ use crate::api::assets::{
 use crate::api::assets::{BatchDeleteAssetsResponse, PurgeOrphansResponse, RebuildAssetsResponse};
 use crate::components::empty_state::EmptyState;
 use crate::components::forms::FormInput;
+use crate::components::skeletons::assets_skeleton::AssetsSkeleton;
+use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::ui::{FilterTabs, Pagination};
 #[cfg(target_arch = "wasm32")]
 use crate::models::asset::{AssetFilter, AssetSort};
@@ -425,7 +427,9 @@ pub fn Assets() -> Element {
             if let Some(err) = error() {
                 div { class: "mt-8 text-sm text-red-500", "加载失败：{err}" }
             } else if loading() && assets.is_empty() {
-                div { class: "mt-8 text-sm text-[var(--color-paper-secondary)]", "加载中..." }
+                DelayedSkeleton {
+                    AssetsSkeleton {}
+                }
             } else if assets.is_empty() {
                 EmptyState {
                     title: "暂无素材".to_string(),

@@ -8,7 +8,15 @@ use dioxus::router::components::Link;
 
 use crate::api::auth::{get_current_user, logout};
 use crate::components::admin_skeleton::AdminDashboardSkeleton;
+use crate::components::skeletons::admin_comments_skeleton::AdminCommentsSkeleton;
+use crate::components::skeletons::assets_skeleton::AssetsSkeleton;
 
+use crate::components::skeletons::friends_admin_skeleton::FriendsAdminSkeleton;
+use crate::components::skeletons::mcp_skeleton::McpSkeleton;
+use crate::components::skeletons::posts_skeleton::PostsSkeleton;
+use crate::components::skeletons::posts_trash_skeleton::PostsTrashSkeleton;
+use crate::components::skeletons::runner_skeleton::RunnerSkeleton;
+use crate::components::skeletons::system_skeleton::SystemSkeleton;
 use crate::components::write_skeleton::WriteSkeleton;
 use crate::context::UserContext;
 use crate::router::Route;
@@ -155,16 +163,7 @@ pub fn AdminLayout() -> Element {
                                 // flex-1 撑满 main(使 write 骨架屏能引用到确定高度),
                                 // 非 write 页面的 py-12 padding 由 main_class 自带,这里不重复加。
                                 div { class: "flex-1 min-h-0 flex flex-col animate-pulse",
-                                    {
-                                        match route {
-                                            Route::Write {} | Route::WriteEdit { .. } => rsx! {
-                                                WriteSkeleton {}
-                                            },
-                                            _ => rsx! {
-                                                AdminDashboardSkeleton {}
-                                            },
-                                        }
-                                    }
+                                    {admin_route_skeleton(&route)}
                                 }
                             }
                         }
@@ -172,6 +171,25 @@ pub fn AdminLayout() -> Element {
                 }
             }
         }
+    }
+}
+
+/// 根据当前后台路由，渲染对应的专属骨架屏。
+fn admin_route_skeleton(route: &Route) -> Element {
+    match route {
+        Route::Admin {} => rsx! { AdminDashboardSkeleton {} },
+        Route::Write {} | Route::WriteEdit { .. } => rsx! { WriteSkeleton {} },
+        Route::Posts {} => rsx! { PostsSkeleton {} },
+        Route::PostsTrash {} => rsx! { PostsTrashSkeleton {} },
+        Route::Assets {} => rsx! { AssetsSkeleton {} },
+        Route::FriendsAdmin {} => rsx! { FriendsAdminSkeleton {} },
+        Route::AdminComments {} | Route::AdminCommentsPage { .. } => {
+            rsx! { AdminCommentsSkeleton {} }
+        }
+        Route::System {} => rsx! { SystemSkeleton {} },
+        Route::Runner {} => rsx! { RunnerSkeleton {} },
+        Route::Mcp {} => rsx! { McpSkeleton {} },
+        _ => rsx! { AdminDashboardSkeleton {} },
     }
 }
 

@@ -15,12 +15,11 @@ use crate::api::comments::{approve_comment, batch_update_comment_status, spam_co
 #[cfg(target_arch = "wasm32")]
 use crate::api::comments::{get_all_comments, AllCommentsResponse};
 use crate::components::empty_state::EmptyState;
-use crate::components::skeletons::atoms::SkeletonBox;
+use crate::components::skeletons::admin_comments_skeleton::AdminCommentsSkeleton;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::ui::{
-    FilterTabs, Pagination, StatusBadge, ADMIN_CARD_CLASS, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS,
-    BTN_SOLID_AMBER, BTN_SOLID_GREEN, BTN_SOLID_RED, BTN_TEXT_AMBER, BTN_TEXT_GREEN, BTN_TEXT_RED,
-    CHECKBOX_CLASS,
+    FilterTabs, Pagination, StatusBadge, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_SOLID_AMBER,
+    BTN_SOLID_GREEN, BTN_SOLID_RED, BTN_TEXT_AMBER, BTN_TEXT_GREEN, BTN_TEXT_RED, CHECKBOX_CLASS,
 };
 use crate::models::comment::{AdminComment, CommentStatus};
 use crate::router::Route;
@@ -227,16 +226,7 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                 } else if loading() && comments().is_empty() {
                     rsx! {
                         DelayedSkeleton {
-                            div { class: "{ADMIN_CARD_CLASS} p-6 space-y-4",
-                                for _ in 0..5 {
-                                    div { class: "flex items-center gap-4",
-                                        SkeletonBox { class: "h-4 w-4 rounded" }
-                                        SkeletonBox { class: "h-8 w-8 rounded-full" }
-                                        SkeletonBox { class: "h-4 w-32 rounded" }
-                                        SkeletonBox { class: "h-4 flex-1 rounded" }
-                                    }
-                                }
-                            }
+                            AdminCommentsSkeleton {}
                         }
                     }
                 } else if comments().is_empty() {

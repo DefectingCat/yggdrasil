@@ -15,8 +15,7 @@ use crate::api::posts::{list_posts, PostListResponse};
 // 按项目惯例放行。
 #[allow(unused_imports)]
 use crate::api::posts::{
-    delete_post, rebuild_content_html, rebuild_post_content_html, CreatePostResponse,
-    RebuildResult,
+    delete_post, rebuild_content_html, rebuild_post_content_html, CreatePostResponse, RebuildResult,
 };
 use crate::components::empty_state::{EmptyState, EmptyStateAction};
 use crate::components::forms::{FormInput, INPUT_INLINE_CLASS};
@@ -406,4 +405,3 @@ fn PostRow(
         }
     }
 }
-

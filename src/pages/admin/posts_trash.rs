@@ -22,12 +22,11 @@ use crate::api::posts::{
 #[allow(unused_imports)]
 use crate::api::settings::{get_trash_settings, update_trash_settings};
 use crate::components::empty_state::EmptyState;
-use crate::components::skeletons::atoms::SkeletonBox;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
+use crate::components::skeletons::posts_trash_skeleton::PostsTrashSkeleton;
 use crate::components::ui::{
-    LoadingButton, Pagination, StatusBadge, ADMIN_CARD_CLASS, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS,
-    BTN_DANGER_OUTLINE, BTN_ICON, BTN_SOLID_GREEN, BTN_SOLID_RED, BTN_TEXT_ACCENT, BTN_TEXT_RED,
-    CHECKBOX_CLASS,
+    LoadingButton, Pagination, StatusBadge, ADMIN_ROW_HOVER, ADMIN_TABLE_CLASS, BTN_DANGER_OUTLINE,
+    BTN_ICON, BTN_SOLID_GREEN, BTN_SOLID_RED, BTN_TEXT_ACCENT, BTN_TEXT_RED, CHECKBOX_CLASS,
 };
 use crate::hooks::query::use_paginated;
 use crate::models::post::PostListItem;
@@ -157,11 +156,7 @@ pub fn PostsTrash() -> Element {
                 } else if loading() && posts().is_empty() {
                     rsx! {
                         DelayedSkeleton {
-                            div { class: "{ADMIN_CARD_CLASS} p-6 space-y-4",
-                                for _ in 0..5 {
-                                    SkeletonBox { class: "h-10 rounded" }
-                                }
-                            }
+                            PostsTrashSkeleton {}
                         }
                     }
                 } else if posts().is_empty() {
