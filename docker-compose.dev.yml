@@ -31,6 +31,7 @@
 #   target/ → named volume        cargo 编译缓存（避免 VirtioFS 性能瓶颈）
 #   libs/node_modules → volume    pnpm 依赖（与宿主隔离）
 #   cargo registry → named volume crate 下载缓存
+#   uploads/ → bind mount          宿主与容器双向共享素材(修复 serve_image 404)
 #
 # env_file: .env 注入宿主密钥（MCP_TOKEN_ENC_KEY 等，等价 bind mount 时代
 # dotenvy 读 /build/.env 的行为）; environment 优先级更高，显式 DATABASE_URL
@@ -62,6 +63,11 @@ services:
       # Code runner: 挂载 Docker socket（代码沙箱默认启用, 需先构建 runner 镜像
       # bash docker/build-runners.sh）。docker.sock 是宿主 root 级边界, 仅限本地开发。
       - /var/run/docker.sock:/var/run/docker.sock
+      # uploads 共享宿主目录:DB 引用的素材文件存在于宿主 ./uploads,容器需能读到
+      # 才能正确 serve;容器内新上传也落盘到宿主,跨 rebuild 持久化。与生产
+      # docker run -v "$PWD/uploads:/app/uploads" 模式一致。uploads 为低频大文件,
+      # bind mount 的 VirtioFS 开销可忽略(不像 target/ 的海量小文件)。
+      - ./uploads:/build/uploads
     ports:
       - "8080:8080"
     env_file:
