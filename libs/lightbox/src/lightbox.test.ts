@@ -35,6 +35,13 @@ function makeSingleImage(dataSrc: string, alt: string): HTMLElement {
   container.classList.add('lightbox-single');
   return container;
 }
+/** 构造原生 <img> 外链图（无 .blur-img 包裹）。 */
+function makeExternalImage(src: string, alt: string): HTMLImageElement {
+  const img = document.createElement('img');
+  img.src = src;
+  img.setAttribute('alt', alt);
+  return img;
+}
 
 /**
  * 把若干图片挂到一个 root 容器下，再挂到 document.body。
@@ -305,6 +312,55 @@ describe('lightbox 黑盒行为', () => {
       pressKey('ArrowLeft');
       vi.advanceTimersByTime(200);
       expect(getOverlay()).not.toBeNull(); // 仍打开
+    });
+  });
+  describe('外链图片 (HTMLImageElement) 点击放大与混合图集', () => {
+    it('单独外链图片点击触发灯箱打开，完整保留 URL，关闭后焦点归还', () => {
+      const extUrl = 'https://example.com/photo.jpg?token=xyz';
+      const img = makeExternalImage(extUrl, '外链图');
+      mountRoot([img]);
+      window.__initLightbox('.post-content');
+
+      clickEl(img);
+      const overlay = getOverlay();
+      expect(overlay).not.toBeNull();
+
+      const lbImg = getLightboxImg();
+      expect(lbImg).not.toBeNull();
+      expect(lbImg?.src).toContain(extUrl);
+
+      // 关闭灯箱
+      pressKey('Escape');
+      vi.advanceTimersByTime(300);
+
+      expect(getOverlay()).toBeNull();
+      expect(document.activeElement).toBe(img);
+    });
+
+    it('混合图集（本地 .blur-img + 外链 <img>）按 DOM 顺序统一编号并完美切换', () => {
+      const img1 = makeGalleryImage('/uploads/a.webp', '图A');
+      const img2 = makeExternalImage('https://example.com/b.png?w=800', '图B');
+      mountRoot([img1, img2]);
+      window.__initLightbox('.post-content');
+
+      // 点击第 1 张（本地图）
+      clickEl(img1);
+      expect(getCounter()?.textContent).toBe('1 / 2');
+
+      // 按 → 切换到第 2 张（外链图）
+      pressKey('ArrowRight');
+      const lbImg = getLightboxImg()!;
+      stubNatural(lbImg, 800, 600);
+      vi.advanceTimersByTime(200);
+
+      expect(getCounter()?.textContent).toBe('2 / 2');
+      expect(lbImg.src).toContain('https://example.com/b.png?w=800');
+
+      // 按 → 循环切回第 1 张
+      pressKey('ArrowRight');
+      vi.advanceTimersByTime(200);
+      expect(getCounter()?.textContent).toBe('1 / 2');
+      expect(lbImg.src).toContain('/uploads/a.webp');
     });
   });
 });

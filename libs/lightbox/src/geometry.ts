@@ -33,6 +33,11 @@ export function transformFor(rect: Rect, baseW: number, baseH: number): string {
 }
 
 // 原图 URL = data-src 去 query。data-src 形如 "/uploads/x.webp?w=800"。
+// 外链 URL（如 https://... 或 http://...）完整保留 query 参数，防止剥离签名/Token 导致 403/404。
 export function originalUrl(dataSrc: string | null): string {
-  return (dataSrc || '').split('?')[0];
+  if (!dataSrc) return '';
+  if (dataSrc.startsWith('/uploads/') || dataSrc.startsWith('uploads/')) {
+    return dataSrc.split('?')[0];
+  }
+  return dataSrc;
 }

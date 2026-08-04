@@ -942,6 +942,12 @@
     margin: 1rem 0;
     max-width: 100%;
     height: auto;
+    cursor: zoom-in;
+    transition: opacity 0.2s ease-out;
+  }
+
+  .md-content img:where(:not(.cm-widgetBuffer)):hover {
+    opacity: 0.9;
   }
 
   .dark .md-content img:not(.blur-img-placeholder):not(.blur-img-full),
@@ -1280,6 +1286,11 @@
     background: var(--color-paper-code-bg);
     border-radius: var(--radius-mini);
     margin: 1em 0;
+    cursor: zoom-in;
+    transition: opacity 0.2s ease-out;
+  }
+  .blur-img:hover {
+    opacity: 0.9;
   }
   .blur-img-placeholder {
     position: absolute;

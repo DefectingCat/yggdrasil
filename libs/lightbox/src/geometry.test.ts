@@ -71,8 +71,18 @@ describe('transformFor', () => {
 });
 
 describe('originalUrl', () => {
-  it('去 query string', () => {
+  it('本地 /uploads/ 去 query string', () => {
     expect(originalUrl('/uploads/x.webp?w=800')).toBe('/uploads/x.webp');
+    expect(originalUrl('uploads/x.webp?w=800')).toBe('uploads/x.webp');
+  });
+
+  it('外链 URL 完整保留 query string', () => {
+    expect(originalUrl('https://example.com/img.png?token=abc')).toBe(
+      'https://example.com/img.png?token=abc',
+    );
+    expect(originalUrl('http://example.com/img.png?w=800&sign=123')).toBe(
+      'http://example.com/img.png?w=800&sign=123',
+    );
   });
 
   it('无 query 原样返回', () => {

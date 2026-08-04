@@ -102,15 +102,38 @@ function initLazyLoad(container: Element): void {
 
 // ============ 图像收集 ============
 
-// 收集所有 selectors命中的 .blur-img 节点。
+// 从节点提取原图 URL 与 alt 描述（同时兼容 .blur-img 容器与原生外链 <img> 节点）。
+function getImageDetails(originNode: HTMLElement): { origSrc: string; altText: string } | null {
+  if (originNode instanceof HTMLImageElement) {
+    const src = originNode.getAttribute('data-src') || originNode.getAttribute('src') || '';
+    if (!src) return null;
+    return {
+      origSrc: originalUrl(src),
+      altText: originNode.getAttribute('alt') || '',
+    };
+  }
+  const fullImgEl = originNode.querySelector('.blur-img-full');
+  if (fullImgEl instanceof HTMLImageElement) {
+    const dataSrc = fullImgEl.getAttribute('data-src') || fullImgEl.getAttribute('src') || '';
+    if (!dataSrc) return null;
+    return {
+      origSrc: originalUrl(dataSrc),
+      altText: fullImgEl.getAttribute('alt') || '',
+    };
+  }
+  return null;
+}
+
+// 收集所有 selectors 命中的 .blur-img 节点与原生外链 <img> 节点。
 // gallery: 正文图（组成图集）；singles: 带 lightbox-single class 的单张图（如封面）。
 function collectImages(roots: Element[]): { gallery: HTMLElement[]; singles: HTMLElement[] } {
   const gallery: HTMLElement[] = [];
   const singles: HTMLElement[] = [];
   for (const root of roots) {
-    const nodes = root.querySelectorAll('.blur-img');
+    const nodes = root.querySelectorAll('.blur-img, img');
     for (const n of nodes) {
       if (!(n instanceof HTMLElement)) continue;
+      if (n instanceof HTMLImageElement && n.closest('.blur-img')) continue;
       if (n.classList.contains('lightbox-single')) {
         singles.push(n);
       } else {
@@ -129,11 +152,9 @@ let state: LightboxState | null = null;
 function openLightbox(originNode: HTMLElement, gallery: HTMLElement[], index: number | null): void {
   if (state) closeLightbox(true);
 
-  const fullImgEl = originNode.querySelector('.blur-img-full');
-  if (!(fullImgEl instanceof HTMLImageElement)) return;
-  const dataSrc = fullImgEl.getAttribute('data-src') || '';
-  const origSrc = originalUrl(dataSrc);
-  const altText = fullImgEl.getAttribute('alt') || '';
+  const details = getImageDetails(originNode);
+  if (!details) return;
+  const { origSrc, altText } = details;
   const isSingle = originNode.classList.contains('lightbox-single') || gallery.length === 0;
 
   const vw = window.innerWidth;
@@ -343,10 +364,10 @@ function removeOverlay(): void {
   // 用 preventScroll 抑制 focus() 默认的 scrollIntoView 行为——否则关闭灯箱后
   // 页面会自动滚动把原图完整纳入视口（用户只点了一半露出的图时尤其明显）。
   if (prev) {
-    const f = prev.querySelector('.blur-img-full');
-    if (f instanceof HTMLImageElement) {
-      f.setAttribute('tabindex', '-1');
-      f.focus({ preventScroll: true });
+    const targetEl = prev instanceof HTMLImageElement ? prev : prev.querySelector('.blur-img-full');
+    if (targetEl instanceof HTMLImageElement) {
+      targetEl.setAttribute('tabindex', '-1');
+      targetEl.focus({ preventScroll: true });
     }
   }
 }
@@ -364,10 +385,9 @@ function gotoIndex(rawIndex: number): void {
   if (newIndex === s.index) return;
 
   const newNode = s.gallery[newIndex];
-  const fullImgEl = newNode.querySelector('.blur-img-full');
-  if (!(fullImgEl instanceof HTMLImageElement)) return;
-  const origSrc = originalUrl(fullImgEl.getAttribute('data-src') || '');
-  const altText = fullImgEl.getAttribute('alt') || '';
+  const details = getImageDetails(newNode);
+  if (!details) return;
+  const { origSrc, altText } = details;
 
   // 淡出当前图
   s.img.style.transition = 'opacity 150ms ease-out';
