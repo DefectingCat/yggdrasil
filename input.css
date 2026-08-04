@@ -1519,6 +1519,7 @@
   /* ========== 后台管理交互式 checkbox ==========
      与文章内 checkbox（.md-content 任务列表）视觉语言一致：appearance:none 全自定义，
      同样的尺寸/圆角/对勾 SVG，但额外带交互态（cursor / hover / focus-visible）。
+     对勾通过 background-size: 0→0.75rem 缩放过渡（弹跳曲线），勾选/取消双向动画。
      ui.rs 的 CHECKBOX_CLASS / CHECKBOX_DANGER_CLASS 引用此类名。 */
   .ygg-checkbox {
     appearance: none;
@@ -1530,11 +1531,19 @@
     border: 1.5px solid var(--color-paper-border);
     border-radius: 4px;
     background-color: transparent;
+    /* 对勾 SVG 预载但 background-size:0 不可见；勾选时缩放至 0.75rem 显现。
+       亮色用白对勾，暗色在 .dark .ygg-checkbox 中覆盖为深色对勾。 */
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%20fill='none'%20stroke='%23ffffff'%20stroke-width='2.2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M3.5%208.5l3%203%206-6.5'/%3E%3C/svg%3E");
     background-position: center;
     background-repeat: no-repeat;
-    background-size: 0.75rem;
+    background-size: 0;
     cursor: pointer;
-    transition: background-color 0.15s ease, border-color 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease, background-size 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* 暗色对勾：#1e1e2e 深色描边在浅绿 #a6e3a1 底上对比充足 */
+  .dark .ygg-checkbox {
+    background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%20fill='none'%20stroke='%231e1e2e'%20stroke-width='2.2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M3.5%208.5l3%203%206-6.5'/%3E%3C/svg%3E");
   }
 
   .ygg-checkbox:hover:not(:checked) {
@@ -1544,13 +1553,7 @@
   .ygg-checkbox:checked {
     background-color: var(--color-paper-accent);
     border-color: var(--color-paper-accent);
-    /* 亮色：中绿 #40a02b 底 + 白对勾（对比 ≥ 4.5:1） */
-    background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%20fill='none'%20stroke='%23ffffff'%20stroke-width='2.2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M3.5%208.5l3%203%206-6.5'/%3E%3C/svg%3E");
-  }
-
-  /* 暗色：浅绿 #a6e3a1 底上白对勾对比不足，改深色对勾（主题底色 #1e1e2e） */
-  .dark .ygg-checkbox:checked {
-    background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%20fill='none'%20stroke='%231e1e2e'%20stroke-width='2.2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M3.5%208.5l3%203%206-6.5'/%3E%3C/svg%3E");
+    background-size: 0.75rem;
   }
 
   .ygg-checkbox:focus-visible {
@@ -1582,6 +1585,30 @@
   .ygg-checkbox-danger:focus-visible {
     outline: 2px solid #ef4444;
     outline-offset: 1px;
+  }
+
+  /* ========== 批量操作栏展开/收起过渡 ==========
+     选中评论/文章时批量操作栏展开，取消时收起。使用 grid-template-rows 0fr↔1fr
+     技术实现 auto-height 过渡（现代浏览器原生支持）。
+     margin-top: 0 !important 覆盖父级 space-y 的间距，收起时不留白。 */
+  .batch-bar {
+    display: grid;
+    grid-template-rows: 1fr;
+    opacity: 1;
+    transition: grid-template-rows 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+                margin-top 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .batch-bar.is-collapsed {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    margin-top: 0 !important;
+  }
+
+  .batch-bar > * {
+    overflow: hidden;
+    min-height: 0;
   }
 
 }

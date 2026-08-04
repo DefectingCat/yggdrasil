@@ -148,9 +148,8 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                 on_change: move |v| active_filter.set(v),
             }
 
-            if !selected_ids().is_empty() {
-                {
-                    rsx! {
+            div {
+                class: if selected_ids().is_empty() { "batch-bar is-collapsed" } else { "batch-bar" },
                         div { class: "flex items-center gap-3 p-3 bg-paper-theme rounded-lg",
                             span { class: "text-sm text-paper-secondary", "已选择 {selected_ids().len()} 条" }
                             button {
@@ -211,8 +210,6 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                                 "批量删除"
                             }
                         }
-                    }
-                }
             }
 
             {
