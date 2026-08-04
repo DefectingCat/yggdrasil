@@ -8,7 +8,10 @@
 //!
 //! Esc / 粘贴监听挂在 window 上，只在 mount 注册一次、`use_drop` 移除；handler 内用
 //! `visible.peek()` 守卫——modal 关闭后粘贴绝不触发上传。无文件的文本粘贴不拦截
-//! （不 prevent_default），搜索框等正常粘贴不受影响。
+//! （不 prevent_default），搜索框等正常粘贴不受影响。原生监听器触发时 Dioxus 的
+//! scope 栈为空（`spawn` 会因 `current_scope_id` unwrap 空栈而 panic），渲染期捕获的
+//! 组件 scope id 在粘贴 handler 里经 `Runtime::in_scope` 显式进栈后再入队，使粘贴路径
+//! 与 Dioxus 事件入口（拖拽/选择）的 spawn 语义完全一致。
 //!
 //! 组件始终挂载（`visible` 只控制渲染早退），上传中途允许关闭弹窗：spawn 的任务与
 //! signals 随组件实例存活，后台续传，批末有 ≥1 个成功仍照常回调 `on_uploaded`。
@@ -179,6 +182,12 @@ pub fn AssetUploadModal(mut visible: Signal<bool>, on_uploaded: EventHandler<()>
         type Listeners = Rc<RefCell<Option<(KeyClosure, PasteClosure)>>>;
         let listeners: Listeners = use_hook(|| Rc::new(RefCell::new(None)));
         let listeners_for_drop = listeners.clone();
+        // 组件 scope id（渲染期捕获）：原生 window 监听器触发时 Dioxus 的 scope 栈
+        // 为空，`spawn` 会因 current_scope_id unwrap 空栈而 panic（与 sql_console
+        // 的 Ctrl+Enter 同源），监听器里用 Runtime::in_scope 重建 scope 上下文。
+        let scope_id = dioxus::core::Runtime::current()
+            .try_current_scope_id()
+            .unwrap_or(dioxus::core::ScopeId::ROOT);
         // effect 闭包 move 捕获的是这两份克隆，原值留给下方 drop/change 事件闭包。
         let next_id_for_paste = next_id.clone();
         let files_for_paste = files.clone();
@@ -218,13 +227,15 @@ pub fn AssetUploadModal(mut visible: Signal<bool>, on_uploaded: EventHandler<()>
                     let collected: Vec<web_sys::File> =
                         (0..list.length()).filter_map(|i| list.item(i)).collect();
                     if !collected.is_empty() {
-                        enqueue_files(
-                            items,
-                            next_id_in_paste.clone(),
-                            files_in_paste.clone(),
-                            on_uploaded,
-                            collected,
-                        );
+                        // 原生监听里无 scope 上下文：进入组件 scope 使 enqueue 内的
+                        // spawn 与 Dioxus 事件入口（拖拽/选择）行为完全一致。
+                        // Rc 句柄逐事件克隆进内层闭包（外层 FnMut 的捕获不可 move 出，
+                        // 同 sql_console 的 on_run_shortcut 闭包包装考虑）。
+                        let next_id_call = next_id_in_paste.clone();
+                        let files_call = files_in_paste.clone();
+                        dioxus::core::Runtime::current().in_scope(scope_id, move || {
+                            enqueue_files(items, next_id_call, files_call, on_uploaded, collected);
+                        });
                     }
                 })
                     as Box<dyn FnMut(web_sys::ClipboardEvent)>);
