@@ -204,7 +204,10 @@ pub fn Assets() -> Element {
     let page_orphan_ids_for_toggle = page_orphan_ids.clone();
 
     rsx! {
-        div {
+        // min-h-full：AdminLayout 卡片是 flex 列滚动容器，main（flex-1）的高度为 definite，
+        // 故本根节点可解析百分比最小高度——内容不足一页时撑满 main 内容盒，
+        // 配合下方分页的 mt-auto wrapper 把分页条吸附到卡片底部。
+        div { class: "min-h-full flex flex-col",
             h1 { class: "text-3xl font-extrabold tracking-tight mb-2", "素材管理" }
             p { class: "text-sm text-[var(--color-paper-secondary)] mb-8",
                 "管理文章编辑器上传的图片。共 {all_count} 张，引用中 {used_count} 张，未引用 {orphan_count} 张。"
@@ -532,7 +535,7 @@ pub fn Assets() -> Element {
                                                 class: "text-[10px] truncate text-[var(--color-paper-secondary)] mt-0.5",
                                                 title: "{alt_text}",
                                                 "alt: {alt_text}"
-                                            } // 行已不在 DB（refs 为空的业务拒绝 = 素材不存在） // 行已不在 DB（refs 为空的业务拒绝 = 素材不存在） // 行已不在 DB（refs 为空的业务拒绝 = 素材不存在）  行已不在 DB（refs 为空的业务拒绝 = 素材不存在） // 行已不在 DB（refs 为空的业务拒绝 = 素材不存在）  行已不在 DB（refs 为空的业务拒绝 = 素材不存在）  行已不在 DB（refs 为空的业务拒绝 = 素材不存在）  行已不在 DB（refs 为空的业务拒绝 = 素材不存在）
+                                            }
                                         }
 
                                         // 操作区：确认删除 / alt 编辑 / 常规三按钮 三态互斥
@@ -679,15 +682,21 @@ pub fn Assets() -> Element {
                     }
                 }
 
-                Pagination {
-                    variant: "admin",
-                    current_page: page(),
-                    total,
-                    per_page: ASSETS_PER_PAGE,
-                    unit: "张",
-                    on_prev: move |_| page.set((page() - 1).max(1)),
-                    on_next: move |_| page.set(page() + 1),
-                    on_jump: move |p: i32| page.set(p),
+                // mt-auto 吸收上方自由空间：内容短时分页贴卡片底（main 的 py-12 保留 48px
+                // 底距）；内容超一页时 auto margin 为 0，分页跟在网格后随卡片滚动。
+                // wrapper 是 flex item 建立独立格式化上下文，Pagination nav 自带的 mt-6
+                // 不会穿透塌陷，24px 间距恒在。
+                div { class: "mt-auto",
+                    Pagination {
+                        variant: "admin",
+                        current_page: page(),
+                        total,
+                        per_page: ASSETS_PER_PAGE,
+                        unit: "张",
+                        on_prev: move |_| page.set((page() - 1).max(1)),
+                        on_next: move |_| page.set(page() + 1),
+                        on_jump: move |p: i32| page.set(p),
+                    }
                 }
             }
         }
