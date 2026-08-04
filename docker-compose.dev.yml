@@ -93,22 +93,6 @@ services:
         - path: ./themes
           target: /build/themes
           action: sync
-        - path: ./public
-          target: /build/public
-          action: sync
-          ignore:
-            - style.css
-            - highlight.css
-            - katex/
-            - tiptap/
-            - codemirror/
-            - lightbox/
-            - yggdrasil-core/
-            - xterm/
-            - doc/
-        - path: ./input.css
-          target: /build/input.css
-          action: sync
         - path: ./Makefile
           target: /build/Makefile
           action: sync
@@ -121,6 +105,22 @@ services:
           target: /build/.cargo
           action: sync
         # 依赖清单变化 → 重建镜像（COPY 新源码快照 + 重跑 make dev）
+        - path: ./public
+          target: /build/public
+          action: rebuild
+          ignore:
+            - style.css
+            - highlight.css
+            - katex/
+            - tiptap/
+            - codemirror/
+            - lightbox/
+            - yggdrasil-core/
+            - xterm/
+            - doc/
+        - path: ./input.css
+          target: /build/input.css
+          action: rebuild
         - path: ./Cargo.toml
           action: rebuild
         - path: ./Cargo.lock
