@@ -243,6 +243,13 @@ COPY . .
 # which left math rendering as bare spans without KaTeX fonts.
 RUN make build-libs && make highlight-css && make katex-css && tailwindcss -i input.css -o public/style.css --minify
 
+# Pre-populate dx's esbuild tool cache from the Chinese npm mirror.
+# dx hardcodes registry.npmjs.org for esbuild (packages/cli/src/esbuild.rs:62) —
+# neither NPM_CONFIG_REGISTRY nor .npmrc affects it. Pre-caching from npmmirror
+# makes the path.exists() check at esbuild.rs:25 short-circuit the download.
+# ESBUILD_VERSION must match dx's pinned constant (0.27.3 in dx 0.7.10).
+ENV DX_HOME=/usr/local/dx
+RUN make esbuild-cache
 # Build the client-side Dioxus WASM bundle. We use dx only for the client assets;
 # dx's linker wrapper is incompatible with a raw static linker, so the server
 # binary is built with plain cargo in the next step. The client build emits a

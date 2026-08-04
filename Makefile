@@ -1,4 +1,4 @@
-.PHONY: dev build build-linux build-freebsd freebsd-sysroot docker docker-amd64 docker-apple docker-multiarch docker-dev docker-dev-down docker-dev-shell docker-run docker-lint docker-clippy docker-check docker-fmt docker-fix docker-test docker-tools-build docker-tools-clean css css-watch clean build-libs build-editor build-codemirror build-lightbox build-core build-xterm highlight-css katex-css test doc doc-open start lint fix restore-webp
+.PHONY: dev build build-linux build-freebsd freebsd-sysroot docker docker-amd64 docker-apple docker-multiarch docker-dev docker-dev-down docker-dev-shell docker-run docker-lint docker-clippy docker-check docker-fmt docker-fix docker-test docker-tools-build docker-tools-clean css css-watch clean build-libs build-editor build-codemirror build-lightbox build-core build-xterm highlight-css katex-css test doc doc-open start lint fix restore-webp esbuild-cache
 
 build:
 	@rm -rf static/
@@ -80,6 +80,37 @@ restore-webp:
 		done; \
 	done
 
+# Pre-populate dx 的 esbuild 工具缓存（国内镜像加速）。
+# dx CLI 硬编码 esbuild 下载源为 registry.npmjs.org（packages/cli/src/esbuild.rs:62），
+# 不读 NPM_CONFIG_REGISTRY 也不读 .npmrc——npm config set registry 无效。
+# 此处从 npmmirror（阿里）预下载与 dx 内置 ESBUILD_VERSION 完全一致的 tarball
+# （SHA256 与 npmjs.org 相同），解压到 dx 缓存目录。dx 的 esbuild.rs:24-28 在
+# path.exists() 命中时跳过联网下载。
+# 升级 dx 后须同步 ESBUILD_VERSION（查 dx 源码 esbuild.rs 的 ESBUILD_VERSION 常量）。
+ESBUILD_VERSION := 0.27.3
+esbuild-cache:
+	@ESBUILD_DIR="$${DX_HOME:-$$HOME/.local/share/.dx}/tools/esbuild-$(ESBUILD_VERSION)"; \
+	if [ -x "$$ESBUILD_DIR/esbuild" ]; then \
+		echo "esbuild $(ESBUILD_VERSION) already cached at $$ESBUILD_DIR/esbuild"; \
+	else \
+		mkdir -p "$$ESBUILD_DIR"; \
+		case "$$(uname -s)-$$(uname -m)" in \
+			Linux-x86_64)   ESBUILD_PLATFORM=linux-x64   ;; \
+			Linux-aarch64)  ESBUILD_PLATFORM=linux-arm64 ;; \
+			Darwin-x86_64)  ESBUILD_PLATFORM=darwin-x64  ;; \
+			Darwin-arm64)   ESBUILD_PLATFORM=darwin-arm64 ;; \
+			*) echo "unsupported platform: $$(uname -s)-$$(uname -m)" >&2; exit 1 ;; \
+		esac; \
+		echo "Downloading esbuild $(ESBUILD_VERSION) ($$ESBUILD_PLATFORM) from npmmirror..."; \
+		TMP="$$(mktemp -d)"; \
+		curl -fsSL "https://registry.npmmirror.com/@esbuild/$$ESBUILD_PLATFORM/-/$$ESBUILD_PLATFORM-$(ESBUILD_VERSION).tgz" \
+			| tar -xz -C "$$TMP"; \
+		mv "$$TMP/package/bin/esbuild" "$$ESBUILD_DIR/esbuild"; \
+		rm -rf "$$TMP"; \
+		chmod +x "$$ESBUILD_DIR/esbuild"; \
+		echo "esbuild $(ESBUILD_VERSION) cached at $$ESBUILD_DIR/esbuild"; \
+	fi
+
 highlight-css:
 	@cargo run --bin generate_highlight_css
 
@@ -107,7 +138,7 @@ build-core:       ; @cd libs && pnpm --filter @yggdrasil/core run build
 build-xterm:      ; @cd libs && pnpm --filter @yggdrasil/xterm-terminal run build
 build-mermaid:    ; @cd libs && pnpm --filter @yggdrasil/mermaid-renderer run build
 
-dev: build-libs highlight-css katex-css
+dev: build-libs highlight-css katex-css esbuild-cache
 	@echo "Cleaning static/..."
 	@rm -rf static/
 	@echo "Building CSS..."
