@@ -327,6 +327,10 @@ pub enum OutputChunk {
         oom_killed: bool,
         timed_out: bool,
         duration_ms: u64,
+        /// 系统级错误消息（镜像缺失 / daemon 不可达等）。正常执行时为 None；
+        /// 由 spawn_exec_task 的 Err 分支在容器拉起失败时推送，让前端 SSE
+        /// 能拿到可操作消息，而非笼统的「连接异常」。
+        error: Option<String>,
     },
 }
 
@@ -576,7 +580,6 @@ pub async fn run_in_container_stream(
         .ok()
         .and_then(|info| info.state.and_then(|s| s.oom_killed))
         .unwrap_or(false);
-
     // 推送终态 chunk（客户端已断开则跳过，send 必然失败）。
     let duration_ms = start_time.elapsed().as_millis() as u64;
     if !client_disconnected {
@@ -586,6 +589,7 @@ pub async fn run_in_container_stream(
                 oom_killed,
                 timed_out,
                 duration_ms,
+                error: None,
             })
             .await;
     }

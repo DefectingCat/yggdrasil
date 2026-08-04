@@ -628,6 +628,9 @@ mod sse_consumer {
         oom_killed: bool,
         timed_out: bool,
         duration_ms: u64,
+        /// 系统级错误消息（镜像缺失 / daemon 不可达）。有值时优先于退出码展示。
+        #[serde(default)]
+        error: Option<String>,
     }
 
     /// 启动 EventSource 消费 SSE 流。
@@ -690,9 +693,17 @@ mod sse_consumer {
                     oom_killed: false,
                     timed_out: false,
                     duration_ms: 0,
+                    error: None,
                 });
 
-            let (info, err) = if payload.timed_out {
+            // 系统级错误（镜像缺失 / daemon 不可达）优先于退出码展示——
+            // 此类错误下 exit_code 无意义，直接显示可操作消息。
+            let (info, err) = if let Some(msg) = payload.error {
+                (
+                    format!("耗时: {}ms · 状态: 系统错误", payload.duration_ms),
+                    msg,
+                )
+            } else if payload.timed_out {
                 (
                     format!("耗时: {}ms · 状态: 超时", payload.duration_ms),
                     "超时".to_string(),

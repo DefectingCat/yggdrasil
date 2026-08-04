@@ -149,14 +149,14 @@ fn spawn_exec_task(
         let start_time = chrono::Utc::now();
         // 唯一的行为分叉：流式路径逐 chunk 推 SSE，非流式仅落终态 buffer。
         let stream_suffix = if stream_tx.is_some() { " (stream)" } else { "" };
-        let res = match stream_tx {
+        let res = match &stream_tx {
             Some(tx) => run_in_container_stream(
                 &lang_def.image,
                 &lang_def.run_cmd,
                 &req.source,
                 &lang_def.extension,
                 final_limits,
-                tx,
+                tx.clone(),
             )
             .await
             .map(|(exit_code, stdout, stderr, oom_killed, _)| {
@@ -200,6 +200,23 @@ fn spawn_exec_task(
                 // 系统内部异常脱敏：日志记完整 error，前端只见分类后的可操作消息。
                 tracing::error!(error = ?e, task_id = %task_id, "container execution failed{}", stream_suffix);
                 let (status, stderr_msg) = classify_runner_error(&e, &lang_def.image);
+
+                // 流式路径：run_in_container_stream 在 create_container 阶段就 Err 返回
+                // （镜像缺失 / daemon 不可达），此时 Done chunk 从未推送，SSE 流静默关闭，
+                // 前端只能显示笼统的「连接异常」。这里补推一个带 error 的 Done chunk，
+                // 让前端拿到可操作消息。send 失败（客户端已断开）则忽略——轮询兜底仍兜得住。
+                if let Some(tx) = &stream_tx {
+                    let _ = tx
+                        .send(OutputChunk::Done {
+                            exit_code: None,
+                            oom_killed: false,
+                            timed_out: status == ExecStatus::Timeout,
+                            duration_ms,
+                            error: Some(stderr_msg.clone()),
+                        })
+                        .await;
+                }
+
                 let exec_res = ExecResult {
                     status: status.clone(),
                     stdout: String::new(),

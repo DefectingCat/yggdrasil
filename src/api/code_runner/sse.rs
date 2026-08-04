@@ -25,13 +25,15 @@ pub struct StreamQuery {
     pub task_id: String,
 }
 
-/// done 事件的 JSON payload。
 #[derive(serde::Serialize)]
 struct DonePayload {
     exit_code: Option<i64>,
     oom_killed: bool,
     timed_out: bool,
     duration_ms: u64,
+    /// 系统级错误消息（镜像缺失 / daemon 不可达等）。正常执行时为 None。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
 }
 
 /// SSE handler：从 EXEC_STREAMS 取出 receiver（取出即移除，防重复连接），
@@ -54,6 +56,7 @@ pub async fn exec_stream(
                 oom_killed,
                 timed_out,
                 duration_ms,
+                error,
             } => Event::default()
                 .event("done")
                 .json_data(DonePayload {
@@ -61,6 +64,7 @@ pub async fn exec_stream(
                     oom_killed,
                     timed_out,
                     duration_ms,
+                    error,
                 })
                 .unwrap_or_else(|_| Event::default().event("done").data("{}")),
         })
