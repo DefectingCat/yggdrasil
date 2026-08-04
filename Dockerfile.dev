@@ -63,8 +63,13 @@ RUN ARCH="$(dpkg --print-architecture)" \
     && corepack enable \
     && corepack prepare pnpm@11.8.0 --activate
 
+# confirmModulesPurge=false: 无 TTY 容器内 pnpm install 发现 node_modules
+# volume 与 lockfile 不匹配（如 watch rebuild 后 lockfile 更新）需要清空
+# 重建时，默认因无法交互确认而 abort（ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY），
+# 设 false 直接自动执行。
 RUN npm config set registry "${NPM_REGISTRY}" \
-    && pnpm config set registry "${NPM_REGISTRY}"
+    && pnpm config set registry "${NPM_REGISTRY}" \
+    && pnpm config set confirmModulesPurge false
 
 # ── Rust: rsproxy 镜像（字节跳动，2026 年仍为社区主流方案）──────────
 # https://rsproxy.cn/  官方配置指南
