@@ -63,13 +63,16 @@ RUN ARCH="$(dpkg --print-architecture)" \
     && corepack enable \
     && corepack prepare pnpm@11.8.0 --activate
 
-# confirmModulesPurge=false: 无 TTY 容器内 pnpm install 发现 node_modules
-# volume 与 lockfile 不匹配（如 watch rebuild 后 lockfile 更新）需要清空
-# 重建时，默认因无法交互确认而 abort（ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY），
-# 设 false 直接自动执行。
+# CI=true: 无 TTY 容器内 pnpm install 检测到 node_modules volume 与 lockfile
+# 不匹配（如 watch rebuild 后 lockfile 更新）需清空重建时, 默认因无法交互
+# 确认而 abort（ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY）。pnpm 11 已
+# 移除 confirmModulesPurge 配置通道, 官方做法是设 CI=true 启用 CI 默认值
+# （跳过交互确认）。副作用: install 走 frozen-lockfile 语义, lockfile 与
+# package.json 不一致时失败——正是期望信号（该由 watch rebuild 处理）。
+ENV CI=true
+
 RUN npm config set registry "${NPM_REGISTRY}" \
-    && pnpm config set registry "${NPM_REGISTRY}" \
-    && pnpm config set confirmModulesPurge false
+    && pnpm config set registry "${NPM_REGISTRY}"
 
 # ── Rust: rsproxy 镜像（字节跳动，2026 年仍为社区主流方案）──────────
 # https://rsproxy.cn/  官方配置指南
