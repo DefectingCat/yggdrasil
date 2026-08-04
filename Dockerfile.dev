@@ -95,11 +95,11 @@ RUN mkdir -p /usr/local/cargo \
 RUN rustup target add wasm32-unknown-unknown && rustup component add clippy rustfmt
 
 # ── dx CLI（与生产 Dockerfile 一致，从 GitHub Releases 安装预编译二进制）──
-ARG DX_VERSION=0.7.9
+ARG DX_VERSION=0.7.10
 RUN ARCH="$(dpkg --print-architecture)" \
     && case "$ARCH" in \
-        amd64) DX_TRIPLET=x86_64-unknown-linux-gnu  DX_SHA256=3b132551b480bc96f938f9f0d37936ee1190f994977539dcc347eaf38540d005 ;; \
-        arm64) DX_TRIPLET=aarch64-unknown-linux-gnu DX_SHA256=8cf14db0b11b43b31dd6d39e71b00e567f2fccfde85ae3a8f7ef0f8745e5ccfb ;; \
+        amd64) DX_TRIPLET=x86_64-unknown-linux-gnu  DX_SHA256=4363e4ed2a3f1eb7f4d38d2d59aed59ce43271c44c16b425e92c89a64761fbe7 ;; \
+        arm64) DX_TRIPLET=aarch64-unknown-linux-gnu DX_SHA256=8f1a17d3218700ffbe15e6540d936a178b2556fc801121a31082e3ba4ab9ef55 ;; \
         *) echo "unsupported arch: $ARCH" >&2; exit 1; \
     esac \
     && DX_URL="${GH_PROXY:+${GH_PROXY}/}https://github.com/DioxusLabs/dioxus/releases/download/v${DX_VERSION}/dx-${DX_TRIPLET}.tar.gz" \

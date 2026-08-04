@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 # Builder stage: compile the static-linked musl server binary and frontend assets
 # -----------------------------------------------------------------------------
-# Trixie (Debian 13, glibc 2.41) — required because the prebuilt `dx` v0.7.9
+# Trixie (Debian 13, glibc 2.41) — required because the prebuilt `dx` v0.7.10
 # binary (aarch64/x86_64-unknown-linux-gnu) needs GLIBC_2.39; Bookworm only
 # ships 2.36, so `dx --version` fails with "version `GLIBC_2.39' not found".
 FROM rust:1.96-trixie AS builder
@@ -94,7 +94,7 @@ RUN rustup target add wasm32-unknown-unknown \
 
 # Install the Dioxus CLI from the official prebuilt binary (GitHub Releases),
 # NOT `cargo install` (which compiles dx-cli's huge dep tree from source — the
-# slowest single Docker step). The release tag v0.7.9 matches the crate version
+# slowest single Docker step). The release tag v0.7.10 matches the crate version
 # we previously pinned. The prebuilt dx is a glibc (linux-gnu) binary requiring
 # GLIBC_2.39 — that's why the builder stage above uses Trixie (glibc 2.41), not
 # Bookworm (glibc 2.36). dx runs only in this builder stage (to emit the WASM
@@ -102,7 +102,7 @@ RUN rustup target add wasm32-unknown-unknown \
 # platform leg downloads only its native arch; the sha256 pins the exact
 # artifact (supply-chain integrity, verified against the release's .sha256
 # sidecar).
-ARG DX_VERSION=0.7.9
+ARG DX_VERSION=0.7.10
 # The 32 MB dx tarball sits on github.com releases; from China it downloads at
 # ~300 KB/s and the connection is frequently reset mid-transfer with
 # "curl: (56) ... unexpected eof while reading" — the same flaky-upstream
@@ -112,8 +112,8 @@ ARG DX_VERSION=0.7.9
 # each retry. The sha256 pin still catches a corrupted/partial download.
 RUN ARCH="$(dpkg --print-architecture)" \
     && case "$ARCH" in \
-        amd64) DX_TRIPLET=x86_64-unknown-linux-gnu  DX_SHA256=3b132551b480bc96f938f9f0d37936ee1190f994977539dcc347eaf38540d005 ;; \
-        arm64) DX_TRIPLET=aarch64-unknown-linux-gnu DX_SHA256=8cf14db0b11b43b31dd6d39e71b00e567f2fccfde85ae3a8f7ef0f8745e5ccfb ;; \
+        amd64) DX_TRIPLET=x86_64-unknown-linux-gnu  DX_SHA256=4363e4ed2a3f1eb7f4d38d2d59aed59ce43271c44c16b425e92c89a64761fbe7 ;; \
+        arm64) DX_TRIPLET=aarch64-unknown-linux-gnu DX_SHA256=8f1a17d3218700ffbe15e6540d936a178b2556fc801121a31082e3ba4ab9ef55 ;; \
         *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
     esac \
     && DX_URL="${GH_PROXY:+${GH_PROXY}/}https://github.com/DioxusLabs/dioxus/releases/download/v${DX_VERSION}/dx-${DX_TRIPLET}.tar.gz" \
