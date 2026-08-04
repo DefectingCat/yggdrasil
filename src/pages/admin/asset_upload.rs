@@ -1,0 +1,515 @@
+//! 素材上传 modal（素材管理页内上传）。
+//!
+//! 三条入口（点击选择 / 拖拽 / 粘贴）收敛到同一个 [`enqueue_files`]：拿到的
+//! `web_sys::File` 先过 [`validate_file`]（镜像服务端 5MiB / 四种 MIME 的硬限制，
+//! 不合格立即记失败行、不发请求），合格项入队后由**每批一个**的顺序任务逐个上传
+//! （张间 500ms 把稳态速率压到 `RATE_LIMIT_UPLOAD_PER_SEC=2` 以下，防批量拖入触发
+//! 429）。上传管线与文章编辑器完全同源（`upload_image_file` → `POST /api/upload`）。
+//!
+//! Esc / 粘贴监听挂在 window 上，只在 mount 注册一次、`use_drop` 移除；handler 内用
+//! `visible.peek()` 守卫——modal 关闭后粘贴绝不触发上传。无文件的文本粘贴不拦截
+//! （不 prevent_default），搜索框等正常粘贴不受影响。
+//!
+//! 组件始终挂载（`visible` 只控制渲染早退），上传中途允许关闭弹窗：spawn 的任务与
+//! signals 随组件实例存活，后台续传，批末有 ≥1 个成功仍照常回调 `on_uploaded`。
+//!
+//! 注：`next_id` 用 `Rc<Cell<u64>>` 而非裸 `Cell`——`use_hook` 每次渲染都会 clone
+//! 存储值（dioxus-core `use_hook_inner` 走 `.cloned()`），裸 Cell 会被按值拷贝，
+//! 各入口闭包拿到互不同步的副本导致 id 冲突；Rc 克隆共享同一个 Cell。
+
+use dioxus::prelude::*;
+
+use crate::components::ui::SPINNER_SVG;
+
+#[cfg(target_arch = "wasm32")]
+use super::assets::format_bytes;
+#[cfg(target_arch = "wasm32")]
+use crate::tiptap_bridge::upload_image_file;
+// 从 Dioxus 事件拿底层 web_sys::File（write.rs L30-34 同款 cfg 门控惯例）：
+// - HasFileData：evt.files()（FormEvent / DragEvent 取文件）
+// - WebFileExt：file.get_web_file()（FileData 取底层 web_sys::File）
+#[cfg(target_arch = "wasm32")]
+use dioxus::html::HasFileData;
+#[cfg(target_arch = "wasm32")]
+use dioxus::web::WebFileExt;
+
+/// 单文件大小硬上限（5MiB），镜像服务端 `crate::utils::server::MAX_FILE_SIZE`。
+#[cfg(any(test, target_arch = "wasm32"))]
+const MAX_UPLOAD_BYTES: u64 = 5 * 1024 * 1024;
+/// 允许的 MIME 白名单，镜像服务端 `api/upload.rs` 的 `ALLOWED_MIME_TYPES`。
+#[cfg(any(test, target_arch = "wasm32"))]
+const ALLOWED_MIME: &[&str] = &["image/jpeg", "image/png", "image/gif", "image/webp"];
+
+/// 单条上传状态机：Queued → Uploading → Done / Failed(原因)。
+// 变体仅在 WASM 端构造，server SSR 只匹配渲染，非 wasm 构建放行 dead_code。
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+#[derive(Clone, PartialEq)]
+enum UploadStatus {
+    Queued,
+    Uploading,
+    Done,
+    Failed(String),
+}
+
+/// 列表行数据（纯数据，两端都可编译；`web_sys::File` 句柄不进 signal，
+/// 由 WASM 端的 files 表以 id 关联保存，供重试取回）。
+// 同 UploadStatus：实例仅在 WASM 端构造。
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+#[derive(Clone, PartialEq)]
+struct UploadItem {
+    id: u64,
+    name: String,
+    /// 入队时已用 `format_bytes` 格式化好的可读大小。
+    size: String,
+    status: UploadStatus,
+}
+
+/// 预校验：MIME 白名单 + 5MiB 上限。失败返回可读原因（直接展示在行内，不发请求）。
+#[cfg(any(test, target_arch = "wasm32"))]
+fn validate_file(mime: &str, size: u64) -> Result<(), String> {
+    if !ALLOWED_MIME.contains(&mime) {
+        return Err("不支持的文件类型（仅 JPEG / PNG / GIF / WebP）".into());
+    }
+    if size > MAX_UPLOAD_BYTES {
+        return Err("大小超过 5MB 限制".into());
+    }
+    Ok(())
+}
+
+/// 更新单条状态：write guard 在函数内立即释放，绝不跨 await 持有。
+#[cfg(target_arch = "wasm32")]
+fn set_status(items: &mut Signal<Vec<UploadItem>>, id: u64, status: UploadStatus) {
+    let mut guard = items.write();
+    if let Some(it) = guard.iter_mut().find(|it| it.id == id) {
+        it.status = status;
+    }
+}
+
+/// 三入口收敛点：校验入队 + 起批任务。仅 WASM 端存在（`web_sys::File` / `spawn` /
+/// `upload_image_file` 都是 WASM-only 符号）。
+#[cfg(target_arch = "wasm32")]
+fn enqueue_files(
+    mut items: Signal<Vec<UploadItem>>,
+    next_id: std::rc::Rc<std::cell::Cell<u64>>,
+    files: std::rc::Rc<std::cell::RefCell<Vec<(u64, web_sys::File)>>>,
+    on_uploaded: EventHandler<()>,
+    new_files: Vec<web_sys::File>,
+) {
+    // 1) 校验入队：不合格直接记 Failed（不发请求）；合格记 Queued 并留存句柄供重试。
+    let mut valid_ids = Vec::new();
+    for file in new_files {
+        let id = next_id.get() + 1;
+        next_id.set(id);
+        let item = UploadItem {
+            id,
+            name: file.name(),
+            size: format_bytes(file.size() as i64),
+            status: match validate_file(&file.type_(), file.size() as u64) {
+                Ok(()) => {
+                    files.borrow_mut().push((id, file));
+                    valid_ids.push(id);
+                    UploadStatus::Queued
+                }
+                Err(msg) => UploadStatus::Failed(msg),
+            },
+        };
+        items.write().push(item);
+    }
+    if valid_ids.is_empty() {
+        return;
+    }
+
+    // 2) 一批一个顺序任务逐个上传：与服务端上传限流对齐
+    //    （RATE_LIMIT_UPLOAD_PER_SEC=2 / BURST=15），张间 500ms 把稳态速率压到
+    //    2/s 以下防 429。批末有 ≥1 个成功才回调 on_uploaded（一批一次）。
+    spawn(async move {
+        let mut any_done = false;
+        for (idx, id) in valid_ids.iter().enumerate() {
+            // 句柄可能已被「×」移除：跳过该条。borrow 不出块，guard 不跨 await。
+            let file = files
+                .borrow()
+                .iter()
+                .find(|(fid, _)| fid == id)
+                .map(|(_, f)| f.clone());
+            let Some(file) = file else { continue };
+            set_status(&mut items, *id, UploadStatus::Uploading);
+            match upload_image_file(file).await {
+                Ok(_) => {
+                    set_status(&mut items, *id, UploadStatus::Done);
+                    any_done = true;
+                }
+                Err(msg) => set_status(&mut items, *id, UploadStatus::Failed(msg)),
+            }
+            // 本批非最后一张时停顿压速率（后续项已被移除也只是多等一拍，无害）。
+            if idx + 1 < valid_ids.len() {
+                crate::utils::time::sleep_ms(500).await;
+            }
+        }
+        if any_done {
+            on_uploaded.call(());
+        }
+    });
+}
+
+/// 素材上传 modal。
+///
+/// - `visible`：显隐控制（父组件持有；× / Esc / 点遮罩都会置 false）。
+/// - `on_uploaded`：一批上传完成且 ≥1 个成功时回调一次（父组件刷新网格）。
+#[component]
+#[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
+pub fn AssetUploadModal(mut visible: Signal<bool>, on_uploaded: EventHandler<()>) -> Element {
+    let mut items: Signal<Vec<UploadItem>> = use_signal(Vec::new);
+    let mut drag_active = use_signal(|| false);
+    // 自增 id 分配器 + 重试用文件句柄表（WASM-only）：use_hook 持 Rc，跨渲染共享。
+    #[cfg(target_arch = "wasm32")]
+    let next_id = use_hook(|| std::rc::Rc::new(std::cell::Cell::new(0_u64)));
+    #[cfg(target_arch = "wasm32")]
+    let files =
+        use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(Vec::<(u64, web_sys::File)>::new())));
+
+    // window 全局监听（Esc 关闭 + 粘贴上传）：组件始终挂载，故只在 mount 注册一次，
+    // use_drop 移除；handler 内 peek 守卫——modal 关闭后 Esc/粘贴都不响应。
+    // 骨架照抄 ui.rs Popover（use_hook 持 Closure + use_effect 注册 + use_drop 移除）。
+    #[cfg(target_arch = "wasm32")]
+    {
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        type KeyClosure = wasm_bindgen::prelude::Closure<dyn FnMut(web_sys::KeyboardEvent)>;
+        type PasteClosure = wasm_bindgen::prelude::Closure<dyn FnMut(web_sys::ClipboardEvent)>;
+        type Listeners = Rc<RefCell<Option<(KeyClosure, PasteClosure)>>>;
+        let listeners: Listeners = use_hook(|| Rc::new(RefCell::new(None)));
+        let listeners_for_drop = listeners.clone();
+        // effect 闭包 move 捕获的是这两份克隆，原值留给下方 drop/change 事件闭包。
+        let next_id_for_paste = next_id.clone();
+        let files_for_paste = files.clone();
+        use_effect(move || {
+            let Some(window) = web_sys::window() else {
+                return;
+            };
+            let on_keydown =
+                wasm_bindgen::prelude::Closure::wrap(Box::new(move |ev: web_sys::KeyboardEvent| {
+                    if !*visible.peek() {
+                        return;
+                    }
+                    if ev.key() == "Escape" {
+                        visible.set(false);
+                    }
+                })
+                    as Box<dyn FnMut(web_sys::KeyboardEvent)>);
+            // 内层 paste 闭包再各持一份克隆（FnMut effect 的捕获不可被 move 出）。
+            let next_id_in_paste = next_id_for_paste.clone();
+            let files_in_paste = files_for_paste.clone();
+            let on_paste =
+                wasm_bindgen::prelude::Closure::wrap(Box::new(move |ev: web_sys::ClipboardEvent| {
+                    if !*visible.peek() {
+                        return;
+                    }
+                    let Some(dt) = ev.clipboard_data() else {
+                        return;
+                    };
+                    let Some(list) = dt.files() else {
+                        return;
+                    };
+                    // 文本粘贴（无文件）不拦截：不 prevent_default，搜索框正常粘贴。
+                    if list.length() == 0 {
+                        return;
+                    }
+                    ev.prevent_default();
+                    let collected: Vec<web_sys::File> =
+                        (0..list.length()).filter_map(|i| list.item(i)).collect();
+                    if !collected.is_empty() {
+                        enqueue_files(
+                            items,
+                            next_id_in_paste.clone(),
+                            files_in_paste.clone(),
+                            on_uploaded,
+                            collected,
+                        );
+                    }
+                })
+                    as Box<dyn FnMut(web_sys::ClipboardEvent)>);
+            use wasm_bindgen::JsCast;
+            let _ = window
+                .add_event_listener_with_callback("keydown", on_keydown.as_ref().unchecked_ref());
+            let _ =
+                window.add_event_listener_with_callback("paste", on_paste.as_ref().unchecked_ref());
+            *listeners.borrow_mut() = Some((on_keydown, on_paste));
+        });
+        use_drop(move || {
+            if let Some((on_keydown, on_paste)) = listeners_for_drop.borrow_mut().take() {
+                if let Some(window) = web_sys::window() {
+                    use wasm_bindgen::JsCast;
+                    let _ = window.remove_event_listener_with_callback(
+                        "keydown",
+                        on_keydown.as_ref().unchecked_ref(),
+                    );
+                    let _ = window.remove_event_listener_with_callback(
+                        "paste",
+                        on_paste.as_ref().unchecked_ref(),
+                    );
+                }
+            }
+        });
+    }
+
+    // 每个 move 事件闭包独占一份 Rc 克隆（move 闭包按整个变量捕获）。
+    #[cfg(target_arch = "wasm32")]
+    let (next_id_for_drop, next_id_for_change) = (next_id.clone(), next_id.clone());
+    #[cfg(target_arch = "wasm32")]
+    let (files_for_drop, files_for_change) = (files.clone(), files.clone());
+
+    if !visible() {
+        return rsx! {};
+    }
+
+    // 快照当前列表（小 Vec，clone 成本可忽略；status 变化驱动重渲染）。
+    let items_snapshot = items.read().clone();
+
+    rsx! {
+        // 遮罩：点击关闭（照抄 AssetPickerModal）。
+        div {
+            class: "fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-6",
+            onclick: move |_| visible.set(false),
+            // 面板：阻止点击穿透到遮罩。
+            div {
+                class: "w-full max-w-lg max-h-[80vh] flex flex-col rounded-[2rem] bg-[var(--color-paper-entry)] border border-[var(--color-paper-border)] shadow-xl overflow-hidden",
+                onclick: move |evt| evt.stop_propagation(),
+
+                // 头部（照抄 AssetPickerModal 头部类）。
+                div { class: "flex items-center gap-3 px-6 py-4 border-b border-[var(--color-paper-border)]",
+                    h2 { class: "text-lg font-bold text-[var(--color-paper-primary)]", "上传素材" }
+                    div { class: "flex-1" }
+                    button {
+                        class: "shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-[var(--color-paper-secondary)] hover:bg-[var(--color-paper-theme)] transition-colors cursor-pointer",
+                        aria_label: "关闭",
+                        onclick: move |_| visible.set(false),
+                        "×"
+                    }
+                }
+
+                // 主体：拖放区 + 逐文件状态列表。
+                div { class: "flex-1 overflow-y-auto p-6 flex flex-col gap-4",
+                    // 拖放区 = label：点击天然触发隐藏 file input（同 CoverUploader），无需 JS。
+                    // 内部内容包一层 pointer-events-none，防子元素进出触发 dragleave 高亮闪烁。
+                    label {
+                        class: "flex flex-col items-center justify-center gap-2 px-6 py-10 border border-dashed rounded-2xl cursor-pointer transition-colors",
+                        class: if drag_active() { "border-[var(--color-paper-primary)] bg-[var(--color-paper-theme)]" } else { "border-[var(--color-paper-border)] bg-[var(--color-paper-theme)] hover:border-[var(--color-paper-primary)]" },
+                        // ondragover 必须 prevent_default，否则浏览器直接打开文件。
+                        ondragover: move |evt| {
+                            evt.prevent_default();
+                            drag_active.set(true);
+                        },
+                        ondragenter: move |evt| {
+                            evt.prevent_default();
+                        },
+                        ondragleave: move |_| {
+                            drag_active.set(false);
+                        },
+                        ondrop: move |evt| {
+                            evt.prevent_default();
+                            drag_active.set(false);
+                            #[cfg(target_arch = "wasm32")]
+                            {
+                                let collected: Vec<web_sys::File> = evt
+                                    .files()
+                                    .into_iter()
+                                    .filter_map(|f| f.get_web_file())
+                                    .collect();
+                                if !collected.is_empty() {
+                                    enqueue_files(
+                                        items,
+                                        next_id_for_drop.clone(),
+                                        files_for_drop.clone(),
+                                        on_uploaded,
+                                        collected,
+                                    );
+                                }
+                            }
+                        },
+                        div { class: "pointer-events-none flex flex-col items-center gap-2",
+                            // 上传图标（Feather 风格线框，照抄 CoverUploader）。
+                            svg {
+                                class: "w-8 h-8 text-[var(--color-paper-tertiary)]",
+                                xmlns: "http://www.w3.org/2000/svg",
+                                view_box: "0 0 24 24",
+                                fill: "none",
+                                stroke: "currentColor",
+                                stroke_width: "1.8",
+                                stroke_linecap: "round",
+                                stroke_linejoin: "round",
+                                path { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }
+                                polyline { points: "17 8 12 3 7 8" }
+                                line { x1: "12", y1: "3", x2: "12", y2: "15" }
+                            }
+                            p { class: "text-sm font-medium text-[var(--color-paper-primary)]",
+                                "拖拽图片到这里，或点击选择"
+                            }
+                            p { class: "text-xs text-[var(--color-paper-tertiary)]",
+                                "支持 Ctrl/⌘+V 粘贴 · JPEG / PNG / GIF / WebP · 单张 ≤ 5MB"
+                            }
+                        }
+                        input {
+                            r#type: "file",
+                            accept: "image/jpeg,image/png,image/gif,image/webp",
+                            multiple: true,
+                            class: "hidden",
+                            onchange: move |evt| {
+                                #[cfg(target_arch = "wasm32")]
+                                {
+                                    let collected: Vec<web_sys::File> = evt
+                                        .files()
+                                        .into_iter()
+                                        .filter_map(|f| f.get_web_file())
+                                        .collect();
+                                    if !collected.is_empty() {
+                                        enqueue_files(
+                                            items,
+                                            next_id_for_change.clone(),
+                                            files_for_change.clone(),
+                                            on_uploaded,
+                                            collected,
+                                        );
+                                    }
+                                }
+                            },
+                        }
+                    }
+
+                    // 逐文件状态列表。
+                    if !items_snapshot.is_empty() {
+                        div { class: "flex flex-col gap-2",
+                            for item in items_snapshot.iter() {
+                                {
+                                    let item_id = item.id;
+                                    #[cfg(target_arch = "wasm32")]
+                                    let (files_for_retry, files_for_remove) =
+                                        (files.clone(), files.clone());
+                                    rsx! {
+                                        div {
+                                            key: "{item_id}",
+                                            class: "flex items-center gap-3 rounded-2xl border border-[var(--color-paper-border)] bg-[var(--color-paper-theme)] px-4 py-3",
+                                            // 左：文件名 + 大小（min-w-0 + truncate 防长文件名撑破行）。
+                                            div { class: "flex-1 min-w-0",
+                                                p { class: "text-sm truncate text-[var(--color-paper-primary)]",
+                                                    title: "{item.name}",
+                                                    "{item.name}"
+                                                }
+                                                p { class: "text-xs font-mono text-[var(--color-paper-tertiary)]",
+                                                    "{item.size}"
+                                                }
+                                            }
+                                            // 右：状态 + 操作。
+                                            match &item.status {
+                                                UploadStatus::Queued => rsx! {
+                                                    span { class: "text-xs text-[var(--color-paper-tertiary)] shrink-0", "等待中" }
+                                                },
+                                                UploadStatus::Uploading => rsx! {
+                                                    span { class: "flex items-center gap-1.5 text-xs text-[var(--color-paper-secondary)] shrink-0",
+                                                        span {
+                                                            class: "inline-block w-3.5 h-3.5",
+                                                            dangerous_inner_html: SPINNER_SVG,
+                                                        }
+                                                        "上传中"
+                                                    }
+                                                },
+                                                UploadStatus::Done => rsx! {
+                                                    span { class: "text-xs text-emerald-600 dark:text-emerald-400 shrink-0", "✓ 已上传" }
+                                                },
+                                                UploadStatus::Failed(msg) => rsx! {
+                                                    // 失败原因文字展示（不只靠颜色），过长截断 + title 全文。
+                                                    span { class: "text-xs text-red-500 shrink-0 max-w-56 truncate",
+                                                        title: "{msg}",
+                                                        "{msg}"
+                                                    }
+                                                    button {
+                                                        class: "text-xs cursor-pointer text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] shrink-0",
+                                                        onclick: move |_| {
+                                                            #[cfg(target_arch = "wasm32")]
+                                                            {
+                                                                // 从 files 表取回句柄重发本条。
+                                                                let file = files_for_retry
+                                                                    .borrow()
+                                                                    .iter()
+                                                                    .find(|(fid, _)| *fid == item_id)
+                                                                    .map(|(_, f)| f.clone());
+                                                                if let Some(file) = file {
+                                                                    set_status(&mut items, item_id, UploadStatus::Uploading);
+                                                                    spawn(async move {
+                                                                        match upload_image_file(file).await {
+                                                                            Ok(_) => {
+                                                                                set_status(&mut items, item_id, UploadStatus::Done);
+                                                                                on_uploaded.call(());
+                                                                            }
+                                                                            Err(msg) => set_status(
+                                                                                &mut items,
+                                                                                item_id,
+                                                                                UploadStatus::Failed(msg),
+                                                                            ),
+                                                                        }
+                                                                    });
+                                                                }
+                                                            }
+                                                        },
+                                                        "重试"
+                                                    }
+                                                    button {
+                                                        class: "text-xs cursor-pointer text-[var(--color-paper-tertiary)] hover:text-[var(--color-paper-primary)] transition-colors shrink-0",
+                                                        aria_label: "移除",
+                                                        onclick: move |_| {
+                                                            // 移除该条，同时删 files 里的句柄
+                                                            // （进行中的批任务会跳过已删项）。
+                                                            items.write().retain(|it| it.id != item_id);
+                                                            #[cfg(target_arch = "wasm32")]
+                                                            files_for_remove
+                                                                .borrow_mut()
+                                                                .retain(|(fid, _)| *fid != item_id);
+                                                        },
+                                                        "×"
+                                                    }
+                                                },
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{validate_file, ALLOWED_MIME, MAX_UPLOAD_BYTES};
+
+    /// 四种支持的类型在上限边缘全部接受。
+    #[test]
+    fn validate_file_accepts_supported_types_at_limit() {
+        for mime in ALLOWED_MIME {
+            assert!(
+                validate_file(mime, MAX_UPLOAD_BYTES).is_ok(),
+                "{mime} 应被接受"
+            );
+        }
+    }
+
+    /// svg 不在白名单（服务端同样拒绝）。
+    #[test]
+    fn validate_file_rejects_svg() {
+        assert!(validate_file("image/svg+xml", 1024).is_err());
+    }
+
+    /// 空 MIME（浏览器给不出类型）也拒绝。
+    #[test]
+    fn validate_file_rejects_empty_mime() {
+        assert!(validate_file("", 1024).is_err());
+    }
+
+    /// 上限 +1 字节拒绝。
+    #[test]
+    fn validate_file_rejects_oversize() {
+        assert!(validate_file("image/png", MAX_UPLOAD_BYTES + 1).is_err());
+    }
+}

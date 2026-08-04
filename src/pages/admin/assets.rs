@@ -27,6 +27,7 @@ use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
 use crate::components::ui::{FilterTabs, Pagination};
 #[cfg(target_arch = "wasm32")]
 use crate::models::asset::{AssetFilter, AssetSort};
+use crate::pages::admin::asset_upload::AssetUploadModal;
 #[cfg(target_arch = "wasm32")]
 use crate::utils::js::invoke_optional_global;
 use std::collections::HashSet;
@@ -40,7 +41,8 @@ const ASSETS_PER_PAGE: i32 = 60;
 const SEARCH_DEBOUNCE_MS: u32 = 300;
 
 /// 格式化字节数为可读字符串（B/KB/MB/GB）。
-fn format_bytes(bytes: i64) -> String {
+/// pub(super)：asset_upload 的上传列表复用同一份格式化（不新增第三份拷贝）。
+pub(super) fn format_bytes(bytes: i64) -> String {
     const KB: f64 = 1024.0;
     const MB: f64 = KB * 1024.0;
     const GB: f64 = MB * 1024.0;
@@ -91,6 +93,8 @@ pub fn Assets() -> Element {
     // 与单删保护语义一致）；选择跨翻页/筛选保留，批量删除成功后整体清空。
     let mut selected_ids: Signal<HashSet<String>> = use_signal(HashSet::new);
     let mut batch_confirm = use_signal(|| false);
+    // 页内上传 modal 显隐。
+    let mut upload_open = use_signal(|| false);
 
     // 搜索防抖：query 是输入框原始值（受控绑定），debounced_query 才是请求参数。
     // 停顿 300ms 无新输入才提交；每次击键重启本 effect 并新 spawn 一个延时任务，
@@ -226,6 +230,12 @@ pub fn Assets() -> Element {
                 // 右侧控件与 FilterTabs 同加 mb-6：items-end 对齐的是 margin box，
                 // 两者底边同落在 tabs 下划线处，到下方横幅/网格的距离均为 24px。
                 div { class: "flex items-center gap-3 mb-6",
+                    // 页内上传：主 CTA（实心 paper-primary，对齐 AssetPickerModal「上传新图」先例）。
+                    button {
+                        class: "text-xs font-medium cursor-pointer px-3 py-2 rounded-full bg-[var(--color-paper-primary)] text-[var(--color-paper-theme)] hover:opacity-80 transition-opacity",
+                        onclick: move |_| upload_open.set(true),
+                        "上传素材"
+                    }
                     // 重建索引：以磁盘为准全量自愈（存量回填/不一致修复）。
                     button {
                         class: "text-xs font-medium cursor-pointer px-3 py-2 rounded-full border border-[var(--color-paper-border)] text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] hover:border-[var(--color-paper-primary)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
@@ -698,6 +708,13 @@ pub fn Assets() -> Element {
                         on_jump: move |p: i32| page.set(p),
                     }
                 }
+            }
+
+            // 页内上传 modal：始终挂载，visible 控制渲染；上传成功刷新网格
+            // （不重置页码/排序，按当前排序自然刷新——「最新」下新图在头部）。
+            AssetUploadModal {
+                visible: upload_open,
+                on_uploaded: move |_| reload.set(reload() + 1),
             }
         }
     }
