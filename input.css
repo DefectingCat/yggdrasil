@@ -863,14 +863,16 @@
     border-spacing: 0;
     border-radius: var(--radius-paper);
     box-shadow: 0 0 0 1px var(--color-paper-border);
+    overflow: hidden;
   }
 
   .md-content table thead th {
     background: var(--color-paper-code-block);
     font-weight: 600;
     color: var(--color-paper-primary);
-    padding: 16px 24px;
+    padding: 14px 20px;
     text-align: left;
+    vertical-align: middle;
     border-bottom: 1px solid var(--color-paper-border);
     white-space: nowrap;
   }
@@ -892,8 +894,9 @@
   }
 
   .md-content table tbody td {
-    padding: 16px 24px;
+    padding: 14px 20px;
     line-height: 1.6;
+    vertical-align: top;
     border-bottom: 1px solid var(--color-paper-border);
     color: var(--color-paper-secondary);
   }
@@ -906,10 +909,30 @@
     transition: background-color 0.2s ease;
   }
 
+  .md-content table tbody tr:nth-child(even) {
+    background: color-mix(in srgb, var(--color-paper-code-bg) 40%, transparent);
+  }
+
   .md-content table tbody tr:hover {
     background: var(--color-paper-entry);
   }
 
+  .md-content table td code {
+    padding: 0.15rem 0.35rem;
+    border: 1px solid color-mix(in srgb, var(--color-paper-border) 60%, transparent);
+    white-space: nowrap;
+    word-break: break-word;
+  }
+
+  .md-content table .katex {
+    line-height: 1.2;
+  }
+
+  .md-content table .katex-display {
+    margin: 0.4em 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
   /* 排除 CodeMirror 编辑器内的 <img>：CM 用 <img class="cm-widgetBuffer">（width:0、
      height:1em 的占位符）对齐折叠 widget 的基线。若被这里的 margin/height 命中，
      会把折叠那行 .cm-line 撑高约 32px（上下各 1rem margin）。用 :where() 把
