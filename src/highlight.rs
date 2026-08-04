@@ -29,6 +29,7 @@ pub mod server {
             include_str!("../syntaxes/TypeScript.sublime-syntax"),
         ),
         ("Vue", include_str!("../syntaxes/Vue.sublime-syntax")),
+        ("WGSL", include_str!("../syntaxes/WGSL.sublime-syntax")),
         ("Zig", include_str!("../syntaxes/Zig.sublime-syntax")),
     ];
 
@@ -612,5 +613,99 @@ published = true
         let upper = highlight_code(code, Some("TOML"));
         assert_eq!(lower, upper);
         assert!(lower.contains(r#"<span class="source toml">"#));
+    }
+    #[test]
+    fn highlight_code_wgsl() {
+        // relrelb/sublime-wgsl 语法，覆盖 attribute/fn/类型/字面量/控制流/struct/注释。
+        let code = "\
+@vertex
+fn vs_main(@location(0) pos: vec3<f32>) -> @builtin(position) vec4<f32> {
+  let x: f32 = 1.5;
+  return vec4<f32>(pos, x);
+}
+// comment
+struct Uniforms { m: mat4x4<f32> }";
+        let result = highlight_code(code, Some("wgsl"));
+        // 根作用域 source.wgsl —— 证明命中真正的 WGSL 语法而非纯文本。
+        assert!(
+            result.contains(r#"<span class="source wgsl">"#),
+            "WGSL 未命中 source.wgsl 根作用域: {}",
+            result
+        );
+        assert!(
+            !result.contains(r#"<span class="text plain">"#),
+            "WGSL 不应回退到纯文本: {}",
+            result
+        );
+        // @vertex -> entity name attribute
+        assert!(
+            result.contains("entity name attribute"),
+            "WGSL @attribute 未识别: {}",
+            result
+        );
+        // fn -> keyword other fn
+        assert!(
+            result.contains("keyword other fn"),
+            "WGSL fn 未识别: {}",
+            result
+        );
+        // vec3/f32/mat4x4 -> storage type
+        assert!(
+            result.contains("storage type"),
+            "WGSL 类型(vec3/f32/mat4x4)未识别: {}",
+            result
+        );
+        // 1.5 -> constant numeric float
+        assert!(
+            result.contains("constant numeric float"),
+            "WGSL 浮点字面量未识别: {}",
+            result
+        );
+        // 0 -> constant numeric
+        assert!(
+            result.contains("constant numeric decimal"),
+            "WGSL 整数字面量未识别: {}",
+            result
+        );
+        // return -> keyword control
+        assert!(
+            result.contains("keyword control"),
+            "WGSL 控制关键字未识别: {}",
+            result
+        );
+        // struct -> keyword declaration struct
+        assert!(
+            result.contains("keyword declaration struct"),
+            "WGSL struct 未识别: {}",
+            result
+        );
+        // Uniforms -> entity name type
+        assert!(
+            result.contains("entity name type"),
+            "WGSL 自定义类型名未识别: {}",
+            result
+        );
+        // // comment -> comment line double-slash
+        assert!(
+            result.contains("comment line double-slash"),
+            "WGSL 行注释未识别: {}",
+            result
+        );
+        // pos/x/m -> variable other
+        assert!(
+            result.contains("variable other"),
+            "WGSL 变量未识别: {}",
+            result
+        );
+    }
+
+    #[test]
+    fn highlight_code_wgsl_uppercase_matches_lowercase() {
+        // 语法注册了 .wgsl 扩展名；大写标识经小写回退路径应与 wgsl 等价。
+        let code = "@compute @workgroup_size(1)\nfn main() {}";
+        let lower = highlight_code(code, Some("wgsl"));
+        let upper = highlight_code(code, Some("WGSL"));
+        assert_eq!(lower, upper);
+        assert!(lower.contains(r#"<span class="source wgsl">"#));
     }
 }
