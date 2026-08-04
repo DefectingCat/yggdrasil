@@ -70,7 +70,7 @@ pub fn Admin() -> Element {
                     }
                 }
                 div { class: "flex items-center gap-3",
-                    Link { class: "{BTN_SECONDARY}", to: Route::Posts {}, "管理文章" }
+                    Link { class: "{BTN_SECONDARY}", to: Route::Posts {}, "全部文章" }
                     Link { class: "{BTN_PRIMARY}", to: Route::Write {}, "发布文章" }
                 }
             }

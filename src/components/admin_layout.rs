@@ -40,10 +40,8 @@ pub fn AdminLayout() -> Element {
         }
     });
 
-    let admin_nav_items = vec![
-        (Route::Admin {}, "仪表盘"),
-        (Route::Write {}, "写文章"),
-        (Route::Posts {}, "管理文章"),
+    let nav_items_top = vec![(Route::Admin {}, "仪表盘"), (Route::Write {}, "写文章")];
+    let nav_items_bottom = vec![
         (Route::Assets {}, "素材"),
         (Route::FriendsAdmin {}, "友链"),
         (Route::Runner {}, "试运行"),
@@ -53,8 +51,6 @@ pub fn AdminLayout() -> Element {
 
     let is_write_route =
         matches!(route, Route::Write {}) || matches!(route, Route::WriteEdit { .. });
-    // 「管理文章」高亮：单路由 /admin/posts（列表 + 回收站 tab 均归此项）。
-    let is_posts_route = matches!(route, Route::Posts {});
 
     // 所有 admin 页面共用同一 shell:外层圆角卡片(滚动容器) + 内部 main 负责居中限宽。
     // write 路由例外:卡片不滚动(overflow-hidden),main 作为 flex 容器不带头尾 padding,
@@ -86,11 +82,25 @@ pub fn AdminLayout() -> Element {
             }
             // Nav Items
             nav { class: "flex-1 flex flex-col gap-2",
-                for (dest, label) in admin_nav_items {
+                for (dest, label) in nav_items_top {
                     {
-                        let is_active = route == dest
-                            || (label == "写文章" && is_write_route)
-                            || (label == "管理文章" && is_posts_route);
+                        let is_active = route == dest || (label == "写文章" && is_write_route);
+                        let base_class = "flex items-center px-4 py-3 rounded-2xl text-sm font-medium transition-all";
+                        let text_class = if is_active {
+                            "bg-[var(--color-paper-theme)] text-[var(--color-paper-primary)] shadow-sm border border-[var(--color-paper-border)]"
+                        } else {
+                            "text-[var(--color-paper-secondary)] hover:bg-[var(--color-paper-theme)]/50 hover:text-[var(--color-paper-primary)] border border-transparent"
+                        };
+                        rsx! {
+                            Link { key: "{label}", class: "{base_class} {text_class}", to: dest, "{label}" }
+                        }
+                    }
+                }
+                // 「内容管理」子菜单：全部文章 / 回收站 / 评论管理（issue #17）。
+                ContentNavGroup {}
+                for (dest, label) in nav_items_bottom {
+                    {
+                        let is_active = route == dest || (label == "写文章" && is_write_route);
                         let base_class = "flex items-center px-4 py-3 rounded-2xl text-sm font-medium transition-all";
                         let text_class = if is_active {
                             "bg-[var(--color-paper-theme)] text-[var(--color-paper-primary)] shadow-sm border border-[var(--color-paper-border)]"
@@ -156,6 +166,91 @@ pub fn AdminLayout() -> Element {
                                         }
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// 「内容管理」子菜单组：全部文章 / 回收站 / 评论管理。
+///
+/// 父项整行点击仅切换展开/收起（不跳转），chevron 旋转 + grid-template-rows
+/// 0fr↔1fr 过渡动画（复用 posts_trash.rs AutoPurgeSettings 的既有模式）。
+/// 当前路由落在组内时自动展开，保证激活子项始终可见；用户手动收起后，
+/// 仅当再次从组外导航进入组内路由时才重新展开。
+#[component]
+fn ContentNavGroup() -> Element {
+    let route = use_route::<Route>();
+    // 判断路由是否属于本组（回收站/评论分页路由一并归入）。
+    fn in_group(route: &Route) -> bool {
+        matches!(
+            route,
+            Route::Posts {}
+                | Route::PostsTrash {}
+                | Route::AdminComments {}
+                | Route::AdminCommentsPage { .. }
+        )
+    }
+    let group_active = in_group(&route);
+    let mut expanded = use_signal(|| group_active);
+
+    // 路由从组外进入组内时自动展开。闭包内读 router().current 建立
+    // ReactiveContext 订阅（仓库约定 #5），路由变化时本 effect 重跑。
+    use_effect(move || {
+        let current = router().current::<Route>();
+        if in_group(&current) {
+            expanded.set(true);
+        }
+    });
+
+    let chevron_rotate = if expanded() { "rotate-180" } else { "" };
+    // 父项样式：与顶层导航项同盒模型；组内路由激活时仅提为 primary 文字色，
+    // 不给自己加 pill（pill 高亮由激活子项承担，避免双层高亮竞争）。
+    let parent_text_class = if group_active {
+        "text-[var(--color-paper-primary)] border border-transparent"
+    } else {
+        "text-[var(--color-paper-secondary)] hover:bg-[var(--color-paper-theme)]/50 hover:text-[var(--color-paper-primary)] border border-transparent"
+    };
+
+    rsx! {
+        div { class: "flex flex-col gap-1",
+            button {
+                class: "flex items-center justify-between w-full px-4 py-3 rounded-2xl text-sm font-medium transition-all cursor-pointer {parent_text_class}",
+                onclick: move |_| expanded.set(!expanded()),
+                span { "内容管理" }
+                svg {
+                    class: "w-4 h-4 transition-transform duration-200 flex-shrink-0 {chevron_rotate}",
+                    view_box: "0 0 24 24",
+                    fill: "none",
+                    stroke: "currentColor",
+                    stroke_width: "2",
+                    path {
+                        stroke_linecap: "round",
+                        stroke_linejoin: "round",
+                        d: "M19 9l-7 7-7-7",
+                    }
+                }
+            }
+            // 展开动画容器：与 AutoPurgeSettings 完全同款（grid 0fr↔1fr + 内层 overflow-hidden）。
+            div {
+                class: "grid transition-all duration-300 ease-in-out",
+                style: if expanded() { "grid-template-rows: 1fr; opacity: 1; pointer-events: auto;" } else { "grid-template-rows: 0fr; opacity: 0; pointer-events: none;" },
+                div { class: "overflow-hidden min-h-0",
+                    // 左侧竖线引导 + 缩进表示层级。
+                    div { class: "ml-4 pl-3 border-l border-[var(--color-paper-border)] flex flex-col gap-1",
+                        for (dest, label, active) in [
+                            (Route::Posts {}, "全部文章", matches!(route, Route::Posts {})),
+                            (Route::PostsTrash {}, "回收站", matches!(route, Route::PostsTrash {})),
+                            (Route::AdminComments {}, "评论管理", matches!(route, Route::AdminComments {} | Route::AdminCommentsPage { .. })),
+                        ] {
+                            Link {
+                                key: "{label}",
+                                class: if active { "flex items-center px-3 py-2 rounded-xl text-sm font-medium transition-all bg-[var(--color-paper-theme)] text-[var(--color-paper-primary)] shadow-sm border border-[var(--color-paper-border)]" } else { "flex items-center px-3 py-2 rounded-xl text-sm font-medium transition-all text-[var(--color-paper-secondary)] hover:bg-[var(--color-paper-theme)]/50 hover:text-[var(--color-paper-primary)] border border-transparent" },
+                                to: dest,
+                                "{label}"
                             }
                         }
                     }

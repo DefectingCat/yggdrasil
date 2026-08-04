@@ -59,7 +59,7 @@ fn format_bytes(bytes: i64) -> String {
 #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut, unused_variables))]
 #[component]
 pub fn Assets() -> Element {
-    // 筛选/搜索/排序/分页状态：全部客户端驱动（单路由 + signal，对齐「管理文章」模式）。
+    // 筛选/搜索/排序/分页状态：全部客户端驱动（单路由 + signal，对齐「全部文章」模式）。
     let mut filter = use_signal(|| "all".to_string());
     let mut query = use_signal(String::new);
     let mut sort = use_signal(|| "created".to_string());
