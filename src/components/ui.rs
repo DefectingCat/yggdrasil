@@ -275,28 +275,34 @@ pub fn StatusBadge(color_class: &'static str, label: String) -> Element {
     }
 }
 
-/// Tooltip 定位样式（胶囊：黑底白字，hover 显现）。
+/// Tooltip 基础样式（胶囊：黑底白字，hover 显现）。水平定位由调用方经 `align` 选择，
+/// 不在此处写死居中——触发器贴容器边缘时居中会让 tooltip 溢出被 `overflow-hidden` 裁掉。
 const TOOLTIP_STYLE: &str =
-    "pointer-events-none absolute left-1/2 -translate-x-1/2 px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-paper-primary text-paper-theme shadow-lg z-50";
+    "pointer-events-none absolute px-3 py-1.5 text-xs font-medium whitespace-nowrap rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-paper-primary text-paper-theme shadow-lg z-50";
 
 /// Tooltip 包裹组件。
 ///
-/// 将任意触发器（按钮等）包裹后，鼠标 hover 时在上方或下方居中弹出提示。
+/// 将任意触发器（按钮等）包裹后，鼠标 hover 时在上方或下方弹出提示。
 /// 用 CSS `group` + `group-hover:opacity-100` 实现，无 JS 状态，`pointer-events-none`
 /// 保证不拦截点击。
 ///
 /// Props：
 /// - `tip`：提示文案
 /// - `children`：触发器元素（按钮 / 链接等）
-/// - `placement`：弹出方向，`"top"`（默认）或 `"bottom"`
+/// - `placement`：垂直方向，`"top"`（默认，弹出在触发器上方）或 `"bottom"`（下方）
+/// - `align`：水平对齐，`"center"`（默认，居中）/ `"start"`（左对齐，向右延伸）/
+///   `"end"`（右对齐，向左延伸）
 ///
-/// 注意：父容器若有 `overflow-hidden` 会裁掉 tooltip，此时应选朝外的方向
-/// （如表格行在 `overflow-hidden` 容器内，朝上的 tooltip 才不会被裁）。
+/// 注意：父容器若有 `overflow-hidden`（如 `ADMIN_TABLE_CLASS`），`position:absolute`
+/// 的 tooltip 会被裁掉。此时除选朝外的 `placement` 外，还须用 `align` 让 tooltip
+/// 朝容器内侧延伸——否则居中的宽 tooltip 越过容器边缘即被裁（见 issue #14：
+/// 表格最右列按钮的 tooltip 右半段被裁、左半段压住相邻内容）。
 #[component]
 pub fn Tooltip(
     tip: String,
     children: Element,
     #[props(default = "top")] placement: &'static str,
+    #[props(default = "center")] align: &'static str,
 ) -> Element {
     // 朝上：tooltip 在触发器上方（bottom-full + mb-2）；朝下：在下方（top-full + mt-2）。
     let position_class = if placement == "bottom" {
@@ -304,10 +310,16 @@ pub fn Tooltip(
     } else {
         "bottom-full mb-2"
     };
+    // 水平对齐：center 居中 / start 左对齐向右 / end 右对齐向左。
+    let align_class = match align {
+        "start" => "left-0",
+        "end" => "right-0",
+        _ => "left-1/2 -translate-x-1/2",
+    };
     rsx! {
         div { class: "group relative inline-flex",
             {children}
-            div { class: "{TOOLTIP_STYLE} {position_class}", "{tip}" }
+            div { class: "{TOOLTIP_STYLE} {position_class} {align_class}", "{tip}" }
         }
     }
 }

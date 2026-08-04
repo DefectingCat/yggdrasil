@@ -453,7 +453,7 @@ fn PostRow(
                         to: Route::WriteEdit { id: post.id },
                         "编辑"
                     }
-                    Tooltip { tip: "重新渲染这篇文章的 HTML".to_string(),
+                    Tooltip { tip: "重新渲染这篇文章的 HTML".to_string(), align: "end",
                         button {
                             class: if rebuilding { "relative inline-flex items-center text-xs text-paper-accent cursor-not-allowed" } else { BTN_TEXT_ACCENT },
                             disabled: rebuilding,
