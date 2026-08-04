@@ -841,10 +841,27 @@ mod tests {
         let md = "| 名 | 式 |\n|---|---|\n| a | $R_s=1$ |\n| b | $\\tfrac{1}{2}$ |\n| c | tail |\n";
         let result = render_markdown_enhanced(md);
         let tbody = &result.html[result.html.find("<tbody>").expect("应有 tbody")..];
-        assert!(!tbody.contains("<th"), "tbody 不应出现 <th>: {}", result.html);
-        assert!(!tbody.contains("</th>"), "不应出现错配 </th>: {}", result.html);
-        assert_eq!(tbody.matches("<td").count(), 6, "3 行 × 2 列应全为 <td>: {}", result.html);
-        assert!(tbody.contains("katex"), "公式应渲染为 KaTeX: {}", result.html);
+        assert!(
+            !tbody.contains("<th"),
+            "tbody 不应出现 <th>: {}",
+            result.html
+        );
+        assert!(
+            !tbody.contains("</th>"),
+            "不应出现错配 </th>: {}",
+            result.html
+        );
+        assert_eq!(
+            tbody.matches("<td").count(),
+            6,
+            "3 行 × 2 列应全为 <td>: {}",
+            result.html
+        );
+        assert!(
+            tbody.contains("katex"),
+            "公式应渲染为 KaTeX: {}",
+            result.html
+        );
     }
 
     #[test]
@@ -853,7 +870,11 @@ mod tests {
         let md = "| A | B |\n|---|---|\n| x[^n] | $1+1$ |\n\n[^n]: note\n";
         let result = render_markdown_enhanced(md);
         let tbody = &result.html[result.html.find("<tbody>").expect("应有 tbody")..];
-        assert!(!tbody.contains("<th") && !tbody.contains("</th>"), "tbody 不应出现 th: {}", result.html);
+        assert!(
+            !tbody.contains("<th") && !tbody.contains("</th>"),
+            "tbody 不应出现 th: {}",
+            result.html
+        );
     }
 
     #[test]
@@ -864,7 +885,11 @@ mod tests {
         let h2_start = result.html.find("<h2").expect("应有 h2");
         let h2_end = result.html.find("</h2>").expect("应有 </h2>");
         let katex_pos = result.html.find("katex").expect("公式应渲染");
-        assert!(h2_start < katex_pos && katex_pos < h2_end, "公式应在 h2 内部: {}", result.html);
+        assert!(
+            h2_start < katex_pos && katex_pos < h2_end,
+            "公式应在 h2 内部: {}",
+            result.html
+        );
     }
 
     #[test]

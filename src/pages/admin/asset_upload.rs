@@ -496,7 +496,7 @@ pub fn AssetUploadModal(mut visible: Signal<bool>, on_uploaded: EventHandler<()>
                                                                                     .borrow()
                                                                                     .iter()
                                                                                     .find(|(fid, _)| *fid == item_id)
-                                                                                    .map(|(_, f)| f.clone()); // 移除该条，同时删 files 里的句柄
+                                                                                    .map(|(_, f)| f.clone());
                                                                                 if let Some(file) = file {
                                                                                     set_status(&mut items, item_id, UploadStatus::Uploading);
                                                                                     spawn(async move {
