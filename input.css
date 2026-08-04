@@ -123,6 +123,70 @@
     animation: row-enter 450ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
+  /* 素材弹窗开合动画（进入走 keyframes 挂载即播；关闭走 .is-closing + transition，
+     可逆——重开时平滑反向。出(200ms)比入(260ms)快，关闭响应更干脆）。 */
+  @keyframes modal-overlay-enter {
+    from {
+      opacity: 0;
+    }
+  }
+
+  .animate-modal-overlay-enter {
+    animation: modal-overlay-enter 200ms ease-out backwards;
+  }
+
+  @keyframes modal-panel-enter {
+    from {
+      opacity: 0;
+      transform: translateY(16px) scale(0.96);
+    }
+  }
+
+  .animate-modal-panel-enter {
+    animation: modal-panel-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+
+  /* 关闭态基类：遮罩淡出 + 面板淡出微缩。fill 用 backwards（与 page-enter 同因：
+     终态即元素自然值，避免 forwards 的 identity-matrix 残留成 fixed 后代 containing block）。 */
+  .modal-overlay,
+  .modal-panel {
+    transition: opacity 200ms cubic-bezier(0.22, 1, 0.36, 1),
+                transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .modal-overlay.is-closing {
+    opacity: 0;
+  }
+
+  .modal-overlay.is-closing .modal-panel {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+
+  /* 上传列表行移除（× 后先播退出动画，200ms 后由 Rust 侧摘除节点） */
+  @keyframes row-leave {
+    to {
+      opacity: 0;
+      transform: translateY(-4px) scale(0.98);
+    }
+  }
+
+  .animate-row-leave {
+    animation: row-leave 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  /* 上传状态指示切换（等待中→上传中→已上传/失败）：keyed 重挂载触发 pop */
+  @keyframes status-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.7);
+    }
+  }
+
+  .animate-status-pop {
+    animation: status-pop 200ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+
   /* Minimalist custom scrollbars */
   * {
     scrollbar-width: thin;
@@ -1586,7 +1650,11 @@
   .animate-page-enter,
   .animate-popover-enter,
   .animate-select-enter,
-  .animate-row-enter {
+  .animate-row-enter,
+  .animate-modal-overlay-enter,
+  .animate-modal-panel-enter,
+  .animate-row-leave,
+  .animate-status-pop {
     animation: none;
   }
 
@@ -1602,6 +1670,16 @@
   .mobile-nav-content,
   .mobile-nav-item {
     transition: none !important;
+  }
+
+  /* 关闭保留纯 opacity 淡出（安全动效），禁用位移过渡 */
+  .modal-overlay,
+  .modal-panel {
+    transition: opacity 200ms ease;
+  }
+
+  .modal-overlay.is-closing .modal-panel {
+    transform: none;
   }
 }
 

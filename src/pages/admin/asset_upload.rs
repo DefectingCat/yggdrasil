@@ -43,6 +43,9 @@ const MAX_UPLOAD_BYTES: u64 = 5 * 1024 * 1024;
 #[cfg(any(test, target_arch = "wasm32"))]
 const ALLOWED_MIME: &[&str] = &["image/jpeg", "image/png", "image/gif", "image/webp"];
 
+/// 关闭/移除动画时长 ms，与 input.css 的 200ms 过渡/动画时长一一对应。
+const EXIT_ANIM_MS: u32 = 200;
+
 /// 单条上传状态机：Queued → Uploading → Done / Failed(原因)。
 // 变体仅在 WASM 端构造，server SSR 只匹配渲染，非 wasm 构建放行 dead_code。
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
@@ -65,6 +68,8 @@ struct UploadItem {
     /// 入队时已用 `format_bytes` 格式化好的可读大小。
     size: String,
     status: UploadStatus,
+    /// 用户点了 ×：先播退出动画（animate-row-leave），EXIT_ANIM_MS 后真正摘除。
+    removing: bool,
 }
 
 /// 预校验：MIME 白名单 + 5MiB 上限。失败返回可读原因（直接展示在行内，不发请求）。
@@ -107,6 +112,7 @@ fn enqueue_files(
             id,
             name: file.name(),
             size: format_bytes(file.size() as i64),
+            removing: false,
             status: match validate_file(&file.type_(), file.size() as u64) {
                 Ok(()) => {
                     files.borrow_mut().push((id, file));
@@ -163,6 +169,11 @@ fn enqueue_files(
 pub fn AssetUploadModal(mut visible: Signal<bool>, on_uploaded: EventHandler<()>) -> Element {
     let mut items: Signal<Vec<UploadItem>> = use_signal(Vec::new);
     let mut drag_active = use_signal(|| false);
+    // 关闭动画状态：visible 翻 false 时先置 closing 播退出动画，EXIT_ANIM_MS 后再卸载内容。
+    let mut closing = use_signal(|| false);
+    // 是否曾开过弹窗：mount 时 visible=false 也会跑一次 use_effect，不加此守卫会
+    // 在页面加载后 200ms 内渲染一层透明遮罩（opacity:0 仍拦截点击）吞掉首次点击。
+    let mut opened = use_signal(|| false);
     // 自增 id 分配器 + 重试用文件句柄表（WASM-only）：use_hook 持 Rc，跨渲染共享。
     #[cfg(target_arch = "wasm32")]
     let next_id = use_hook(|| std::rc::Rc::new(std::cell::Cell::new(0_u64)));
@@ -268,8 +279,29 @@ pub fn AssetUploadModal(mut visible: Signal<bool>, on_uploaded: EventHandler<()>
     let (next_id_for_drop, next_id_for_change) = (next_id.clone(), next_id.clone());
     #[cfg(target_arch = "wasm32")]
     let (files_for_drop, files_for_change) = (files.clone(), files.clone());
+    // 行列表内层 for 闭包用：状态区 keyed 包装引入的嵌套闭包无法 move 外层闭包捕获的
+    // Rc（FnMut 链，E0507），故在组件体预克隆一份，供内层闭包从组件体直接捕获。
+    #[cfg(target_arch = "wasm32")]
+    let files_for_rows = files.clone();
 
-    if !visible() {
+    // visible 翻转驱动关闭动画：重开立即复位（transition 平滑反向），关闭则播完再卸载。
+    // 闭包只订阅 visible，closing/opened 全用 peek 防自触发循环。
+    use_effect(move || {
+        if visible() {
+            opened.set(true);
+            closing.set(false);
+        } else if *opened.peek() && !*closing.peek() {
+            closing.set(true);
+            spawn(async move {
+                crate::utils::time::sleep_ms(EXIT_ANIM_MS).await;
+                closing.set(false);
+            });
+        }
+    });
+
+    // closing() 的订阅读是必需的——closing.set 靠这个订阅触发重渲染，peek 会不重绘。
+    let is_closing = closing();
+    if !visible() && !is_closing {
         return rsx! {};
     }
 
@@ -279,11 +311,12 @@ pub fn AssetUploadModal(mut visible: Signal<bool>, on_uploaded: EventHandler<()>
     rsx! {
         // 遮罩：点击关闭（照抄 AssetPickerModal）。
         div {
-            class: "fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-6",
+            class: "fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-6 modal-overlay animate-modal-overlay-enter",
+            class: if is_closing { "is-closing" } else { "" },
             onclick: move |_| visible.set(false),
             // 面板：阻止点击穿透到遮罩。
             div {
-                class: "w-full max-w-lg max-h-[80vh] flex flex-col rounded-[2rem] bg-[var(--color-paper-entry)] border border-[var(--color-paper-border)] shadow-xl overflow-hidden",
+                class: "w-full max-w-lg max-h-[80vh] flex flex-col rounded-[2rem] bg-[var(--color-paper-entry)] border border-[var(--color-paper-border)] shadow-xl overflow-hidden modal-panel animate-modal-panel-enter",
                 onclick: move |evt| evt.stop_propagation(),
 
                 // 头部（照抄 AssetPickerModal 头部类）。
@@ -396,16 +429,23 @@ pub fn AssetUploadModal(mut visible: Signal<bool>, on_uploaded: EventHandler<()>
                     // 逐文件状态列表。
                     if !items_snapshot.is_empty() {
                         div { class: "flex flex-col gap-2",
-                            for item in items_snapshot.iter() {
+                            for (idx, item) in items_snapshot.iter().enumerate() {
                                 {
                                     let item_id = item.id;
-                                    #[cfg(target_arch = "wasm32")]
-                                    let (files_for_retry, files_for_remove) =
-                                        (files.clone(), files.clone());
+                                    // 状态切换 key（q/u/d/f）：status 变化强制重挂载状态区 → 重放 status-pop。
+                                    let status_key = match &item.status {
+                                        UploadStatus::Queued => "q",
+                                        UploadStatus::Uploading => "u",
+                                        UploadStatus::Done => "d",
+                                        UploadStatus::Failed(_) => "f",
+                                    };
                                     rsx! {
                                         div {
                                             key: "{item_id}",
                                             class: "flex items-center gap-3 rounded-2xl border border-[var(--color-paper-border)] bg-[var(--color-paper-theme)] px-4 py-3",
+                                            class: if item.removing { "animate-row-leave" } else { "animate-row-enter" },
+                                            // 进场阶梯 delay（复用 .animate-row-enter）；removing 时清空，避免退出动画被残留 delay 推迟。
+                                            style: if item.removing { String::new() } else { format!("animation-delay:{}ms", idx * 30) },
                                             // 左：文件名 + 大小（min-w-0 + truncate 防长文件名撑破行）。
                                             div { class: "flex-1 min-w-0",
                                                 p {
@@ -415,70 +455,94 @@ pub fn AssetUploadModal(mut visible: Signal<bool>, on_uploaded: EventHandler<()>
                                                 }
                                                 p { class: "text-xs font-mono text-[var(--color-paper-tertiary)]", "{item.size}" }
                                             }
-                                            // 右：状态 + 操作。
-                                            match &item.status {
-                                                UploadStatus::Queued => rsx! {
-                                                    span { class: "text-xs text-[var(--color-paper-tertiary)] shrink-0", "等待中" }
-                                                },
-                                                UploadStatus::Uploading => rsx! {
-                                                    span { class: "flex items-center gap-1.5 text-xs text-[var(--color-paper-secondary)] shrink-0",
-                                                        span {
-                                                            class: "inline-block w-3.5 h-3.5",
-                                                            dangerous_inner_html: SPINNER_SVG,
-                                                        }
-                                                        "上传中"
-                                                    }
-                                                },
-                                                UploadStatus::Done => rsx! {
-                                                    span { class: "text-xs text-emerald-600 dark:text-emerald-400 shrink-0", "✓ 已上传" }
-                                                },
-                                                UploadStatus::Failed(msg) => rsx! {
-                                                    // 失败原因文字展示（不只靠颜色），过长截断 + title 全文。
-                                                    span { class: "text-xs text-red-500 shrink-0 max-w-56 truncate", title: "{msg}", "{msg}" }
-                                                    button {
-                                                        class: "text-xs cursor-pointer text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] shrink-0",
-                                                        onclick: move |_| {
-                                                            #[cfg(target_arch = "wasm32")]
-                                                            {
-                                                                // 从 files 表取回句柄重发本条。
-                                                                let file = files_for_retry
-                                                                    .borrow()
-                                                                    .iter()
-                                                                    .find(|(fid, _)| *fid == item_id)
-                                                                    .map(|(_, f)| f.clone()); // 移除该条，同时删 files 里的句柄
-                                                                if let Some(file) = file {
-                                                                    set_status(&mut items, item_id, UploadStatus::Uploading);
-                                                                    spawn(async move {
-                                                                        match upload_image_file(file).await {
-                                                                            Ok(_) => {
-                                                                                set_status(&mut items, item_id, UploadStatus::Done);
-                                                                                on_uploaded.call(());
-                                                                            }
-                                                                            Err(msg) => {
-                                                                                set_status(&mut items, item_id, UploadStatus::Failed(msg));
-                                                                            }
+                                            // 右：状态 + 操作。外层 keyed（status 变化强制重挂载）→ 重放 status-pop。
+                                            for _ in std::iter::once(()) {
+                                                {
+                                                    // for 闭包体内声明 Rc 局部：下层 onclick 的 move 捕获落在本层
+                                                    // 局部（可自由 move），而非跨层 move 外层闭包捕获（FnMut 链 E0507）。
+                                                    #[cfg(target_arch = "wasm32")]
+                                                    let (files_for_retry, files_for_remove) =
+                                                        (files_for_rows.clone(), files_for_rows.clone());
+                                                    rsx! {
+                                                        div {
+                                                            key: "{status_key}",
+                                                            class: "flex items-center gap-2 shrink-0 animate-status-pop",
+                                                            match &item.status {
+                                                                UploadStatus::Queued => rsx! {
+                                                                    span { class: "text-xs text-[var(--color-paper-tertiary)] shrink-0", "等待中" }
+                                                                },
+                                                                UploadStatus::Uploading => rsx! {
+                                                                    span { class: "flex items-center gap-1.5 text-xs text-[var(--color-paper-secondary)] shrink-0",
+                                                                        span {
+                                                                            class: "inline-block w-3.5 h-3.5",
+                                                                            dangerous_inner_html: SPINNER_SVG,
                                                                         }
-                                                                    });
-                                                                }
+                                                                        "上传中"
+                                                                    }
+                                                                },
+                                                                UploadStatus::Done => rsx! {
+                                                                    span { class: "text-xs text-emerald-600 dark:text-emerald-400 shrink-0", "✓ 已上传" }
+                                                                },
+                                                                UploadStatus::Failed(msg) => rsx! {
+                                                                    // 失败原因文字展示（不只靠颜色），过长截断 + title 全文。
+                                                                    span { class: "text-xs text-red-500 shrink-0 max-w-56 truncate", title: "{msg}", "{msg}" }
+                                                                    button {
+                                                                        class: "text-xs cursor-pointer text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] shrink-0",
+                                                                        onclick: move |_| {
+                                                                            #[cfg(target_arch = "wasm32")]
+                                                                            {
+                                                                                // 从 files 表取回句柄重发本条。
+                                                                                let file = files_for_retry
+                                                                                    .borrow()
+                                                                                    .iter()
+                                                                                    .find(|(fid, _)| *fid == item_id)
+                                                                                    .map(|(_, f)| f.clone()); // 移除该条，同时删 files 里的句柄
+                                                                                if let Some(file) = file {
+                                                                                    set_status(&mut items, item_id, UploadStatus::Uploading);
+                                                                                    spawn(async move {
+                                                                                        match upload_image_file(file).await {
+                                                                                            Ok(_) => {
+                                                                                                set_status(&mut items, item_id, UploadStatus::Done);
+                                                                                                on_uploaded.call(());
+                                                                                            }
+                                                                                            Err(msg) => {
+                                                                                                set_status(&mut items, item_id, UploadStatus::Failed(msg));
+                                                                                            }
+                                                                                        }
+                                                                                    });
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "重试"
+                                                                    }
+                                                                    button {
+                                                                        class: "text-xs cursor-pointer text-[var(--color-paper-tertiary)] hover:text-[var(--color-paper-primary)] transition-colors shrink-0",
+                                                                        aria_label: "移除",
+                                                                        onclick: move |_| {
+                                                                            // 先标记 removing 播退出动画；文件句柄立即释放，批任务取不到句柄会
+                                                                            // 跳过该条（不会在淡出行上写状态）；EXIT_ANIM_MS 后真正摘除列表项。
+                                                                            {
+                                                                                let mut guard = items.write();
+                                                                                if let Some(it) = guard.iter_mut().find(|it| it.id == item_id) {
+                                                                                    it.removing = true;
+                                                                                }
+                                                                            }
+                                                                            #[cfg(target_arch = "wasm32")]
+                                                                            files_for_remove
+                                                                                .borrow_mut()
+                                                                                .retain(|(fid, _)| *fid != item_id);
+                                                                            spawn(async move {
+                                                                                crate::utils::time::sleep_ms(EXIT_ANIM_MS).await;
+                                                                                items.write().retain(|it| it.id != item_id);
+                                                                            });
+                                                                        },
+                                                                        "×"
+                                                                    }
+                                                                },
                                                             }
-                                                        },
-                                                        "重试"
+                                                        }
                                                     }
-                                                    button {
-                                                        class: "text-xs cursor-pointer text-[var(--color-paper-tertiary)] hover:text-[var(--color-paper-primary)] transition-colors shrink-0",
-                                                        aria_label: "移除",
-                                                        onclick: move |_| {
-                                                            // 移除该条，同时删 files 里的句柄
-                                                            // （进行中的批任务会跳过已删项）。
-                                                            items.write().retain(|it| it.id != item_id);
-                                                            #[cfg(target_arch = "wasm32")]
-                                                            files_for_remove
-                                                                .borrow_mut()
-                                                                .retain(|(fid, _)| *fid != item_id);
-                                                        },
-                                                        "×"
-                                                    }
-                                                },
+                                                }
                                             }
                                         }
                                     }
