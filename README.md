@@ -51,39 +51,6 @@
 - **安全**：Argon2、AES-GCM-256（MCP 令牌静态加密）、governor 限流
 - **沙箱**：bollard（Docker 执行层）
 
-## 快速开始
-
-前置依赖：Rust 1.95+、`wasm32-unknown-unknown` target、`dx` CLI、tailwindcss CLI v4、PostgreSQL、Node 20+ 与 pnpm。
-
-```bash
-# 1. 配置数据库连接
-export DATABASE_URL=postgres://postgres:postgres@localhost:5432/yggdrasil
-
-# 2. 启动开发服务器（首次启动自动建库并运行 migrations/）
-make dev
-```
-
-如需单独手动迁移：`./scripts/migrate.sh`。
-
-其他常用命令：
-
-```bash
-make css         # input.css -> public/style.css
-make lint        # Biome + clippy + fmt 检查（只读）
-make test        # cargo test + libs 单元测试
-make doc         # 生成 rustdoc 到 public/doc/
-```
-
-## 构建与部署
-
-```bash
-make build            # 完整 release 构建（WASM 前端 + 原生服务端）
-make build-linux      # x86_64 musl 静态二进制（用于服务器 / Docker）
-make docker           # 当前架构 Docker 镜像
-make docker-amd64     # x86_64 镜像（Apple Silicon 经 Rosetta）
-make docker-multiarch IMAGE=ghcr.io/owner/yggdrasil:latest   # amd64+arm64 多架构并推送
-```
-
 **生产部署必须前置反向代理**（nginx / Caddy）做 TLS 终结，并设置：
 
 - `APP_BASE_URL`（CSRF 可信来源）
@@ -91,17 +58,6 @@ make docker-multiarch IMAGE=ghcr.io/owner/yggdrasil:latest   # amd64+arm64 多�
 - `TRUSTED_PROXY_COUNT`（精确反代跳数，错误值会被 XFF 伪造绕过限流）
 
 容器监听 `127.0.0.1:3000`，健康探针：`/healthz`（存活）、`/readyz`（就绪，`SELECT 1`）。更多细节见 [贡献者约定](AGENTS.md) 的生产部署一节。
-
-## 关键端点
-
-| 路径 | 说明 |
-| --- | --- |
-| `/` `/post/:slug` | 首页与文章详情 |
-| `/friends` `/changelog` | 友链、更新日志 |
-| `/feed.xml` `/feed.json` | RSS 2.0、JSON Feed 1.1 |
-| `/mcp` | MCP 服务器（bearer token） |
-| `/healthz` `/readyz` | 存活 / 就绪探针 |
-| `/admin/*` | 后台管理（写作、内容、运维、沙箱） |
 
 ## 项目结构
 
