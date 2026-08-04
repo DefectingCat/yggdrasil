@@ -89,6 +89,9 @@ pub fn Assets() -> Element {
     let mut alt_input = use_signal(String::new);
     // 重载触发器：操作成功后 +1 让 effect 重新请求。
     let mut reload = use_signal(|| 0_i32);
+    // 已加载视图标识（filter|query|sort|page）：fetch 成功后更新，作为网格 key。
+    // 同视图内的 reload（删除/上传/alt/重建/清理）不改变它 → 走 keyed diff 不重播动画。
+    let mut loaded_view = use_signal(String::new);
     // 多选：选中素材 id 集合 + 批量删除确认态。仅未引用素材可选（被引用的禁删，
     // 与单删保护语义一致）；选择跨翻页/筛选保留，批量删除成功后整体清空。
     let mut selected_ids: Signal<HashSet<String>> = use_signal(HashSet::new);
@@ -133,11 +136,19 @@ pub fn Assets() -> Element {
             } else {
                 AssetSort::CreatedDesc
             };
+            // 视图 key 在 spawn 前构造（q 随后被 move 进 list_assets）。reload 故意不参与：
+            // 同视图重操作只 diff 网格，不重播入场动画。
+            let view_key = format!("{f}|{q}|{s}|{p}");
             spawn(async move {
                 loading.set(true);
                 error.set(None);
                 match list_assets(filter_enum, q, sort_enum, p).await {
-                    Ok(resp) => data.set(Some(resp)),
+                    Ok(resp) => {
+                        // 先 key 后数据：即使两次 set 未被批处理，网格也只在最终
+                        // key 下挂载一次，不会 "" → 正式 key 二次挂载闪双动画。
+                        loaded_view.set(view_key);
+                        data.set(Some(resp));
+                    }
                     Err(e) => error.set(Some(e.to_string())),
                 }
                 loading.set(false);
@@ -337,7 +348,7 @@ pub fn Assets() -> Element {
             if let Some(msg) = op_message() {
                 // mt-4 会与 FilterTabs 自带的 mb-6 叠加成大空洞；改用 mb-6 后
                 // 上方 = tabs 标准间距 24px，下方与网格 mt-2 塌陷同为 24px，对称。
-                div { class: "mb-6 flex items-center justify-between gap-4 rounded-2xl border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] px-4 py-3 text-sm text-[var(--color-paper-primary)] shadow-sm",
+                div { class: "mb-6 flex items-center justify-between gap-4 rounded-2xl border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] px-4 py-3 text-sm text-[var(--color-paper-primary)] shadow-sm animate-row-enter",
                     span { "{msg}" }
                     button {
                         class: "text-[var(--color-paper-tertiary)] hover:text-[var(--color-paper-primary)] cursor-pointer",
@@ -349,7 +360,7 @@ pub fn Assets() -> Element {
 
             // 多选批量操作条：出现即与操作横幅同槽位（顶栏与网格之间）。
             if any_selected {
-                div { class: "mb-6 flex items-center gap-3 rounded-2xl border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] px-4 py-3 text-sm shadow-sm",
+                div { class: "mb-6 flex items-center gap-3 rounded-2xl border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] px-4 py-3 text-sm shadow-sm animate-row-enter",
                     span { class: "text-sm text-[var(--color-paper-secondary)]",
                         "已选 {selected_ids().len()} 张"
                     }
@@ -447,238 +458,249 @@ pub fn Assets() -> Element {
                     description: "在编辑器中上传图片后会自动出现在这里".to_string(),
                 }
             } else {
-                // 网格：缩略图卡片（assets-lightbox 为 __initLightbox 的根选择器）
-                div { class: "assets-lightbox grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 mt-2",
-                    for asset in assets.iter() {
-                        {
-                            let a = &asset.asset;
-                            let thumb = format!("/uploads/{}?thumb=300x300", a.path);
-                            let placeholder = format!("/uploads/{}?w=20", a.path);
-                            let img_alt = a.alt.clone().unwrap_or_else(|| a.filename.clone());
-                            let is_orphan = asset.ref_count == 0;
-                            let is_selected = selected_ids().contains(&a.id);
-                            // 选中卡片加主题色描边（ring 与原有 border 叠加，不动布局）。
-                            let card_ring = if is_selected {
-                                "ring-2 ring-[var(--color-paper-accent)]"
-                            } else {
-                                ""
-                            };
-                            // 勾选框：未引用素材才可删可选。选中或有任何选择时常显，
-                            // 否则随卡片 hover 显现（与卡片操作按钮同一显现语言）。
-                            let checkbox_class = if is_selected {
-                                "absolute top-2 right-2 z-10 w-6 h-6 flex items-center justify-center rounded-full text-xs cursor-pointer transition-all bg-[var(--color-paper-accent)] text-white border border-[var(--color-paper-accent)]"
-                            } else if any_selected {
-                                "absolute top-2 right-2 z-10 w-6 h-6 flex items-center justify-center rounded-full text-xs cursor-pointer transition-all bg-black/40 backdrop-blur-sm text-white border border-white/60"
-                            } else {
-                                "absolute top-2 right-2 z-10 w-6 h-6 flex items-center justify-center rounded-full text-xs cursor-pointer transition-all bg-black/40 backdrop-blur-sm text-white border border-white/60 opacity-0 group-hover:opacity-100"
-                            };
-                            // z-10：.blur-img-full 带 z-index:1，不提升会被展示层盖住（灯箱改造的回归）。
-                            let badge_class = if is_orphan {
-                                "absolute top-2 left-2 z-10 text-[10px] font-mono px-2 py-0.5 rounded-full backdrop-blur-sm bg-amber-500/80 text-white"
-                            } else {
-                                "absolute top-2 left-2 z-10 text-[10px] font-mono px-2 py-0.5 rounded-full backdrop-blur-sm bg-black/50 text-white"
-                            };
-                            rsx! {
-                                div {
-                                    key: "{a.id}",
-                                    class: "group relative rounded-3xl overflow-hidden border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] shadow-sm hover:shadow-md transition-all {card_ring}",
-                                    // blur-img 双层结构（对齐前台正文图）：?w=20 模糊占位 +
-                                    // data-src 展示层（IO 懒加载）；点击由 lightbox.js 接管为灯箱
-                                    // （图集模式，原图 = data-src 去 query）。不加 lightbox-single。
-                                    div { class: "blur-img aspect-square m-0 cursor-pointer bg-[var(--color-paper-theme)]",
-                                        img {
-                                            class: "blur-img-placeholder",
-                                            src: "{placeholder}",
-                                            alt: "",
+                // 网格：缩略图卡片（assets-lightbox 为 __initLightbox 的根选择器）。
+                // loaded_view 作 key 强制 remount：视图切换（tab/搜索/排序/翻页）后新数据
+                // 落地时整网重挂载、卡片重播阶梯入场；同视图内 reload（删除/上传/alt）
+                // key 不变，走普通 keyed diff 不重播。std::iter::once 先例见 post_detail.rs。
+                for view_key in std::iter::once(loaded_view()) {
+                    div {
+                        key: "{view_key}",
+                        class: "assets-lightbox grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 mt-2",
+                        for (idx, asset) in assets.iter().enumerate() {
+                            {
+                                let a = &asset.asset;
+                                let thumb = format!("/uploads/{}?thumb=300x300", a.path);
+                                let placeholder = format!("/uploads/{}?w=20", a.path);
+                                let img_alt = a.alt.clone().unwrap_or_else(|| a.filename.clone());
+                                let is_orphan = asset.ref_count == 0;
+                                let is_selected = selected_ids().contains(&a.id);
+                                // 选中卡片加主题色描边（ring 与原有 border 叠加，不动布局）。
+                                let card_ring = if is_selected {
+                                    "ring-2 ring-[var(--color-paper-accent)]"
+                                } else {
+                                    ""
+                                };
+                                // 阶梯入场 delay：30ms 步长、300ms 封顶——前 10 张阶梯、其余同播，
+                                // 60 张/页时尾部不晚于 ~750ms 全部到位（对齐 asset_upload 的 idx*30 先例）。
+                                let enter_delay = (idx * 30).min(300);
+                                // 勾选框：未引用素材才可删可选。选中或有任何选择时常显，
+                                // 否则随卡片 hover 显现（与卡片操作按钮同一显现语言）。
+                                let checkbox_class = if is_selected {
+                                    "absolute top-2 right-2 z-10 w-6 h-6 flex items-center justify-center rounded-full text-xs cursor-pointer transition-all bg-[var(--color-paper-accent)] text-white border border-[var(--color-paper-accent)]"
+                                } else if any_selected {
+                                    "absolute top-2 right-2 z-10 w-6 h-6 flex items-center justify-center rounded-full text-xs cursor-pointer transition-all bg-black/40 backdrop-blur-sm text-white border border-white/60"
+                                } else {
+                                    "absolute top-2 right-2 z-10 w-6 h-6 flex items-center justify-center rounded-full text-xs cursor-pointer transition-all bg-black/40 backdrop-blur-sm text-white border border-white/60 opacity-0 group-hover:opacity-100"
+                                };
+                                // z-10：.blur-img-full 带 z-index:1，不提升会被展示层盖住（灯箱改造的回归）。
+                                let badge_class = if is_orphan {
+                                    "absolute top-2 left-2 z-10 text-[10px] font-mono px-2 py-0.5 rounded-full backdrop-blur-sm bg-amber-500/80 text-white"
+                                } else {
+                                    "absolute top-2 left-2 z-10 text-[10px] font-mono px-2 py-0.5 rounded-full backdrop-blur-sm bg-black/50 text-white"
+                                };
+                                rsx! {
+                                    div {
+                                        key: "{a.id}",
+                                        class: "group relative rounded-3xl overflow-hidden border border-[var(--color-paper-border)] bg-[var(--color-paper-entry)] shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 animate-row-enter {card_ring}",
+                                        style: "animation-delay: {enter_delay}ms",
+                                        // blur-img 双层结构（对齐前台正文图）：?w=20 模糊占位 +
+                                        // data-src 展示层（IO 懒加载）；点击由 lightbox.js 接管为灯箱
+                                        // （图集模式，原图 = data-src 去 query）。不加 lightbox-single。
+                                        div { class: "blur-img aspect-square m-0 cursor-pointer bg-[var(--color-paper-theme)]",
+                                            img {
+                                                class: "blur-img-placeholder",
+                                                src: "{placeholder}",
+                                                alt: "",
+                                            }
+                                            img {
+                                                class: "blur-img-full",
+                                                "data-src": "{thumb}",
+                                                alt: "{img_alt}",
+                                            }
                                         }
-                                        img {
-                                            class: "blur-img-full",
-                                            "data-src": "{thumb}",
-                                            alt: "{img_alt}",
+                                        // 引用徽标
+                                        span {
+                                        class: "{badge_class}",
+                                            if is_orphan {
+                                                "未引用"
+                                            } else {
+                                                "被 {asset.ref_count} 篇引用"
+                                            }
                                         }
-                                    }
-                                    // 引用徽标
-                                    span {
-                                    class: "{badge_class}",
+                                        // 多选勾选框（仅未引用素材；stop_propagation 防触发灯箱）
                                         if is_orphan {
-                                            "未引用"
-                                        } else {
-                                            "被 {asset.ref_count} 篇引用"
-                                        }
-                                    }
-                                    // 多选勾选框（仅未引用素材；stop_propagation 防触发灯箱）
-                                    if is_orphan {
-                                        button {
-                                            class: "{checkbox_class}",
-                                            title: if is_selected { "取消选择" } else { "选择" },
-                                            onclick: {
-                                                let id = a.id.clone();
-                                                move |evt| {
-                                                    evt.stop_propagation();
-                                                    let mut s = selected_ids();
-                                                    if s.contains(&id) {
-                                                        s.remove(&id);
-                                                    } else {
-                                                        s.insert(id.clone());
+                                            button {
+                                                class: "{checkbox_class}",
+                                                title: if is_selected { "取消选择" } else { "选择" },
+                                                onclick: {
+                                                    let id = a.id.clone();
+                                                    move |evt| {
+                                                        evt.stop_propagation();
+                                                        let mut s = selected_ids();
+                                                        if s.contains(&id) {
+                                                            s.remove(&id);
+                                                        } else {
+                                                            s.insert(id.clone());
+                                                        }
+                                                        selected_ids.set(s);
                                                     }
-                                                    selected_ids.set(s);
+                                                },
+                                                if is_selected {
+                                                    "✓"
                                                 }
-                                            },
-                                            if is_selected {
-                                                "✓"
                                             }
                                         }
-                                    }
-                                    div { class: "p-3",
-                                        p {
-                                            class: "text-xs font-medium truncate text-[var(--color-paper-primary)]",
-                                            title: "{a.filename}",
-                                            "{a.filename}"
-                                        }
-                                        p { class: "text-[10px] font-mono text-[var(--color-paper-tertiary)] mt-0.5",
-                                            "{a.width}×{a.height} · {format_bytes(a.size_bytes)}"
-                                        }
-                                        if let Some(alt_text) = &a.alt {
+                                        div { class: "p-3",
                                             p {
-                                                class: "text-[10px] truncate text-[var(--color-paper-secondary)] mt-0.5",
-                                                title: "{alt_text}",
-                                                "alt: {alt_text}"
+                                                class: "text-xs font-medium truncate text-[var(--color-paper-primary)]",
+                                                title: "{a.filename}",
+                                                "{a.filename}"
                                             }
-                                        }
+                                            p { class: "text-[10px] font-mono text-[var(--color-paper-tertiary)] mt-0.5",
+                                                "{a.width}×{a.height} · {format_bytes(a.size_bytes)}"
+                                            }
+                                            if let Some(alt_text) = &a.alt {
+                                                p {
+                                                    class: "text-[10px] truncate text-[var(--color-paper-secondary)] mt-0.5",
+                                                    title: "{alt_text}",
+                                                    "alt: {alt_text}"
+                                                }
+                                            }
 
-                                        // 操作区：确认删除 / alt 编辑 / 常规三按钮 三态互斥
-                                        if confirm_delete().as_deref() == Some(a.id.as_str()) {
-                                            div { class: "flex items-center gap-2 mt-2",
-                                                button {
-                                                    class: "text-[10px] font-medium cursor-pointer px-2 py-1 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors",
-                                                    onclick: {
-                                                        let id = a.id.clone();
-                                                        move |_| {
-                                                            confirm_delete.set(None);
-                                                            let id = id.clone();
-                                                            #[cfg(target_arch = "wasm32")]
-                                                            spawn(async move {
-                                                                match delete_asset(id).await {
-                                                                    Ok(resp) => {
-                                                                        // 行已不在 DB（refs 为空的业务拒绝 = 素材不存在）
-                                                                        // 说明网格是过期数据，同样触发刷新自愈。
-                                                                        let stale = !resp.success && resp.refs.is_empty();
-                                                                        op_message.set(Some(resp.message));
-                                                                        if resp.success || stale {
-                                                                            reload.set(reload() + 1);
-                                                                        }
-                                                                    }
-                                                                    Err(e) => op_message
-                                                                        .set(Some(format!("删除失败：{e}"))),
-                                                                }
-                                                            });
-                                                        }
-                                                    },
-                                                    "确认删除"
-                                                }
-                                                button {
-                                                    class: "text-[10px] cursor-pointer px-2 py-1 rounded-full border border-[var(--color-paper-border)] text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors",
-                                                    onclick: move |_| confirm_delete.set(None),
-                                                    "取消"
-                                                }
-                                            }
-                                        } else if editing_alt().as_deref() == Some(a.id.as_str()) {
-                                            div { class: "flex items-center gap-1 mt-2",
-                                                FormInput {
-                                                    r#type: "text",
-                                                    placeholder: "alt 文本",
-                                                    value: alt_input(),
-                                                    class: "flex-1 min-w-0 text-[10px] px-2 py-1 rounded-full border border-paper-border bg-paper-entry text-paper-primary placeholder:text-paper-tertiary focus:outline-none focus:border-paper-accent transition-colors",
-                                                    oninput: move |v: String| alt_input.set(v),
-                                                }
-                                                button {
-                                                    class: "text-[10px] font-medium cursor-pointer px-2 py-1 rounded-full bg-[var(--color-paper-primary)] text-[var(--color-paper-theme)] hover:opacity-80 transition-opacity",
-                                                    onclick: {
-                                                        let id = a.id.clone();
-                                                        move |_| {
-                                                            let id = id.clone();
-                                                            let alt = alt_input();
-                                                            editing_alt.set(None);
-                                                            #[cfg(target_arch = "wasm32")]
-                                                            spawn(async move {
-                                                                match update_asset_alt(id, alt).await {
-                                                                    Ok(resp) => {
-                                                                        op_message.set(Some(resp.message));
-                                                                        if resp.success {
-                                                                            reload.set(reload() + 1);
-                                                                        }
-                                                                    }
-                                                                    Err(e) => op_message
-                                                                        .set(Some(format!("保存失败：{e}"))),
-                                                                }
-                                                            });
-                                                        }
-                                                    },
-                                                    "存"
-                                                }
-                                                button {
-                                                    class: "text-[10px] cursor-pointer px-2 py-1 rounded-full border border-[var(--color-paper-border)] text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors",
-                                                    onclick: move |_| editing_alt.set(None),
-                                                    "×"
-                                                }
-                                            }
-                                        } else {
-                                            div { class: "flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity",
-                                                button {
-                                                    class: "text-[10px] cursor-pointer text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors",
-                                                    title: "复制图片相对路径",
-                                                    onclick: {
-                                                        let url = format!("/uploads/{}", a.path);
-                                                        move |_| {
-                                                            #[cfg(target_arch = "wasm32")]
-                                                            if let Some(window) = web_sys::window() {
-                                                                let _ = window
-                                                                    .navigator()
-                                                                    .clipboard()
-                                                                    .write_text(&url);
-                                                                op_message.set(Some(format!("已复制 {url}")));
-                                                            }
-                                                        }
-                                                    },
-                                                    "复制路径"
-                                                }
-                                                button {
-                                                    class: "text-[10px] cursor-pointer text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors",
-                                                    title: "编辑 alt",
-                                                    onclick: {
-                                                        let id = a.id.clone();
-                                                        let current_alt = a.alt.clone().unwrap_or_default();
-                                                        move |_| {
-                                                            alt_input.set(current_alt.clone());
-                                                            editing_alt.set(Some(id.clone()));
-                                                        }
-                                                    },
-                                                    "alt"
-                                                }
-                                                if asset.ref_count > 0 {
-                                                    {
-                                                        let refs_tip = asset
-                                                            .refs
-                                                            .iter()
-                                                            .map(|r| r.title.clone())
-                                                            .collect::<Vec<_>>()
-                                                            .join("、");
-                                                        rsx! {
-                                                            span {
-                                                                class: "text-[10px] text-[var(--color-paper-tertiary)] cursor-not-allowed",
-                                                                title: "被引用：{refs_tip}",
-                                                                "删除"
-                                                            }
-                                                        }
-                                                    }
-                                                } else {
+                                            // 操作区：确认删除 / alt 编辑 / 常规三按钮 三态互斥
+                                            if confirm_delete().as_deref() == Some(a.id.as_str()) {
+                                                div { class: "flex items-center gap-2 mt-2",
                                                     button {
-                                                        class: "text-[10px] cursor-pointer text-red-500/70 hover:text-red-500 transition-colors",
+                                                        class: "text-[10px] font-medium cursor-pointer px-2 py-1 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors",
                                                         onclick: {
                                                             let id = a.id.clone();
-                                                            move |_| confirm_delete.set(Some(id.clone()))
+                                                            move |_| {
+                                                                confirm_delete.set(None);
+                                                                let id = id.clone();
+                                                                #[cfg(target_arch = "wasm32")]
+                                                                spawn(async move {
+                                                                    match delete_asset(id).await {
+                                                                        Ok(resp) => {
+                                                                            // 行已不在 DB（refs 为空的业务拒绝 = 素材不存在）
+                                                                            // 说明网格是过期数据，同样触发刷新自愈。
+                                                                            let stale = !resp.success && resp.refs.is_empty();
+                                                                            op_message.set(Some(resp.message));
+                                                                            if resp.success || stale {
+                                                                                reload.set(reload() + 1);
+                                                                            }
+                                                                        }
+                                                                        Err(e) => op_message
+                                                                            .set(Some(format!("删除失败：{e}"))),
+                                                                    }
+                                                                });
+                                                            }
                                                         },
-                                                        "删除"
+                                                        "确认删除"
+                                                    }
+                                                    button {
+                                                        class: "text-[10px] cursor-pointer px-2 py-1 rounded-full border border-[var(--color-paper-border)] text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors",
+                                                        onclick: move |_| confirm_delete.set(None),
+                                                        "取消"
+                                                    }
+                                                }
+                                            } else if editing_alt().as_deref() == Some(a.id.as_str()) {
+                                                div { class: "flex items-center gap-1 mt-2",
+                                                    FormInput {
+                                                        r#type: "text",
+                                                        placeholder: "alt 文本",
+                                                        value: alt_input(),
+                                                        class: "flex-1 min-w-0 text-[10px] px-2 py-1 rounded-full border border-paper-border bg-paper-entry text-paper-primary placeholder:text-paper-tertiary focus:outline-none focus:border-paper-accent transition-colors",
+                                                        oninput: move |v: String| alt_input.set(v),
+                                                    }
+                                                    button {
+                                                        class: "text-[10px] font-medium cursor-pointer px-2 py-1 rounded-full bg-[var(--color-paper-primary)] text-[var(--color-paper-theme)] hover:opacity-80 transition-opacity",
+                                                        onclick: {
+                                                            let id = a.id.clone();
+                                                            move |_| {
+                                                                let id = id.clone();
+                                                                let alt = alt_input();
+                                                                editing_alt.set(None);
+                                                                #[cfg(target_arch = "wasm32")]
+                                                                spawn(async move {
+                                                                    match update_asset_alt(id, alt).await {
+                                                                        Ok(resp) => {
+                                                                            op_message.set(Some(resp.message));
+                                                                            if resp.success {
+                                                                                reload.set(reload() + 1);
+                                                                            }
+                                                                        }
+                                                                        Err(e) => op_message
+                                                                            .set(Some(format!("保存失败：{e}"))),
+                                                                    }
+                                                                });
+                                                            }
+                                                        },
+                                                        "存"
+                                                    }
+                                                    button {
+                                                        class: "text-[10px] cursor-pointer px-2 py-1 rounded-full border border-[var(--color-paper-border)] text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors",
+                                                        onclick: move |_| editing_alt.set(None),
+                                                        "×"
+                                                    }
+                                                }
+                                            } else {
+                                                div { class: "flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity",
+                                                    button {
+                                                        class: "text-[10px] cursor-pointer text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors",
+                                                        title: "复制图片相对路径",
+                                                        onclick: {
+                                                            let url = format!("/uploads/{}", a.path);
+                                                            move |_| {
+                                                                #[cfg(target_arch = "wasm32")]
+                                                                if let Some(window) = web_sys::window() {
+                                                                    let _ = window
+                                                                        .navigator()
+                                                                        .clipboard()
+                                                                        .write_text(&url);
+                                                                    op_message.set(Some(format!("已复制 {url}")));
+                                                                }
+                                                            }
+                                                        },
+                                                        "复制路径"
+                                                    }
+                                                    button {
+                                                        class: "text-[10px] cursor-pointer text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] transition-colors",
+                                                        title: "编辑 alt",
+                                                        onclick: {
+                                                            let id = a.id.clone();
+                                                            let current_alt = a.alt.clone().unwrap_or_default();
+                                                            move |_| {
+                                                                alt_input.set(current_alt.clone());
+                                                                editing_alt.set(Some(id.clone()));
+                                                            }
+                                                        },
+                                                        "alt"
+                                                    }
+                                                    if asset.ref_count > 0 {
+                                                        {
+                                                            let refs_tip = asset
+                                                                .refs
+                                                                .iter()
+                                                                .map(|r| r.title.clone())
+                                                                .collect::<Vec<_>>()
+                                                                .join("、");
+                                                            rsx! {
+                                                                span {
+                                                                    class: "text-[10px] text-[var(--color-paper-tertiary)] cursor-not-allowed",
+                                                                    title: "被引用：{refs_tip}",
+                                                                    "删除"
+                                                                }
+                                                            }
+                                                        }
+                                                    } else {
+                                                        button {
+                                                            class: "text-[10px] cursor-pointer text-red-500/70 hover:text-red-500 transition-colors",
+                                                            onclick: {
+                                                                let id = a.id.clone();
+                                                                move |_| confirm_delete.set(Some(id.clone()))
+                                                            },
+                                                            "删除"
+                                                        }
                                                     }
                                                 }
                                             }
