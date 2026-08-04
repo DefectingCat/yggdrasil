@@ -119,11 +119,21 @@ pub fn PostDetail(slug: String) -> Element {
             // 仅对已发布文章展示评论区域，使用 SuspenseBoundary 处理加载状态。
             if post.status == crate::models::post::PostStatus::Published {
                 div { class: "mt-12 border-t border-gray-200 dark:border-gray-700 pt-8",
-                    SuspenseBoundary {
-                        fallback: move |_| rsx! {
-                            DelayedSkeleton { crate::components::skeletons::comment_skeleton::CommentListSkeleton {} }
-                        },
-                        crate::components::comments::section::CommentSection { post_id: post.id }
+                    // 用单元素 keyed 列表包裹 CommentSection，key 绑定 post.id，强制
+                    // 上/下一篇切换时 remount（与上方 PostContent 同理，见其注释）。
+                    // 否则 PostDetail 组件实例被复用、CommentSection 也被复用，其
+                    // use_resource 闭包捕获的 post_id 是冻结快照、refresh_trigger 不随
+                    // 导航变化，资源不重启、仍请求旧文章评论——B 文章评论区显示 A 文章
+                    // 评论（issue #10）。remount 让 CommentContext 重置、资源以新
+                    // post_id 重新拉取。
+                    for comment_key in std::iter::once(post.id) {
+                        SuspenseBoundary {
+                            key: "{comment_key}",
+                            fallback: move |_| rsx! {
+                                DelayedSkeleton { crate::components::skeletons::comment_skeleton::CommentListSkeleton {} }
+                            },
+                            crate::components::comments::section::CommentSection { post_id: post.id }
+                        }
                     }
                 }
             }

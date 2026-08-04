@@ -24,3 +24,19 @@ fn post_detail_does_not_mirror_slug_into_signal() {
         "post_detail.rs 在 render 期 set signal——违反渲染纯净性。"
     );
 }
+
+/// 回归测试：锁定 CommentSection 在上/下一篇切换时强制 remount（issue #10）。
+#[test]
+fn comment_section_is_remounted_on_post_switch() {
+    let src = include_str!("../src/pages/post_detail.rs");
+
+    // CommentSection 必须被单元素 keyed for 循环（key 绑定 post.id）包裹：Dioxus 的
+    // keyed diff 只在兄弟节点列表里生效，单个非列表元素按位置复用。若移除该包裹，
+    // CommentSection 复用旧实例，use_resource 闭包的冻结 post_id 导致导航后仍请求
+    // 旧文章评论（issue #10）。
+    assert!(
+        src.contains("std::iter::once(post.id)"),
+        "post_detail.rs 不再以 keyed 单元素 for-loop 包裹 CommentSection——\
+         切换文章会复用 CommentSection 实例，残留旧文章评论（issue #10）。"
+    );
+}
