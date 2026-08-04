@@ -520,8 +520,7 @@ pub async fn run_in_container_stream(
     let wait_with_timeout = async {
         match timeout(Duration::from_secs(limits.timeout_secs), wait_future).await {
             Ok(Some(Ok(exit_status))) => Some(exit_status.status_code),
-            Ok(Some(Err(_))) => None, // wait error
-            Ok(None) => None,         // stream ended
+            Ok(Some(Err(_))) | Ok(None) => None, // wait error or stream ended
             Err(_) => {
                 // 超时，杀容器。kill 后 attach stream 会被 Docker 关闭，log_reader 自然结束。
                 timed_out = true;
@@ -860,8 +859,7 @@ mod tests {
             output_bytes: 1024,
             allow_network: false,
         };
-        let res =
-            run_in_container("alpine:latest", "sleep 10", "", "txt", limits, None).await;
+        let res = run_in_container("alpine:latest", "sleep 10", "", "txt", limits, None).await;
 
         assert!(res.is_err());
         let err = res.unwrap_err();

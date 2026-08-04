@@ -33,6 +33,19 @@ pub struct RenderedContent {
 }
 
 #[cfg(feature = "server")]
+/// 根据 Markdown 标题层级返回对应的 HTML 标签名。
+fn heading_tag(level: pulldown_cmark::HeadingLevel) -> &'static str {
+    match level {
+        pulldown_cmark::HeadingLevel::H1 => "h1",
+        pulldown_cmark::HeadingLevel::H2 => "h2",
+        pulldown_cmark::HeadingLevel::H3 => "h3",
+        pulldown_cmark::HeadingLevel::H4 => "h4",
+        pulldown_cmark::HeadingLevel::H5 => "h5",
+        pulldown_cmark::HeadingLevel::H6 => "h6",
+    }
+}
+
+#[cfg(feature = "server")]
 /// 增强版 Markdown 渲染：生成 TOC、标题锚点与语法高亮代码块。
 pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
     use pulldown_cmark::{Event, HeadingLevel, Options, Tag, TagEnd};
@@ -156,14 +169,7 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
                 in_heading = true;
                 if heading_idx < headings.len() {
                     let (_, _, ref id) = headings[heading_idx];
-                    let tag = match level {
-                        HeadingLevel::H1 => "h1",
-                        HeadingLevel::H2 => "h2",
-                        HeadingLevel::H3 => "h3",
-                        HeadingLevel::H4 => "h4",
-                        HeadingLevel::H5 => "h5",
-                        HeadingLevel::H6 => "h6",
-                    };
+                    let tag = heading_tag(level);
                     // write! 直写目标 String，零中间分配（format! 会先分配临时 String 再 push_str）。
                     let _ = write!(html, "<{tag} id=\"{id}\">");
                 }
@@ -171,14 +177,7 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
             Event::End(TagEnd::Heading(level)) => {
                 if heading_idx < headings.len() {
                     let (_, _, ref id) = headings[heading_idx];
-                    let tag = match level {
-                        HeadingLevel::H1 => "h1",
-                        HeadingLevel::H2 => "h2",
-                        HeadingLevel::H3 => "h3",
-                        HeadingLevel::H4 => "h4",
-                        HeadingLevel::H5 => "h5",
-                        HeadingLevel::H6 => "h6",
-                    };
+                    let tag = heading_tag(level);
                     let _ = write!(
                         html,
                         "<a class=\"anchor\" aria-hidden=\"true\" href=\"#{id}\">#</a></{tag}>"
@@ -468,7 +467,7 @@ where
                 alt_attr = alt_attr,
             )
         })
-        .to_string()
+        .into_owned()
 }
 
 #[cfg(feature = "server")]
@@ -494,7 +493,7 @@ fn wrap_tables(html: &str) -> String {
         .replace_all(html, |caps: &regex::Captures| {
             format!("<div class=\"table-wrap\">{}</div>", &caps[0])
         })
-        .to_string()
+        .into_owned()
 }
 
 #[cfg(feature = "server")]

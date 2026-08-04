@@ -78,7 +78,6 @@ impl ChangeCategory {
             "Deprecated" => Self::Deprecated,
             "Removed" => Self::Removed,
             "Security" => Self::Security,
-            "Internal" => Self::Internal,
             _ => Self::Internal,
         }
     }

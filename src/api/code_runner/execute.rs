@@ -194,7 +194,7 @@ fn spawn_exec_task(
                     stderr,
                     exit_code,
                     duration_ms,
-                    language: lang_key.clone(),
+                    language: lang_key,
                 };
                 update_task_result(&task_id, status, exec_res);
             }
@@ -225,7 +225,7 @@ fn spawn_exec_task(
                     stderr: stderr_msg,
                     exit_code: None,
                     duration_ms,
-                    language: lang_key.clone(),
+                    language: lang_key,
                 };
                 update_task_result(&task_id, status, exec_res);
             }

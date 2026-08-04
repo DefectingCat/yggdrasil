@@ -150,7 +150,6 @@ pub async fn update_post(
         }
 
         let tags_cleaned = clean_tags(&tags);
-        let tags_for_invalidation = tags_cleaned.clone();
 
         // 先清除旧标签关联，再重新同步新标签。
         tx.execute("DELETE FROM post_tags WHERE post_id = $1", &[&post_id])
@@ -177,7 +176,7 @@ pub async fn update_post(
         // 合并旧标签与新标签，统一失效标签下的文章列表缓存。
         let all_tags_to_invalidate: Vec<String> = old_tags
             .into_iter()
-            .chain(tags_for_invalidation.into_iter())
+            .chain(tags_cleaned.into_iter())
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
             .collect();

@@ -60,15 +60,14 @@ impl AppError {
 impl From<AppError> for ServerFnError {
     fn from(err: AppError) -> ServerFnError {
         let msg = match &err {
-            AppError::Unauthorized(m) => m.to_string(),
-            AppError::Forbidden(m) => m.to_string(),
-            AppError::NotFound(m) => m.to_string(),
+            AppError::Unauthorized(m)
+            | AppError::Forbidden(m)
+            | AppError::NotFound(m)
+            | AppError::Internal(m) => m.to_string(),
             // BadRequest 是业务规则拒绝（如 SQL 护栏拦截），消息原样透传给用户。
             AppError::BadRequest(m) => m.to_string(),
             AppError::DbConn(_) => "服务暂时不可用".to_string(),
-            AppError::Query(_) => "操作失败".to_string(),
-            AppError::Transaction(_) => "操作失败".to_string(),
-            AppError::Internal(m) => m.to_string(),
+            AppError::Query(_) | AppError::Transaction(_) => "操作失败".to_string(),
         };
         ServerFnError::new(msg)
     }

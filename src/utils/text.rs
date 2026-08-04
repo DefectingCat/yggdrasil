@@ -37,18 +37,18 @@ static WHITESPACE_RE: LazyLock<regex::Regex> =
 ///
 /// 处理顺序：代码块 → 行内代码 → 图片 → 链接（保留文字）→ 标题 → 加粗/斜体 → 合并空白。
 pub fn strip_markdown(md: &str) -> String {
-    let mut plain = CODE_BLOCK_RE.replace_all(md, "").to_string();
-    plain = INLINE_CODE_RE.replace_all(&plain, "").to_string();
+    let mut plain = CODE_BLOCK_RE.replace_all(md, "").into_owned();
+    plain = INLINE_CODE_RE.replace_all(&plain, "").into_owned();
     // 必须先移除图片再处理链接，否则 `![](url)` 会残留 `!`
-    plain = IMAGE_RE.replace_all(&plain, "").to_string();
-    plain = LINK_RE.replace_all(&plain, "$1").to_string();
-    plain = HEADING_RE.replace_all(&plain, "").to_string();
+    plain = IMAGE_RE.replace_all(&plain, "").into_owned();
+    plain = LINK_RE.replace_all(&plain, "$1").into_owned();
+    plain = HEADING_RE.replace_all(&plain, "").into_owned();
     plain = plain
         .replace("**", "")
         .replace('*', "")
         .replace("__", "")
         .replace('_', "");
-    plain = WHITESPACE_RE.replace_all(&plain, " ").to_string();
+    plain = WHITESPACE_RE.replace_all(&plain, " ").into_owned();
     plain.trim().to_string()
 }
 

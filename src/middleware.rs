@@ -154,8 +154,7 @@ pub(crate) async fn add_cache_control(
     use axum::http::header;
 
     let path = req.uri().path().to_string();
-    let method = req.method().clone();
-    let cache_value = cache_control_for_path(&path, &method);
+    let cache_value = cache_control_for_path(&path, req.method());
 
     let mut response = next.run(req).await;
 
