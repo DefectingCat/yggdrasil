@@ -37,23 +37,47 @@ pub fn PostsTrashSkeleton() -> Element {
                     table { class: "w-full text-sm",
                         thead {
                             tr { class: "border-b border-paper-border",
-                                th { class: "px-4 py-3 w-10", SkeletonBox { class: "h-4 w-4 rounded" } }
-                                th { class: "px-4 py-3", SkeletonBox { class: "h-3 w-12" } }
-                                th { class: "px-4 py-3 w-24", SkeletonBox { class: "h-3 w-10 mx-auto" } }
-                                th { class: "px-4 py-3 w-32", SkeletonBox { class: "h-3 w-14" } }
-                                th { class: "px-4 py-3 w-24", SkeletonBox { class: "h-3 w-14 mx-auto" } }
-                                th { class: "px-4 py-3 w-28", SkeletonBox { class: "h-3 w-12 ml-auto" } }
+                                th { class: "px-4 py-3 w-10",
+                                    SkeletonBox { class: "h-4 w-4 rounded" }
+                                }
+                                th { class: "px-4 py-3",
+                                    SkeletonBox { class: "h-3 w-12" }
+                                }
+                                th { class: "px-4 py-3 w-24",
+                                    SkeletonBox { class: "h-3 w-10 mx-auto" }
+                                }
+                                th { class: "px-4 py-3 w-32",
+                                    SkeletonBox { class: "h-3 w-14" }
+                                }
+                                th { class: "px-4 py-3 w-24",
+                                    SkeletonBox { class: "h-3 w-14 mx-auto" }
+                                }
+                                th { class: "px-4 py-3 w-28",
+                                    SkeletonBox { class: "h-3 w-12 ml-auto" }
+                                }
                             }
                         }
                         tbody {
                             for _ in 0..8 {
                                 tr { class: "border-b border-paper-border last:border-0",
-                                    td { class: "px-4 py-3", SkeletonBox { class: "h-4 w-4 rounded" } }
-                                    td { class: "px-4 py-3", SkeletonBox { class: "h-4 w-1/3" } }
-                                    td { class: "px-4 py-3", SkeletonBox { class: "h-5 w-14 mx-auto rounded" } }
-                                    td { class: "px-4 py-3", SkeletonBox { class: "h-4 w-20" } }
-                                    td { class: "px-4 py-3", SkeletonBox { class: "h-5 w-16 mx-auto rounded" } }
-                                    td { class: "px-4 py-3", SkeletonBox { class: "h-4 w-20 ml-auto" } }
+                                    td { class: "px-4 py-3",
+                                        SkeletonBox { class: "h-4 w-4 rounded" }
+                                    }
+                                    td { class: "px-4 py-3",
+                                        SkeletonBox { class: "h-4 w-1/3" }
+                                    }
+                                    td { class: "px-4 py-3",
+                                        SkeletonBox { class: "h-5 w-14 mx-auto rounded" }
+                                    }
+                                    td { class: "px-4 py-3",
+                                        SkeletonBox { class: "h-4 w-20" }
+                                    }
+                                    td { class: "px-4 py-3",
+                                        SkeletonBox { class: "h-5 w-16 mx-auto rounded" }
+                                    }
+                                    td { class: "px-4 py-3",
+                                        SkeletonBox { class: "h-4 w-20 ml-auto" }
+                                    }
                                 }
                             }
                         }

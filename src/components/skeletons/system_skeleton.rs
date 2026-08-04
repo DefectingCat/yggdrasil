@@ -44,19 +44,35 @@ pub fn SystemSkeleton() -> Element {
                 table { class: "w-full text-sm",
                     thead {
                         tr { class: "border-b border-paper-border",
-                            th { class: "px-4 py-3", SkeletonBox { class: "h-3 w-16" } }
-                            th { class: "px-4 py-3", SkeletonBox { class: "h-3 w-20" } }
-                            th { class: "px-4 py-3", SkeletonBox { class: "h-3 w-24" } }
-                            th { class: "px-4 py-3 w-20", SkeletonBox { class: "h-3 w-12 ml-auto" } }
+                            th { class: "px-4 py-3",
+                                SkeletonBox { class: "h-3 w-16" }
+                            }
+                            th { class: "px-4 py-3",
+                                SkeletonBox { class: "h-3 w-20" }
+                            }
+                            th { class: "px-4 py-3",
+                                SkeletonBox { class: "h-3 w-24" }
+                            }
+                            th { class: "px-4 py-3 w-20",
+                                SkeletonBox { class: "h-3 w-12 ml-auto" }
+                            }
                         }
                     }
                     tbody {
                         for _ in 0..5 {
                             tr { class: "border-b border-paper-border last:border-0",
-                                td { class: "px-4 py-3", SkeletonBox { class: "h-4 w-28" } }
-                                td { class: "px-4 py-3", SkeletonBox { class: "h-4 w-36" } }
-                                td { class: "px-4 py-3", SkeletonBox { class: "h-4 w-40" } }
-                                td { class: "px-4 py-3", SkeletonBox { class: "h-4 w-16 ml-auto" } }
+                                td { class: "px-4 py-3",
+                                    SkeletonBox { class: "h-4 w-28" }
+                                }
+                                td { class: "px-4 py-3",
+                                    SkeletonBox { class: "h-4 w-36" }
+                                }
+                                td { class: "px-4 py-3",
+                                    SkeletonBox { class: "h-4 w-40" }
+                                }
+                                td { class: "px-4 py-3",
+                                    SkeletonBox { class: "h-4 w-16 ml-auto" }
+                                }
                             }
                         }
                     }

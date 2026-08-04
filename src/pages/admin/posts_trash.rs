@@ -88,240 +88,246 @@ pub fn PostsTrash() -> Element {
             // 页面 header：计数取自本组件 use_paginated 的 total（比旧 get_post_stats 角标更准）。
             div { class: "pb-6 border-b border-paper-border mb-6",
                 div {
-                    h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]", "回收站" }
-                    p { class: "text-base text-[var(--color-paper-secondary)] mt-2", "{subtitle}" }
+                    h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]",
+                        "回收站"
+                    }
+                    p { class: "text-base text-[var(--color-paper-secondary)] mt-2",
+                        "{subtitle}"
+                    }
                 }
             }
             div { class: "space-y-6",
-            // 自动清理配置卡片（抽取为子组件 AutoPurgeSettings，见文件末尾）。
-            AutoPurgeSettings { settings }
+                // 自动清理配置卡片（抽取为子组件 AutoPurgeSettings，见文件末尾）。
+                AutoPurgeSettings { settings }
 
-            // 批量操作栏（选中时显示）
-            if !selected_ids().is_empty() {
-                div { class: "flex items-center gap-3 p-3 bg-paper-theme rounded-lg",
-                    span { class: "text-sm text-paper-secondary", "已选择 {selected_ids().len()} 条" }
-                    button {
-                        class: "{BTN_SOLID_GREEN}",
-                        onclick: move |_| {
-                            let ids: Vec<i32> = selected_ids().iter().copied().collect();
-                            spawn(async move {
-                                let _ = batch_restore_posts(ids).await;
-                            });
-                            for id in selected_ids() {
-                                remove_post(id);
-                            }
-                            selected_ids.set(HashSet::new());
-                        },
-                        "批量恢复"
-                    }
-                    button {
-                        class: "{BTN_SOLID_RED}",
-                        onclick: move |_| {
-                            #[cfg(target_arch = "wasm32")]
-                            {
-                                if web_sys::window()
-                                    .and_then(|w| {
-                                        w.confirm_with_message(
-                                                "确定要彻底删除选中的文章吗？此操作不可恢复。",
-                                            )
-                                            .ok()
-                                    })
-                                    .unwrap_or(false)
-                                {
-                                    let ids: Vec<i32> = selected_ids().iter().copied().collect();
-                                    spawn(async move {
-                                        let _ = batch_purge_posts(ids).await;
-                                    });
-                                    for id in selected_ids() {
-                                        remove_post(id);
-                                    }
-                                    selected_ids.set(HashSet::new());
+                // 批量操作栏（选中时显示）
+                if !selected_ids().is_empty() {
+                    div { class: "flex items-center gap-3 p-3 bg-paper-theme rounded-lg",
+                        span { class: "text-sm text-paper-secondary",
+                            "已选择 {selected_ids().len()} 条"
+                        }
+                        button {
+                            class: "{BTN_SOLID_GREEN}",
+                            onclick: move |_| {
+                                let ids: Vec<i32> = selected_ids().iter().copied().collect();
+                                spawn(async move {
+                                    let _ = batch_restore_posts(ids).await;
+                                });
+                                for id in selected_ids() {
+                                    remove_post(id);
                                 }
-                            }
-                        },
-                        "批量彻底删除"
+                                selected_ids.set(HashSet::new());
+                            },
+                            "批量恢复"
+                        }
+                        button {
+                            class: "{BTN_SOLID_RED}",
+                            onclick: move |_| {
+                                #[cfg(target_arch = "wasm32")]
+                                {
+                                    if web_sys::window()
+                                        .and_then(|w| {
+                                            w.confirm_with_message(
+                                                    "确定要彻底删除选中的文章吗？此操作不可恢复。",
+                                                )
+                                                .ok()
+                                        })
+                                        .unwrap_or(false)
+                                    {
+                                        let ids: Vec<i32> = selected_ids().iter().copied().collect();
+                                        spawn(async move {
+                                            let _ = batch_purge_posts(ids).await;
+                                        });
+                                        for id in selected_ids() {
+                                            remove_post(id);
+                                        }
+                                        selected_ids.set(HashSet::new());
+                                    }
+                                }
+                            },
+                            "批量彻底删除"
+                        }
                     }
                 }
-            }
 
-            // 主内容：错误 / 加载骨架 / 空态 / 列表
-            {
-                if error().is_some() {
-                    rsx! {
-                        EmptyState {
-                            title: "加载失败",
-                            description: "获取回收站列表时发生错误，请稍后重试。",
+                // 主内容：错误 / 加载骨架 / 空态 / 列表
+                {
+                    if error().is_some() {
+                        rsx! {
+                            EmptyState {
+                                title: "加载失败",
+                                description: "获取回收站列表时发生错误，请稍后重试。",
+                            }
                         }
-                    }
-                } else if loading() && posts().is_empty() {
-                    rsx! {
-                        DelayedSkeleton {
-                            PostsTrashSkeleton {}
+                    } else if loading() && posts().is_empty() {
+                        rsx! {
+                            DelayedSkeleton {
+                                PostsTrashSkeleton {}
+                            }
                         }
-                    }
-                } else if posts().is_empty() {
-                    rsx! {
-                        EmptyState {
-                            title: "回收站为空",
-                            description: "当前没有被软删除的文章。",
+                    } else if posts().is_empty() {
+                        rsx! {
+                            EmptyState {
+                                title: "回收站为空",
+                                description: "当前没有被软删除的文章。",
+                            }
                         }
-                    }
-                } else {
-                    let list = posts();
-                    let all_selected = list.iter().all(|p| selected_ids().contains(&p.id));
-                    let all_ids: Vec<i32> = list.iter().map(|p| p.id).collect();
-                    rsx! {
-                        div { class: "{ADMIN_TABLE_CLASS}",
-                            div { class: "overflow-x-auto",
-                                table { class: "w-full text-sm",
-                                    thead {
-                                        tr { class: "border-b border-paper-border text-left text-paper-secondary",
-                                            th { class: "px-4 py-3 font-medium w-10",
-                                                input {
-                                                    r#type: "checkbox",
-                                                    class: "{CHECKBOX_CLASS}",
-                                                    checked: all_selected,
-                                                    onchange: {
-                                                        move |_| {
+                    } else {
+                        let list = posts();
+                        let all_selected = list.iter().all(|p| selected_ids().contains(&p.id));
+                        let all_ids: Vec<i32> = list.iter().map(|p| p.id).collect();
+                        rsx! {
+                            div { class: "{ADMIN_TABLE_CLASS}",
+                                div { class: "overflow-x-auto",
+                                    table { class: "w-full text-sm",
+                                        thead {
+                                            tr { class: "border-b border-paper-border text-left text-paper-secondary",
+                                                th { class: "px-4 py-3 font-medium w-10",
+                                                    input {
+                                                        r#type: "checkbox",
+                                                        class: "{CHECKBOX_CLASS}",
+                                                        checked: all_selected,
+                                                        onchange: {
+                                                            move |_| {
+                                                                let mut s = selected_ids();
+                                                                if all_selected {
+                                                                    for id in &all_ids {
+                                                                        s.remove(id);
+                                                                    }
+                                                                } else {
+                                                                    for id in &all_ids {
+                                                                        s.insert(*id);
+                                                                    }
+                                                                }
+                                                                selected_ids.set(s);
+                                                            }
+                                                        },
+                                                    }
+                                                }
+                                                th { class: "px-4 py-3 font-medium", "标题" }
+                                                th { class: "px-4 py-3 font-medium whitespace-nowrap", "原状态" }
+                                                th { class: "px-4 py-3 font-medium w-32 whitespace-nowrap", "删除时间" }
+                                                th { class: "px-4 py-3 font-medium w-24 text-center whitespace-nowrap",
+                                                    "剩余"
+                                                }
+                                                th { class: "px-4 py-3 font-medium w-32 text-right whitespace-nowrap",
+                                                    "操作"
+                                                }
+                                            }
+                                        }
+                                        tbody {
+                                            for post in list.iter() {
+                                                TrashRow {
+                                                    key: "{post.id}",
+                                                    post: post.clone(),
+                                                    retention_days: settings().retention_days,
+                                                    selected: selected_ids().contains(&post.id),
+                                                    on_select: {
+                                                        let id = post.id;
+                                                        move |checked: bool| {
                                                             let mut s = selected_ids();
-                                                            if all_selected {
-                                                                for id in &all_ids {
-                                                                    s.remove(id);
-                                                                }
+                                                            if checked {
+                                                                s.insert(id);
                                                             } else {
-                                                                for id in &all_ids {
-                                                                    s.insert(*id);
-                                                                }
+                                                                s.remove(&id);
                                                             }
                                                             selected_ids.set(s);
                                                         }
                                                     },
-                                                }
-                                            }
-                                            th { class: "px-4 py-3 font-medium", "标题" }
-                                            th { class: "px-4 py-3 font-medium whitespace-nowrap", "原状态" }
-                                            th { class: "px-4 py-3 font-medium w-32 whitespace-nowrap", "删除时间" }
-                                            th { class: "px-4 py-3 font-medium w-24 text-center whitespace-nowrap",
-                                                "剩余"
-                                            }
-                                            th { class: "px-4 py-3 font-medium w-32 text-right whitespace-nowrap",
-                                                "操作"
-                                            }
-                                        }
-                                    }
-                                    tbody {
-                                        for post in list.iter() {
-                                            TrashRow {
-                                                key: "{post.id}",
-                                                post: post.clone(),
-                                                retention_days: settings().retention_days,
-                                                selected: selected_ids().contains(&post.id),
-                                                on_select: {
-                                                    let id = post.id;
-                                                    move |checked: bool| {
-                                                        let mut s = selected_ids();
-                                                        if checked {
-                                                            s.insert(id);
-                                                        } else {
-                                                            s.remove(&id);
+                                                    on_restore: {
+                                                        let id = post.id;
+                                                        move |_| {
+                                                            spawn(async move {
+                                                                let _ = restore_post(id).await;
+                                                            });
+                                                            remove_post(id);
                                                         }
-                                                        selected_ids.set(s);
-                                                    }
-                                                },
-                                                on_restore: {
-                                                    let id = post.id;
-                                                    move |_| {
-                                                        spawn(async move {
-                                                            let _ = restore_post(id).await;
-                                                        });
-                                                        remove_post(id);
-                                                    }
-                                                },
-                                                on_purge: {
-                                                    let id = post.id;
-                                                    move |_| {
-                                                        #[cfg(target_arch = "wasm32")]
-                                                        {
-                                                            if web_sys::window()
-                                                                .and_then(|w| {
-                                                                    w
-                                                                        .confirm_with_message(
-                                                                            "确定要彻底删除这篇文章吗？此操作不可恢复。",
-                                                                        )
-                                                                        .ok()
-                                                                })
-                                                                .unwrap_or(false)
+                                                    },
+                                                    on_purge: {
+                                                        let id = post.id;
+                                                        move |_| {
+                                                            #[cfg(target_arch = "wasm32")]
                                                             {
-                                                                spawn(async move {
-                                                                    let _ = purge_post(id).await;
-                                                                });
-                                                                remove_post(id);
+                                                                if web_sys::window()
+                                                                    .and_then(|w| {
+                                                                        w
+                                                                            .confirm_with_message(
+                                                                                "确定要彻底删除这篇文章吗？此操作不可恢复。",
+                                                                            )
+                                                                            .ok()
+                                                                    })
+                                                                    .unwrap_or(false)
+                                                                {
+                                                                    spawn(async move {
+                                                                        let _ = purge_post(id).await;
+                                                                    });
+                                                                    remove_post(id);
+                                                                }
                                                             }
                                                         }
-                                                    }
-                                                },
+                                                    },
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
-                        // 底部：清空回收站 + 分页
-                        div { class: "flex items-center justify-between mt-4",
-                            button {
-                                class: "{BTN_DANGER_OUTLINE}",
-                                onclick: move |_| {
-                                    #[cfg(target_arch = "wasm32")]
-                                    {
-                                        if web_sys::window()
-                                            .and_then(|w| {
-                                                w.confirm_with_message(
-                                                        "确定要清空回收站吗？所有已删除文章将被彻底移除，此操作不可恢复。",
-                                                    )
-                                                    .ok()
-                                            })
-                                            .unwrap_or(false)
+                            // 底部：清空回收站 + 分页
+                            div { class: "flex items-center justify-between mt-4",
+                                button {
+                                    class: "{BTN_DANGER_OUTLINE}",
+                                    onclick: move |_| {
+                                        #[cfg(target_arch = "wasm32")]
                                         {
-                                            spawn(async move {
-                                                let _ = empty_trash().await;
-                                            });
-                                            posts.set(Vec::new());
-                                            total.set(0);
-                                            selected_ids.set(HashSet::new());
+                                            if web_sys::window()
+                                                .and_then(|w| {
+                                                    w.confirm_with_message(
+                                                            "确定要清空回收站吗？所有已删除文章将被彻底移除，此操作不可恢复。",
+                                                        )
+                                                        .ok()
+                                                })
+                                                .unwrap_or(false)
+                                            {
+                                                spawn(async move {
+                                                    let _ = empty_trash().await;
+                                                });
+                                                posts.set(Vec::new());
+                                                total.set(0);
+                                                selected_ids.set(HashSet::new());
+                                            }
                                         }
+                                    },
+                                    "清空回收站"
+                                }
+                            }
+                            Pagination {
+                                variant: "admin",
+                                current_page: current_page(),
+                                total: total(),
+                                per_page: TRASH_PER_PAGE,
+                                unit: "篇",
+                                on_prev: {
+                                    let mut page = current_page;
+                                    move |_| {
+                                        page.with_mut(|p| *p = (*p - 1).max(1));
                                     }
                                 },
-                                "清空回收站"
+                                on_next: {
+                                    let mut page = current_page;
+                                    move |_| {
+                                        page.with_mut(|p| *p += 1);
+                                    }
+                                },
+                                on_jump: {
+                                    let mut page = current_page;
+                                    move |p: i32| {
+                                        page.set(p);
+                                    }
+                                },
                             }
-                        }
-                        Pagination {
-                            variant: "admin",
-                            current_page: current_page(),
-                            total: total(),
-                            per_page: TRASH_PER_PAGE,
-                            unit: "篇",
-                            on_prev: {
-                                let mut page = current_page;
-                                move |_| {
-                                    page.with_mut(|p| *p = (*p - 1).max(1));
-                                }
-                            },
-                            on_next: {
-                                let mut page = current_page;
-                                move |_| {
-                                    page.with_mut(|p| *p += 1);
-                                }
-                            },
-                            on_jump: {
-                                let mut page = current_page;
-                                move |p: i32| {
-                                    page.set(p);
-                                }
-                            },
                         }
                     }
                 }
-            }
             }
         }
     }

@@ -440,9 +440,7 @@ pub fn Assets() -> Element {
             if let Some(err) = error() {
                 div { class: "mt-8 text-sm text-red-500", "加载失败：{err}" }
             } else if loading() && assets.is_empty() {
-                DelayedSkeleton {
-                    AssetsSkeleton {}
-                }
+                DelayedSkeleton { AssetsSkeleton {} }
             } else if assets.is_empty() {
                 EmptyState {
                     title: "暂无素材".to_string(),

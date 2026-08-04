@@ -177,19 +177,41 @@ pub fn AdminLayout() -> Element {
 /// 根据当前后台路由，渲染对应的专属骨架屏。
 fn admin_route_skeleton(route: &Route) -> Element {
     match route {
-        Route::Admin {} => rsx! { AdminDashboardSkeleton {} },
-        Route::Write {} | Route::WriteEdit { .. } => rsx! { WriteSkeleton {} },
-        Route::Posts {} => rsx! { PostsSkeleton {} },
-        Route::PostsTrash {} => rsx! { PostsTrashSkeleton {} },
-        Route::Assets {} => rsx! { AssetsSkeleton {} },
-        Route::FriendsAdmin {} => rsx! { FriendsAdminSkeleton {} },
+        Route::Admin {} => rsx! {
+            AdminDashboardSkeleton {}
+        },
+        Route::Write {} | Route::WriteEdit { .. } => rsx! {
+            WriteSkeleton {}
+        },
+        Route::Posts {} => rsx! {
+            PostsSkeleton {}
+        },
+        Route::PostsTrash {} => rsx! {
+            PostsTrashSkeleton {}
+        },
+        Route::Assets {} => rsx! {
+            AssetsSkeleton {}
+        },
+        Route::FriendsAdmin {} => rsx! {
+            FriendsAdminSkeleton {}
+        },
         Route::AdminComments {} | Route::AdminCommentsPage { .. } => {
-            rsx! { AdminCommentsSkeleton {} }
+            rsx! {
+                AdminCommentsSkeleton {}
+            }
         }
-        Route::System {} => rsx! { SystemSkeleton {} },
-        Route::Runner {} => rsx! { RunnerSkeleton {} },
-        Route::Mcp {} => rsx! { McpSkeleton {} },
-        _ => rsx! { AdminDashboardSkeleton {} },
+        Route::System {} => rsx! {
+            SystemSkeleton {}
+        },
+        Route::Runner {} => rsx! {
+            RunnerSkeleton {}
+        },
+        Route::Mcp {} => rsx! {
+            McpSkeleton {}
+        },
+        _ => rsx! {
+            AdminDashboardSkeleton {}
+        },
     }
 }
 
@@ -262,8 +284,13 @@ fn ContentNavGroup() -> Element {
                         for (dest, label, active) in [
                             (Route::Posts {}, "全部文章", matches!(route, Route::Posts {})),
                             (Route::PostsTrash {}, "回收站", matches!(route, Route::PostsTrash {})),
-                            (Route::AdminComments {}, "评论管理", matches!(route, Route::AdminComments {} | Route::AdminCommentsPage { .. })),
-                        ] {
+                            (
+                                Route::AdminComments {},
+                                "评论管理",
+                                matches!(route, Route::AdminComments {} | Route::AdminCommentsPage { .. }),
+                            ),
+                        ]
+                        {
                             Link {
                                 key: "{label}",
                                 class: if active { "flex items-center px-3 py-2 rounded-xl text-sm font-medium transition-all bg-[var(--color-paper-theme)] text-[var(--color-paper-primary)] shadow-sm border border-[var(--color-paper-border)]" } else { "flex items-center px-3 py-2 rounded-xl text-sm font-medium transition-all text-[var(--color-paper-secondary)] hover:bg-[var(--color-paper-theme)]/50 hover:text-[var(--color-paper-primary)] border border-transparent" },

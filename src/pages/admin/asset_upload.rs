@@ -288,7 +288,9 @@ pub fn AssetUploadModal(mut visible: Signal<bool>, on_uploaded: EventHandler<()>
 
                 // 头部（照抄 AssetPickerModal 头部类）。
                 div { class: "flex items-center gap-3 px-6 py-4 border-b border-[var(--color-paper-border)]",
-                    h2 { class: "text-lg font-bold text-[var(--color-paper-primary)]", "上传素材" }
+                    h2 { class: "text-lg font-bold text-[var(--color-paper-primary)]",
+                        "上传素材"
+                    }
                     div { class: "flex-1" }
                     button {
                         class: "shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-[var(--color-paper-secondary)] hover:bg-[var(--color-paper-theme)] transition-colors cursor-pointer",
@@ -350,7 +352,12 @@ pub fn AssetUploadModal(mut visible: Signal<bool>, on_uploaded: EventHandler<()>
                                 stroke_linejoin: "round",
                                 path { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }
                                 polyline { points: "17 8 12 3 7 8" }
-                                line { x1: "12", y1: "3", x2: "12", y2: "15" }
+                                line {
+                                    x1: "12",
+                                    y1: "3",
+                                    x2: "12",
+                                    y2: "15",
+                                }
                             }
                             p { class: "text-sm font-medium text-[var(--color-paper-primary)]",
                                 "拖拽图片到这里，或点击选择"
@@ -401,13 +408,12 @@ pub fn AssetUploadModal(mut visible: Signal<bool>, on_uploaded: EventHandler<()>
                                             class: "flex items-center gap-3 rounded-2xl border border-[var(--color-paper-border)] bg-[var(--color-paper-theme)] px-4 py-3",
                                             // 左：文件名 + 大小（min-w-0 + truncate 防长文件名撑破行）。
                                             div { class: "flex-1 min-w-0",
-                                                p { class: "text-sm truncate text-[var(--color-paper-primary)]",
+                                                p {
+                                                    class: "text-sm truncate text-[var(--color-paper-primary)]",
                                                     title: "{item.name}",
                                                     "{item.name}"
                                                 }
-                                                p { class: "text-xs font-mono text-[var(--color-paper-tertiary)]",
-                                                    "{item.size}"
-                                                }
+                                                p { class: "text-xs font-mono text-[var(--color-paper-tertiary)]", "{item.size}" }
                                             }
                                             // 右：状态 + 操作。
                                             match &item.status {
@@ -428,10 +434,7 @@ pub fn AssetUploadModal(mut visible: Signal<bool>, on_uploaded: EventHandler<()>
                                                 },
                                                 UploadStatus::Failed(msg) => rsx! {
                                                     // 失败原因文字展示（不只靠颜色），过长截断 + title 全文。
-                                                    span { class: "text-xs text-red-500 shrink-0 max-w-56 truncate",
-                                                        title: "{msg}",
-                                                        "{msg}"
-                                                    }
+                                                    span { class: "text-xs text-red-500 shrink-0 max-w-56 truncate", title: "{msg}", "{msg}" }
                                                     button {
                                                         class: "text-xs cursor-pointer text-[var(--color-paper-secondary)] hover:text-[var(--color-paper-primary)] shrink-0",
                                                         onclick: move |_| {
@@ -442,7 +445,7 @@ pub fn AssetUploadModal(mut visible: Signal<bool>, on_uploaded: EventHandler<()>
                                                                     .borrow()
                                                                     .iter()
                                                                     .find(|(fid, _)| *fid == item_id)
-                                                                    .map(|(_, f)| f.clone());
+                                                                    .map(|(_, f)| f.clone()); // 移除该条，同时删 files 里的句柄
                                                                 if let Some(file) = file {
                                                                     set_status(&mut items, item_id, UploadStatus::Uploading);
                                                                     spawn(async move {
@@ -451,11 +454,9 @@ pub fn AssetUploadModal(mut visible: Signal<bool>, on_uploaded: EventHandler<()>
                                                                                 set_status(&mut items, item_id, UploadStatus::Done);
                                                                                 on_uploaded.call(());
                                                                             }
-                                                                            Err(msg) => set_status(
-                                                                                &mut items,
-                                                                                item_id,
-                                                                                UploadStatus::Failed(msg),
-                                                                            ),
+                                                                            Err(msg) => {
+                                                                                set_status(&mut items, item_id, UploadStatus::Failed(msg));
+                                                                            }
                                                                         }
                                                                     });
                                                                 }

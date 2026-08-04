@@ -344,9 +344,7 @@ fn LinkList() -> Element {
             h2 { class: "text-xl font-bold text-[var(--color-paper-primary)]", "友链列表" }
 
             if loading() && links().is_empty() {
-                DelayedSkeleton {
-                    FriendsAdminSkeleton {}
-                }
+                DelayedSkeleton { FriendsAdminSkeleton {} }
             } else if links().is_empty() {
                 p { class: "text-[var(--color-paper-secondary)] text-sm py-4 text-center",
                     "还没有友链，先添加一位伙伴吧。"

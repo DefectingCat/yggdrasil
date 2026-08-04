@@ -225,9 +225,7 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                     }
                 } else if loading() && comments().is_empty() {
                     rsx! {
-                        DelayedSkeleton {
-                            AdminCommentsSkeleton {}
-                        }
+                        DelayedSkeleton { AdminCommentsSkeleton {} }
                     }
                 } else if comments().is_empty() {
                     rsx! {

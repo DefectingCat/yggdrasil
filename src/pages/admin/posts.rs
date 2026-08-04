@@ -42,8 +42,12 @@ pub fn Posts() -> Element {
         div { class: "w-full max-w-7xl mx-auto space-y-6",
             div { class: "flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-paper-border mb-6",
                 div {
-                    h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]", "全部文章" }
-                    p { class: "text-base text-[var(--color-paper-secondary)] mt-2", "所有文章及草稿" }
+                    h1 { class: "text-4xl font-extrabold tracking-tight text-[var(--color-paper-primary)]",
+                        "全部文章"
+                    }
+                    p { class: "text-base text-[var(--color-paper-secondary)] mt-2",
+                        "所有文章及草稿"
+                    }
                 }
                 div { class: "flex items-center gap-3",
                     RebuildCacheBar {}
@@ -374,7 +378,9 @@ fn PostRow(
                         to: Route::WriteEdit { id: post.id },
                         "编辑"
                     }
-                    Tooltip { tip: "重新渲染这篇文章的 HTML".to_string(), align: "end",
+                    Tooltip {
+                        tip: "重新渲染这篇文章的 HTML".to_string(),
+                        align: "end",
                         button {
                             class: if rebuilding { "relative inline-flex items-center text-xs text-paper-accent cursor-not-allowed" } else { BTN_TEXT_ACCENT },
                             disabled: rebuilding,
