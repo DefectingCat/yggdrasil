@@ -216,18 +216,6 @@ pub fn CodeRunner(
             }
         });
 
-        // source prop 外部变更（如 admin 页面切换语言重置示例代码）同步到
-        // signal + 编辑器。C4 修复后直接捕获 prop 副本：prop 变化时本 effect 自动重跑。
-        // 旧代码读 source_prop_signal 只为绕开 render-body 纯净性，现 signal 已删，
-        // 该 effect 退化为「seed」语义——prop 变即同步，用户编辑（改 source_signal）不触发。
-        use_effect(move || {
-            let new_val = source.clone();
-            source_signal.set(new_val.clone());
-            if let Some(h) = editor_handle.read().as_ref() {
-                h.instance().set_value(&new_val);
-            }
-        });
-
         // 组件卸载时销毁 CodeMirror 实例（EditorHandle::drop → instance.destroy）。
         use_drop(move || {
             editor_handle.set(None);

@@ -125,12 +125,20 @@ pub fn Runner() -> Element {
                 }
             }
 
-            // 运行器（admin 试运行页单实例、纯客户端渲染，instance_id 固定 0 即可）
-            CodeRunner {
-                source: source(),
-                language: lang(),
-                overrides,
-                instance_id: 0,
+            // 强制 remount 切换语言：CodeRunner 挂载 use_effect 的「防重复 init」守卫
+            // （editor_handle.is_some() → return）阻止 CodeMirror 重建到新语言；且 plain
+            // String prop 非响应式，内部 use_effect 不会因 prop 变化重跑（与 post_detail 翻页
+            // remount 同根因，见 src/pages/post_detail.rs:110-115 注释）。key 绑定语言 →
+            // keyed diff 卸载旧实例（use_drop 销毁 CodeMirror/xterm）→ 挂载新实例，mount effect
+            // 以新 language + 新 source 初始化编辑器。输出区随 remount 重置（切语言本应清空旧输出）。
+            for lang_key in std::iter::once(lang().clone()) {
+                CodeRunner {
+                    key: "{lang_key}",
+                    source: source(),
+                    language: lang(),
+                    overrides: overrides.clone(),
+                    instance_id: 0,
+                }
             }
         }
     }
