@@ -47,7 +47,10 @@ pub async fn log_runner_readiness() {
             return;
         }
     };
-    let tags: HashSet<String> = images.iter().flat_map(|i| i.repo_tags.clone()).collect();
+    let tags: HashSet<String> = images
+        .iter()
+        .flat_map(|i| i.repo_tags.iter().cloned())
+        .collect();
 
     // 仅探测已启用（命中白名单）的语言镜像，避免为运维收窄掉的语言报缺失。
     let registered: Vec<(&String, &str)> = LANGUAGES

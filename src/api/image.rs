@@ -689,30 +689,31 @@ pub async fn serve_image(
 
     // Offload decode + resize + encode to the blocking pool so the async
     // runtime stays responsive to other requests.
-    let path_for_blocking = path.clone();
-    let params_for_blocking = params.clone();
-    let (processed, content_type) = match tokio::task::spawn_blocking(move || {
-        process_image_blocking(data, params_for_blocking, path_for_blocking)
-    })
-    .await
-    {
-        Ok(Ok(r)) => r,
-        Ok(Err(status)) => return status.into_response(),
-        Err(_) => {
-            tracing::error!("Image processing task panicked");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
-    };
+    let (processed, content_type) =
+        match tokio::task::spawn_blocking(move || process_image_blocking(data, params, path)).await
+        {
+            Ok(Ok(r)) => r,
+            Ok(Err(status)) => return status.into_response(),
+            Err(_) => {
+                tracing::error!("Image processing task panicked");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        };
 
     let processed = Bytes::from(processed);
     let cached = CachedImage {
-        data: processed.clone(),
-        content_type: content_type.clone(),
+        data: processed,
+        content_type,
     };
     let _ = IMAGE_CACHE.insert(cache_key.clone(), cached.clone()).await;
     write_disk_cache(&cache_key, &cached).await;
 
-    image_response(processed, content_type, "public, max-age=86400", &headers)
+    image_response(
+        cached.data,
+        cached.content_type,
+        "public, max-age=86400",
+        &headers,
+    )
 }
 
 /// 图片尺寸缓存（moka sync）。key = 相对路径如 "2026/06/22/x.webp"。

@@ -20,13 +20,11 @@ use crate::router::Route;
 /// - 返回首页链接
 #[component]
 pub fn PostFooter(post: Post) -> Element {
-    let tags = post.tags.clone();
-
     rsx! {
         footer { class: "post-footer",
-            if !tags.is_empty() {
+            if !post.tags.is_empty() {
                 ul { class: "post-tags",
-                    for tag in tags.into_iter() {
+                    for tag in &post.tags {
                         li { key: "{tag}",
                             Link {
                                 to: Route::TagDetail {
