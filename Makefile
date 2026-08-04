@@ -60,7 +60,7 @@ build-freebsd:
 	@echo "Deploy it to FreeBSD 15+ alongside the static public/ directory."
 	@echo "Runtime needs (bundled in FreeBSD base): libc.so.7 libthr.so.3 libkvm.so.7 etc."
 
-# 兜底：dx build 0.7.9 会把 public/ 下的 .webp 重编码成 VP8L 无损静图
+# 兜底：dx build 0.7.10 会把 public/ 下的 .webp 重编码成 VP8L 无损静图
 # （动画帧被丢弃，静图体积反增 7-8 倍），与文档承诺的"原样拷贝"不符。
 # SVG/ICO 等其他格式不受影响，故只需覆盖 .webp。
 # 遍历所有 dx 产物目录（release/debug），用源 public/ 的同名文件覆盖回去。
@@ -275,7 +275,7 @@ docker-check:
 	@$(TOOLS_COMPOSE) run --rm tools cargo check --all-features
 
 # 格式化（写入文件，回流宿主）：cargo fmt + biome format。
-# 注意：不含 dx fmt——dx fmt 0.7.9 会搬运/删除 rsx 注释，仅按需手动跑 docker-fix。
+# 注意：不含 dx fmt——dx fmt 0.7.10 会搬运/删除 rsx 注释，仅按需手动跑 docker-fix。
 docker-fmt:
 	@$(TOOLS_COMPOSE) run --rm tools bash -c 'cd libs && pnpm install --frozen-lockfile >/dev/null && pnpm exec biome format --write . && cd /build && cargo fmt'
 

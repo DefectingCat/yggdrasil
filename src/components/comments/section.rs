@@ -63,7 +63,7 @@ pub fn CommentSection(post_id: i32) -> Element {
     // 轮询待审核评论状态：只要本地还有待审核评论，就定期查询其审核状态。
     //
     // 必须用 use_resource 而非 use_future：use_future 不跟踪响应式依赖——闭包仅运行
-    // 一次，async 结束后即便依赖信号变化也不会重启（Dioxus 0.7.9 use_future 源码
+    // 一次，async 结束后即便依赖信号变化也不会重启（Dioxus 0.7.10 use_future 源码
     // 证实其无 ReactiveContext）。上一版修复（8268546）误以为在同步段读取
     // pending_comments 能让 use_future 自动重启，实际并不能：页面刷新时 use_effect
     // 异步载入 localStorage 的 pending，而此时已 return 退出的 future 永不重启，

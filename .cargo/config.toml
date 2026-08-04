@@ -1,4 +1,4 @@
-# Dioxus 0.7.9 的 #[server(Fn, "/api")] 宏在 URL 末尾追加一个去冲突数字后缀:
+# Dioxus 0.7.10 的 #[server(Fn, "/api")] 宏在 URL 末尾追加一个去冲突数字后缀:
 #   xxh64( <key> + ":" + module_path!(), 0 )
 # 默认 <key> = CARGO_MANIFEST_DIR（编译时 crate 绝对路径）。不同构建环境路径不同会算出不同后缀。
 #
@@ -15,7 +15,7 @@
 # 保留该 key 仍是确定性兜底：后缀与环境解耦，日志里 /api/<fn><后缀> 与浏览器请求在任意机器一致。
 [env]
 SERVER_FN_OVERRIDE_KEY = "yggdrasil"
-# Workaround for Dioxus 0.7.9 leaking the wasm_js getrandom backend cfg
+# Workaround for Dioxus 0.7.10 leaking the wasm_js getrandom backend cfg
 # into the server build. We disable DX's automatic flag in the Makefile
 # and set it only for the wasm32 target here.
 [target.wasm32-unknown-unknown]

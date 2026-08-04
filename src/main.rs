@@ -160,7 +160,7 @@ fn main() {
             }
 
             // 端口预探测：dioxus::server::serve() 内部对
-            // `TcpListener::bind(addr).await...unwrap()`（dioxus-server 0.7.9 launch.rs:143）
+            // `TcpListener::bind(addr).await...unwrap()`（dioxus-server 0.7.10 launch.rs:143）
             // 失败会直接 panic（SIGABRT）。这里在交接给 serve() 之前先探测同一地址，
             // 失败则走统一的 exit(1) 路径，输出可操作的提示，而不是丢一个裸 panic 栈。
             // 探测用的 listener 立即 drop，由 serve() 重新绑定（同进程内快速 rebind，

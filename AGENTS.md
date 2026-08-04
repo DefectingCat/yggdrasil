@@ -37,7 +37,7 @@ Yggdrasil is a fullstack blog/CMS built with **Dioxus 0.7**. A single Rust crate
 
 ## Development Commands
 
-Prerequisites: Rust 1.95+, `wasm32-unknown-unknown` target, `dx` CLI (v0.7.9), `tailwindcss` CLI v4, PostgreSQL, Node 20+ / pnpm.
+Prerequisites: Rust 1.95+, `wasm32-unknown-unknown` target, `dx` CLI (v0.7.10), `tailwindcss` CLI v4, PostgreSQL, Node 20+ / pnpm.
 
 ```bash
 # Dev server (builds libs + highlight.css + katex.css first, assumes node_modules present)
@@ -93,7 +93,7 @@ make docker-multiarch IMAGE=ghcr.io/owner/yggdrasil:latest   # amd64+arm64, push
 
 **Feature model** (`Cargo.toml`): `default = ["web", "server"]`. `web` = `dioxus/web` (WASM); `server` = all native deps (tokio, axum, tokio-postgres, deadpool, argon2, moka, syntect, katex-rs, mimalloc, governor, bollard, …). Most deps are `optional = true` and gated behind the `server` feature list. Release profile: `opt-level=3`, `lto="thin"`, `codegen-units=1`, `strip=symbols`, **`panic="abort"`** (shed WASM unwind metadata; server relies on systemd/k8s restart — design around `Result + ?`, never panic-driven control flow).
 
-**`.cargo/config.toml`**: sets `--cfg getrandom_backend="wasm_js"` for `wasm32-unknown-unknown` only (workaround for a Dioxus 0.7.9 cfg leak into the server build). musl/freebsd linker blocks are commented templates.
+**`.cargo/config.toml`**: sets `--cfg getrandom_backend="wasm_js"` for `wasm32-unknown-unknown` only (workaround for a Dioxus 0.7.10 cfg leak into the server build). musl/freebsd linker blocks are commented templates.
 
 **`build.rs`**: injects `YGG_BUILD_GIT_DESCRIBE/HASH/COMMIT_DATE` + rustc version + build time via `cargo:rustc-env` (read by `src/build_info.rs` through `env!`). 3-tier fallback: env var → local `git` → `"unknown"`. `rerun-if-changed=.git/HEAD` + `.git/index`. std-only (no build-deps).
 
