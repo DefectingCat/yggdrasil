@@ -212,6 +212,7 @@ pub fn AssetUploadModal(mut visible: Signal<bool>, on_uploaded: EventHandler<()>
                         return;
                     }
                     if ev.key() == "Escape" {
+                        closing.set(true);
                         visible.set(false);
                     }
                 })
@@ -284,14 +285,19 @@ pub fn AssetUploadModal(mut visible: Signal<bool>, on_uploaded: EventHandler<()>
     #[cfg(target_arch = "wasm32")]
     let files_for_rows = files.clone();
 
-    // visible 翻转驱动关闭动画：重开立即复位（transition 平滑反向），关闭则播完再卸载。
-    // 闭包只订阅 visible，closing/opened 全用 peek 防自触发循环。
+    // visible 翻转驱动关闭动画：关闭入口（× / 遮罩 / Esc）会同步先置 closing 再翻
+    // visible（同帧渲染在存活元素上换 .is-closing 类 → transition 从可见态出发）；
+    // 这里只负责重开复位与 EXIT_ANIM_MS 后的复位卸载。闭包只订阅 visible，
+    // closing/opened 全用 peek 防自触发循环。
     use_effect(move || {
         if visible() {
             opened.set(true);
             closing.set(false);
-        } else if *opened.peek() && !*closing.peek() {
-            closing.set(true);
+        } else if *opened.peek() {
+            // 非交互路径的 visible 翻转（理论上不存在）兜底补置 closing。
+            if !*closing.peek() {
+                closing.set(true);
+            }
             spawn(async move {
                 crate::utils::time::sleep_ms(EXIT_ANIM_MS).await;
                 closing.set(false);
@@ -313,7 +319,10 @@ pub fn AssetUploadModal(mut visible: Signal<bool>, on_uploaded: EventHandler<()>
         div {
             class: "fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-6 modal-overlay animate-modal-overlay-enter",
             class: if is_closing { "is-closing" } else { "" },
-            onclick: move |_| visible.set(false),
+            onclick: move |_| {
+                closing.set(true);
+                visible.set(false);
+            },
             // 面板：阻止点击穿透到遮罩。
             div {
                 class: "w-full max-w-lg max-h-[80vh] flex flex-col rounded-[2rem] bg-[var(--color-paper-entry)] border border-[var(--color-paper-border)] shadow-xl overflow-hidden modal-panel animate-modal-panel-enter",
@@ -328,7 +337,10 @@ pub fn AssetUploadModal(mut visible: Signal<bool>, on_uploaded: EventHandler<()>
                     button {
                         class: "shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-[var(--color-paper-secondary)] hover:bg-[var(--color-paper-theme)] transition-colors cursor-pointer",
                         aria_label: "关闭",
-                        onclick: move |_| visible.set(false),
+                        onclick: move |_| {
+                            closing.set(true);
+                            visible.set(false);
+                        },
                         "×"
                     }
                 }
