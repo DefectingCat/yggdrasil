@@ -270,31 +270,32 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
                 in_codeblock = false;
             }
             Event::InlineMath(tex) => {
-                // 先刷出累积的普通事件，再注入 KaTeX 渲染结果。
-                if !non_heading_events.is_empty() {
-                    pulldown_cmark::html::push_html(&mut html, non_heading_events.into_iter());
-                    non_heading_events = Vec::new();
+                // 不 flush 直写，渲染结果作为 InlineHtml 事件并入本批：push_html 的 writer
+                // 把表格 thead/tbody 状态存在单次调用内（初始 Head，见 pulldown-cmark html.rs），
+                // 表格单元格中途 flush 会让后续单元格在新 writer 里回落成 <th>。
+                let rendered = crate::api::katex::render_inline(&tex);
+                if in_heading {
+                    // 标题内事件不进 non_heading_events（catch-all 直写），此处同样直写以保序。
+                    html.push_str(&rendered);
+                } else {
+                    non_heading_events.push(Event::InlineHtml(rendered.into()));
                 }
-                // 标题内的公式按内联渲染（标题不应用块级公式）。
-                html.push_str(&crate::api::katex::render_inline(&tex));
             }
             Event::DisplayMath(tex) => {
-                if !non_heading_events.is_empty() {
-                    pulldown_cmark::html::push_html(&mut html, non_heading_events.into_iter());
-                    non_heading_events = Vec::new();
-                }
+                // 同 InlineMath：并入本批，避免表格中途 flush。
                 // 块级公式独占一行：用 <p class="math-display"> 包裹 KaTeX 输出。
                 // KaTeX 自身已产出 .katex-display，外层 <p> 负责段间距与居中容器。
-                html.push_str("<p class=\"math-display\">");
-                html.push_str(&crate::api::katex::render_display(&tex));
-                html.push_str("</p>");
+                let rendered = format!(
+                    "<p class=\"math-display\">{}</p>",
+                    crate::api::katex::render_display(&tex)
+                );
+                if in_heading {
+                    html.push_str(&rendered);
+                } else {
+                    non_heading_events.push(Event::InlineHtml(rendered.into()));
+                }
             }
             Event::FootnoteReference(name) => {
-                // 先刷出累积的普通事件，再注入脚注引用标记。
-                if !non_heading_events.is_empty() {
-                    pulldown_cmark::html::push_html(&mut html, non_heading_events.into_iter());
-                    non_heading_events = Vec::new();
-                }
                 let label = name.to_string();
                 // 本 label 的第 n 次引用（1-based），用于 id 后缀。
                 let n = {
@@ -305,11 +306,18 @@ pub fn render_markdown_enhanced(md: &str) -> RenderedContent {
                 let id = footnote_id(&label);
                 // display_num：label 首次出现顺序编号；悬空引用（无 def）查不到时回退到引用序号 n。
                 let num = fn_num.get(&label).copied().unwrap_or(n);
+                // 同 InlineMath：并入本批（格式串与原实现逐字一致），避免表格中途 flush。
                 // 上标引用：id 供 back-link 回跳，href 跳到定义，role=doc-noteref 语义化。
+                let mut rendered = String::new();
                 let _ = write!(
-                    html,
+                    rendered,
                     r##"<sup class="fn-ref" id="fnref:{id}-{n}"><a href="#fn:{id}" class="fn-ref-link" role="doc-noteref" aria-label="脚注 {num}">{num}</a></sup>"##
                 );
+                if in_heading {
+                    html.push_str(&rendered);
+                } else {
+                    non_heading_events.push(Event::InlineHtml(rendered.into()));
+                }
             }
             Event::Start(Tag::FootnoteDefinition(name)) => {
                 // 脚注定义开始：先刷出累积的普通事件，再用 <aside> 开启语义化容器。
@@ -825,6 +833,38 @@ mod tests {
             result.html
         );
         assert!(result.html.contains("<table>"));
+    }
+
+    #[test]
+    fn render_markdown_table_with_inline_math_keeps_td_cells() {
+        // 回归：单元格含 $…$ 曾触发中途 flush，后续单元格被渲染成 <th>。
+        let md = "| 名 | 式 |\n|---|---|\n| a | $R_s=1$ |\n| b | $\\tfrac{1}{2}$ |\n| c | tail |\n";
+        let result = render_markdown_enhanced(md);
+        let tbody = &result.html[result.html.find("<tbody>").expect("应有 tbody")..];
+        assert!(!tbody.contains("<th"), "tbody 不应出现 <th>: {}", result.html);
+        assert!(!tbody.contains("</th>"), "不应出现错配 </th>: {}", result.html);
+        assert_eq!(tbody.matches("<td").count(), 6, "3 行 × 2 列应全为 <td>: {}", result.html);
+        assert!(tbody.contains("katex"), "公式应渲染为 KaTeX: {}", result.html);
+    }
+
+    #[test]
+    fn render_markdown_table_with_footnote_ref_keeps_td_cells() {
+        // FootnoteReference 与 InlineMath 走同一 flush 路径，同约防御。
+        let md = "| A | B |\n|---|---|\n| x[^n] | $1+1$ |\n\n[^n]: note\n";
+        let result = render_markdown_enhanced(md);
+        let tbody = &result.html[result.html.find("<tbody>").expect("应有 tbody")..];
+        assert!(!tbody.contains("<th") && !tbody.contains("</th>"), "tbody 不应出现 th: {}", result.html);
+    }
+
+    #[test]
+    fn render_markdown_heading_math_stays_inside_heading() {
+        // in_heading 直写分支：公式必须落在 h 标签内（顺序不漂移到下一个 flush 点）。
+        let md = "## 公式 $E=mc^2$ 标题\n\n正文\n";
+        let result = render_markdown_enhanced(md);
+        let h2_start = result.html.find("<h2").expect("应有 h2");
+        let h2_end = result.html.find("</h2>").expect("应有 </h2>");
+        let katex_pos = result.html.find("katex").expect("公式应渲染");
+        assert!(h2_start < katex_pos && katex_pos < h2_end, "公式应在 h2 内部: {}", result.html);
     }
 
     #[test]
