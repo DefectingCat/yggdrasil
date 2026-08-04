@@ -289,14 +289,6 @@ fn sanitize(input: &str, config: &SanitizerConfig) -> String {
             return Ok(());
         }
 
-        let allowed_for_tag: HashSet<&str> = {
-            let mut s = generic_attrs.clone();
-            if let Some(tag_specific) = tag_attrs_map.get(tag.as_str()) {
-                s.extend(tag_specific.iter().copied());
-            }
-            s
-        };
-
         let attrs_to_remove: Vec<String> = el
             .attributes()
             .iter()
@@ -304,7 +296,11 @@ fn sanitize(input: &str, config: &SanitizerConfig) -> String {
                 let name = attr.name();
                 let name_lower = name.to_lowercase();
                 // 仅保留白名单属性；对 href/src/cite 额外校验 URL 安全性。
-                if allowed_for_tag.contains(name_lower.as_str()) {
+                let is_allowed = generic_attrs.contains(name_lower.as_str())
+                    || tag_attrs_map
+                        .get(tag.as_str())
+                        .is_some_and(|attrs| attrs.contains(name_lower.as_str()));
+                if is_allowed {
                     if name_lower == "href" || name_lower == "src" || name_lower == "cite" {
                         let val = attr.value();
                         if !is_safe_url(&val, allowed_schemes, allow_data_uri) {
