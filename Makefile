@@ -1,4 +1,4 @@
-.PHONY: dev build build-linux build-freebsd freebsd-sysroot docker docker-amd64 docker-apple docker-multiarch docker-dev docker-dev-down docker-dev-shell css css-watch clean build-libs build-editor build-codemirror build-lightbox build-core build-xterm highlight-css katex-css test doc doc-open start lint fix restore-webp
+.PHONY: dev build build-linux build-freebsd freebsd-sysroot docker docker-amd64 docker-apple docker-multiarch docker-dev docker-dev-down docker-dev-shell docker-run docker-lint docker-clippy docker-check docker-fmt docker-fix docker-test docker-tools-build docker-tools-clean css css-watch clean build-libs build-editor build-codemirror build-lightbox build-core build-xterm highlight-css katex-css test doc doc-open start lint fix restore-webp
 
 build:
 	@rm -rf static/
@@ -249,6 +249,52 @@ docker-dev-down:
 # 进入 dev 容器的交互式 shell（容器需已在运行）。
 docker-dev-shell:
 	@docker compose -f docker-compose.dev.yml exec dev bash
+
+# ── Docker 工具容器（lint / test / fix / check）──────────────────
+# 本地（xfy 的 Mac）AliEDR 会 SIGKILL 本地构建链二进制（wasm-bindgen exit 137），
+# 故 lint/fix/test/check 一律在容器内跑，避开 EDR。见 docker-compose.tools.yml。
+#
+# 用 bind mount（双向）：fmt/fix 写文件直接回流宿主工作区。
+# 首次运行 cargo 依赖全量编译约 10 分钟；之后命名卷缓存命中，秒级启动。
+TOOLS_COMPOSE := docker compose -f docker-compose.tools.yml
+
+# 一次性运行任意命令（例：make docker-run CMD='cargo build --features server'）。
+docker-run:
+	@$(TOOLS_COMPOSE) run --rm tools bash -c '$(CMD)'
+
+# lint（只读）：clippy + cargo fmt --check + biome check + typecheck。
+docker-lint:
+	@$(TOOLS_COMPOSE) run --rm tools bash -c 'cd libs && pnpm install --frozen-lockfile >/dev/null && cd /build && make lint'
+
+# 仅 clippy（最常用的编译期检查，不需要 pnpm）。
+docker-clippy:
+	@$(TOOLS_COMPOSE) run --rm tools cargo clippy --all-targets --all-features -- -D warnings
+
+# 最快编译校验：cargo check --all-features（不跑 clippy lint、不跑测试）。
+docker-check:
+	@$(TOOLS_COMPOSE) run --rm tools cargo check --all-features
+
+# 格式化（写入文件，回流宿主）：cargo fmt + biome format。
+# 注意：不含 dx fmt——dx fmt 0.7.9 会搬运/删除 rsx 注释，仅按需手动跑 docker-fix。
+docker-fmt:
+	@$(TOOLS_COMPOSE) run --rm tools bash -c 'cd libs && pnpm install --frozen-lockfile >/dev/null && pnpm exec biome format --write . && cd /build && cargo fmt'
+
+# fix（写入文件，回流宿主）：biome format + cargo fix + cargo fmt + dx fmt。
+# 警告：dx fmt 会重排 rsx 宏内注释——改完务必 git diff 复核，必要时 checkout 无关文件。
+docker-fix:
+	@$(TOOLS_COMPOSE) run --rm tools bash -c 'cd libs && pnpm install --frozen-lockfile >/dev/null && cd /build && make fix'
+
+# test：cargo test + libs pnpm test。需要 Docker daemon 的 code-runner 测试自动 skip。
+docker-test:
+	@$(TOOLS_COMPOSE) run --rm tools bash -c 'cd libs && pnpm install --frozen-lockfile >/dev/null && cd /build && make test'
+
+# 重建工具镜像（Dockerfile.dev 变更后用；正常情况下 run 会按需自动构建）。
+docker-tools-build:
+	@$(TOOLS_COMPOSE) build
+
+# 清理工具容器命名卷（释放磁盘；下次运行重新编译依赖）。
+docker-tools-clean:
+	@$(TOOLS_COMPOSE) down -v
 
 clean:
 	@cargo clean

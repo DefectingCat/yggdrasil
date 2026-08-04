@@ -1,0 +1,66 @@
+# docker-compose.tools.yml — 一次性 lint / test / fix / check 容器
+#
+# 为什么需要这个文件（而不复用 docker-compose.dev.yml）：
+#   dev compose 用 compose-watch sync（host→container 单向），容器内 fmt/fix 写
+#   的文件不会回流宿主。本文件用 bind mount（双向），让 cargo fmt / biome format
+#   / dx fmt 的改动直接落回宿主工作区。
+#
+#   另：本地（xfy 的 Mac）AliEDR 会 SIGKILL 本地构建链中的二进制（wasm-bindgen
+#   exit 137 等），所以 lint/fix/test/check 一律在容器内跑，避开 EDR。
+#
+# 用法（一般通过 Makefile docker-* target 调用，无需手敲）：
+#   make docker-lint      # make lint（clippy + fmt --check + biome + typecheck）
+#   make docker-clippy    # 仅 cargo clippy --all-targets --all-features -D warnings
+#   make docker-check     # cargo check --all-features（最快编译校验）
+#   make docker-fmt       # cargo fmt + biome format（只格式化，无 cargo fix / dx fmt）
+#   make docker-fix       # make fix（biome format + cargo fix + cargo fmt + dx fmt）
+#   make docker-test      # make test（cargo test + libs pnpm test）
+#   make docker-run CMD='cargo build --no-default-features --features server'
+#
+# 架构：
+#   ┌─────────────────────────────────────────────────────┐
+#   │ Host (macOS)                                        │
+#   │   工作区 . ──bind mount（双向）──▶ /build           │
+#   │   target/ 不共享（容器用独立 Linux named volume）    │
+#   │   libs/node_modules 同理（Linux 二进制，与宿主隔离） │
+#   └─────────────────────────────────────────────────────┘
+#
+# Volume 策略：
+#   /build                              bind mount（宿主源码，双向）
+#   /build/target            ↕ shadow   named volume（Linux 编译产物，不污染宿主 darwin target/）
+#   /build/libs/node_modules ↕ shadow   named volume（pnpm 虚拟存储，与宿主隔离）
+#   pnpm store / cargo registry / git   named volume（跨运行缓存）
+#
+# 首次运行：cargo 依赖全量编译约 10 分钟，pnpm install 约 30 秒；之后命名卷缓存命中，
+# clippy/test 秒级启动。
+#
+# 不挂 docker.sock：clippy/fmt/test 不需要 Docker（需要 daemon 的 code-runner 测试
+# 自动 skip）。如需跑 runner 集成测试，用 make docker-dev。
+
+services:
+  tools:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    init: true
+    working_dir: /build
+    volumes:
+      # 宿主源码双向挂载——fmt/fix 写文件直接回流宿主工作区。
+      - .:/build
+      # Shadow：容器侧 Linux 产物不写进宿主 target/（宿主是 darwin，混用会脏）。
+      - yggdrasil-tools-target:/build/target
+      # Shadow：libs/node_modules 是 Linux pnpm 产物，与宿主 node_modules 隔离。
+      - yggdrasil-tools-node-modules:/build/libs/node_modules
+      # pnpm 全局 store + cargo 缓存——跨运行复用，避免重复下载。
+      - yggdrasil-tools-pnpm-store:/root/.local/share/pnpm/store
+      - yggdrasil-tools-cargo-registry:/usr/local/cargo/registry
+      - yggdrasil-tools-cargo-git:/usr/local/cargo/git
+    # 保持容器可被 `compose up` 常驻（一般用 `compose run` 传命令覆盖）。
+    command: ["sleep", "infinity"]
+
+volumes:
+  yggdrasil-tools-target:
+  yggdrasil-tools-node-modules:
+  yggdrasil-tools-pnpm-store:
+  yggdrasil-tools-cargo-registry:
+  yggdrasil-tools-cargo-git:

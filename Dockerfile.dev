@@ -92,7 +92,7 @@ RUN mkdir -p /usr/local/cargo \
         > /usr/local/cargo/config.toml
 
 # 开发只需 wasm32 target（dx serve 原生编译 server + 交叉编译 wasm 前端）
-RUN rustup target add wasm32-unknown-unknown
+RUN rustup target add wasm32-unknown-unknown && rustup component add clippy rustfmt
 
 # ── dx CLI（与生产 Dockerfile 一致，从 GitHub Releases 安装预编译二进制）──
 ARG DX_VERSION=0.7.9
