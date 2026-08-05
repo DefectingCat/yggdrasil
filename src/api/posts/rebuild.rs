@@ -195,6 +195,7 @@ pub async fn rebuild_post_content_html(post_id: i32) -> Result<CreatePostRespons
         crate::cache::invalidate_post_by_slug(&slug).await;
         // SSR：单篇详情页 + 列表页（首页/分页/归档/标签都含列表项摘要）。
         crate::ssr_cache::invalidate_ssr_route(&format!("/post/{slug}"));
+        crate::ssr_cache::invalidate_post_preview(&slug);
         crate::ssr_cache::invalidate_ssr_all_public();
         crate::ssr_cache::bump_global_generation();
 

@@ -587,6 +587,7 @@ pub async fn invalidate_for_post_write(slugs: &[String], tags: &[String]) {
     invalidate_tag_posts_for(tags).await;
     for slug in slugs {
         crate::ssr_cache::invalidate_ssr_route(&format!("/post/{slug}"));
+        crate::ssr_cache::invalidate_post_preview(slug);
     }
     crate::ssr_cache::invalidate_ssr_all_public();
     crate::ssr_cache::bump_global_generation();

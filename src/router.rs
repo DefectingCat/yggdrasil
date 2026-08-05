@@ -12,8 +12,8 @@ use crate::components::frontend_layout::FrontendLayout;
 use crate::context::UserContext;
 use crate::pages::about::About;
 use crate::pages::admin::{
-    Admin, AdminComments, AdminCommentsPage, Assets, FriendsAdmin, Mcp, Posts, PostsTrash, Runner,
-    System, Write, WriteEdit,
+    Admin, AdminComments, AdminCommentsPage, Assets, FriendsAdmin, Mcp, PostPreview, Posts,
+    PostsTrash, Runner, System, Write, WriteEdit,
 };
 use crate::pages::archives::Archives;
 use crate::pages::changelog::Changelog;
@@ -83,6 +83,9 @@ pub enum Route {
         /// 编辑文章页
         #[route("/write/:id")]
         WriteEdit { id: i32 },
+        /// 草稿/文章预览（管理员只读）
+        #[route("/preview/:slug")]
+        PostPreview { slug: String },
         /// 文章管理（全部文章列表）
         #[route("/posts")]
         Posts {},

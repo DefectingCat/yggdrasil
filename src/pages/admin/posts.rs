@@ -26,7 +26,7 @@ use crate::components::ui::{
     BTN_TEXT_ACCENT, BTN_TEXT_RED, SPINNER_SVG,
 };
 use crate::hooks::query::use_paginated;
-use crate::models::post::PostListItem;
+use crate::models::post::{PostListItem, PostStatus};
 use crate::router::Route;
 
 /// 每页展示的文章数量。
@@ -352,15 +352,24 @@ fn PostRow(
     on_rebuild: EventHandler<i32>,
 ) -> Element {
     let date_str = post.formatted_date();
+    // 草稿标题跳预览（/admin/preview/<slug>），已发布标题跳公开详情页。
+    // 草稿在 /post/<slug> 会被 status 过滤 404，故必须分流避免死链。
+    let title_dest = if post.status == PostStatus::Draft {
+        Route::PostPreview {
+            slug: post.slug.clone(),
+        }
+    } else {
+        Route::PostDetail {
+            slug: post.slug.clone(),
+        }
+    };
 
     rsx! {
         tr { class: "{ADMIN_ROW_HOVER}",
             td { class: "px-4 py-3",
                 Link {
                     class: "text-paper-primary hover:text-paper-accent transition-colors cursor-pointer",
-                    to: Route::PostDetail {
-                        slug: post.slug.clone(),
-                    },
+                    to: title_dest,
                     "{post.title}"
                 }
             }

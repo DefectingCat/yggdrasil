@@ -400,9 +400,11 @@ impl crate::mcp::server::YggMcpServer {
             if new != &old_slug {
                 cache::invalidate_post_by_slug(&old_slug).await;
                 ssr_cache::invalidate_ssr_route(&format!("/post/{old_slug}"));
+                ssr_cache::invalidate_post_preview(&old_slug);
             }
         }
         ssr_cache::invalidate_ssr_route(&format!("/post/{effective_slug}"));
+        ssr_cache::invalidate_post_preview(&effective_slug);
         ssr_cache::invalidate_ssr_all_public();
         ssr_cache::bump_global_generation();
 

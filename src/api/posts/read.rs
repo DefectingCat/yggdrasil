@@ -122,3 +122,47 @@ pub async fn get_post_by_slug(slug: String) -> Result<SinglePostResponse, Server
         Ok(SinglePostResponse { post: None })
     }
 }
+
+/// 管理员按 slug 预览文章（含草稿），不缓存、不带上下篇导航。
+///
+/// 镜像 [`get_post_by_id`] 的查询，但按 slug 取、不做 `status = 'published'`
+/// 过滤，故草稿可被预览。回收站（软删除）文章返回 `None`。草稿绝不进公开缓存
+/// （`cache::get/set_post_by_slug`），因此预览路径只走一次直查。
+#[server(GetPostPreview, "/api")]
+pub async fn get_post_preview(slug: String) -> Result<SinglePostResponse, ServerFnError> {
+    let _user = get_current_admin_user().await?;
+
+    #[cfg(feature = "server")]
+    {
+        let client = get_conn().await.map_err(AppError::db_conn)?;
+
+        let row = client
+            .query_opt(
+                "SELECT
+                    p.id, p.author_id, p.title, p.slug, p.summary, p.content_md, p.content_html, p.toc_html,
+                    p.status, p.published_at, p.created_at, p.updated_at, p.cover_image,
+                    p.word_count, p.reading_time,
+                    COALESCE(array_agg(t.name) FILTER (WHERE t.name IS NOT NULL), '{}') as tags
+                 FROM posts p
+                 LEFT JOIN post_tags pt ON p.id = pt.post_id
+                 LEFT JOIN tags t ON pt.tag_id = t.id
+                 WHERE p.slug = $1 AND p.deleted_at IS NULL
+                 GROUP BY p.id",
+                &[&slug],
+            )
+            .await
+            .map_err(AppError::query)?;
+
+        let post = match row {
+            Some(row) => Some(row_to_post_full(&row).await),
+            None => None,
+        };
+
+        Ok(SinglePostResponse { post })
+    }
+
+    #[cfg(not(feature = "server"))]
+    {
+        Ok(SinglePostResponse { post: None })
+    }
+}

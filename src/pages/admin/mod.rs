@@ -20,6 +20,8 @@ pub mod mcp;
 pub mod posts;
 /// 回收站页面模块（/admin/posts/trash 独立路由）。
 pub mod posts_trash;
+/// 草稿/文章预览页面模块（管理员只读）。
+pub mod preview;
 /// 代码试运行沙箱页面模块。
 pub mod runner;
 /// 系统管理页面模块（数据库 + 服务器状态 + SQL 控制台 + 导出 + 备份）。
@@ -41,6 +43,8 @@ pub use mcp::Mcp;
 pub use posts::Posts;
 /// 回收站页面组件。
 pub use posts_trash::PostsTrash;
+/// 草稿/文章预览页面组件（管理员只读）。
+pub use preview::PostPreview;
 /// 代码试运行沙箱组件。
 pub use runner::Runner;
 /// 系统管理入口组件。

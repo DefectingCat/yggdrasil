@@ -72,6 +72,15 @@ pub fn invalidate_ssr_route(route: &str) {
     }
 }
 
+/// 失效某文章的 admin 预览路由 SSR 缓存。
+///
+/// 草稿编辑后预览需见最新内容。`invalidate_ssr_all_public` 显式跳过 `admin/`
+/// 目录（见 [`invalidate_ssr_all_public`] 注释），预览路由 (`/admin/preview/<slug>`)
+/// 不会被全量失效覆盖，故写入路径需定向调用本函数。
+pub fn invalidate_post_preview(slug: &str) {
+    invalidate_ssr_route(&format!("/admin/preview/{slug}"));
+}
+
 /// 失效所有公开页 SSR 缓存（删除 `static/` 下除 `.well-known`、`admin` 外的全部）。
 ///
 /// 用于批量重建等影响面广的写入。保留 `.well-known`（浏览器/PWA 元数据，

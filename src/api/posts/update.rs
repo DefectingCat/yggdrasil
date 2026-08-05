@@ -187,11 +187,12 @@ pub async fn update_post(
             if old != &final_slug {
                 crate::cache::invalidate_post_by_slug(old).await;
                 crate::ssr_cache::invalidate_ssr_route(&format!("/post/{old}"));
+                crate::ssr_cache::invalidate_post_preview(old);
             }
         }
 
-        // SSR：内容/标签/摘要变化影响详情页与所有列表页。
         crate::ssr_cache::invalidate_ssr_route(&format!("/post/{final_slug}"));
+        crate::ssr_cache::invalidate_post_preview(&final_slug);
         crate::ssr_cache::invalidate_ssr_all_public();
         crate::ssr_cache::bump_global_generation();
 

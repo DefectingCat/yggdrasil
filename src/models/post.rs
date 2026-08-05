@@ -24,6 +24,24 @@ impl PostStatus {
         }
     }
 
+    /// 返回中文展示标签（草稿/已发布）。
+    pub fn label(&self) -> &'static str {
+        match self {
+            PostStatus::Draft => "草稿",
+            PostStatus::Published => "已发布",
+        }
+    }
+
+    /// 返回状态徽章在 light/dark 模式下的 Tailwind 背景与颜色类。
+    pub fn badge_class(&self) -> &'static str {
+        match self {
+            PostStatus::Published => {
+                "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+            }
+            PostStatus::Draft => "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400",
+        }
+    }
+
     /// 将字符串解析为 PostStatus，无法识别时返回 None。
     #[cfg(feature = "server")]
     pub fn from_str(s: &str) -> Option<Self> {
@@ -136,10 +154,7 @@ impl PostListItem {
 
     /// 返回中文状态标签。
     pub fn status_label(&self) -> &'static str {
-        match self.status {
-            PostStatus::Published => "已发布",
-            PostStatus::Draft => "草稿",
-        }
+        self.status.label()
     }
 
     /// 返回状态文本在 light/dark 模式下的 Tailwind 颜色类。
@@ -152,12 +167,7 @@ impl PostListItem {
 
     /// 返回状态徽章在 light/dark 模式下的 Tailwind 背景与颜色类。
     pub fn status_badge_class(&self) -> &'static str {
-        match self.status {
-            PostStatus::Published => {
-                "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
-            }
-            PostStatus::Draft => "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400",
-        }
+        self.status.badge_class()
     }
 }
 
