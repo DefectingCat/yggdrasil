@@ -49,10 +49,7 @@ pub fn AdminLayout() -> Element {
     });
 
     let nav_items_top = vec![(Route::Admin {}, "仪表盘"), (Route::Write {}, "写文章")];
-    let nav_items_bottom = vec![
-        (Route::Assets {}, "素材"),
-        (Route::FriendsAdmin {}, "友链"),
-    ];
+    let nav_items_bottom = vec![(Route::Assets {}, "素材"), (Route::FriendsAdmin {}, "友链")];
 
     let is_write_route =
         matches!(route, Route::Write {}) || matches!(route, Route::WriteEdit { .. });
@@ -314,10 +311,7 @@ fn ToolsNavGroup() -> Element {
     let route = use_route::<Route>();
     // 判断路由是否属于本组。
     fn in_group(route: &Route) -> bool {
-        matches!(
-            route,
-            Route::Runner {} | Route::Mcp {} | Route::System {}
-        )
+        matches!(route, Route::Runner {} | Route::Mcp {} | Route::System {})
     }
     let group_active = in_group(&route);
     let mut expanded = use_signal(|| group_active);
