@@ -136,6 +136,7 @@ pub fn AdminLayout() -> Element {
         }
     };
 
+    let skeleton_route = route.clone();
     match ((ctx.checked)(), (ctx.user)()) {
         (true, Some(_)) => {
             rsx! {
@@ -143,7 +144,21 @@ pub fn AdminLayout() -> Element {
                     {nav_content}
                     div { class: "flex-1 flex flex-col min-w-0 h-screen p-2 md:p-4",
                         div { class: "flex-1 bg-[var(--color-paper-theme)] rounded-[2rem] shadow-sm border border-[var(--color-paper-border)] {card_overflow} relative flex flex-col",
-                            main { class: "{main_class}", Outlet::<Route> {} }
+                            main { class: "{main_class}",
+                                // 与前台 frontend_layout.rs 同理：admin 内的 use_server_future(...)?
+                                // （如 preview.rs）pending 时会向上抛 RenderError::Suspended；没有
+                                // SuspenseBoundary 时挂起 scope 渲染为空占位节点，主内容区在 server fn
+                                // 往返期间整片空白。fallback 复用登录校验期的同款路由骨架屏（同样的
+                                // flex wrapper + animate-pulse），骨架屏→骨架屏→内容全程无缝、无空白帧。
+                                SuspenseBoundary {
+                                    fallback: move |_| rsx! {
+                                        div { class: "flex-1 min-h-0 flex flex-col animate-pulse",
+                                            {admin_route_skeleton(&skeleton_route)}
+                                        }
+                                    },
+                                    Outlet::<Route> {}
+                                }
+                            }
                         }
                     }
                 }
