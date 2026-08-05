@@ -269,12 +269,16 @@ PLATFORMS ?= linux/amd64,linux/arm64
 GIT_DESCRIBE := $(shell git describe --tags --always --dirty 2>/dev/null)
 GIT_HASH := $(shell git rev-parse HEAD 2>/dev/null)
 GIT_DATE := $(shell git log -1 --format=%cd --date=iso-strict 2>/dev/null)
+# 镜像版本号:取最近 git tag 原值(v0.10.0,带 v,与 CI publish-ghcr 的 GITHUB_REF_NAME 一致);
+# 可用 VERSION=v0.10.1 覆盖。生产镜像据此打版本 tag(yggdrasil:v0.10.0、yggdrasil:v0.10.0-amd64)。
+VERSION ?= $(shell git describe --tags --abbrev=0 2>/dev/null)
 # build-arg 复用块:每个 docker target 展开一次。空值也传(让 Dockerfile 默认接管)。
 GIT_BUILD_ARGS = --build-arg YGG_BUILD_GIT_DESCRIBE="$(GIT_DESCRIBE)" \
                  --build-arg YGG_BUILD_GIT_HASH="$(GIT_HASH)" \
                  --build-arg YGG_BUILD_GIT_COMMIT_DATE="$(GIT_DATE)"
 docker:
-	@docker buildx build --load $(GIT_BUILD_ARGS) -t yggdrasil .
+	@docker buildx build --load $(GIT_BUILD_ARGS) \
+		-t yggdrasil:latest -t yggdrasil:$(VERSION) .
 
 # Build an amd64 image. On an x86_64 host the server compiles in-container via
 # the plain Dockerfile (native, no host toolchain). On any other host (e.g.
@@ -286,9 +290,11 @@ docker:
 # itself. Product is directly docker run / docker save exportable.
 docker-amd64:
 ifeq ($(HOST_ARCH),x86_64)
-	@docker buildx build --platform linux/amd64 --load $(GIT_BUILD_ARGS) -t yggdrasil:amd64 .
+	@docker buildx build --platform linux/amd64 --load $(GIT_BUILD_ARGS) \
+		-t yggdrasil:amd64 -t yggdrasil:$(VERSION)-amd64 .
 else
-	@docker buildx build --platform linux/amd64 --load -f Dockerfile.cross $(GIT_BUILD_ARGS) -t yggdrasil:amd64 .
+	@docker buildx build --platform linux/amd64 --load -f Dockerfile.cross $(GIT_BUILD_ARGS) \
+		-t yggdrasil:amd64 -t yggdrasil:$(VERSION)-amd64 .
 endif
 
 docker-multiarch:
