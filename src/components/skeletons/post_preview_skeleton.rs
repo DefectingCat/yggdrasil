@@ -18,7 +18,11 @@ use dioxus::prelude::*;
 #[component]
 pub fn PostPreviewSkeleton() -> Element {
     rsx! {
-        article { class: "post-single",
+        // w-full：admin_layout 登录校验期会把骨架屏挂进 div.flex.flex-col 包裹层，
+        // 此时 article 作为 flex item，其 margin:auto(来自 .post-single)会禁用 stretch、
+        // 无显式宽度则 shrink-to-fit 收缩变窄。w-full 强制撑满交叉轴，与真实文章
+        // (直接挂 main block 下、自然满宽)几何对齐。其他后台骨架屏根节点同理用 w-full。
+        article { class: "post-single w-full",
             // 预览横幅占位：左侧「预览模式」文字 + 状态徽章，右侧继续编辑 / 返回列表两枚按钮。
             // 类名与 preview.rs 真实横幅一致，确保占位与真实元素几何对齐。
             div {
