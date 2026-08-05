@@ -17,6 +17,7 @@ use crate::components::skeletons::posts_skeleton::PostsSkeleton;
 use crate::components::skeletons::posts_trash_skeleton::PostsTrashSkeleton;
 use crate::components::skeletons::runner_skeleton::RunnerSkeleton;
 use crate::components::skeletons::system_skeleton::SystemSkeleton;
+use crate::components::skeletons::post_preview_skeleton::PostPreviewSkeleton;
 use crate::components::write_skeleton::WriteSkeleton;
 use crate::context::UserContext;
 use crate::router::Route;
@@ -203,6 +204,9 @@ fn admin_route_skeleton(route: &Route) -> Element {
         },
         Route::Mcp {} => rsx! {
             McpSkeleton {}
+        },
+        Route::PostPreview { .. } => rsx! {
+            PostPreviewSkeleton {}
         },
         _ => rsx! {
             AdminDashboardSkeleton {}

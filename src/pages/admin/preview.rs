@@ -30,7 +30,7 @@ use crate::components::post::post_footer::PostFooter;
 use crate::components::post::post_header::PostHeader;
 use crate::components::post::post_toc::PostToc;
 use crate::components::skeletons::delayed_skeleton::DelayedSkeleton;
-use crate::components::skeletons::post_detail_skeleton::PostDetailSkeleton;
+use crate::components::skeletons::post_preview_skeleton::PostPreviewSkeleton;
 use crate::components::ui::{BTN_OUTLINE, BTN_PRIMARY};
 use crate::router::Route;
 
@@ -61,7 +61,7 @@ pub fn PostPreview(slug: String) -> Element {
     let post = match post.read().as_ref() {
         None => {
             return rsx! {
-                DelayedSkeleton { PostDetailSkeleton {} }
+                DelayedSkeleton { PostPreviewSkeleton {} }
             };
         }
         Some(Err(_)) | Some(Ok(SinglePostResponse { post: None })) => {

@@ -26,6 +26,8 @@ pub mod mcp_skeleton;
 pub mod post_card_skeleton;
 /// 文章详情页骨架屏组件。
 pub mod post_detail_skeleton;
+/// 草稿/文章预览页骨架屏组件。
+pub mod post_preview_skeleton;
 /// 文章列表页骨架屏组件。
 pub mod posts_skeleton;
 /// 后台回收站骨架屏组件。
