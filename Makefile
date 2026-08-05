@@ -1,4 +1,4 @@
-.PHONY: dev build build-linux build-freebsd freebsd-sysroot docker docker-amd64 docker-apple docker-multiarch docker-dev docker-dev-down docker-dev-shell docker-run docker-lint docker-clippy docker-check docker-fmt docker-fix docker-test docker-tools-build docker-tools-clean css css-watch clean build-libs build-editor build-codemirror build-lightbox build-core build-xterm highlight-css katex-css test doc doc-open start lint fix restore-webp esbuild-cache
+.PHONY: dev build build-linux build-freebsd freebsd-sysroot docker docker-amd64 docker-apple docker-multiarch docker-dev docker-dev-down docker-dev-shell docker-run docker-lint docker-clippy docker-check docker-fmt docker-fix docker-test docker-tools-build docker-tools-clean css css-watch clean build-libs build-editor build-codemirror build-lightbox build-core build-xterm highlight-css katex-css test doc doc-open start lint fix restore-webp esbuild-cache wasm-bindgen-cache
 
 build:
 	@rm -rf static/
@@ -111,6 +111,40 @@ esbuild-cache:
 		echo "esbuild $(ESBUILD_VERSION) cached at $$ESBUILD_DIR/esbuild"; \
 	fi
 
+# Pre-populate dx 的 wasm-bindgen-cli 工具缓存（与 esbuild-cache 同构）。
+# dx CLI 在 dx build 时会自动下载 wasm-bindgen-cli 二进制（packages/cli/src/
+# wasm_bindgen.rs 的 verify_managed_install → install_github），下载源硬编码为
+# github.com/rustwasm/wasm-bindgen/releases，既不读 GH_PROXY 也不读 NPM_REGISTRY——
+# 国内直连必然慢/连接重置（"Taking a while..." 的主要来源之一）。此处经 gh-proxy
+# 预下载与 Cargo.lock wasm-bindgen crate 版本完全一致的 tarball，解压到 dx 缓存目录。
+# dx 的 wasm_bindgen.rs 在 install_dir.join(installed_bin_name).exists() 命中时
+# 跳过联网下载。dx 按平台选 musl/darwin triplet（见 git_install_url）。
+# 升级 wasm-bindgen 后须同步 WASM_BINDGEN_VERSION（查 Cargo.lock 的 [[package]]
+# wasm-bindgen 版本）。triplet 必须与 dx 源码 git_install_url 的平台映射一致。
+WASM_BINDGEN_VERSION := 0.2.126
+wasm-bindgen-cache:
+	@WB_DIR="$${DX_HOME:-$$HOME/.local/share/.dx}/tools/wasm-bindgen-$(WASM_BINDGEN_VERSION)"; \
+	if [ -x "$$WB_DIR/wasm-bindgen" ]; then \
+		echo "wasm-bindgen $(WASM_BINDGEN_VERSION) already cached at $$WB_DIR/wasm-bindgen"; \
+	else \
+		mkdir -p "$$WB_DIR"; \
+		case "$$(uname -s)-$$(uname -m)" in \
+			Linux-x86_64)   WB_TRIPLET=x86_64-unknown-linux-musl   ;; \
+			Linux-aarch64)  WB_TRIPLET=aarch64-unknown-linux-musl ;; \
+			Darwin-x86_64)  WB_TRIPLET=x86_64-apple-darwin  ;; \
+			Darwin-arm64)   WB_TRIPLET=aarch64-apple-darwin ;; \
+			*) echo "unsupported platform: $$(uname -s)-$$(uname -m)" >&2; exit 1; \
+		esac; \
+		echo "Downloading wasm-bindgen $(WASM_BINDGEN_VERSION) ($$WB_TRIPLET) from gh-proxy..."; \
+		TMP="$$(mktemp -d)"; \
+		curl -fsSL "https://gh-proxy.com/https://github.com/rustwasm/wasm-bindgen/releases/download/$(WASM_BINDGEN_VERSION)/wasm-bindgen-$(WASM_BINDGEN_VERSION)-$$WB_TRIPLET.tar.gz" \
+			| tar -xz -C "$$TMP"; \
+		mv "$$TMP/wasm-bindgen-$(WASM_BINDGEN_VERSION)-$$WB_TRIPLET/wasm-bindgen" "$$WB_DIR/wasm-bindgen"; \
+		rm -rf "$$TMP"; \
+		chmod +x "$$WB_DIR/wasm-bindgen"; \
+		echo "wasm-bindgen $(WASM_BINDGEN_VERSION) cached at $$WB_DIR/wasm-bindgen"; \
+	fi
+
 highlight-css:
 	@cargo run --bin generate_highlight_css
 
@@ -138,7 +172,7 @@ build-core:       ; @cd libs && pnpm --filter @yggdrasil/core run build
 build-xterm:      ; @cd libs && pnpm --filter @yggdrasil/xterm-terminal run build
 build-mermaid:    ; @cd libs && pnpm --filter @yggdrasil/mermaid-renderer run build
 
-dev: build-libs highlight-css katex-css esbuild-cache
+dev: build-libs highlight-css katex-css esbuild-cache wasm-bindgen-cache
 	@echo "Cleaning static/..."
 	@rm -rf static/
 	@echo "Building CSS..."

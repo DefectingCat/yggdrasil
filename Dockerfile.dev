@@ -129,11 +129,12 @@ WORKDIR /build
 # .dockerignore 排除 .git → 容器内 build.rs 的 git describe 回退 "unknown",
 # 以及 docs/tests/scripts/（容器内无集成测试源码, cargo test 会跳过）。
 COPY . /build
-# Pre-populate dx's esbuild cache from npmmirror (see Makefile esbuild-cache target).
-# dx hardcodes registry.npmjs.org for esbuild downloads; this avoids the ~6s
-# npmjs.org fetch at every container start by caching the binary at build time.
+# Pre-populate dx 的 esbuild + wasm-bindgen 工具缓存（见 Makefile）。
+# dx 硬编码 npmjs.org/github.com 下载这两个工具,国内直连慢/重置;build time 预缓存后
+# dx 启动(serve/build)的 path.exists() 检查命中即跳过联网。DX_HOME 在镜像层,
+# 不随 named volume 丢失,target/node_modules 由 compose named volume 跨重启缓存。
 ENV DX_HOME=/usr/local/dx
-RUN make esbuild-cache
+RUN make esbuild-cache wasm-bindgen-cache
 
 # 启动开发服务器：make dev 内含 pnpm install → build-libs → highlight-css
 # → katex-css → tailwindcss → dx serve --interactive false。

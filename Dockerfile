@@ -249,14 +249,24 @@ RUN make build-libs && make highlight-css && make katex-css && tailwindcss -i in
 # makes the path.exists() check at esbuild.rs:25 short-circuit the download.
 # ESBUILD_VERSION must match dx's pinned constant (0.27.3 in dx 0.7.10).
 ENV DX_HOME=/usr/local/dx
-RUN make esbuild-cache
+RUN make esbuild-cache wasm-bindgen-cache
 # Build the client-side Dioxus WASM bundle. We use dx only for the client assets;
 # dx's linker wrapper is incompatible with a raw static linker, so the server
 # binary is built with plain cargo in the next step. The client build emits a
 # ready-to-serve public/ directory under target/dx/yggdrasil/*/web/public.
 # restore-webp overwrites dx's re-encoded VP8L .webp stills with the source
 # originals — keep in sync with make build-linux, which runs the same target.
-RUN dx build @client --release --debug-symbols=false --wasm-js-cfg false && \
+# --mount 缓存 wasm32 的 cargo registry/git/target：dx build 内部跑
+# `cargo build --target wasm32-unknown-unknown`（不经 cargo-chef），改一行 .rs
+# 也会全量重下重编 ~400 个 wasm 依赖；mount 让它们跨 build 持久化。target
+# 卷里的 dx 产物 (target/dx/yggdrasil/*/web/public) 在同一 RUN 内 cp 到 dist/
+# 仍可见（cache mount 在 RUN 期间是活的）。与 cook/cargo build 的 server musl
+# 产物互不干扰——后者在镜像层 /build/target，本 RUN 的 cache 卷覆盖该路径但
+# 只装 wasm32 子目录，server RUN 无 target mount 仍看镜像层。
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/build/target,sharing=locked \
+    dx build @client --release --debug-symbols=false --wasm-js-cfg false && \
     make restore-webp && \
     mkdir -p /build/dist/public && \
     cp -r /build/target/dx/yggdrasil/*/web/public/* /build/dist/public/
