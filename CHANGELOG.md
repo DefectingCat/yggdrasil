@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _暂无未发布改动。_
 
+## [0.10.1] - 2026-08-06
+
+### Added
+
+- **草稿预览页**：登录后可在 `/admin/preview/:slug` 预览草稿文章，并配置专属骨架屏。
+- **生产镜像版本 tag**：生产 Docker 镜像支持按版本号打 tag。
+
+### Changed
+
+- **镜像构建加速**：预缓存 wasm-bindgen-cli 与 cargo buildx cache mount，缩短镜像构建时间。
+
+### Fixed
+
+- **预览页空白闪烁**：修复预览页骨架屏结束后主内容区出现空白闪烁的问题。
+- **骨架屏宽度坍缩**：修复预览骨架屏在登录校验期间宽度坍缩的问题。
+
 ## [0.10.0] - 2026-08-05
 
 ### Added
