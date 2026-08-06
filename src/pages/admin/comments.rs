@@ -148,68 +148,67 @@ pub fn AdminCommentsPage(page: i32) -> Element {
                 on_change: move |v| active_filter.set(v),
             }
 
-            div {
-                class: if selected_ids().is_empty() { "batch-bar is-collapsed" } else { "batch-bar" },
-                        div { class: "flex items-center gap-3 p-3 bg-paper-theme rounded-lg",
-                            span { class: "text-sm text-paper-secondary", "已选择 {selected_ids().len()} 条" }
-                            button {
-                                class: "{BTN_SOLID_GREEN}",
-                                onclick: move |_| {
+            div { class: if selected_ids().is_empty() { "batch-bar is-collapsed" } else { "batch-bar" },
+                div { class: "flex items-center gap-3 p-3 bg-paper-theme rounded-lg",
+                    span { class: "text-sm text-paper-secondary", "已选择 {selected_ids().len()} 条" }
+                    button {
+                        class: "{BTN_SOLID_GREEN}",
+                        onclick: move |_| {
+                            let ids: Vec<i64> = selected_ids().iter().copied().collect();
+                            let ids_for_api = ids.clone();
+                            spawn(async move {
+                                let _ = batch_update_comment_status(ids_for_api, "approved".to_string())
+                                    .await;
+                            });
+                            for id in &ids {
+                                set_comment_status(*id, CommentStatus::Approved);
+                            }
+                            selected_ids.set(HashSet::new());
+                        },
+                        "批量通过"
+                    }
+                    button {
+                        class: "{BTN_SOLID_AMBER}",
+                        onclick: move |_| {
+                            let ids: Vec<i64> = selected_ids().iter().copied().collect();
+                            let ids_for_api = ids.clone();
+                            spawn(async move {
+                                let _ = batch_update_comment_status(ids_for_api, "spam".to_string()).await;
+                            });
+                            for id in &ids {
+                                set_comment_status(*id, CommentStatus::Spam);
+                            }
+                            selected_ids.set(HashSet::new());
+                        },
+                        "批量垃圾"
+                    }
+                    button {
+                        class: "{BTN_SOLID_RED}",
+                        onclick: move |_| {
+                            #[cfg(target_arch = "wasm32")]
+                            {
+                                if web_sys::window()
+                                    .and_then(|w| {
+                                        w.confirm_with_message("确定要删除这些评论吗？").ok()
+                                    })
+                                    .unwrap_or(false)
+                                {
                                     let ids: Vec<i64> = selected_ids().iter().copied().collect();
                                     let ids_for_api = ids.clone();
                                     spawn(async move {
-                                        let _ = batch_update_comment_status(ids_for_api, "approved".to_string())
+                                        let _ = batch_update_comment_status(ids_for_api, "trash".to_string())
                                             .await;
                                     });
                                     for id in &ids {
-                                        set_comment_status(*id, CommentStatus::Approved);
+                                        remove_comment(*id);
                                     }
                                     selected_ids.set(HashSet::new());
-                                },
-                                "批量通过"
+                                }
                             }
-                            button {
-                                class: "{BTN_SOLID_AMBER}",
-                                onclick: move |_| {
-                                    let ids: Vec<i64> = selected_ids().iter().copied().collect();
-                                    let ids_for_api = ids.clone();
-                                    spawn(async move {
-                                        let _ = batch_update_comment_status(ids_for_api, "spam".to_string()).await;
-                                    });
-                                    for id in &ids {
-                                        set_comment_status(*id, CommentStatus::Spam);
-                                    }
-                                    selected_ids.set(HashSet::new());
-                                },
-                                "批量垃圾"
-                            }
-                            button {
-                                class: "{BTN_SOLID_RED}",
-                                onclick: move |_| {
-                                    #[cfg(target_arch = "wasm32")]
-                                    {
-                                        if web_sys::window()
-                                            .and_then(|w| {
-                                                w.confirm_with_message("确定要删除这些评论吗？").ok()
-                                            })
-                                            .unwrap_or(false)
-                                        {
-                                            let ids: Vec<i64> = selected_ids().iter().copied().collect();
-                                            let ids_for_api = ids.clone();
-                                            spawn(async move {
-                                                let _ = batch_update_comment_status(ids_for_api, "trash".to_string())
-                                                    .await;
-                                            });
-                                            for id in &ids {
-                                                remove_comment(*id);
-                                            }
-                                            selected_ids.set(HashSet::new());
-                                        }
-                                    }
-                                },
-                                "批量删除"
-                            }
-                        }
+                        },
+                        "批量删除"
+                    }
+                }
             }
 
             {

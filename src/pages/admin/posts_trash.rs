@@ -101,8 +101,7 @@ pub fn PostsTrash() -> Element {
                 AutoPurgeSettings { settings }
 
                 // 批量操作栏（选中时展开，取消时收起过渡）
-                div {
-                    class: if selected_ids().is_empty() { "batch-bar is-collapsed" } else { "batch-bar" },
+                div { class: if selected_ids().is_empty() { "batch-bar is-collapsed" } else { "batch-bar" },
                     div { class: "flex items-center gap-3 p-3 bg-paper-theme rounded-lg",
                         span { class: "text-sm text-paper-secondary",
                             "已选择 {selected_ids().len()} 条"

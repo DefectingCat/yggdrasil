@@ -13,11 +13,11 @@ use crate::components::skeletons::assets_skeleton::AssetsSkeleton;
 
 use crate::components::skeletons::friends_admin_skeleton::FriendsAdminSkeleton;
 use crate::components::skeletons::mcp_skeleton::McpSkeleton;
+use crate::components::skeletons::post_preview_skeleton::PostPreviewSkeleton;
 use crate::components::skeletons::posts_skeleton::PostsSkeleton;
 use crate::components::skeletons::posts_trash_skeleton::PostsTrashSkeleton;
 use crate::components::skeletons::runner_skeleton::RunnerSkeleton;
 use crate::components::skeletons::system_skeleton::SystemSkeleton;
-use crate::components::skeletons::post_preview_skeleton::PostPreviewSkeleton;
 use crate::components::write_skeleton::WriteSkeleton;
 use crate::context::UserContext;
 use crate::router::Route;
@@ -152,9 +152,7 @@ pub fn AdminLayout() -> Element {
                                 // flex wrapper + animate-pulse），骨架屏→骨架屏→内容全程无缝、无空白帧。
                                 SuspenseBoundary {
                                     fallback: move |_| rsx! {
-                                        div { class: "flex-1 min-h-0 flex flex-col animate-pulse",
-                                            {admin_route_skeleton(&skeleton_route)}
-                                        }
+                                        div { class: "flex-1 min-h-0 flex flex-col animate-pulse", {admin_route_skeleton(&skeleton_route)} }
                                     },
                                     Outlet::<Route> {}
                                 }

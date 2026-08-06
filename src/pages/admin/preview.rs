@@ -66,14 +66,11 @@ pub fn PostPreview(slug: String) -> Element {
         }
         Some(Err(_)) | Some(Ok(SinglePostResponse { post: None })) => {
             return rsx! {
-                div {
-                    class: "flex flex-col items-center justify-center text-center py-20 px-4 animate-page-enter",
-                    p { class: "text-sm text-paper-secondary", "未找到该文章（可能已被删除）。" }
-                    Link {
-                        class: "mt-6 {BTN_OUTLINE}",
-                        to: Route::Posts {},
-                        "返回文章列表"
+                div { class: "flex flex-col items-center justify-center text-center py-20 px-4 animate-page-enter",
+                    p { class: "text-sm text-paper-secondary",
+                        "未找到该文章（可能已被删除）。"
                     }
+                    Link { class: "mt-6 {BTN_OUTLINE}", to: Route::Posts {}, "返回文章列表" }
                 }
             };
         }
@@ -83,12 +80,10 @@ pub fn PostPreview(slug: String) -> Element {
     rsx! {
         article { class: "post-single animate-page-enter", key: "{post.slug}",
             // 预览横幅：状态徽章 + 继续编辑 / 返回列表。
-            div {
-                class: "flex flex-wrap items-center justify-between gap-3 mb-6 p-3 rounded-2xl bg-[var(--color-paper-entry)] border border-[var(--color-paper-border)]",
+            div { class: "flex flex-wrap items-center justify-between gap-3 mb-6 p-3 rounded-2xl bg-[var(--color-paper-entry)] border border-[var(--color-paper-border)]",
                 div { class: "flex items-center gap-2 text-sm text-paper-secondary",
                     span { "预览模式" }
-                    span {
-                        class: "px-2 py-0.5 rounded-full text-xs font-medium {post.status.badge_class()}",
+                    span { class: "px-2 py-0.5 rounded-full text-xs font-medium {post.status.badge_class()}",
                         "{post.status.label()}"
                     }
                 }
@@ -98,11 +93,7 @@ pub fn PostPreview(slug: String) -> Element {
                         to: Route::WriteEdit { id: post.id },
                         "继续编辑"
                     }
-                    Link {
-                        class: "{BTN_OUTLINE}",
-                        to: Route::Posts {},
-                        "返回列表"
-                    }
+                    Link { class: "{BTN_OUTLINE}", to: Route::Posts {}, "返回列表" }
                 }
             }
 

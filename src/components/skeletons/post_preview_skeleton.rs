@@ -25,8 +25,7 @@ pub fn PostPreviewSkeleton() -> Element {
         article { class: "post-single w-full",
             // 预览横幅占位：左侧「预览模式」文字 + 状态徽章，右侧继续编辑 / 返回列表两枚按钮。
             // 类名与 preview.rs 真实横幅一致，确保占位与真实元素几何对齐。
-            div {
-                class: "flex flex-wrap items-center justify-between gap-3 mb-6 p-3 rounded-2xl bg-[var(--color-paper-entry)] border border-[var(--color-paper-border)]",
+            div { class: "flex flex-wrap items-center justify-between gap-3 mb-6 p-3 rounded-2xl bg-[var(--color-paper-entry)] border border-[var(--color-paper-border)]",
                 div { class: "flex items-center gap-2",
                     SkeletonBox { class: "h-4 w-16 rounded" }
                     SkeletonBox { class: "h-5 w-14 rounded-full" }
